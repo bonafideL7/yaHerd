@@ -23,6 +23,7 @@ struct HerdView: View {
     private let pastureFilter: Binding<PastureListFilter>?
     private let usesShellBottomAccessory: Bool
     private let onOpenAnimal: (UUID) -> Void
+    private let onEditAnimal: (UUID) -> Void
     private let onOpenPasture: (UUID) -> Void
     private let onOpenFieldChecks: () -> Void
     private let onOpenWorkSessions: () -> Void
@@ -41,6 +42,7 @@ struct HerdView: View {
         pastureFilter: Binding<PastureListFilter>? = nil,
         usesShellBottomAccessory: Bool = false,
         onOpenAnimal: @escaping (UUID) -> Void = { _ in },
+        onEditAnimal: @escaping (UUID) -> Void = { _ in },
         onOpenPasture: @escaping (UUID) -> Void = { _ in },
         onOpenFieldChecks: @escaping () -> Void = {},
         onOpenWorkSessions: @escaping () -> Void = {},
@@ -58,6 +60,7 @@ struct HerdView: View {
         self.pastureFilter = pastureFilter
         self.usesShellBottomAccessory = usesShellBottomAccessory
         self.onOpenAnimal = onOpenAnimal
+        self.onEditAnimal = onEditAnimal
         self.onOpenPasture = onOpenPasture
         self.onOpenFieldChecks = onOpenFieldChecks
         self.onOpenWorkSessions = onOpenWorkSessions
@@ -82,6 +85,7 @@ struct HerdView: View {
                     usesShellBottomAccessory: usesShellBottomAccessory,
                     showsListActions: allowsModeSwitch,
                     onOpenAnimal: onOpenAnimal,
+                    onEditAnimal: onEditAnimal,
                     onOpenFieldChecks: onOpenFieldChecks,
                     onOpenWorkSessions: onOpenWorkSessions,
                     onOpenSettings: onOpenSettings

@@ -26,6 +26,7 @@ struct AnimalListContentList: View {
     let inlineFocusRequestID: UUID
     let onStartNewInlineEntry: () -> Void
     let onStartEditingAnimal: (AnimalSummary) -> Void
+    let onOpenAnimalEditor: (UUID) -> Void
     let onSubmitInlineEntry: () -> Void
     let onPrepareInlinePicker: () -> Void
     let onShowInlineBirthDatePicker: () -> Void
@@ -182,8 +183,8 @@ struct AnimalListContentList: View {
 
     private func editableAnimalRow(_ animal: AnimalSummary) -> some View {
         Button {
-            if dataAccessMode.allowsDataMutations && allowsInlineEditing {
-                onStartEditingAnimal(animal)
+            if dataAccessMode.allowsDataMutations {
+                onOpenAnimalEditor(animal.id)
             } else {
                 onOpenInlineDetails(animal.id)
             }
@@ -193,7 +194,21 @@ struct AnimalListContentList: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityHint(dataAccessMode.allowsDataMutations && allowsInlineEditing ? "Double-tap to edit this animal inline" : "Double-tap to view this animal")
+        .contextMenu {
+            if dataAccessMode.allowsDataMutations && allowsInlineEditing {
+                Button {
+                    onStartEditingAnimal(animal)
+                } label: {
+                    Label("Quick Edit", systemImage: "pencil.line")
+                }
+            }
+            Button {
+                onOpenInlineDetails(animal.id)
+            } label: {
+                Label("View Details", systemImage: "info.circle")
+            }
+        }
+        .accessibilityHint(dataAccessMode.allowsDataMutations ? "Double-tap to open the animal editor; long-press for more options" : "Double-tap to view this animal")
     }
 
     private func inlineEntryRow(mode: AnimalListInlineEntryRow.Mode, animalID: UUID? = nil) -> some View {

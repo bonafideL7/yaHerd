@@ -75,7 +75,7 @@ private struct PreflightedAppNavigationRestorationValidator: AppNavigationRestor
         var pastureIDs = Set<UUID>()
         for route in snapshot.herdRouter.path + (snapshot.herdRouter.searchPath ?? []) {
             switch route {
-            case .animal(let animalID):
+            case .animal(let animalID), .animalEdit(let animalID):
                 animalIDs.insert(animalID)
             case .pasture(let pastureID):
                 pastureIDs.insert(pastureID)

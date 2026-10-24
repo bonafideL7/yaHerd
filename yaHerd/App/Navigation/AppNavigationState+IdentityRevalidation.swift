@@ -69,7 +69,7 @@ extension AppNavigationState {
         for route in path {
             let isValid: Bool
             switch route {
-            case .animal(let animalID):
+            case .animal(let animalID), .animalEdit(let animalID):
                 isValid = try validator.animalExists(id: animalID)
             case .pasture(let pastureID):
                 isValid = try validator.pastureExists(id: pastureID)
@@ -207,7 +207,7 @@ extension AppNavigationState {
             switch route {
             case .fieldChecks, .workingSessions:
                 stableRoutes.append(route)
-            case .animal, .pasture:
+            case .animal, .animalEdit, .pasture:
                 return stableRoutes
             }
         }

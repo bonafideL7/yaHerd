@@ -22,11 +22,26 @@ struct AnimalDetailView: View {
     @State private var editingTag: AnimalTagSnapshot?
     @State private var isLineageExpanded = false
     @State private var showingAddOffspring = false
+    @State private var showingDiscardConfirmation = false
+    @State private var showingArchiveConfirmation = false
+    @State private var permanentDeleteReviewDetail: AnimalDetailSnapshot?
+    @State private var returnsToListAfterSave: Bool
+    @State private var discardDestination: EditingExit = .back
+
+    private enum EditingExit {
+        case back
+        case details
+    }
 
     let animalID: UUID
+    let initiallyEditing: Bool
+    let onClose: (() -> Void)?
 
-    init(animalID: UUID) {
+    init(animalID: UUID, initiallyEditing: Bool = false, onClose: (() -> Void)? = nil) {
         self.animalID = animalID
+        self.initiallyEditing = initiallyEditing
+        self.onClose = onClose
+        _returnsToListAfterSave = State(initialValue: initiallyEditing)
     }
 
     private var displayedTagNumber: String {
@@ -132,10 +147,61 @@ struct AnimalDetailView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
+        .confirmationDialog(
+            "Discard unsaved changes?",
+            isPresented: $showingDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Discard Changes", role: .destructive) {
+                finishEditing(discardDestination)
+            }
+            Button("Keep Editing", role: .cancel) {}
+        } message: {
+            Text("Changes to this animal have not been saved.")
+        }
+        .confirmationDialog(
+            "Archive this record?",
+            isPresented: $showingArchiveConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Archive Record", role: .destructive) {
+                archiveFromEditor()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Archived records are hidden from normal herd views but can be restored later.")
+        }
+        .sheet(item: $permanentDeleteReviewDetail) { reviewDetail in
+            AnimalPermanentDeleteReviewView(detail: reviewDetail) {
+                viewModel.delete(animalID: animalID, using: repository)
+            }
+            .presentationDetents([.large])
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if viewModel.isEditing {
+                Color.clear.frame(height: 88).allowsHitTesting(false)
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if viewModel.isEditing {
+                floatingActions
+                    .padding(.trailing, 24)
+                    .padding(.bottom, 12)
+            }
+        }
         .navigationTitle("Animal")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(viewModel.isEditing)
+        .navigationBarBackButtonHidden(true)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    requestBack()
+                } label: {
+                    Label("Back", systemImage: "chevron.left")
+                }
+                .accessibilityHint("Return to the previous screen")
+            }
+
             if !displayedTagNumber.isEmpty {
                 ToolbarItem(placement: .principal) {
                     let def = tagColorLibrary.resolvedDefinition(tagColorID: displayedTagColorID)
@@ -149,35 +215,38 @@ struct AnimalDetailView: View {
             }
 
             if viewModel.isEditing {
-                ToolbarItem(placement: .cancellationAction) {
-                    ToolbarCancelButton {
-                        viewModel.cancelEditing()
-                    }
-                }
-
                 ToolbarItem(placement: .confirmationAction) {
                     ToolbarSaveButton {
-                        viewModel.save(animalID: animalID, defaultTagColorID: tagColorLibrary.defaultColorID, using: repository)
+                        saveChanges()
                     }
                     .disabled(!canSaveChanges)
                 }
             } else if viewModel.detail != nil {
-                ToolbarItemGroup(placement: .topBarTrailing) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    ToolbarEditButton {
+                        returnsToListAfterSave = false
+                        viewModel.beginEditing()
+                    }
+                }
+            }
+
+            if viewModel.detail != nil {
+                ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
                         AnimalTimelineContainerView(animalID: animalID)
                     } label: {
                         Image(systemName: "clock.arrow.circlepath")
                     }
-
-                    ToolbarEditButton {
-                        viewModel.beginEditing()
-                    }
+                    .accessibilityLabel("Animal Timeline")
                 }
             }
         }
         .task {
             if !viewModel.hasLoaded {
                 viewModel.load(animalID: animalID, using: repository, pastureRepository: pastureReferenceDataReader)
+                if initiallyEditing && dataAccessMode.allowsDataMutations && viewModel.detail != nil {
+                    viewModel.beginEditing()
+                }
             }
         }
         .onChange(of: viewModel.errorMessage) { _, newValue in
@@ -185,9 +254,137 @@ struct AnimalDetailView: View {
         }
         .onChange(of: viewModel.didDelete) { _, didDelete in
             if didDelete {
-                dismiss()
+                closeDestination()
             }
         }
+    }
+
+    private func closeDestination() {
+        if let onClose {
+            onClose()
+        } else {
+            dismiss()
+        }
+    }
+
+    private func requestBack() {
+        if viewModel.isEditing && canSaveChanges {
+            discardDestination = .back
+            showingDiscardConfirmation = true
+        } else {
+            closeDestination()
+        }
+    }
+
+    private func requestViewDetails() {
+        guard viewModel.isEditing else { return }
+        if canSaveChanges {
+            discardDestination = .details
+            showingDiscardConfirmation = true
+        } else {
+            finishEditing(.details)
+        }
+    }
+
+    private func finishEditing(_ destination: EditingExit) {
+        switch destination {
+        case .back:
+            closeDestination()
+        case .details:
+            viewModel.cancelEditing()
+            returnsToListAfterSave = false
+        }
+    }
+
+    private func saveChanges() {
+        viewModel.save(
+            animalID: animalID,
+            defaultTagColorID: tagColorLibrary.defaultColorID,
+            using: repository
+        )
+        if !viewModel.isEditing && returnsToListAfterSave {
+            closeDestination()
+        }
+    }
+
+    private func archiveFromEditor() {
+        viewModel.archive(
+            animalID: animalID,
+            using: repository,
+            pastureRepository: pastureReferenceDataReader
+        )
+        if viewModel.errorMessage == nil {
+            viewModel.cancelEditing()
+            if returnsToListAfterSave {
+                closeDestination()
+            }
+        }
+    }
+
+    private func restoreFromEditor() {
+        viewModel.restore(
+            animalID: animalID,
+            using: repository,
+            pastureRepository: pastureReferenceDataReader
+        )
+        if viewModel.errorMessage == nil {
+            viewModel.cancelEditing()
+            if returnsToListAfterSave {
+                closeDestination()
+            }
+        }
+    }
+
+    private var floatingActions: some View {
+        Menu {
+            Button {
+                requestViewDetails()
+            } label: {
+                Label("View Details", systemImage: "info.circle")
+            }
+
+            if viewModel.canAddOffspring && viewModel.preparedOffspringEditor != nil {
+                Button {
+                    showingAddOffspring = true
+                } label: {
+                    Label("Add Offspring", systemImage: "plus.circle")
+                }
+                .disabled(canSaveChanges)
+            }
+
+            if let detail = viewModel.detail, dataAccessMode.allowsDataMutations {
+                Divider()
+
+                if detail.isArchived {
+                    Button {
+                        restoreFromEditor()
+                    } label: {
+                        Label("Restore Archived Record", systemImage: "arrow.uturn.backward.circle")
+                    }
+                    .disabled(canSaveChanges)
+
+                    Button(role: .destructive) {
+                        permanentDeleteReviewDetail = viewModel.preparePermanentDeleteReview(
+                            animalID: animalID,
+                            using: repository
+                        )
+                    } label: {
+                        Label("Permanently Delete", systemImage: "trash")
+                    }
+                    .disabled(canSaveChanges)
+                } else {
+                    Button(role: .destructive) {
+                        showingArchiveConfirmation = true
+                    } label: {
+                        Label("Archive Record", systemImage: "archivebox")
+                    }
+                    .disabled(canSaveChanges)
+                }
+            }
+        } label: {
+            FloatingAddButtonLabel()
+        }
+        .accessibilityLabel("Animal actions")
     }
 
     private var canSaveChanges: Bool {
@@ -260,6 +457,7 @@ struct AnimalDetailView: View {
         AnimalDetailLineageSection(isExpanded: $isLineageExpanded, detail: detail)
         AnimalDetailStatusSection(detail: detail) { status in
             guard dataAccessMode.allowsDataMutations else { return }
+            returnsToListAfterSave = false
             viewModel.beginEditingStatus(status)
         }
         AnimalDetailRecordManagementSection(

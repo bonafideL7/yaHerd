@@ -51,6 +51,7 @@ struct AnimalListView: View {
     @State private var activeInlineParentPicker: ParentPickerType?
     @State private var detailAnimalID: UUID?
     @State private var isShowingInlineDetail = false
+    @State private var opensFullEditor = false
     private let externalSearchText: Binding<String>?
     private let externalIsSearching: Binding<Bool>?
     private let externalSortOrder: Binding<AnimalSortOrder>?
@@ -64,6 +65,7 @@ struct AnimalListView: View {
     private let usesShellBottomAccessory: Bool
     private let showsListActions: Bool
     private let onOpenAnimal: ((UUID) -> Void)?
+    private let onEditAnimal: ((UUID) -> Void)?
     private let onOpenFieldChecks: () -> Void
     private let onOpenWorkSessions: () -> Void
     private let onOpenSettings: () -> Void
@@ -83,6 +85,7 @@ struct AnimalListView: View {
         usesShellBottomAccessory: Bool = false,
         showsListActions: Bool = true,
         onOpenAnimal: ((UUID) -> Void)? = nil,
+        onEditAnimal: ((UUID) -> Void)? = nil,
         onOpenFieldChecks: @escaping () -> Void = {},
         onOpenWorkSessions: @escaping () -> Void = {},
         onOpenSettings: @escaping () -> Void = {}
@@ -101,6 +104,7 @@ struct AnimalListView: View {
         self.usesShellBottomAccessory = usesShellBottomAccessory
         self.showsListActions = showsListActions
         self.onOpenAnimal = onOpenAnimal
+        self.onEditAnimal = onEditAnimal
         self.onOpenFieldChecks = onOpenFieldChecks
         self.onOpenWorkSessions = onOpenWorkSessions
         self.onOpenSettings = onOpenSettings
@@ -278,7 +282,7 @@ struct AnimalListView: View {
         }
         .navigationDestination(isPresented: $isShowingInlineDetail) {
             if let detailAnimalID {
-                AnimalDetailView(animalID: detailAnimalID)
+                AnimalDetailView(animalID: detailAnimalID, initiallyEditing: opensFullEditor)
             }
         }
         .toolbar {
@@ -445,6 +449,7 @@ struct AnimalListView: View {
             inlineFocusRequestID: inlineEntry.focusRequestID,
             onStartNewInlineEntry: beginNewInlineEntry,
             onStartEditingAnimal: beginInlineEditing,
+            onOpenAnimalEditor: openAnimalEditor,
             onSubmitInlineEntry: submitInlineEntry,
             onPrepareInlinePicker: { inlineEntry.prepareForPickerPresentation() },
             onShowInlineBirthDatePicker: { presentInlineEntryPicker { isShowingInlineBirthDatePicker = true } },
@@ -737,10 +742,33 @@ struct AnimalListView: View {
         }
     }
 
+    private func finishInlineEntryBeforeNavigation() -> Bool {
+        guard inlineEntry.isActive else { return true }
+        if inlineEntry.trimmedText.isEmpty {
+            inlineEntry.cancel()
+        } else {
+            commitInlineEntry(startNewEntryAfterCreate: false)
+        }
+        return !inlineEntry.isActive
+    }
+
+    private func openAnimalEditor(_ animalID: UUID) {
+        guard finishInlineEntryBeforeNavigation() else { return }
+        if let onEditAnimal {
+            onEditAnimal(animalID)
+        } else {
+            opensFullEditor = true
+            detailAnimalID = animalID
+            isShowingInlineDetail = true
+        }
+    }
+
     private func openInlineDetails(_ animalID: UUID) {
+        guard finishInlineEntryBeforeNavigation() else { return }
         if let onOpenAnimal {
             onOpenAnimal(animalID)
         } else {
+            opensFullEditor = false
             detailAnimalID = animalID
             isShowingInlineDetail = true
         }
