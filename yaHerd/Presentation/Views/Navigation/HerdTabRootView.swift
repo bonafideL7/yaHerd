@@ -127,7 +127,6 @@ struct HerdTabRootView: View {
             }
         }
     }
-
 }
 
 struct HerdTabBottomAccessory: View {
