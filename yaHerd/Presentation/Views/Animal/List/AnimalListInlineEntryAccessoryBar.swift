@@ -30,7 +30,7 @@ struct AnimalListInlineEntryAccessoryBar: View {
     var body: some View {
         HStack(spacing: 8) {
             accessoryButton(
-                systemName: "person.2",
+                systemName: "figure.stand",
                 accessibilityLabel: "Sex",
                 accessibilityValue: sex.label,
                 action: {
@@ -95,7 +95,7 @@ struct AnimalListInlineEntryAccessoryBar: View {
             }
 
             accessoryButton(
-                systemName: "arrow.triangle.branch",
+                systemName: "person.2",
                 accessibilityLabel: "Parents",
                 accessibilityValue: parentSummary,
                 action: onToggleParents
