@@ -98,7 +98,7 @@ struct HerdView: View {
                 )
             }
         }
-        .navigationTitle(allowsModeSwitch ? (mode == .animals ? "Animals" : "Pastures") : "Search")
+        .navigationTitle(allowsModeSwitch ? (mode == .animals ? "Animals" : "Pastures") : "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if allowsModeSwitch {
