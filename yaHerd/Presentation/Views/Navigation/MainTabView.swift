@@ -9,6 +9,7 @@ struct MainTabView: View {
 
     var body: some View {
         @Bindable var navigation = navigation
+        @Bindable var router = navigation.herdRouter
 
         TabView(selection: $navigation.selectedTab) {
             Tab("Home", systemImage: "house", value: AppTab.home) {
@@ -35,6 +36,7 @@ struct MainTabView: View {
                 HerdTabRootView(tab: .search)
             }
         }
+        .searchable(text: $router.searchText, prompt: "Search tag, color, or name")
         .tabViewSearchActivation(.searchTabSelection)
         .yaherdTabBarMinimizeBehavior()
         .yaherdTabViewBottomAccessory(isVisible: navigation.showsAnimalListAccessory) {
