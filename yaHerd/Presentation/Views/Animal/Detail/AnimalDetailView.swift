@@ -221,13 +221,6 @@ struct AnimalDetailView: View {
                     }
                     .disabled(!canSaveChanges)
                 }
-            } else if viewModel.detail != nil {
-                ToolbarItem(placement: .topBarTrailing) {
-                    ToolbarEditButton {
-                        returnsToListAfterSave = false
-                        viewModel.beginEditing()
-                    }
-                }
             }
 
             if viewModel.detail != nil {
@@ -238,6 +231,15 @@ struct AnimalDetailView: View {
                         Image(systemName: "clock.arrow.circlepath")
                     }
                     .accessibilityLabel("Animal Timeline")
+                }
+
+                if !viewModel.isEditing {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        ToolbarEditButton {
+                            returnsToListAfterSave = false
+                            viewModel.beginEditing()
+                        }
+                    }
                 }
             }
         }
