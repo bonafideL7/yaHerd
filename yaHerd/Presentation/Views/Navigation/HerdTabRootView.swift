@@ -16,6 +16,7 @@ struct HerdTabRootView: View {
 
         if tab == .search {
             herdNavigationStack
+                .searchable(text: $router.searchText, prompt: "Search tag, color, or name")
                 .task {
                     prepareSearchTabIfSelected()
                 }
