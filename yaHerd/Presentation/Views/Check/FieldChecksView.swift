@@ -94,11 +94,19 @@ struct FieldChecksView: View {
             .sorted(by: sortedByStateThenNewest)
     }
 
+    private var overviewSessions: [FieldCheckSessionSummary] {
+        model.sessions
+            .filter {
+                !$0.isPastureArchived && (!$0.isCompleted || $0.openFindingsCount > 0
+                    || $0.flaggedAnimalCount > 0 || $0.missingAnimalCount > 0)
+            }
+            .sorted(by: sortedByStateThenNewest)
+    }
+
     private var filteredIsEmpty: Bool {
         switch selectedMode {
         case .all:
-            return openCheckSessions.isEmpty && openFindingSessions.isEmpty
-                && flaggedSessions.isEmpty && missingSessions.isEmpty
+            return overviewSessions.isEmpty
         case .inProgress:
             return openCheckSessions.isEmpty
         case .completed:
@@ -271,14 +279,6 @@ struct FieldChecksView: View {
 
     @ViewBuilder
     private var allSections: some View {
-        overviewSection
-        openChecksSection
-        allFindingsSection
-        allFlaggedSection
-        allMissingSection
-    }
-
-    private var overviewSection: some View {
         Section {
             FieldChecksOverviewCard(
                 openCheckCount: openCheckSessions.count,
@@ -286,6 +286,59 @@ struct FieldChecksView: View {
                 flaggedCount: flaggedSessions.count,
                 missingCount: missingSessions.count
             )
+        }
+
+        Section("Pasture Checks") {
+            ForEach(overviewSessions) { session in
+                VStack(alignment: .leading, spacing: 8) {
+                    fieldCheckNavigationRow(
+                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id)
+                    ) {
+                        FieldCheckSessionSummaryRow(session: session)
+                    }
+                    if session.openFindingsCount > 0 || session.flaggedAnimalCount > 0 || session.missingAnimalCount > 0 {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                if session.openFindingsCount > 0 {
+                                    issueAction(
+                                        "\(session.openFindingsCount) Findings",
+                                        systemImage: "exclamationmark.bubble",
+                                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensFindings: true)
+                                    )
+                                }
+                                if session.flaggedAnimalCount > 0 {
+                                    issueAction(
+                                        "\(session.flaggedAnimalCount) Flagged",
+                                        systemImage: "flag",
+                                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensFlaggedRoster: true)
+                                    )
+                                }
+                                if session.missingAnimalCount > 0 {
+                                    issueAction(
+                                        "\(session.missingAnimalCount) Missing",
+                                        systemImage: "questionmark.app",
+                                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensMissingRoster: true)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func issueAction(
+        _ label: String,
+        systemImage: String,
+        configuration: FieldCheckSessionLaunchConfiguration
+    ) -> some View {
+        fieldCheckNavigationRow(configuration: configuration) {
+            Label(label, systemImage: systemImage)
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
         }
     }
 
@@ -298,52 +351,6 @@ struct FieldChecksView: View {
                         configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensRemainingRoster: true)
                     ) {
                         FieldCheckSessionSummaryRow(session: session, emphasis: emphasis(for: session))
-                    }
-                }
-            }
-        }
-    }
-
-    // Overview categories intentionally overlap: a check may have several outstanding issues.
-    @ViewBuilder
-    private var allFindingsSection: some View {
-        if !openFindingSessions.isEmpty {
-            Section("Open Findings") {
-                ForEach(openFindingSessions) { session in
-                    fieldCheckNavigationRow(
-                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensFindings: true)
-                    ) {
-                        FieldCheckSessionSummaryRow(session: session, emphasis: .findings)
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var allFlaggedSection: some View {
-        if !flaggedSessions.isEmpty {
-            Section("Flagged Animals") {
-                ForEach(flaggedSessions) { session in
-                    fieldCheckNavigationRow(
-                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensFlaggedRoster: true)
-                    ) {
-                        FieldCheckSessionSummaryRow(session: session, emphasis: .flagged)
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var allMissingSection: some View {
-        if !missingSessions.isEmpty {
-            Section("Missing Animals") {
-                ForEach(missingSessions) { session in
-                    fieldCheckNavigationRow(
-                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensMissingRoster: true)
-                    ) {
-                        FieldCheckSessionSummaryRow(session: session, emphasis: .missing)
                     }
                 }
             }
