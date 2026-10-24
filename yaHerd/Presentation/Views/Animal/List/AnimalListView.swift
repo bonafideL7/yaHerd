@@ -253,7 +253,7 @@ struct AnimalListView: View {
     }
 
     private var inlineHelperText: String {
-        "Enter color prefix + number, like W345 for white 345 or LB01 for light blue 01. Unrecognized prefixes are saved as the animal name."
+        "Enter a color prefix or name and number (W345 or White 345). Other text is saved as the animal name."
     }
 
     private var errorMessageIsPresented: Binding<Bool> {
