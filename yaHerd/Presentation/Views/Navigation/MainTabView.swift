@@ -35,6 +35,7 @@ struct MainTabView: View {
                 HerdTabRootView(tab: .search)
             }
         }
+        .tabViewSearchActivation(.searchTabSelection)
         .yaherdTabBarMinimizeBehavior()
         .yaherdTabViewBottomAccessory(isVisible: navigation.showsAnimalListAccessory) {
             HerdTabBottomAccessory()
