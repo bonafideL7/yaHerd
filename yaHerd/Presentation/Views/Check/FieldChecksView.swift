@@ -97,7 +97,8 @@ struct FieldChecksView: View {
     private var filteredIsEmpty: Bool {
         switch selectedMode {
         case .all:
-            return openCheckSessions.isEmpty
+            return openCheckSessions.isEmpty && openFindingSessions.isEmpty
+                && flaggedSessions.isEmpty && missingSessions.isEmpty
         case .inProgress:
             return openCheckSessions.isEmpty
         case .completed:
@@ -272,13 +273,18 @@ struct FieldChecksView: View {
     private var allSections: some View {
         overviewSection
         openChecksSection
+        allFindingsSection
+        allFlaggedSection
+        allMissingSection
     }
 
     private var overviewSection: some View {
         Section {
             FieldChecksOverviewCard(
-                needsAttentionCount: openCheckSessions.filter { $0.openFindingsCount > 0 || $0.flaggedAnimalCount > 0 || $0.missingAnimalCount > 0 }.count,
-                openCheckCount: openCheckSessions.count
+                openCheckCount: openCheckSessions.count,
+                findingsCount: openFindingSessions.count,
+                flaggedCount: flaggedSessions.count,
+                missingCount: missingSessions.count
             )
         }
     }
@@ -292,6 +298,52 @@ struct FieldChecksView: View {
                         configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensRemainingRoster: true)
                     ) {
                         FieldCheckSessionSummaryRow(session: session, emphasis: emphasis(for: session))
+                    }
+                }
+            }
+        }
+    }
+
+    // Overview categories intentionally overlap: a check may have several outstanding issues.
+    @ViewBuilder
+    private var allFindingsSection: some View {
+        if !openFindingSessions.isEmpty {
+            Section("Open Findings") {
+                ForEach(openFindingSessions) { session in
+                    fieldCheckNavigationRow(
+                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensFindings: true)
+                    ) {
+                        FieldCheckSessionSummaryRow(session: session, emphasis: .findings)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var allFlaggedSection: some View {
+        if !flaggedSessions.isEmpty {
+            Section("Flagged Animals") {
+                ForEach(flaggedSessions) { session in
+                    fieldCheckNavigationRow(
+                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensFlaggedRoster: true)
+                    ) {
+                        FieldCheckSessionSummaryRow(session: session, emphasis: .flagged)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var allMissingSection: some View {
+        if !missingSessions.isEmpty {
+            Section("Missing Animals") {
+                ForEach(missingSessions) { session in
+                    fieldCheckNavigationRow(
+                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensMissingRoster: true)
+                    ) {
+                        FieldCheckSessionSummaryRow(session: session, emphasis: .missing)
                     }
                 }
             }
@@ -507,13 +559,17 @@ struct FieldCheckAllSessionGroups {
 }
 
 private struct FieldChecksOverviewCard: View {
-    let needsAttentionCount: Int
     let openCheckCount: Int
+    let findingsCount: Int
+    let flaggedCount: Int
+    let missingCount: Int
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 10)], alignment: .leading, spacing: 10) {
-            FieldChecksOverviewMetric(title: "Attention", value: needsAttentionCount, tint: needsAttentionCount > 0 ? .orange : .primary)
-            FieldChecksOverviewMetric(title: "Open", value: openCheckCount, tint: openCheckCount > 0 ? .accentColor : .primary)
+            FieldChecksOverviewMetric(title: "Open", value: openCheckCount, tint: .accentColor)
+            FieldChecksOverviewMetric(title: "Findings", value: findingsCount, tint: findingsCount > 0 ? .red : .primary)
+            FieldChecksOverviewMetric(title: "Flagged", value: flaggedCount, tint: flaggedCount > 0 ? .orange : .primary)
+            FieldChecksOverviewMetric(title: "Missing", value: missingCount, tint: missingCount > 0 ? .brown : .primary)
         }
         .padding(.vertical, 4)
     }
