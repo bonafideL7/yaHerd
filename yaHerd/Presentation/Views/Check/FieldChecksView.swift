@@ -109,10 +109,7 @@ struct FieldChecksView: View {
     private var filteredIsEmpty: Bool {
         switch selectedMode {
         case .all:
-            return needsAttentionSessions.isEmpty
-            && openCheckSessions.isEmpty
-            && completedCheckSessions.isEmpty
-            && archivedPastureSessions.isEmpty
+            return openCheckSessions.isEmpty
         case .inProgress:
             return openCheckSessions.isEmpty
         case .completed:
@@ -287,16 +284,14 @@ struct FieldChecksView: View {
     private var allSections: some View {
         overviewSection
         openChecksSection
-        completedChecksSection
-        archivedPasturesSection
     }
 
     private var overviewSection: some View {
         Section {
             FieldChecksOverviewCard(
-                needsAttentionCount: needsAttentionSessions.count,
-                openCheckCount: allSessionGroups.openCount,
-                completedCheckCount: allSessionGroups.completedCount,
+                needsAttentionCount: openCheckSessions.filter { $0.openFindingsCount > 0 || $0.flaggedAnimalCount > 0 || $0.missingAnimalCount > 0 }.count,
+                openCheckCount: openCheckSessions.count,
+                completedCheckCount: completedCheckSessions.count,
                 archivedCheckCount: archivedPastureSessions.count
             )
         }
