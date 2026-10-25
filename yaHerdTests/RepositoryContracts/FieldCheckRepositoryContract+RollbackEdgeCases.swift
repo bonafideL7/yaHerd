@@ -248,12 +248,12 @@ extension FieldCheckRepositoryContract {
                 targetAcresPerHead: 1.5
             )
         )
-        let animal = try fixture.makeAnimalRepository().create(
+        let animal = try makeRollbackCow(
             input: rollbackEdgeAnimalInput(
                 name: "Roster State Rollback Animal",
                 tagNumber: "RS501",
-                pastureID: pasture.id
-            )
+                pastureID: pasture.id,
+            using: fixture
         )
         let repository = fixture.makeFieldCheckRepository()
         let sessionID = try await repository.createSession(
@@ -566,19 +566,19 @@ extension FieldCheckRepositoryContract {
                 targetAcresPerHead: 1.5
             )
         )
-        let firstAnimal = try fixture.makeAnimalRepository().create(
+        let firstAnimal = try makeRollbackCow(
             input: rollbackEdgeAnimalInput(
                 name: "Finding Quick Count One",
                 tagNumber: "FQ601",
-                pastureID: pasture.id
-            )
+                pastureID: pasture.id,
+            using: fixture
         )
-        _ = try fixture.makeAnimalRepository().create(
+        _ = try makeRollbackCow(
             input: rollbackEdgeAnimalInput(
                 name: "Finding Quick Count Two",
                 tagNumber: "FQ602",
-                pastureID: pasture.id
-            )
+                pastureID: pasture.id,
+            using: fixture
         )
 
         let repository = fixture.makeFieldCheckRepository()
@@ -728,6 +728,38 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
+    }
+
+    // The classifier distinguishes cows from heifers by maternal history. Keep
+    // the Field Check roster limited to the intended animal(s) while making
+    // cow-specific quick-count rollback scenarios biologically valid.
+    private static func makeRollbackCow(
+        input: AnimalInput,
+        using fixture: FieldCheckRepositoryContractFixture
+    ) throws -> AnimalDetailSnapshot {
+        let repository = fixture.makeAnimalRepository()
+        let mother = try repository.create(input: input)
+        _ = try repository.create(
+            input: AnimalInput(
+                name: "Historical offspring of \(input.tagNumber)",
+                tagNumber: "\(input.tagNumber)-history",
+                tagColorID: nil,
+                sex: .female,
+                birthDate: rollbackEdgeDate(year: 2024, month: 1, day: 1),
+                status: .sold,
+                pastureID: nil,
+                sireID: nil,
+                damID: mother.id,
+                distinguishingFeatures: [],
+                saleDate: rollbackEdgeDate(year: 2025, month: 5, day: 1),
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        )
+        return mother
     }
 
     private static func rollbackEdgeAnimalInput(
