@@ -1351,7 +1351,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         )
         let persistedContext = readOnlyAssembly.contextFactory.makeReadContext()
         try persistedContext.performAndWait {
-            let storedPasture = try XCTUnwrap(readOnlyAssembly.lookup.herdOwned(
+            let storedPasture = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPasture.self, id: foreignPastureID, herdID: foreignHerdID,
                 in: persistedContext
             ))
@@ -5721,7 +5721,7 @@ private final class CoreDataAnimalIdentityContractScope {
         }
     }
 
-    private func seedSupportAnimal(
+    private nonisolated func seedSupportAnimal(
         id: UUID,
         name: String,
         herd: CDHerd,

@@ -2482,7 +2482,7 @@ enum AnimalAggregateTransactionContract {
     }
 
     private static func dashboardPregnancyStatus(
-        from result: PregnancyResult?
+        from result: AnimalPregnancyStatus?
     ) -> DashboardPregnancyStatus? {
         switch result {
         case .open:
