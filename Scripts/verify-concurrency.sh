@@ -267,14 +267,19 @@ run_xcodebuild_gate() {
   echo "$label passed."
 }
 
-# Fast PR gate: one compiler invocation path using the same Debug configuration developers
-# normally use in Xcode. This is the gate intended to catch Swift 6 source diagnostics quickly.
-run_xcodebuild_gate \
-  'Debug iOS Simulator build' \
-  -configuration Debug \
-  -sdk iphonesimulator \
-  -destination 'generic/platform=iOS Simulator' \
-  build
+# When simulator tests run in the same job, xcodebuild test compiles the app
+# and test target. Keep the compiler-policy checks above, but avoid rebuilding
+# the app here. Standalone concurrency verification retains its Debug build.
+if [[ "${YAHERD_TESTS_BUILD_APP:-0}" != "1" ]]; then
+  run_xcodebuild_gate \
+    'Debug iOS Simulator build' \
+    -configuration Debug \
+    -sdk iphonesimulator \
+    -destination 'generic/platform=iOS Simulator' \
+    build
+else
+  echo 'Debug app build delegated to the iOS Simulator test step.'
+fi
 
 if [[ "$FULL_VERIFY" == "1" ]]; then
   run_xcodebuild_gate \

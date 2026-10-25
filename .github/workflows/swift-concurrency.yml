@@ -16,6 +16,11 @@ on:
         required: true
         type: boolean
         default: true
+      run_tests:
+        description: Run iOS Simulator automated tests
+        required: true
+        type: boolean
+        default: true
       full_verification:
         description: Also run Release, build-for-testing, and device builds
         required: true
@@ -32,14 +37,14 @@ jobs:
   verify:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
     runs-on: macos-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       - name: Validate verification selection
         if: ${{ github.event_name == 'workflow_dispatch' }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ inputs.run_architecture }}" != "true" && "${{ inputs.run_concurrency }}" != "true" ]]; then
+          if [[ "${{ inputs.run_architecture }}" != "true" && "${{ inputs.run_concurrency }}" != "true" && "${{ inputs.run_tests }}" != "true" ]]; then
             echo "Select at least one verification option." >&2
             exit 1
           fi
@@ -76,7 +81,7 @@ jobs:
           bash Scripts/verify-privacy.sh
 
       - name: Select Xcode 26
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_concurrency }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_concurrency || inputs.run_tests }}
         shell: bash
         run: |
           set -euo pipefail
@@ -101,6 +106,44 @@ jobs:
         shell: bash
         env:
           YAHERD_FULL_VERIFY: ${{ github.event_name == 'workflow_dispatch' && inputs.full_verification && '1' || '0' }}
+          YAHERD_TESTS_BUILD_APP: ${{ (github.event_name != 'workflow_dispatch' || inputs.run_tests) && '1' || '0' }}
         run: |
           set -euo pipefail
           bash Scripts/verify-concurrency.sh
+
+      - name: Run iOS Simulator tests
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_tests }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Discover an installed iOS 26 iPhone simulator on the runner.
+          SIMULATOR_ID="$(xcrun simctl list -j devices available | python3 -c '
+          import json
+          import sys
+          devices = json.load(sys.stdin).get("devices", {})
+          for runtime, entries in devices.items():
+              if "SimRuntime.iOS-26" not in runtime:
+                  continue
+              for device in entries:
+                  if device.get("isAvailable", True) and device.get("name", "").startswith("iPhone"):
+                      print(device["udid"])
+                      sys.exit(0)
+          ')"
+
+          if [[ -z "$SIMULATOR_ID" ]]; then
+            echo "An available iOS 26 iPhone simulator is required to run yaHerdTests." >&2
+            xcrun simctl list devices available >&2
+            exit 1
+          fi
+
+          echo "Running yaHerdTests on simulator $SIMULATOR_ID"
+          xcodebuild \
+            -project yaHerd.xcodeproj \
+            -scheme yaHerd \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -derivedDataPath "$GITHUB_WORKSPACE/.build/ConcurrencyDerivedData" \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO \
+            test

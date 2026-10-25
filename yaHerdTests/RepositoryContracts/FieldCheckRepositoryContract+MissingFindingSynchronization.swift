@@ -66,7 +66,7 @@ extension FieldCheckRepositoryContract {
             )
         )
 
-        func addMissingFinding(note: String, recordedAt: Date) throws -> UUID {
+        func addMissingFinding(note: String, recordedAt: Date) async throws -> UUID {
             try await repository.addFinding(
                 sessionID: sessionID,
                 input: FieldCheckFindingInput(
@@ -103,11 +103,11 @@ extension FieldCheckRepositoryContract {
             )
         }
 
-        let firstResolvableID = try addMissingFinding(
+        let firstResolvableID = try await addMissingFinding(
             note: "Resolve first missing finding",
             recordedAt: Date(timeIntervalSince1970: 1_780_203_600)
         )
-        let secondResolvableID = try addMissingFinding(
+        let secondResolvableID = try await addMissingFinding(
             note: "Resolve second missing finding",
             recordedAt: Date(timeIntervalSince1970: 1_780_207_200)
         )
@@ -159,11 +159,11 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
-        let firstDeletableID = try addMissingFinding(
+        let firstDeletableID = try await addMissingFinding(
             note: "Delete first missing finding",
             recordedAt: Date(timeIntervalSince1970: 1_780_210_800)
         )
-        let secondDeletableID = try addMissingFinding(
+        let secondDeletableID = try await addMissingFinding(
             note: "Delete second missing finding",
             recordedAt: Date(timeIntervalSince1970: 1_780_214_400)
         )
@@ -203,11 +203,11 @@ extension FieldCheckRepositoryContract {
         XCTAssertTrue(afterDeletion.findings.contains { $0.id == firstResolvableID && $0.status == .resolved }, file: file, line: line)
         XCTAssertTrue(afterDeletion.findings.contains { $0.id == secondResolvableID && $0.status == .resolved }, file: file, line: line)
 
-        let firstReassignmentID = try addMissingFinding(
+        let firstReassignmentID = try await addMissingFinding(
             note: "Reassign one of multiple missing findings",
             recordedAt: Date(timeIntervalSince1970: 1_780_218_000)
         )
-        let remainingOriginalID = try addMissingFinding(
+        let remainingOriginalID = try await addMissingFinding(
             note: "Remain on original animal",
             recordedAt: Date(timeIntervalSince1970: 1_780_221_600)
         )

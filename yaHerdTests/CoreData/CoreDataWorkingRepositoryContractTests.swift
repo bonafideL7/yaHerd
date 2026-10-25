@@ -1227,7 +1227,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                 let assembly = try await harness.makeAssembly()
                 let environment = try CoreDataWorkingContractEnvironment(assembly: assembly)
                 let primaryAnimals = environment.makeAnimalRepository()
-                let primaryWorking = environment.makeWorkingRepository()
+                let primaryWorking = environment.makeCoreWorkingRepository()
                 let pasture = try environment.makePastureRepository().create(
                     input: PastureInput(
                         name: "Working History Identity Pasture",

@@ -1328,9 +1328,12 @@ enum FieldCheckRepositoryContract {
         _ expected: FieldCheckRepositoryError,
         file: StaticString,
         line: UInt,
-        operation: () throws -> Void
-    ) {
-        XCTAssertThrowsError(try operation(), file: file, line: line) { error in
+        operation: () async throws -> Void
+    ) async {
+        do {
+            try await operation()
+            XCTFail("Expected FieldCheckRepositoryError but operation succeeded.", file: file, line: line)
+        } catch {
             guard let repositoryError = error as? FieldCheckRepositoryError else {
                 XCTFail("Expected FieldCheckRepositoryError but received \(error).", file: file, line: line)
                 return

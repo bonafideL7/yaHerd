@@ -31,12 +31,12 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         let readContext = reopened.contextFactory.makeReadContext()
         try readContext.performAndWait {
             let herd = try XCTUnwrap(
-                reopened.lookup.herd(id: herdID, in: readContext)
+                CoreDataLookup().herd(id: herdID, in: readContext)
             )
             XCTAssertEqual(herd.id, herdID)
 
             let pasture = try XCTUnwrap(
-                reopened.lookup.herdOwned(
+                CoreDataLookup().herdOwned(
                     CDPasture.self,
                     id: pastureID,
                     herdID: herdID,
@@ -119,7 +119,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         let context = assembly.contextFactory.makeReadContext()
         try context.performAndWait {
             let pastureA = try XCTUnwrap(
-                assembly.lookup.herdOwned(
+                CoreDataLookup().herdOwned(
                     CDPasture.self,
                     id: sharedPastureID,
                     herdID: herdAID,
@@ -127,7 +127,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
                 )
             )
             let pastureB = try XCTUnwrap(
-                assembly.lookup.herdOwned(
+                CoreDataLookup().herdOwned(
                     CDPasture.self,
                     id: sharedPastureID,
                     herdID: herdBID,
@@ -208,7 +208,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         let context = assembly.contextFactory.makeReadContext()
         try context.performAndWait {
             XCTAssertThrowsError(
-                try assembly.lookup.herdOwned(
+                try CoreDataLookup().herdOwned(
                     CDPasture.self,
                     id: duplicatePastureID,
                     herdID: herdID,
@@ -258,12 +258,12 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
                 herdID: nil
             )
             XCTAssertThrowsError(
-                try reopened.lookup.herd(id: duplicateHerdID, in: context)
+                try CoreDataLookup().herd(id: duplicateHerdID, in: context)
             ) { error in
                 XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
             }
             XCTAssertThrowsError(
-                try reopened.lookup.herdOwned(
+                try CoreDataLookup().herdOwned(
                     CDPasture.self,
                     id: pastureID,
                     herdID: duplicateHerdID,
@@ -274,10 +274,10 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             }
 
             XCTAssertEqual(
-                try reopened.lookup.herd(id: controlHerdID, in: context)?.name,
+                try CoreDataLookup().herd(id: controlHerdID, in: context)?.name,
                 "Unaffected Root"
             )
-            XCTAssertNil(try reopened.lookup.herdOwned(
+            XCTAssertNil(try CoreDataLookup().herdOwned(
                 CDPasture.self,
                 id: pastureID,
                 herdID: controlHerdID,
@@ -307,13 +307,13 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         let reopened = try await harness.makeAssembly(accessMode: .readOnly)
         let context = reopened.contextFactory.makeReadContext()
         try context.performAndWait {
-            let pastureA = try XCTUnwrap(reopened.lookup.herdOwned(
+            let pastureA = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPasture.self,
                 id: sharedPastureID,
                 herdID: herdAID,
                 in: context
             ))
-            let pastureB = try XCTUnwrap(reopened.lookup.herdOwned(
+            let pastureB = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPasture.self,
                 id: sharedPastureID,
                 herdID: herdBID,
@@ -326,13 +326,13 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             XCTAssertEqual(pastureB.id, sharedPastureID)
             XCTAssertEqual(pastureB.herd.id, herdBID)
             XCTAssertEqual(pastureB.name, "B Pasture")
-            XCTAssertNil(try reopened.lookup.herdOwned(
+            XCTAssertNil(try CoreDataLookup().herdOwned(
                 CDPasture.self,
                 id: UUID(),
                 herdID: herdAID,
                 in: context
             ))
-            XCTAssertNil(try reopened.lookup.herdOwned(
+            XCTAssertNil(try CoreDataLookup().herdOwned(
                 CDPasture.self,
                 id: sharedPastureID,
                 herdID: UUID(),
@@ -373,7 +373,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         let context = reopened.contextFactory.makeReadContext()
         try context.performAndWait {
             XCTAssertThrowsError(
-                try reopened.lookup.herdOwned(
+                try CoreDataLookup().herdOwned(
                     CDPasture.self,
                     id: sharedPastureID,
                     herdID: duplicateHerdID,
@@ -390,7 +390,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
                 )
             }
 
-            let control = try XCTUnwrap(reopened.lookup.herdOwned(
+            let control = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPasture.self,
                 id: sharedPastureID,
                 herdID: controlHerdID,
@@ -431,9 +431,9 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
 
         let context = assembly.contextFactory.makeReadContext()
         try context.performAndWait {
-            XCTAssertNotNil(try assembly.lookup.herd(id: herdID, in: context))
+            XCTAssertNotNil(try CoreDataLookup().herd(id: herdID, in: context))
             XCTAssertNil(
-                try assembly.lookup.herdOwned(
+                try CoreDataLookup().herdOwned(
                     CDPasture.self,
                     id: failedPastureID,
                     herdID: herdID,
@@ -517,22 +517,22 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         let reopened = try await harness.makeAssembly(accessMode: .readOnly)
         let context = reopened.contextFactory.makeReadContext()
         try context.performAndWait {
-            let herd = try XCTUnwrap(reopened.lookup.herd(id: herdID, in: context))
+            let herd = try XCTUnwrap(CoreDataLookup().herd(id: herdID, in: context))
             XCTAssertEqual(herd.name, "Original Herd")
             XCTAssertEqual(herd.createdAt, originalUpdatedAt)
             XCTAssertEqual(herd.updatedAt, originalUpdatedAt)
 
-            let original = try XCTUnwrap(reopened.lookup.herdOwned(
+            let original = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPasture.self, id: removedPastureID, herdID: herdID, in: context
             ))
             XCTAssertEqual(original.name, "Original Pasture")
             XCTAssertEqual(original.herd.id, herdID)
-            let control = try XCTUnwrap(reopened.lookup.herdOwned(
+            let control = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPasture.self, id: controlPastureID, herdID: herdID, in: context
             ))
             XCTAssertEqual(control.name, "Control Pasture")
             XCTAssertEqual(control.herd.id, herdID)
-            XCTAssertNil(try reopened.lookup.herdOwned(
+            XCTAssertNil(try CoreDataLookup().herdOwned(
                 CDPasture.self, id: rejectedPastureID, herdID: herdID, in: context
             ))
         }
@@ -670,7 +670,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
 
         try readContext.performAndWait {
             XCTAssertEqual(
-                try readOnly.lookup.herd(id: herdID, in: readContext)?.name,
+                try CoreDataLookup().herd(id: herdID, in: readContext)?.name,
                 "Read Only Herd"
             )
         }
@@ -793,7 +793,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
 
         try await assembly.transactionExecutor.performWrite { context in
             let pasture = try XCTUnwrap(
-                assembly.lookup.herdOwned(
+                CoreDataLookup().herdOwned(
                     CDPasture.self,
                     id: removedPastureID,
                     herdID: herdID,
@@ -806,16 +806,16 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         let reopened = try await harness.makeAssembly(accessMode: .readOnly)
         let freshContext = reopened.contextFactory.makeReadContext()
         try freshContext.performAndWait {
-            XCTAssertNil(try reopened.lookup.herdOwned(
+            XCTAssertNil(try CoreDataLookup().herdOwned(
                 CDPasture.self, id: removedPastureID, herdID: herdID, in: freshContext
             ))
-            let control = try XCTUnwrap(reopened.lookup.herdOwned(
+            let control = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPasture.self, id: controlPastureID, herdID: herdID, in: freshContext
             ))
             XCTAssertEqual(control.name, "Control Pasture")
-            XCTAssertNotNil(try reopened.lookup.herd(id: herdID, in: freshContext))
+            XCTAssertNotNil(try CoreDataLookup().herd(id: herdID, in: freshContext))
 
-            let fieldSession = try XCTUnwrap(reopened.lookup.herdOwned(
+            let fieldSession = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDFieldCheckSession.self, id: fieldSessionID, herdID: herdID, in: freshContext
             ))
             XCTAssertNil(fieldSession.pasture)
@@ -823,14 +823,14 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             XCTAssertEqual(fieldSession.pastureNameSnapshot, "Original Pasture")
             XCTAssertEqual(fieldSession.completedAt, timestamp.addingTimeInterval(30))
 
-            let working = try XCTUnwrap(reopened.lookup.herdOwned(
+            let working = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDWorkingSession.self, id: workingSessionID, herdID: herdID, in: freshContext
             ))
             XCTAssertNil(working.sourcePasture)
             XCTAssertEqual(working.sourcePastureIDSnapshot, removedPastureID)
             XCTAssertEqual(working.sourcePastureNameSnapshot, "Original Pasture")
 
-            let queue = try XCTUnwrap(reopened.lookup.herdOwned(
+            let queue = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDWorkingQueueItem.self, id: queueID, herdID: herdID, in: freshContext
             ))
             XCTAssertEqual(queue.session.id, workingSessionID)
@@ -945,10 +945,10 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         }
 
         try await assembly.transactionExecutor.performWrite { context in
-            let animal = try XCTUnwrap(assembly.lookup.herdOwned(
+            let animal = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDAnimal.self, id: removedAnimalID, herdID: herdID, in: context
             ))
-            let workingSession = try XCTUnwrap(assembly.lookup.herdOwned(
+            let workingSession = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDWorkingSession.self, id: workingSessionID, herdID: herdID, in: context
             ))
             XCTAssertTrue(workingSession.activeAnimals?.contains(animal) == true)
@@ -958,27 +958,27 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         let reopened = try await harness.makeAssembly(accessMode: .readOnly)
         let freshContext = reopened.contextFactory.makeReadContext()
         try freshContext.performAndWait {
-            XCTAssertNil(try reopened.lookup.herdOwned(
+            XCTAssertNil(try CoreDataLookup().herdOwned(
                 CDAnimal.self, id: removedAnimalID, herdID: herdID, in: freshContext
             ))
-            XCTAssertNil(try reopened.lookup.herdOwned(
+            XCTAssertNil(try CoreDataLookup().herdOwned(
                 CDAnimalTag.self, id: tagID, herdID: herdID, in: freshContext
             ))
-            XCTAssertNil(try reopened.lookup.herdOwned(
+            XCTAssertNil(try CoreDataLookup().herdOwned(
                 CDMovementRecord.self, id: movementID, herdID: herdID, in: freshContext
             ))
-            let control = try XCTUnwrap(reopened.lookup.herdOwned(
+            let control = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDAnimal.self, id: controlAnimalID, herdID: herdID, in: freshContext
             ))
             XCTAssertEqual(control.name, "Control Cow")
-            XCTAssertNotNil(try reopened.lookup.herd(id: herdID, in: freshContext))
+            XCTAssertNotNil(try CoreDataLookup().herd(id: herdID, in: freshContext))
 
-            let fieldSession = try XCTUnwrap(reopened.lookup.herdOwned(
+            let fieldSession = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDFieldCheckSession.self, id: fieldSessionID, herdID: herdID, in: freshContext
             ))
             XCTAssertEqual(fieldSession.pasture?.id, pastureID)
 
-            let check = try XCTUnwrap(reopened.lookup.herdOwned(
+            let check = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDFieldCheckAnimalCheck.self, id: checkID, herdID: herdID, in: freshContext
             ))
             XCTAssertEqual(check.session.id, fieldSessionID)
@@ -987,7 +987,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             XCTAssertEqual(check.rosterTagNumberSnapshot, "17")
             XCTAssertEqual(check.animalNameSnapshot, "Historical Cow")
 
-            let finding = try XCTUnwrap(reopened.lookup.herdOwned(
+            let finding = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDFieldCheckFinding.self, id: findingID, herdID: herdID, in: freshContext
             ))
             XCTAssertEqual(finding.session.id, fieldSessionID)
@@ -997,12 +997,12 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             XCTAssertEqual(finding.animalNameSnapshot, "Historical Cow")
             XCTAssertEqual(finding.note, "Historical finding")
 
-            let working = try XCTUnwrap(reopened.lookup.herdOwned(
+            let working = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDWorkingSession.self, id: workingSessionID, herdID: herdID, in: freshContext
             ))
             XCTAssertEqual(working.sourcePasture?.id, pastureID)
             XCTAssertEqual(working.activeAnimals?.count ?? 0, 0)
-            let queue = try XCTUnwrap(reopened.lookup.herdOwned(
+            let queue = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDWorkingQueueItem.self, id: queueID, herdID: herdID, in: freshContext
             ))
             XCTAssertEqual(queue.session.id, workingSessionID)

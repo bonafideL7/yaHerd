@@ -1565,7 +1565,7 @@ enum PastureDeletionWorkflowContract {
     ) throws -> [MovementSnapshot] {
         try repository.fetchTimeline(id: animalID).compactMap { event -> MovementSnapshot? in
             guard case .movement = event.type else { return nil }
-            return MovementSnapshot(date: event.date, details: event.details)
+            return MovementSnapshot(date: event.date, details: try XCTUnwrap(event.details))
         }
     }
 

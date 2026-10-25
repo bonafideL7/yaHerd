@@ -104,7 +104,7 @@ enum HerdRepositoryContract {
     ) async throws {
         let repository = fixture.makeHerdRepository()
 
-        await assertMissingHerd(
+        assertMissingHerd(
             try repository.fetchCurrentHerd(),
             file: file,
             line: line
@@ -116,14 +116,14 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
-        await assertMissingHerd(
+        assertMissingHerd(
             try await repository.renameCurrentHerd(to: "Contract Herd"),
             file: file,
             line: line
         )
 
         // A failed rename must leave the same repository usable and empty.
-        await assertMissingHerd(
+        assertMissingHerd(
             try repository.fetchCurrentHerd(),
             file: file,
             line: line
@@ -138,7 +138,7 @@ enum HerdRepositoryContract {
 
         // Herd creation belongs to the explicit bootstrap/onboarding boundary. Repository reads or
         // ordinary rename mutations must not invent a root merely because persistence is empty.
-        await assertMissingHerd(
+        assertMissingHerd(
             try fixture.makeHerdRepository().fetchCurrentHerd(),
             file: file,
             line: line
@@ -428,12 +428,12 @@ enum HerdRepositoryContract {
             XCTAssertEqual(error as? HerdRepositoryError, .emptyName, file: file, line: line)
         }
 
-        await assertMissingHerd(
+        assertMissingHerd(
             try repository.fetchCurrentHerd(),
             file: file,
             line: line
         )
-        await assertMissingHerd(
+        assertMissingHerd(
             try fixture.makeHerdRepository().fetchCurrentHerd(),
             file: file,
             line: line
@@ -681,7 +681,7 @@ enum HerdRepositoryContract {
         try fixture.selectionControl.setCurrentHerdID(nil)
 
         let repository = fixture.makeHerdRepository()
-        await assertMissingHerd(
+        assertMissingHerd(
             try repository.fetchCurrentHerd(),
             file: file,
             line: line
@@ -693,17 +693,17 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
-        await assertMissingHerd(
+        assertMissingHerd(
             try await repository.renameCurrentHerd(to: "Must Not Infer"),
             file: file,
             line: line
         )
-        await assertMissingHerd(
+        assertMissingHerd(
             try repository.fetchCurrentHerd(),
             file: file,
             line: line
         )
-        await assertMissingHerd(
+        assertMissingHerd(
             try fixture.makeHerdRepository().fetchCurrentHerd(),
             file: file,
             line: line
@@ -751,7 +751,7 @@ enum HerdRepositoryContract {
         try fixture.selectionControl.setCurrentHerdID(UUID())
 
         let repository = fixture.makeHerdRepository()
-        await assertMissingHerd(
+        assertMissingHerd(
             try repository.fetchCurrentHerd(),
             file: file,
             line: line
@@ -763,17 +763,17 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
-        await assertMissingHerd(
+        assertMissingHerd(
             try await repository.renameCurrentHerd(to: "Must Not Fall Back"),
             file: file,
             line: line
         )
-        await assertMissingHerd(
+        assertMissingHerd(
             try repository.fetchCurrentHerd(),
             file: file,
             line: line
         )
-        await assertMissingHerd(
+        assertMissingHerd(
             try fixture.makeHerdRepository().fetchCurrentHerd(),
             file: file,
             line: line
@@ -820,12 +820,12 @@ enum HerdRepositoryContract {
     }
 
     private static func assertMissingHerd(
-        _ expression: @autoclosure () async throws -> HerdSummary,
+        _ expression: @autoclosure () throws -> HerdSummary,
         file: StaticString,
         line: UInt
-    ) async {
+    ) {
         do {
-            _ = try await expression()
+            _ = try expression()
             XCTFail("Expected HerdRepositoryError.missingHerd.", file: file, line: line)
         } catch {
             XCTAssertEqual(error as? HerdRepositoryError, .missingHerd, file: file, line: line)
