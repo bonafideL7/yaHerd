@@ -2636,7 +2636,20 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             ]
         )
 
-        try pastures.delete(ids: [destination.id])
+        // Arrange a stale destination directly in the isolated test store.
+        let destinationContext = try environment.assembly.contextFactory.makeWriteContext()
+        try destinationContext.performAndWait {
+            guard let storedDestination = try CoreDataLookup().herdOwned(
+                CDPasture.self,
+                id: destination.id,
+                herdID: environment.herdID,
+                in: destinationContext
+            ) else {
+                throw PastureDeletionTransactionError.destinationPastureMissing(pastureID: destination.id)
+            }
+            destinationContext.delete(storedDestination)
+            try destinationContext.save()
+        }
         let baseline = try CoreDataContractStoreSnapshotter.snapshot(assembly: environment.assembly)
 
         do {
@@ -4807,7 +4820,21 @@ private final class CoreDataAnimalContractEnvironment {
             input: PastureInput(name: "Missing second", acreage: 11, usableAcreage: 10, targetAcresPerHead: 1)
         )
         let plan = emptyPastureDeletionPlan(ids: [first.id, missing.id])
-        try pastureRepository.delete(ids: [missing.id])
+        // Arrange a missing target after the deletion plan has been prepared.
+        let staleContext = try assembly.contextFactory.makeWriteContext()
+        let herdID = self.herdID
+        try staleContext.performAndWait {
+            guard let storedPasture = try CoreDataLookup().herdOwned(
+                CDPasture.self,
+                id: missing.id,
+                herdID: herdID,
+                in: staleContext
+            ) else {
+                throw PastureDeletionTransactionError.pastureMissing(pastureID: missing.id)
+            }
+            staleContext.delete(storedPasture)
+            try staleContext.save()
+        }
 
         return PastureDeletionPreconditionContractProbe(
             writer: CoreDataPastureDeletionTransactionWriter(selection: selection, assembly: assembly),
