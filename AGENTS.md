@@ -20,8 +20,6 @@ Before changing production code:
 - If a fix grows into repeated workarounds, reassess the design rather than stacking patches.
 - Do not modify unrelated features or restore files or infrastructure intentionally removed by the user.
 
-Do not create Markdown documentation, dependency or navigation matrices, implementation trackers, automated tests, test targets, or CI workflows unless the user explicitly requests them. These repository instructions guide ChatGPT implementation and Codex code reviews; they are not an instruction to generate more documentation.
-
 ## Persistence direction
 
 yaHerd currently uses a local-only Core Data `NSPersistentContainer`. The approved future direction is iCloud synchronization and multi-user Herd sharing using Core Data and CloudKit, as specified in [Info/CLOUDKIT_COLLABORATION.md](Info/CLOUDKIT_COLLABORATION.md). Do not describe that target as already implemented. A SwiftData migration, compatibility layer, or dual-write path is not required.
@@ -75,7 +73,6 @@ Review the full affected scope and report identifiable material findings togethe
 ## Verification and delivery
 
 - Use available build tools and direct source inspection to verify production changes; validate runtime behavior when the environment supports it.
-- Do not recreate or modify tests or CI to obtain a passing result.
 - A successful build is not proof that reported runtime behavior was fixed.
 - Do not claim to have executed builds or verified behavior when that was not done.
 - Before submitting a PR, inspect the final diff for unrelated changes, duplicate logic, unnecessary complexity, and accidentally restored files.
