@@ -41,7 +41,7 @@ struct AnimalAggregateTaggedCreateContractProbe {
     let makeAnimalRepository: () -> any AnimalRepository
     let makeAnimalListQueryReader: (() -> any AnimalListQueryReading)?
     let makeDashboardQueryReader: (() -> any DashboardQueryReading)?
-    let makePastureRepository: () -> any PastureRepository
+    let makePastureRepository: () -> any TestPastureRepository
     let makeWorkingOwnershipControl: () -> any AnimalAggregateWorkingOwnershipContractTestControl
     let transaction: CreateAnimalAggregateTransaction
 }
@@ -86,7 +86,7 @@ struct AnimalAggregateUpdateContractProbe {
     let makeAnimalRepository: () -> any AnimalRepository
     let makeAnimalListQueryReader: (() -> any AnimalListQueryReading)?
     let makeDashboardQueryReader: (() -> any DashboardQueryReading)?
-    let makePastureRepository: () -> any PastureRepository
+    let makePastureRepository: () -> any TestPastureRepository
     let animalID: UUID
     let makeUpdateTransaction: (
         _ current: AnimalAggregateEditSnapshot
@@ -105,7 +105,7 @@ struct AnimalAggregateActivePastureMoveContractProbe {
     let makeReader: () -> any AnimalAggregateEditReading
     let makeAnimalRepository: () -> any AnimalRepository
     let makeDashboardQueryReader: (() -> any DashboardQueryReading)?
-    let makePastureRepository: () -> any PastureRepository
+    let makePastureRepository: () -> any TestPastureRepository
     let animalID: UUID
     let makeUpdateTransaction: (
         _ current: AnimalAggregateEditSnapshot
@@ -2549,7 +2549,7 @@ enum AnimalAggregateTransactionContract {
     private static func assertPastureCountProjectionsMatchResidents(
         pastureID: UUID,
         dashboardReader: (any DashboardQueryReading)?,
-        pastureRepository: any PastureRepository,
+        pastureRepository: any TestPastureRepository,
         file: StaticString,
         line: UInt
     ) async throws {
