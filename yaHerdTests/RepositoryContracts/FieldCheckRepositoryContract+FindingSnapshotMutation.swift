@@ -165,7 +165,7 @@ extension FieldCheckRepositoryContract {
         )
         XCTAssertEqual(taggedFinding.animalID, calf.id, file: file, line: line)
         XCTAssertEqual(taggedFinding.animalDisplayTagNumber, "C70", file: file, line: line)
-        XCTAssertEqual(taggedFinding.animalDisplayTagColorID, originalColorID, file: file, line: line)
+        XCTAssertEqual(taggedFinding.animalDisplayTagColorID, originalColorID, "taggedFinding must retain the initial roster tag color", file: file, line: line)
         XCTAssertEqual(taggedFinding.pastureName, "Mutation Snapshot North", file: file, line: line)
         XCTAssertEqual(untaggedFinding.animalID, untagged.id, file: file, line: line)
         XCTAssertEqual(
@@ -175,7 +175,7 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
-        XCTAssertEqual(untaggedFinding.animalDisplayTagColorID, originalColorID, file: file, line: line)
+        XCTAssertEqual(untaggedFinding.animalDisplayTagColorID, originalColorID, "untaggedFinding must retain the initial roster tag color", file: file, line: line)
         XCTAssertEqual(untaggedFinding.pastureName, "Mutation Snapshot North", file: file, line: line)
 
         let calfCheckAfterAdd = try XCTUnwrap(
@@ -272,12 +272,12 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(updatedTaggedFinding.note, "Updated post-change tagged finding", file: file, line: line)
         XCTAssertEqual(updatedTaggedFinding.animalID, calf.id, file: file, line: line)
         XCTAssertEqual(updatedTaggedFinding.animalDisplayTagNumber, "C70", file: file, line: line)
-        XCTAssertEqual(updatedTaggedFinding.animalDisplayTagColorID, originalColorID, file: file, line: line)
+        XCTAssertEqual(updatedTaggedFinding.animalDisplayTagColorID, originalColorID, "updatedTaggedFinding must retain the initial roster tag color", file: file, line: line)
         XCTAssertEqual(updatedTaggedFinding.pastureName, "Mutation Snapshot North", file: file, line: line)
         XCTAssertEqual(updatedUntaggedFinding.note, "Updated post-change untagged finding", file: file, line: line)
         XCTAssertEqual(updatedUntaggedFinding.animalID, untagged.id, file: file, line: line)
         XCTAssertEqual(updatedUntaggedFinding.animalDisplayTagNumber, "UT", file: file, line: line)
-        XCTAssertEqual(updatedUntaggedFinding.animalDisplayTagColorID, originalColorID, file: file, line: line)
+        XCTAssertEqual(updatedUntaggedFinding.animalDisplayTagColorID, originalColorID, "updatedUntaggedFinding must retain the initial roster tag color", file: file, line: line)
         XCTAssertEqual(updatedUntaggedFinding.pastureName, "Mutation Snapshot North", file: file, line: line)
 
         let openFindings = try afterUpdateReader.fetchOpenFindings(limit: 0)
@@ -292,10 +292,10 @@ extension FieldCheckRepositoryContract {
             line: line
         )
         XCTAssertEqual(openTaggedFinding.animalDisplayTagNumber, "C70", file: file, line: line)
-        XCTAssertEqual(openTaggedFinding.animalDisplayTagColorID, originalColorID, file: file, line: line)
+        XCTAssertEqual(openTaggedFinding.animalDisplayTagColorID, originalColorID, "openTaggedFinding must retain the initial roster tag color", file: file, line: line)
         XCTAssertEqual(openTaggedFinding.pastureName, "Mutation Snapshot North", file: file, line: line)
         XCTAssertEqual(openUntaggedFinding.animalDisplayTagNumber, "UT", file: file, line: line)
-        XCTAssertEqual(openUntaggedFinding.animalDisplayTagColorID, originalColorID, file: file, line: line)
+        XCTAssertEqual(openUntaggedFinding.animalDisplayTagColorID, originalColorID, "openUntaggedFinding must retain the initial roster tag color", file: file, line: line)
         XCTAssertEqual(openUntaggedFinding.pastureName, "Mutation Snapshot North", file: file, line: line)
     }
 

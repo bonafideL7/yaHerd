@@ -3323,11 +3323,13 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
     private func waitUntilReached(
         _ barrier: CoreDataAnimalCommitBarrier
     ) async {
-        for _ in 0..<10_000 {
+        // A bounded real-time wait permits a Core Data writer to reach the hook
+        // even when scheduling takes longer than a burst of Task.yield() calls.
+        for _ in 0..<500 {
             if barrier.didReach {
                 return
             }
-            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(10))
         }
     }
 
