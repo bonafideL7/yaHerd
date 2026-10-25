@@ -223,7 +223,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         )
         let controlSessionID = try await primaryWorking.startSession(
             input: WorkingSessionStartInput(
-                date: Date(timeIntervalSinceReferenceDate: 440_500),
+                date: Date(timeIntervalSinceReferenceDate: 526_400),
                 sourcePastureID: pasture.id,
                 treatmentTemplateName: "Healthy Dashboard Graph Control",
                 plannedTreatments: [],
