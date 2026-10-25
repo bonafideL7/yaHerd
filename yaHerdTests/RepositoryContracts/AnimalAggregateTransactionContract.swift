@@ -3575,9 +3575,6 @@ enum AnimalAggregateTransactionContract {
         if let sireDisplay, !sireDisplay.isEmpty {
             birthDetails.append("Sire: \(sireDisplay)")
         }
-        if let pastureName = detail.pastureName, !pastureName.isEmpty {
-            birthDetails.append("Pasture: \(pastureName)")
-        }
 
         var expected: [TimelineSignature] = [
             TimelineSignature(
