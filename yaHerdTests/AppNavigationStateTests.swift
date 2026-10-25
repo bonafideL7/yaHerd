@@ -165,10 +165,16 @@ final class AppNavigationStateTests: XCTestCase {
         let navigation = AppNavigationState()
         navigation.openFieldChecks(.inProgress)
 
-        navigation.herdRouter.updateFieldCheckMode(.openFindings, in: .herd)
+        XCTAssertEqual(navigation.fullScreenWorkflow, .fieldCheck)
+        XCTAssertEqual(navigation.workflowRouter.route, .fieldCheckSessions(.inProgress))
 
-        XCTAssertEqual(navigation.herdRouter.path, [.fieldChecks(.openFindings)])
-        XCTAssertEqual(navigation.selectedTab, .herd)
+        // The Field Checks view binds its filter to the isolated workflow route,
+        // not to the Herd tab's navigation stack.
+        navigation.workflowRouter.route = .fieldCheckSessions(.openFindings)
+
+        XCTAssertTrue(navigation.herdRouter.path.isEmpty)
+        XCTAssertEqual(navigation.workflowRouter.route, .fieldCheckSessions(.openFindings))
+        XCTAssertEqual(navigation.selectedTab, .home)
 
         let payload = try XCTUnwrap(navigation.restorationPayload())
         let restored = AppNavigationState()
@@ -177,7 +183,7 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertTrue(restored.herdRouter.path.isEmpty)
         XCTAssertEqual(restored.fullScreenWorkflow, .fieldCheck)
         XCTAssertEqual(restored.workflowRouter.route, .fieldCheckSessions(.openFindings))
-        XCTAssertEqual(restored.selectedTab, .herd)
+        XCTAssertEqual(restored.selectedTab, .home)
     }
 
     func testCheckFilterSelectionKeepsSearchAndHerdStacksIndependent() {
