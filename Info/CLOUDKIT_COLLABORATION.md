@@ -1,12 +1,13 @@
 # yaHerd iCloud Synchronization and Herd Collaboration
 
 **Status:** Approved feature requirements and implementation guidance; NOT an implemented feature.
+**Agent assignments:** ChatGPT implements, verifies and addresses PR review findings. Codex reviews code only; do not delegate feature implementation or automated test/CI changes to Codex.
 **Requested outcome:** Offline-first device synchronization plus sharing and collaboration between different Apple Accounts.
 **Initial inspection baseline:** main commit 5a5b29b6f2c4588de0e1b187133a7d1ea98838cc (2026-10-25).
 **Platforms:** yaHerd iOS 26+, Swift 6, SwiftUI, Core Data.
 **Authority:** User-approved requirements establish intended behavior. Inspect current production code for actual implementation; the baseline and path names below are discovery aids, never an assertion that a later branch still has that structure.
 
-Read the repository-root AGENTS.md first. This document is a feature specification, not a dependency matrix, implementation tracker, release status report, or permission to skip source inspection.
+Read the repository-root AGENTS.md first. This document is the single approved CloudKit feature specification, executable manual test-case plan, and Codex review guide, not a dependency matrix, implementation tracker, release status report, or permission to skip source inspection. It captures the eight original implementation workstreams; verify historical code references against latest main.
 
 ## 1. Required product behavior
 
@@ -63,7 +64,7 @@ This section records verified code as of the baseline above. Re-check all paths,
 
 ## 4. Implementation stages and completion requirements
 
-The stages below form an implementation order, not a status matrix. Every stage: inspect latest code; trace affected callers, reads, writes, recovery and navigation; implement the smallest production change; verify with available Xcode tooling and direct inspection; inspect final diff; request substantive code review; report runtime limitations. Do not create/modify tests or CI, or restore removed infrastructure, unless the user specifically asks. Implement only the requested stage and necessary prerequisites; do not roll into the next stage automatically.
+The stages below form an implementation order, not a status matrix. ChatGPT implements production changes; Codex reviews only. Every stage: inspect latest code; trace affected callers, reads, writes, recovery and navigation; implement the smallest production change; verify with available Xcode tooling, direct inspection and relevant Section 5 manual cases; inspect final diff; request substantive Codex code review; correct genuine production defects; report runtime limitations. Do not create/modify tests or CI, or restore removed infrastructure, unless the user specifically asks. Implement only the requested stage and necessary prerequisites; do not roll into the next stage automatically.
 
 ### Stage 1: CloudKit-compatible Core Data model and safe migration
 
@@ -198,7 +199,7 @@ The stages below form an implementation order, not a status matrix. Every stage:
 4. Preserve current read-only recovery and useful diagnostic export without unintentionally exporting private shared records or silently replacing the working database.
 5. Initialize and inspect the CloudKit DEVELOPMENT schema only with intentional developer workflows. Review schema implications before deployment; never perform schema initialization on normal production launch.
 6. Deploy verified schema to CloudKit PRODUCTION and validate TestFlight against production behavior. Plan schema evolution carefully because existing production fields/types cannot be casually removed.
-7. Conduct end-to-end behavioral verification across two different Apple Accounts and, if available, a second device on the owner's Account. Exercise offline work, cold-launch invitation acceptance, read-only access, revocation, multiple Herds, concurrent edits, pending import, local migration, account change, deletion, relaunch and interrupted sync.
+7. Execute the detailed Section 5 manual test cases across two different Apple Accounts and, if available, a second device on the owner's Account. Exercise offline work, cold-launch invitation acceptance, read-only access, revocation, multiple Herds, concurrent edits, pending import, local migration, account change, deletion, relaunch and interrupted sync.
 8. Inspect production logs/status for persistent errors, stalled export/import, unnecessary refresh and crashes. Describe unverified cases as limitations rather than declaring coverage.
 9. Perform the final security and user-data audit before production release.
 
@@ -230,37 +231,37 @@ These are observable manual/device verification scenarios, NOT a directive to ad
 
 ## 6. Pull-request implementation rules
 
-Use focused implementation stages as PR boundaries; a phase and its demonstrably necessary dependencies may be combined when they cannot function independently. Start each stage against latest merged main and inspect current code first. Do not assume an earlier stage was completed just because this document describes it.
+ChatGPT is the implementing agent and produces PR changes; Codex serves only as PR code reviewer. Use focused implementation stages as PR boundaries; a phase and its demonstrably necessary dependencies may be combined when they cannot function independently. Start each stage against latest merged main and inspect current code first. Do not assume an earlier stage was completed just because this document describes it.
 
 Before submitting each PR:
 1. Identify the intended behavior and exact affected production call paths.
 2. Explain the root cause or missing behavior that required changes.
 3. Audit reads, writes, related workflows, errors, rollback, recovery, remote changes and navigation.
-4. Use Xcode build/direct source inspection; exercise live behavior when the available environment permits.
+4. Use Xcode build/direct source inspection; run the applicable Section 5 manual test cases when equipment and accounts permit, and report cases not executed.
 5. Inspect the final diff for scope, dead/duplicate logic, unintended changes and restored removed infrastructure.
-6. Request review against AGENTS.md and the applicable feature stage. Fix actual production defects.
+6. Request Codex code review against AGENTS.md and the applicable feature stage. ChatGPT fixes actual production defects.
 7. Report modified paths, evidence of verification, known gaps and unresolved risks. Do not modify tests or CI unless the user expressly instructs it.
 
 Required changes to Scripts/verify-architecture.sh must be narrowly justified by approved CloudKit implementation. Keep its other architectural restrictions intact; do not rewrite automation or CI to create a false passing signal.
 
-## 7. Codex implementation instructions
+## 7. ChatGPT implementation instructions (Codex is review-only)
 
-When asked to implement a stage:
+ChatGPT, not Codex, implements production changes, performs available verification, creates PRs and fixes review findings. When asked to implement a stage:
 
 - Read root AGENTS.md and this feature specification, then read the latest actual source and relevant Apple API documentation.
 - Treat this document as approved intended product behavior, not a claim about current implementation or an instruction to preserve incorrect assumptions.
 - Perform only the user-requested stage and required dependent work. Preserve existing names/contracts whenever feasible; avoid duplicate abstractions or custom synchronization engines.
 - Address both normal and failure paths, including an absent account, sharing permission, imported graph incompleteness, wrong-store routing, stale navigation, user-data preservation and destructive operations where relevant.
-- Do not invent a passing verification result, restore discarded code, author process artifacts or change tests/CI.
+- Execute applicable Section 5 manual cases when the environment permits and clearly report unexecuted cases. Do not invent passing verification results, restore discarded code, author process artifacts or change automated tests/CI.
 - Create a focused PR when requested, inspect comments, fix actual defects and report limitations. Do not merge contrary to user direction.
 
-Example invocation:
+Example request to ChatGPT (not Codex):
 
 "Implement Stage 2 in Info/CLOUDKIT_COLLABORATION.md. Follow AGENTS.md. Inspect current code first. Update production persistence and all related write paths, verify available builds and execution paths, review the final diff against Stage 2 acceptance criteria, and open a PR. Do not add documentation, tests, CI, or unrelated changes."
 
-## 8. Codex code-review agent instructions
+## 8. Codex code-review agent instructions (review only)
 
-Review the actual PR diff and production execution paths against the requested stage and all affected feature-wide safety invariants. Do not review only this document, invent missing code based on an old plan, or assume tests have been run.
+Codex reviews code only. Do not implement a feature stage, modify production code, open an implementation PR, create automated tests or modify CI. Report findings to ChatGPT for production corrections. Review the actual PR diff and production execution paths against the requested stage and all affected feature-wide safety invariants. Do not review only this document, invent missing code based on an old plan, or assume tests have been run.
 
 Check specifically:
 - Migration and backup/recovery preserve application data and stable UUIDs.
@@ -276,7 +277,7 @@ Check specifically:
 
 For each confirmed issue give severity, file/line, trigger, expected vs actual behavior, production impact, root cause and minimal corrective change. Severity must reflect tangible risk, not the absence of tests or documents. Identify all materially affected sibling paths in the same review. Avoid serial nitpicking or unlimited re-review cycles. An empty findings review is acceptable.
 
-Conclude with implementation-stage satisfaction, concrete verified defects, build/runtime actions actually executed, unverified real-device requirements and merge readiness. Never equate successful compilation with verified cross-account collaboration.
+Conclude with implementation-stage satisfaction, concrete verified defects, build/runtime actions actually executed, Section 5 manual cases demonstrated or not executed, unverified real-device requirements and merge readiness. Never equate successful compilation with verified cross-account collaboration.
 
 ## 9. Release gates and reference resources
 
