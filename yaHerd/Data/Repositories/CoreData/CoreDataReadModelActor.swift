@@ -82,7 +82,7 @@ actor CoreDataReadModelActor:
 
         return try await context.perform {
             try Task.checkCancellation()
-            try context.setQueryGenerationFrom(.current)
+            try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
@@ -172,7 +172,7 @@ actor CoreDataReadModelActor:
 
         return try await context.perform {
             try Task.checkCancellation()
-            try context.setQueryGenerationFrom(.current)
+            try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
@@ -215,7 +215,7 @@ actor CoreDataReadModelActor:
             try Task.checkCancellation()
             // Group identity validation and all resident count queries must
             // observe the same committed store generation.
-            try context.setQueryGenerationFrom(.current)
+            try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
@@ -244,7 +244,7 @@ actor CoreDataReadModelActor:
 
         return try await context.perform {
             try Task.checkCancellation()
-            try context.setQueryGenerationFrom(.current)
+            try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
@@ -323,7 +323,7 @@ actor CoreDataReadModelActor:
 
         return try await context.perform {
             try Task.checkCancellation()
-            try context.setQueryGenerationFrom(.current)
+            try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
@@ -407,7 +407,7 @@ actor CoreDataReadModelActor:
 
         return try await context.perform {
             try Task.checkCancellation()
-            try context.setQueryGenerationFrom(.current)
+            try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
@@ -453,7 +453,7 @@ actor CoreDataReadModelActor:
 
         return try await context.perform {
             try Task.checkCancellation()
-            try context.setQueryGenerationFrom(.current)
+            try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
@@ -531,7 +531,7 @@ actor CoreDataReadModelActor:
 
         return try await context.perform {
             try Task.checkCancellation()
-            try context.setQueryGenerationFrom(.current)
+            try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
@@ -1009,7 +1009,7 @@ actor CoreDataReadModelActor:
 
         return try await context.perform {
             try Task.checkCancellation()
-            try context.setQueryGenerationFrom(.current)
+            try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
@@ -1074,7 +1074,7 @@ actor CoreDataReadModelActor:
 
         return try await context.perform {
             try Task.checkCancellation()
-            try context.setQueryGenerationFrom(.current)
+            try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
@@ -1192,7 +1192,7 @@ actor CoreDataReadModelActor:
 
         return try await context.perform {
             try Task.checkCancellation()
-            try context.setQueryGenerationFrom(.current)
+            try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
@@ -2357,6 +2357,21 @@ actor CoreDataReadModelActor:
                 )
             }
         }
+    }
+
+    // Query generations are persistent-store snapshots. In-memory Core Data
+    // stores do not support the SQLite history tokens used by production reads.
+    // Keep generation pinning for SQLite while allowing in-memory read contexts
+    // to observe the state of their coordinator without an invalid token.
+    private static func pinCurrentQueryGenerationIfSupported(
+        in context: NSManagedObjectContext
+    ) throws {
+        guard let stores = context.persistentStoreCoordinator?.persistentStores,
+              !stores.isEmpty,
+              stores.allSatisfy({ $0.type == NSSQLiteStoreType }) else {
+            return
+        }
+        try context.setQueryGenerationFrom(.current)
     }
 
     private static func validateFindingRelationship(
