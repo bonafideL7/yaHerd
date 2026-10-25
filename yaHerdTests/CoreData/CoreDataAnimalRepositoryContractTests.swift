@@ -2638,11 +2638,12 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
 
         // Arrange a stale destination directly in the isolated test store.
         let destinationContext = try environment.assembly.contextFactory.makeWriteContext()
+        let destinationHerdID = environment.herdID
         try destinationContext.performAndWait {
             guard let storedDestination = try CoreDataLookup().herdOwned(
                 CDPasture.self,
                 id: destination.id,
-                herdID: environment.herdID,
+                herdID: destinationHerdID,
                 in: destinationContext
             ) else {
                 throw PastureDeletionTransactionError.destinationPastureMissing(pastureID: destination.id)
