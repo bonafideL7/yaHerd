@@ -824,7 +824,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 100)
             foreignHerd.updatedAt = foreignHerd.createdAt
 
-            let persistedDam = try XCTUnwrap(environment.CoreDataLookup().herdOwned(
+            let persistedDam = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDAnimal.self, id: dam.id, herdID: environment.herdID, in: context
             ))
             persistedDam.herd = foreignHerd
@@ -861,7 +861,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         XCTAssertEqual(try repository.fetchTimeline(id: control.id).map(\.id), controlTimelineIDs)
         let readContext = environment.assembly.contextFactory.makeReadContext()
         try readContext.performAndWait {
-            let storedDam = try XCTUnwrap(environment.CoreDataLookup().herdOwned(
+            let storedDam = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDAnimal.self, id: dam.id, herdID: foreignHerdID, in: readContext
             ))
             XCTAssertEqual(storedDam.herd.id, foreignHerdID)
@@ -891,7 +891,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 101)
             foreignHerd.updatedAt = foreignHerd.createdAt
 
-            let persistedAnimal = try XCTUnwrap(environment.CoreDataLookup().herdOwned(
+            let persistedAnimal = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
             ))
             let movement = CDMovementRecord(context: context)
@@ -949,7 +949,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 103)
             foreignHerd.updatedAt = foreignHerd.createdAt
 
-            let persistedAnimal = try XCTUnwrap(environment.CoreDataLookup().herdOwned(
+            let persistedAnimal = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDAnimal.self, id: tagged.id, herdID: environment.herdID, in: context
             ))
             let tag = try XCTUnwrap(
@@ -981,7 +981,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
 
         let readContext = environment.assembly.contextFactory.makeReadContext()
         try readContext.performAndWait {
-            let persistedAnimal = try XCTUnwrap(environment.CoreDataLookup().herdOwned(
+            let persistedAnimal = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDAnimal.self, id: tagged.id, herdID: environment.herdID, in: readContext
             ))
             let tag = try XCTUnwrap(
@@ -1046,7 +1046,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 120)
             foreignHerd.updatedAt = foreignHerd.createdAt
 
-            let persistedDam = try XCTUnwrap(environment.CoreDataLookup().herdOwned(
+            let persistedDam = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDAnimal.self, id: dam.id, herdID: environment.herdID, in: context
             ))
             persistedDam.herd = foreignHerd
@@ -1090,15 +1090,15 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         )
         let readContext = environment.assembly.contextFactory.makeReadContext()
         try readContext.performAndWait {
-            let persistedTarget = try XCTUnwrap(environment.CoreDataLookup().herdOwned(
+            let persistedTarget = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPasture.self, id: targetPasture.id,
                 herdID: environment.herdID, in: readContext
             ))
-            let persistedValid = try XCTUnwrap(environment.CoreDataLookup().herdOwned(
+            let persistedValid = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDAnimal.self, id: validResident.id,
                 herdID: environment.herdID, in: readContext
             ))
-            let persistedInvalid = try XCTUnwrap(environment.CoreDataLookup().herdOwned(
+            let persistedInvalid = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDAnimal.self, id: invalidResident.id,
                 herdID: environment.herdID, in: readContext
             ))
@@ -1142,7 +1142,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             foreignHerd.name = "Foreign Group Herd"
             foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 130)
             foreignHerd.updatedAt = foreignHerd.createdAt
-            let storedGroup = try XCTUnwrap(environment.CoreDataLookup().herdOwned(
+            let storedGroup = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPastureGroup.self, id: group.id, herdID: environment.herdID,
                 in: corruptGroupContext
             ))
@@ -1168,18 +1168,18 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         // Restore group ownership, then prove inverse resident counts reject foreign-Herd cattle.
         let corruptResidentContext = try environment.assembly.contextFactory.makeWriteContext()
         try corruptResidentContext.performAndWait {
-            let storedGroup = try XCTUnwrap(environment.CoreDataLookup().herdOwned(
+            let storedGroup = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPastureGroup.self, id: group.id, herdID: foreignHerdID,
                 in: corruptResidentContext
             ))
-            let selectedHerd = try XCTUnwrap(environment.CoreDataLookup().herd(
+            let selectedHerd = try XCTUnwrap(CoreDataLookup().herd(
                 id: environment.herdID, in: corruptResidentContext
             ))
-            let foreignHerd = try XCTUnwrap(environment.CoreDataLookup().herd(
+            let foreignHerd = try XCTUnwrap(CoreDataLookup().herd(
                 id: foreignHerdID, in: corruptResidentContext
             ))
             storedGroup.herd = selectedHerd
-            let storedResident = try XCTUnwrap(environment.CoreDataLookup().herdOwned(
+            let storedResident = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDAnimal.self, id: resident.id, herdID: environment.herdID,
                 in: corruptResidentContext
             ))
@@ -1234,11 +1234,11 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
 
         let persistedContext = environment.assembly.contextFactory.makeReadContext()
         try persistedContext.performAndWait {
-            let storedGroup = try XCTUnwrap(environment.CoreDataLookup().herdOwned(
+            let storedGroup = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPastureGroup.self, id: group.id, herdID: environment.herdID,
                 in: persistedContext
             ))
-            let storedPasture = try XCTUnwrap(environment.CoreDataLookup().herdOwned(
+            let storedPasture = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPasture.self, id: targetPasture.id, herdID: environment.herdID,
                 in: persistedContext
             ))

@@ -167,7 +167,7 @@ extension FieldCheckRepositoryContract {
         )
 
         let afterRepository = fixture.makeFieldCheckRepository()
-        try assertRollbackSummariesEqualIgnoringRelationshipOrder(
+        try await assertRollbackSummariesEqualIgnoringRelationshipOrder(
             try afterRepository.fetchSessions(),
             expected: beforeSessions,
             file: file,
@@ -367,7 +367,7 @@ extension FieldCheckRepositoryContract {
                 reassignmentInput
             )
         }
-        try assertMissingFindingRollbackRosterState(
+        try await assertMissingFindingRollbackRosterState(
             sessionID: sessionID,
             originalCheckID: originalCheckID,
             reassignmentCheckID: reassignmentCheckID,
@@ -393,7 +393,7 @@ extension FieldCheckRepositoryContract {
                 .resolved
             )
         }
-        try assertMissingFindingRollbackRosterState(
+        try await assertMissingFindingRollbackRosterState(
             sessionID: sessionID,
             originalCheckID: originalCheckID,
             reassignmentCheckID: reassignmentCheckID,
@@ -418,7 +418,7 @@ extension FieldCheckRepositoryContract {
                 findingID
             )
         }
-        try assertMissingFindingRollbackRosterState(
+        try await assertMissingFindingRollbackRosterState(
             sessionID: sessionID,
             originalCheckID: originalCheckID,
             reassignmentCheckID: reassignmentCheckID,
@@ -582,7 +582,7 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
-        try assertRollbackSummariesEqualIgnoringRelationshipOrder(
+        try await assertRollbackSummariesEqualIgnoringRelationshipOrder(
             try afterRepository.fetchSessions(),
             expected: beforeSessions,
             file: file,
@@ -651,13 +651,13 @@ extension FieldCheckRepositoryContract {
         }
 
         let afterRepository = fixture.makeFieldCheckRepository()
-        try assertRollbackDetailEqualIgnoringRelationshipOrder(
+        try await assertRollbackDetailEqualIgnoringRelationshipOrder(
             try afterRepository.fetchSessionDetail(id: sessionID),
             expected: beforeDetail,
             file: file,
             line: line
         )
-        try assertRollbackSummariesEqualIgnoringRelationshipOrder(
+        try await assertRollbackSummariesEqualIgnoringRelationshipOrder(
             try afterRepository.fetchSessions(),
             expected: beforeSessions,
             file: file,
