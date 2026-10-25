@@ -53,6 +53,7 @@ struct HerdTabRootView: View {
             pastureFilter: $router.pastureFilter,
             usesShellBottomAccessory: true,
             onOpenAnimal: { router.openAnimal($0, in: tab) },
+            onEditAnimal: { router.openAnimalForEditing($0, in: tab) },
             onOpenPasture: { router.openPasture($0, in: tab) },
             onOpenFieldChecks: { navigation.openFieldChecks(.all) },
             onOpenWorkSessions: { navigation.openWorkingSessions() },
@@ -104,6 +105,12 @@ struct HerdTabRootView: View {
         switch route {
         case .animal(let animalID):
             AnimalDetailView(animalID: animalID)
+        case .animalEdit(let animalID):
+            AnimalDetailView(
+                animalID: animalID,
+                initiallyEditing: true,
+                onClose: { router.closeAnimalEditor(animalID, in: tab) }
+            )
         case .pasture(let pastureID):
             PastureDetailView(pastureID: pastureID)
         case .fieldChecks(let mode):

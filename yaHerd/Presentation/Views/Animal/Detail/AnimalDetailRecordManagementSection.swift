@@ -77,7 +77,7 @@ struct AnimalDetailRecordManagementSection: View {
     }
 }
 
-private struct AnimalPermanentDeleteReviewView: View {
+struct AnimalPermanentDeleteReviewView: View {
     @Environment(\.dismiss) private var dismiss
 
     let detail: AnimalDetailSnapshot

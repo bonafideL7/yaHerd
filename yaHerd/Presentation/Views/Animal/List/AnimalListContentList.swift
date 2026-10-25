@@ -26,6 +26,7 @@ struct AnimalListContentList: View {
     let inlineFocusRequestID: UUID
     let onStartNewInlineEntry: () -> Void
     let onStartEditingAnimal: (AnimalSummary) -> Void
+    let onOpenAnimalEditor: (UUID) -> Void
     let onSubmitInlineEntry: () -> Void
     let onPrepareInlinePicker: () -> Void
     let onShowInlineBirthDatePicker: () -> Void
@@ -182,8 +183,12 @@ struct AnimalListContentList: View {
 
     private func editableAnimalRow(_ animal: AnimalSummary) -> some View {
         Button {
-            if dataAccessMode.allowsDataMutations && allowsInlineEditing {
-                onStartEditingAnimal(animal)
+            if dataAccessMode.allowsDataMutations {
+                if allowsInlineEditing {
+                    onStartEditingAnimal(animal)
+                } else {
+                    onOpenAnimalEditor(animal.id)
+                }
             } else {
                 onOpenInlineDetails(animal.id)
             }
@@ -193,7 +198,27 @@ struct AnimalListContentList: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityHint(dataAccessMode.allowsDataMutations && allowsInlineEditing ? "Double-tap to edit this animal inline" : "Double-tap to view this animal")
+        .contextMenu {
+            if dataAccessMode.allowsDataMutations && allowsInlineEditing {
+                Button {
+                    onOpenAnimalEditor(animal.id)
+                } label: {
+                    Label("Full Editor", systemImage: "square.and.pencil")
+                }
+            }
+            Button {
+                onOpenInlineDetails(animal.id)
+            } label: {
+                Label("View Details", systemImage: "info.circle")
+            }
+        }
+        .accessibilityHint(
+            dataAccessMode.allowsDataMutations
+                ? (allowsInlineEditing
+                    ? "Double-tap to edit inline; long-press for full editor or details"
+                    : "Double-tap to open the full editor; long-press for details")
+                : "Double-tap to view this animal"
+        )
     }
 
     private func inlineEntryRow(mode: AnimalListInlineEntryRow.Mode, animalID: UUID? = nil) -> some View {
