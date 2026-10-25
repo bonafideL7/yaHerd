@@ -116,8 +116,8 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
-        assertMissingHerd(
-            try await repository.renameCurrentHerd(to: "Contract Herd"),
+        await assertMissingHerdAsync(
+            { try await repository.renameCurrentHerd(to: "Contract Herd") },
             file: file,
             line: line
         )
@@ -693,8 +693,8 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
-        assertMissingHerd(
-            try await repository.renameCurrentHerd(to: "Must Not Infer"),
+        await assertMissingHerdAsync(
+            { try await repository.renameCurrentHerd(to: "Must Not Infer") },
             file: file,
             line: line
         )
@@ -763,8 +763,8 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
-        assertMissingHerd(
-            try await repository.renameCurrentHerd(to: "Must Not Fall Back"),
+        await assertMissingHerdAsync(
+            { try await repository.renameCurrentHerd(to: "Must Not Fall Back") },
             file: file,
             line: line
         )
@@ -826,6 +826,19 @@ enum HerdRepositoryContract {
     ) {
         do {
             _ = try expression()
+            XCTFail("Expected HerdRepositoryError.missingHerd.", file: file, line: line)
+        } catch {
+            XCTAssertEqual(error as? HerdRepositoryError, .missingHerd, file: file, line: line)
+        }
+    }
+
+    private static func assertMissingHerdAsync(
+        _ operation: () async throws -> HerdSummary,
+        file: StaticString,
+        line: UInt
+    ) async {
+        do {
+            _ = try await operation()
             XCTFail("Expected HerdRepositoryError.missingHerd.", file: file, line: line)
         } catch {
             XCTAssertEqual(error as? HerdRepositoryError, .missingHerd, file: file, line: line)
