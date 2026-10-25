@@ -154,6 +154,9 @@ actor CoreDataReadModelActor:
                         $0,
                         herdID: herdID
                     )
+                }.sorted { left, right in
+                    if left.date != right.date { return left.date > right.date }
+                    return left.id.uuidString < right.id.uuidString
                 }
             )
         }
