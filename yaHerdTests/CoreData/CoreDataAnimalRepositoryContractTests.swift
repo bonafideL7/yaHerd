@@ -3771,7 +3771,7 @@ private final class CoreDataAnimalContractEnvironment {
                 sex: .female,
                 birthDate: Date(timeIntervalSinceReferenceDate: 41_000),
                 status: .active,
-                pastureID: pastureID,
+                pastureID: nil,
                 sireID: nil,
                 damID: nil,
                 distinguishingFeatures: [],
@@ -5880,8 +5880,9 @@ private final class CoreDataAnimalIdentityContractControl: IdentityContractTestC
     ) throws -> [IdentityContractEntitySnapshot] {
         try requireOwnedKind(kind)
         let context = assembly.contextFactory.makeReadContext()
+        let herdID = self.herdID
         return try context.performAndWait {
-            let objects = try fetchObjects(kind: kind, id: id, context: context)
+            let objects = try Self.fetchObjects(kind: kind, id: id, herdID: herdID, context: context)
             return objects.map {
                 IdentityContractEntitySnapshot(
                     id: id,
@@ -5900,9 +5901,10 @@ private final class CoreDataAnimalIdentityContractControl: IdentityContractTestC
     ) throws -> Set<UUID> {
         try requireOwnedKind(kind)
         let context = assembly.contextFactory.makeReadContext()
+        let herdID = self.herdID
         return try context.performAndWait {
             Set(
-                try fetchObjects(kind: kind, id: nil, context: context)
+                try Self.fetchObjects(kind: kind, id: nil, herdID: herdID, context: context)
                     .compactMap { $0.value(forKey: "id") as? UUID }
             )
         }
@@ -5913,6 +5915,7 @@ private final class CoreDataAnimalIdentityContractControl: IdentityContractTestC
     ) throws -> IdentityContractSupportStateSnapshot {
         try requireOwnedKind(kind)
         let context = assembly.contextFactory.makeReadContext()
+        let herdID = self.herdID
         return try context.performAndWait {
             guard let herd = try CoreDataLookup().herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
@@ -5996,9 +5999,10 @@ private final class CoreDataAnimalIdentityContractControl: IdentityContractTestC
         )
     }
 
-    private func fetchObjects(
+    private nonisolated static func fetchObjects(
         kind: IdentityContractEntityKind,
         id: UUID?,
+        herdID: UUID,
         context: NSManagedObjectContext
     ) throws -> [NSManagedObject] {
         let entityName: String
