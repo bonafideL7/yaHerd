@@ -252,7 +252,8 @@ extension FieldCheckRepositoryContract {
             input: rollbackEdgeAnimalInput(
                 name: "Roster State Rollback Animal",
                 tagNumber: "RS501",
-                pastureID: pasture.id,
+                pastureID: pasture.id
+            ),
             using: fixture
         )
         let repository = fixture.makeFieldCheckRepository()
@@ -570,14 +571,16 @@ extension FieldCheckRepositoryContract {
             input: rollbackEdgeAnimalInput(
                 name: "Finding Quick Count One",
                 tagNumber: "FQ601",
-                pastureID: pasture.id,
+                pastureID: pasture.id
+            ),
             using: fixture
         )
         _ = try makeRollbackCow(
             input: rollbackEdgeAnimalInput(
                 name: "Finding Quick Count Two",
                 tagNumber: "FQ602",
-                pastureID: pasture.id,
+                pastureID: pasture.id
+            ),
             using: fixture
         )
 
