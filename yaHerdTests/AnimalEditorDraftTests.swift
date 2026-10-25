@@ -55,6 +55,7 @@ final class AnimalEditorDraftTests: XCTestCase {
             activeTags: [],
             inactiveTags: [],
             location: .pasture,
+            maternalOffspringCountIncludingArchived: 0,
             maternalOffspring: []
         )
     }

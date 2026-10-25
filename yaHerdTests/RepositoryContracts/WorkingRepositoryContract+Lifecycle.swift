@@ -1430,8 +1430,8 @@ extension WorkingRepositoryContract {
         XCTAssertTrue(
             timelineAfterFinish.contains { event in
                 guard case .movement = event.type else { return false }
-                return event.details.contains("Working Released Interim")
-                    && event.details.contains("Working Released Destination")
+                return event.details?.contains("Working Released Interim") == true
+                    && event.details?.contains("Working Released Destination") == true
             },
             "When an animal is no longer in the working pen and has no conflicting Working owner, completion must move from its current pasture to the assigned destination.",
             file: file,
@@ -1936,7 +1936,7 @@ extension WorkingRepositoryContract {
         XCTAssertTrue(
             timelineBeforeDelete.contains { event in
                 guard case .movement = event.type else { return false }
-                return event.details.contains("Working Delete External Interim")
+                return event.details?.contains("Working Delete External Interim") == true
             },
             file: file,
             line: line
@@ -1975,7 +1975,7 @@ extension WorkingRepositoryContract {
         XCTAssertTrue(
             timelineAfterDelete.contains { event in
                 guard case .movement = event.type else { return false }
-                return event.details.contains("Working Delete External Interim")
+                return event.details?.contains("Working Delete External Interim") == true
             },
             "Deleting the stale session must preserve the independent movement history.",
             file: file,

@@ -263,9 +263,9 @@ final class CoreDataModelStructureTests: XCTestCase {
             "WorkingTreatmentRecord": CDWorkingTreatmentRecord.self
         ]
 
-        for (entityName, managedClass) in expectedClasses {
+        for entityName in expectedClasses.keys {
             let entity = try entity(named: entityName, in: model)
-            let expectedName = NSStringFromClass(managedClass)
+            let expectedName = NSStringFromClass(try XCTUnwrap(expectedClasses[entityName]))
             let configuredName = try XCTUnwrap(entity.managedObjectClassName)
             XCTAssertTrue(
                 configuredName == expectedName || expectedName.hasSuffix(".\(configuredName)"),

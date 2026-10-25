@@ -4,7 +4,7 @@ import XCTest
 
 @MainActor
 func XCTAssertThrowsErrorAsync<T>(
-    _ expression: @autoclosure () async throws -> T,
+    _ expression: @autoclosure @MainActor () async throws -> T,
     _ message: @autoclosure () -> String = "",
     file: StaticString = #filePath,
     line: UInt = #line,
