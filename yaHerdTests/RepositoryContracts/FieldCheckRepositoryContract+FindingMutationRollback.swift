@@ -60,13 +60,35 @@ extension FieldCheckRepositoryContract {
                 pastureID: pasture.id
             )
         )
-        _ = try fixture.makeAnimalRepository().create(
+        let secondAnimal = try fixture.makeAnimalRepository().create(
             input: findingMutationRollbackAnimalInput(
                 name: "Finding Mutation Rollback Two",
                 tagNumber: "FM702",
                 pastureID: pasture.id
             )
         )
+
+        // Two adult females without offspring are heifers. Establish real maternal
+        // history so the rollback exercises two cows, while keeping calves out
+        // of the tested session's pasture and quick-count capacity.
+        let calfPasture = try fixture.makePastureRepository().create(
+            input: PastureInput(
+                name: "Finding Mutation Rollback Offspring",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        for (damID, tag) in [(firstAnimal.id, "FM703"), (secondAnimal.id, "FM704")] {
+            _ = try fixture.makeAnimalRepository().create(
+                input: findingMutationRollbackAnimalInput(
+                    name: "Finding Mutation Rollback Offspring",
+                    tagNumber: tag,
+                    pastureID: calfPasture.id,
+                    damID: damID
+                )
+            )
+        }
 
         let repository = fixture.makeFieldCheckRepository()
         let sessionID = try await repository.createSession(
@@ -495,7 +517,8 @@ extension FieldCheckRepositoryContract {
     private static func findingMutationRollbackAnimalInput(
         name: String,
         tagNumber: String,
-        pastureID: UUID
+        pastureID: UUID,
+        damID: UUID? = nil
     ) -> AnimalInput {
         AnimalInput(
             name: name,
@@ -506,7 +529,7 @@ extension FieldCheckRepositoryContract {
             status: .active,
             pastureID: pastureID,
             sireID: nil,
-            damID: nil,
+            damID: damID,
             distinguishingFeatures: [],
             saleDate: nil,
             salePrice: nil,
