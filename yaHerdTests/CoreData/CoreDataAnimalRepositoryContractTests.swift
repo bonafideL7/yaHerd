@@ -2004,11 +2004,11 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let firstWriter = environment.makeAnimalRepository()
         let secondWriter = environment.makeAnimalRepository()
 
-        async let firstCreate = concurrentCreateOutcome(
+        async let firstCreate = Self.concurrentCreateOutcome(
             writer: firstWriter,
             transaction: transaction
         )
-        async let secondCreate = concurrentCreateOutcome(
+        async let secondCreate = Self.concurrentCreateOutcome(
             writer: secondWriter,
             transaction: transaction
         )
@@ -2051,12 +2051,14 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             tags: environment.tags(from: staleBase.animal)
         )
 
-        async let firstResult = concurrentUpdateOutcome(
-            writer: environment.makeAnimalRepository(),
+        let firstUpdateWriter = environment.makeAnimalRepository()
+        let secondUpdateWriter = environment.makeAnimalRepository()
+        async let firstResult = Self.concurrentUpdateOutcome(
+            writer: firstUpdateWriter,
             transaction: firstUpdate
         )
-        async let secondResult = concurrentUpdateOutcome(
-            writer: environment.makeAnimalRepository(),
+        async let secondResult = Self.concurrentUpdateOutcome(
+            writer: secondUpdateWriter,
             transaction: secondUpdate
         )
         let updateOutcomes = await [firstResult, secondResult]
@@ -3284,7 +3286,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         case unexpected
     }
 
-    private func concurrentCreateOutcome(
+    private static func concurrentCreateOutcome(
         writer: any AnimalAggregateTransactionWriting,
         transaction: CreateAnimalAggregateTransaction
     ) async -> ConcurrentWriteOutcome {
@@ -3301,7 +3303,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         }
     }
 
-    private func concurrentUpdateOutcome(
+    private static func concurrentUpdateOutcome(
         writer: any AnimalAggregateTransactionWriting,
         transaction: UpdateAnimalAggregateTransaction
     ) async -> ConcurrentWriteOutcome {
