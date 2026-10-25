@@ -24,11 +24,26 @@ Do not create Markdown documentation, dependency or navigation matrices, impleme
 
 ## Persistence direction
 
-yaHerd uses a local-only Core Data `NSPersistentContainer`. The app is prelaunch and does not require a SwiftData migration, compatibility layer, or dual-write path.
+yaHerd currently uses a local-only Core Data `NSPersistentContainer`. The approved future direction is iCloud synchronization and multi-user Herd sharing using Core Data and CloudKit, as specified in [Info/CLOUDKIT_COLLABORATION.md](Info/CLOUDKIT_COLLABORATION.md). Do not describe that target as already implemented. A SwiftData migration, compatibility layer, or dual-write path is not required.
 
 - Do not reintroduce SwiftData production repositories, models, migration adapters, or supporting infrastructure.
 - Do not treat historical SwiftData implementation or historical planning documents as the active architecture.
 - Preserve data integrity, object identity, relationship behavior, history, and Core Data recovery paths when they are affected by a change.
+
+## Approved CloudKit feature work
+
+The explicitly requested [CloudKit synchronization and collaboration specification](Info/CLOUDKIT_COLLABORATION.md) defines intended feature behavior, implementation stages, acceptance criteria, and CloudKit-specific review requirements. This is the only approved new feature document; it is not a progress tracker or evidence that features have shipped.
+
+For any CloudKit, sharing, Herd selection, Core Data model migration, or related persistence work:
+
+- Read the specification and the current affected production source before making changes. The latest production code remains authoritative for existing implementation details; user-approved feature requirements determine intended behavior.
+- Implement only the stage requested by the user and its demonstrably necessary dependencies. Do not automatically execute later stages or reintroduce discarded infrastructure.
+- Preserve existing data, application UUIDs, transaction semantics, repository boundaries, offline use, and recovery behavior.
+- Trace both private and shared store ownership, every relevant read/write path, remote-change invalidation, navigation, permissions, deletion, invitation lifecycle, and account changes.
+- If a technical approach in the specification conflicts with current code or verified platform behavior, investigate and select the smallest correct solution. Obtain approval before altering a product requirement; update the approved specification when warranted.
+- Review the entire actual change for production defects against the applicable acceptance criteria, and report what was really verified. Compilation or an absence of review comments does not establish cross-account synchronization.
+
+This user-requested specification is an exception to the restriction on creating additional Markdown documents. It does not authorize unrelated documentation, tracking frameworks, automated tests, or CI changes.
 
 ## Codex code review
 
