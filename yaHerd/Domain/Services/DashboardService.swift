@@ -169,7 +169,7 @@ struct DashboardService {
         if !unassigned.isEmpty {
             alerts.append(
                 DashboardAlert(
-                    id: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)),
+                    id: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)),
                     title: "\(unassigned.count) animals not assigned to a pasture",
                     message: "Assign them to avoid management issues.",
                     icon: "map-pin-off",
