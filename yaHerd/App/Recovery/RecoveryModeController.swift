@@ -262,6 +262,11 @@ final class RecoveryModeController: ObservableObject {
       .fileSizeKey,
       .contentModificationDateKey
     ]
+    // An absent store directory is expected for a fresh launch or failed store
+    // initialization; distinguish it from a present but unreadable directory.
+    guard fileManager.fileExists(atPath: directory.path) else {
+      return []
+    }
     let files: [URL]
     do {
       files = try fileManager.contentsOfDirectory(

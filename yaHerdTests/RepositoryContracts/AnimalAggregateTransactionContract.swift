@@ -3253,9 +3253,6 @@ enum AnimalAggregateTransactionContract {
         if let sireDisplay, !sireDisplay.isEmpty {
             details.append("Sire: \(sireDisplay)")
         }
-        if let pastureName = detail.pastureName, !pastureName.isEmpty {
-            details.append("Pasture: \(pastureName)")
-        }
         let expected = TimelineSignature(
             kind: .birth,
             date: detail.birthDate,
@@ -3265,7 +3262,7 @@ enum AnimalAggregateTransactionContract {
         XCTAssertEqual(
             actual,
             expected,
-            "The primary Birth projection must derive from current parent displays and Pasture.",
+            "The primary Birth projection must derive from parent displays without inventing a birthplace from the current pasture.",
             file: file,
             line: line
         )

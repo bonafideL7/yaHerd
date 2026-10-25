@@ -569,8 +569,12 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             finding.animalIDSnapshot = linkedAnimalID
             finding.animalDisplayTagNumberSnapshot = check?.rosterTagNumberSnapshot
                 ?? animal.map(Self.primaryTagFields)?.number
-            finding.animalDisplayTagColorIDSnapshot = check?.rosterTagColorIDSnapshot
-                ?? animal.map(Self.primaryTagFields)?.colorID
+            // A roster check captures the original color, including a nil
+            // color for animals that were untagged when the check began.
+            // Only findings without a roster check use the live animal.
+            finding.animalDisplayTagColorIDSnapshot = check != nil
+                ? check?.rosterTagColorIDSnapshot
+                : animal.map(Self.primaryTagFields)?.colorID
             finding.animalNameSnapshot = check?.animalNameSnapshot ?? animal?.name
             finding.pastureNameSnapshot = session.pastureNameSnapshot
             finding.herd = herd
@@ -650,8 +654,12 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             finding.animalIDSnapshot = linkedAnimalID
             finding.animalDisplayTagNumberSnapshot = check?.rosterTagNumberSnapshot
                 ?? animal.map(Self.primaryTagFields)?.number
-            finding.animalDisplayTagColorIDSnapshot = check?.rosterTagColorIDSnapshot
-                ?? animal.map(Self.primaryTagFields)?.colorID
+            // A roster check captures the original color, including a nil
+            // color for animals that were untagged when the check began.
+            // Only findings without a roster check use the live animal.
+            finding.animalDisplayTagColorIDSnapshot = check != nil
+                ? check?.rosterTagColorIDSnapshot
+                : animal.map(Self.primaryTagFields)?.colorID
             finding.animalNameSnapshot = check?.animalNameSnapshot ?? animal?.name
             finding.pastureNameSnapshot = session.pastureNameSnapshot
             finding.animal = animal

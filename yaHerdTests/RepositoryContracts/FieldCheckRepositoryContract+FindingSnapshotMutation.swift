@@ -175,7 +175,7 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
-        XCTAssertEqual(untaggedFinding.animalDisplayTagColorID, originalColorID, "untaggedFinding must retain the initial roster tag color", file: file, line: line)
+        XCTAssertNil(untaggedFinding.animalDisplayTagColorID, "An untagged animal must retain its nil historical roster color after retagging.", file: file, line: line)
         XCTAssertEqual(untaggedFinding.pastureName, "Mutation Snapshot North", file: file, line: line)
 
         let calfCheckAfterAdd = try XCTUnwrap(
@@ -194,6 +194,12 @@ extension FieldCheckRepositoryContract {
             line: line
         )
         XCTAssertEqual(untaggedCheckAfterAdd.displayTagNumber, "UT", file: file, line: line)
+        XCTAssertNil(
+            untaggedCheckAfterAdd.displayTagColorID,
+            "The originally untagged roster has no historical tag color.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(untaggedCheckAfterAdd.animalName, "Mutation Snapshot Untagged", file: file, line: line)
 
         _ = try fixture.makePastureRepository().update(
@@ -277,7 +283,7 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(updatedUntaggedFinding.note, "Updated post-change untagged finding", file: file, line: line)
         XCTAssertEqual(updatedUntaggedFinding.animalID, untagged.id, file: file, line: line)
         XCTAssertEqual(updatedUntaggedFinding.animalDisplayTagNumber, "UT", file: file, line: line)
-        XCTAssertEqual(updatedUntaggedFinding.animalDisplayTagColorID, originalColorID, "updatedUntaggedFinding must retain the initial roster tag color", file: file, line: line)
+        XCTAssertNil(updatedUntaggedFinding.animalDisplayTagColorID, "An untagged animal must retain its nil historical roster color after retagging.", file: file, line: line)
         XCTAssertEqual(updatedUntaggedFinding.pastureName, "Mutation Snapshot North", file: file, line: line)
 
         let openFindings = try afterUpdateReader.fetchOpenFindings(limit: 0)
@@ -295,7 +301,7 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(openTaggedFinding.animalDisplayTagColorID, originalColorID, "openTaggedFinding must retain the initial roster tag color", file: file, line: line)
         XCTAssertEqual(openTaggedFinding.pastureName, "Mutation Snapshot North", file: file, line: line)
         XCTAssertEqual(openUntaggedFinding.animalDisplayTagNumber, "UT", file: file, line: line)
-        XCTAssertEqual(openUntaggedFinding.animalDisplayTagColorID, originalColorID, "openUntaggedFinding must retain the initial roster tag color", file: file, line: line)
+        XCTAssertNil(openUntaggedFinding.animalDisplayTagColorID, "An untagged animal must retain its nil historical roster color after retagging.", file: file, line: line)
         XCTAssertEqual(openUntaggedFinding.pastureName, "Mutation Snapshot North", file: file, line: line)
     }
 

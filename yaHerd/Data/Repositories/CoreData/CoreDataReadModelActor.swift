@@ -154,6 +154,9 @@ actor CoreDataReadModelActor:
                         $0,
                         herdID: herdID
                     )
+                }.sorted { left, right in
+                    if left.date != right.date { return left.date > right.date }
+                    return left.id.uuidString < right.id.uuidString
                 }
             )
         }
@@ -2363,9 +2366,11 @@ actor CoreDataReadModelActor:
     private static func pinCurrentQueryGenerationIfSupported(
         in context: NSManagedObjectContext
     ) throws {
-        guard let stores = context.persistentStoreCoordinator?.persistentStores,
-              !stores.isEmpty,
-              stores.allSatisfy({ $0.type == NSSQLiteStoreType }) else {
+        // In-memory stores used by tests cannot pin SQLite snapshots.
+        // Preserve the original generation-pinning semantics for every other
+        // configuration, including SQLite, mixed, and unavailable stores.
+        let stores = context.persistentStoreCoordinator?.persistentStores ?? []
+        if stores.count == 1 && stores[0].type == NSInMemoryStoreType {
             return
         }
         try context.setQueryGenerationFrom(.current)
