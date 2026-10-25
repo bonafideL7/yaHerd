@@ -1472,7 +1472,7 @@ extension AnimalRepositoryContract {
         expectedTargetIsActiveInHerd: Bool,
         expectedActiveCount: Int,
         immediateAnimalRepository: any AnimalRepository,
-        immediatePastureRepository: any PastureRepository,
+        immediatePastureRepository: any TestPastureRepository,
         fixture: AnimalActiveHerdReadProjectionContractFixture,
         file: StaticString,
         line: UInt
