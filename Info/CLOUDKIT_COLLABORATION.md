@@ -205,29 +205,118 @@ The stages below form an implementation order, not a status matrix. ChatGPT impl
 
 **Accept when:** The feature works across real distinct Apple Accounts, upgraded data is preserved, data does not cross account/Herd boundaries, production schema is deployed safely, and observed behavior matches requirements. Compilation alone is insufficient.
 
-## 5. Required end-to-end behavior scenarios
+## 5. Executable manual test-case plan
 
-These are observable manual/device verification scenarios, NOT a directive to add automated tests or CI infrastructure.
+This is a behavior and release verification plan for ChatGPT to follow during implementation. It is **not** authorization to create or modify automated tests, test targets, CI, separate tracking files or other infrastructure. Codex reviews code and evidence, not implementation. Never mark a case passed without actually executing it.
 
-- Upgrade an existing local-only installation with a representative populated Herd; IDs, counts and history match before/after.
-- Start on a new device signed into the owner's existing iCloud Account; existing Herds import without an extra implicit "My Herd".
-- Create another deliberate owned Herd and switch among owned and shared Herds; no stale cross-Herd lists, filters or routes appear.
-- Invite an unrelated Apple Account to a populated Herd; accept during normal operation and after app cold launch; verify complete initial data and relationships.
-- Add an animal and tag as invited editor; owner sees the correct new records without restart, not duplicates.
-- Change different records offline on two devices and reconnect; both survive.
-- Edit the same animal offline; observe chosen conflict policy. Do not treat silent last-writer overwrite as verified correct collaboration.
-- Assign a duplicate tag or primary tag concurrently; detect and recover rather than masking.
-- Move an animal while another participant deletes a pasture; inspect historical records, memberships and invalid transitions.
-- Concurrently complete/modify a working session; detect invalid or competing completion.
-- Delete an animal that another device currently displays; navigation and editors revalidate appropriately.
-- Invite as read-only participant; verify every mutation entry point, including swipe, inline, context menu and background action, is blocked.
-- Revoke a participant and have them go offline/online; verify the effective access and user messaging.
-- Leave a shared Herd; verify loss of access and local selection fallback without harming the owner's data.
-- Turn off networking during cloud export/import; local saves persist and are retried when service becomes available.
-- Sign out of iCloud, sign into a different Apple Account and relaunch; no unauthorized exposure or upload of previous account data.
-- Interrupt migration and initial sharing import; app recovers without duplicate roots or destroyed data.
-- Validate failure handling for expired invitation, denied permission, quota and a temporary CloudKit service error.
-- Exercise TestFlight with the production CloudKit schema, not only a development-account schema.
+### 5.1 Test environment, fixtures, and evidence
+
+- **Physical devices:** A = an owner's iPhone signed into Apple Account A; A2 = another device on Account A for same-account sync (recommended); B = iPhone on different Apple Account B with read/write access; C = third Apple Account with read-only access where available. Two physical devices on different accounts are the minimum for real cross-account sharing verification; if A2 or C is unavailable, explicitly mark dependent coverage as not executed rather than asserting it.
+- **Cloud environments:** Use an intentionally initialized/inspected CloudKit **development** schema for engineering scenarios. Use a separately deployed CloudKit **production** schema and TestFlight build for final acceptance. Never initialize production schema from normal app startup.
+- **Existing-data fixture:** Preserve a genuine local-only build's SQLite/Core Data store and a separate restorable copy. Capture Herd IDs, per-entity counts and representative stable UUIDs, active/archived state, parentage, tag/status colors, pastures/groups, movement/health/pregnancy history, field checks and findings, treatment templates, working sessions and child records. The baseline model contains 18 entities; inspect current main and cover every entity that actually exists when testing. Preserve negative/empty cases separately.
+- **Multiple-Herd fixture:** Include two owned Herds and at least one Herd shared by another Account. Give them distinct, recognizable content so wrong-Herd reads are evident.
+- **Recording actual results:** In the implementing PR report, record case IDs, device and OS/build, CloudKit environment, prerequisite state, actions performed, expected vs observed outcome, and privacy-safe diagnostics. Use "passed", "failed", "blocked", or "not executed" with reasons. Do not create a separate test tracker. Never disclose personal Apple Account identifiers, sensitive Herd records or live invitation URLs in logs.
+- **Cloud timing:** Wait for actual propagation/import and compare data, not an invented immediate timeout. CloudKit event success on one device alone does not prove another device received records. A prolonged stall needs a diagnosis, not an unsupported "synced" assertion.
+- **Failure injection:** Use safe development fixtures, network toggles, app termination, supported Xcode/CloudKit tooling and restorable stores. If an import-order, quota or server failure cannot be induced safely, mark the relevant subcase not executed; do not claim simulation occurred.
+
+### 5.2 Migration, schema and store isolation (Stages 1–2)
+
+**M01 — Existing populated store migration.** Setup: Install the prior local-only build with the representative data fixture. Steps: record counts/UUIDs and relationship/history samples; preserve a restorable original; install the new build; inspect all major features. **Pass:** No missing/duplicated data or changed application IDs, and previous CRUD behavior remains correct.
+
+**M02 — Empty upgrade and clean installation.** Setup: One originally empty local store and one fresh device. Steps: upgrade/launch while iCloud is present and absent. **Pass:** No accidental duplicate starter Herd, synthetic recovery upload, corrupt empty store or false "cloud empty" conclusion before import finishes.
+
+**M03 — Migration failure/retry.** Setup: Safe backed-up fixture and a controllable store-load/migration failure. Steps: interrupt or fail migration using supported development means and relaunch. **Pass:** Original data remains recoverable; no silent reset, duplicate roots, partial destructive conversion or forced upload. If not inducible, state limitation.
+
+**M04 — Model and development schema compatibility.** Setup: Versioned model in development environment. Steps: run current SDK CloudKit model/schema validation, inspect attributes, relationships, inverses and constraints; intentionally initialize the development schema only. **Pass:** Compatible model, guarded optional imported values, unchanged production schema.
+
+**M05 — Owned/shared routing and isolation.** Setup: A owns private Herd P; B has shared Herd S. Steps: read, create, edit and delete representative records in each selected Herd; inspect their Core Data store memberships. **Pass:** Reads/writes use their true owning store and share; no cross-store relationships, foreign-Herd mutations or accidental duplication.
+
+**M06 — Per-store failure and recovery.** Setup: Separate private/shared stores. Steps: induce a supported shared-store load/permission problem while observing the private store and recovery mode. **Pass:** Specific error is surfaced, unaffected data remains safe, and fallback/in-memory data is never uploaded as genuine Herd data.
+
+### 5.3 Herd selection and synchronization (Stages 2–4)
+
+**H01 — Initial cloud discovery without duplicate bootstrap.** Setup: A already owns Herd P in iCloud; A2 has no local store. Steps: launch A2 before and after import completes. **Pass:** P is discovered with its original UUID; no automatic second "My Herd" root.
+
+**H02 — Deliberate offline Herd creation.** Setup: Device offline with no selected Herd. Steps: explicitly create a Herd and animal, relaunch offline, reconnect. **Pass:** Exactly one new user-requested Herd persists and eventually exports with stable IDs.
+
+**H03 — Multi-Herd switch and stale navigation.** Setup: Owned and shared Herds with unrelated records. Steps: open animal/pasture details, active workflow, filter and editor in Herd P; switch to Herd S before a delayed fetch completes; restart. **Pass:** No stale cross-Herd data, filters, drafts, routes or saves; coherent selected-Herd restoration.
+
+**H04 — Same-Apple-Account private synchronization.** Setup: A and A2 on Account A. Steps: create/edit one of each entity/relationship class in the private Herd; observe import on A2; make a reverse edit. **Pass:** Bidirectional convergence of records, IDs, relationships and history without duplicates. Without A2, mark unverified.
+
+**H05 — Open-view remote invalidation.** Setup: A and B displaying an already-shared Herd. Steps: edit animal, pasture, health record, field check and working data on one device while other views, counts and Dashboard are visible. **Pass:** Relevant screens update without force relaunch, and deleted details/routes safely revalidate.
+
+**H06 — Durable remote history after relaunch.** Setup: B terminates app after initial import. Steps: A edits several feature areas; B reopens. **Pass:** Pending changes processed once or safely coalesced, history tokens remain valid or recover, and no permanent stale cache or infinite refresh loop.
+
+**H07 — Network loss and export retry.** Setup: A/B authorized editors. Steps: take B offline, make local updates, terminate/restart still offline, reconnect and compare both devices. **Pass:** Local saves survive, eventually converge, no duplicate exports or "fully synced" status based only on local commit.
+
+**H08 — Incomplete remote graph.** Setup: Populated share with animals, parents, pasture, field checks and working children. Steps: import while connectivity is constrained or use safe development instrumentation for partial arrival where possible. **Pass:** No required-relationship crashes, invented identity, false permanent corruption or permanently dropped child; graph displays coherently when complete.
+
+### 5.4 Share creation, invitations and access (Stages 5–6)
+
+**S01 — Share a populated Herd across accounts.** Setup: A owns a full Herd; B is a different Apple Account. Steps: create invitation, accept on B, inspect every modeled descendant type. **Pass:** Only the intended Herd and its complete child graph arrive in B's shared store with stable UUIDs.
+
+**S02 — Warm invitation acceptance.** Setup: yaHerd open on B. Steps: accept an invitation from iOS. **Pass:** Scene callback processes once, no duplicate Herd and correct pending-import/available states.
+
+**S03 — Cold-launch invitation acceptance.** Setup: yaHerd fully terminated on B. Steps: open invitation and launch app. **Pass:** Pending invitation waits for store initialization, is accepted once, and eventually yields a navigable shared Herd.
+
+**S04 — Repeat, invalid and revoked invitations.** Setup: Previously accepted share and separate expired/revoked invitation fixture. Steps: retry acceptance and invalid link. **Pass:** No second root/share, no unauthorized record disclosure, meaningful errors, no loss of unrelated data.
+
+**S05 — New records added after sharing.** Setup: A/B already share Herd. Steps: Add animal and tag, pasture/group, health/pregnancy/movement history, field-check children and working-session/treatment children from either authorized device. **Pass:** New descendants join the correct share and appear on other account; no manual re-sharing required.
+
+**S06 — Bidirectional read/write collaboration.** Setup: B invited as editor. Steps: B edits pasture/moves animal; A records treatment/field check; B modifies working session. **Pass:** Changes are locally atomic, use appropriate stores and converge with correct relationships/history.
+
+**S07 — Read-only access through every editing path.** Setup: B or C as read-only participant. Steps: Attempt inline/full editing, swipe/context-menu archive/delete/restore, bulk edits, tags, pastures, animal movements, health additions, field checks, templates and working-session actions. **Pass:** UI does not offer unauthorized actions, and repository commit paths reject bypasses; reads still work.
+
+**S08 — Permission downgrade with open editor.** Setup: B editing while A changes B from writer to viewer. Steps: B attempts save after permission update and after reconnection if offline. **Pass:** Server-rejected/unauthorized writes do not become authorized cloud state, app preserves a recoverable draft where feasible, and messaging acknowledges offline revocation timing.
+
+**S09 — Revoke, leave and stop sharing separately.** Setup: Owned Herd shared with B; additional safe fixture Herd. Steps: A revokes B, B leaves different share, A stops another share. **Pass:** Distinct intended consequences, proper selection fallback, owner data and unrelated Herds not deleted.
+
+**S10 — Invitation-only privacy.** Setup: Active shared Herd with native CKShare. Steps: Examine access settings; try opening an invitation as an uninvited Apple Account. **Pass:** Public access is not accidentally enabled; uninvited users cannot access unrelated Herd content.
+
+### 5.5 Concurrent editing, integrity and deletion (Stages 6–7)
+
+**C01 — Independent offline edits.** Setup: A/B sharing and offline. Steps: Change different animals/records, reconnect in each order across repeat runs. **Pass:** Both independent valid changes survive after convergence.
+
+**C02 — Same-animal concurrent edits.** Setup: Same animal open on both offline devices. Steps: Change overlapping fields, reconnect in alternate orders. **Pass:** Result matches an explicit implemented conflict policy; report when a remote overwrite cannot be preserved, rather than claiming app-local revisions guarantee cloud serializability.
+
+**C03 — Duplicate tag/primary-tag race.** Setup: A/B offline. Steps: Assign same tag or incompatible active primary tags concurrently, reconnect. **Pass:** Detect and expose recoverable invariant conflict; no invented UUID or endless repair-write loop.
+
+**C04 — Animal move versus pasture deletion.** Setup: Both devices have animal assigned to pasture P. Steps: A moves animal while offline B removes/archives P; reconnect. **Pass:** Domain-valid membership and history or explicit conflict state; no silent loss/cross-Herd relationship.
+
+**C05 — Competing session transitions.** Setup: Both devices viewing same working/field-check session offline. Steps: Make conflicting completion/cancel/edit changes, reconnect. **Pass:** No silently invalid session state or duplicate completion; conflict recovery follows domain rules.
+
+**C06 — Delete versus edit/open navigation.** Setup: A has animal editor open. Steps: B deletes that animal while A has unsaved edits; synchronize. **Pass:** No silent resurrection, crash, invalid route or unintended data loss; editor presents appropriate conflict/removal outcome.
+
+**C07 — Cross-Herd ownership safety.** Setup: At least two accessible Herds, potentially similar record identifiers in development fixture. Steps: attempt parent/pasture/child relationship or mutation against wrong Herd/store. **Pass:** Correct lookup and transaction rejection, no data leakage or foreign-store links.
+
+**C08 — Reconciliation convergence.** Setup: Development fixture with remotely induced domain conflict. Steps: reconnect devices and observe history and repair activity. **Pass:** Bounded repair/user-actionable state, not indefinite automatic alternating writes.
+
+### 5.6 Account failures and release acceptance (Stages 7–8)
+
+**R01 — Apple Account transition.** Setup: A has private and joined shared Herd data. Steps: sign out of iCloud, sign into a different Apple Account and relaunch. **Pass:** Previous account's data is not disclosed or exported to new account; safe local access/recovery policy is observed.
+
+**R02 — iCloud unavailable and CloudKit service errors.** Setup: Restorable owned/shared fixture. Steps: Disable iCloud/network; safely induce quota, denied permission, or service failure where controllable. **Pass:** Preserved local data, accurate actionable errors, no silent empty-store replacement; unavailable fault cases listed as not executed.
+
+**R03 — Interrupted share import/export.** Setup: Large populated share invitation. Steps: terminate app or disconnect mid-transfer, then reconnect. **Pass:** Resume without duplicate Herd/share/child objects or permanently incomplete relationships.
+
+**R04 — Archive versus permanent deletion and sharing removal.** Setup: Herd with archived animals and history. Steps: Separately exercise archive, hard delete, participant leave, revoke and owner stop-sharing on safe fixtures. **Pass:** Only intended effects, correct historical retention/relationships, no unintended purge.
+
+**R05 — TestFlight production schema.** Setup: Development schema reviewed, production CloudKit schema intentionally deployed, TestFlight on distinct accounts. Steps: Repeat S01, S03, S06, S07, H04 (if A2 available), and C01. **Pass:** Same end-to-end behavior on production CloudKit; no reliance on development-only entitlement/schema.
+
+**R06 — Load and app regressions.** Setup: Representative busy multi-Herd dataset with animals, pastures and sessions. Steps: Use Home, Dashboard, animal/pasture lists, filters, field checks, working and editors while cloud events arrive. **Pass:** No significant new UI freezes, incorrect counts, repeated fetch storms, crashes or lost local functionality. Record measured limits if the environment supports them; invent no numerical benchmark.
+
+### 5.7 Completion gates
+
+- **Stage 1:** M01–M04. Migration preservation and actual model validation are mandatory.
+- **Stage 2:** M05–M06 and related migration/fresh creation coverage. Wrong-store writes block progression.
+- **Stage 3:** H01–H03 and C07. Duplicate roots and cross-Herd data exposure block progression.
+- **Stage 4:** H04–H08. Real remote import/refresh behavior must be demonstrated when physical devices are available; simulated events cannot substitute.
+- **Stage 5:** S01–S06, S09–S10 and R03. Different-Apple-Account sharing and complete graph inclusion are mandatory for acceptance.
+- **Stage 6:** S07–S08 and R01. Unauthorized writes and account-data leakage are release blockers.
+- **Stage 7:** C01–C08 and R04. Silent critical invariant corruption or destructive loss is a release blocker.
+- **Stage 8/release:** All applicable cases including R01–R06, production schema and TestFlight. Unexecuted device tests mean **not release verified**, not passed.
+
+Immediate release blockers include data loss, wrong-account upload, foreign-Herd/store access, unintended hard deletion, duplicate Herd/share creation, unauthorized committed edits, silently corrupted domain-critical invariants and invalid production CloudKit schema. Other findings are prioritized by actual production consequences. When a scenario cannot be safely reproduced, report that limitation instead of treating a successful build as behavioral verification.
 
 ## 6. Pull-request implementation rules
 
