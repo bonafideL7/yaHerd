@@ -7,7 +7,7 @@ final class ApplicationSettingsTests: XCTestCase {
         let settings = ApplicationSettings(store: InMemoryApplicationSettingsStore())
 
         XCTAssertFalse(settings.isDashboardEnabled)
-        XCTAssertTrue(settings.hardDeleteAnimals)
+        XCTAssertFalse(settings.hardDeleteAnimals)
         XCTAssertEqual(settings.targetAcresPerHeadDefault, 3.0)
         XCTAssertEqual(settings.usableAcreagePercentDefault, 100)
         XCTAssertEqual(settings.recentPastureIDs, [])
@@ -106,7 +106,7 @@ final class ApplicationSettingsTests: XCTestCase {
         settings.resetToDefaults()
 
         XCTAssertFalse(settings.isDashboardEnabled)
-        XCTAssertTrue(settings.hardDeleteAnimals)
+        XCTAssertFalse(settings.hardDeleteAnimals)
         XCTAssertEqual(settings.targetAcresPerHeadDefault, 3.0)
         XCTAssertEqual(settings.usableAcreagePercentDefault, 100)
         XCTAssertEqual(settings.recentPastureIDs, [])
