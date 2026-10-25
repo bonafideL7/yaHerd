@@ -12,6 +12,7 @@ enum AppTab: String, Codable, Hashable {
 /// Routes owned by the herd navigation stack.
 enum HerdRoute: Codable, Hashable {
     case animal(UUID)
+    case animalEdit(UUID)
     case pasture(UUID)
     case fieldChecks(FieldChecksViewMode)
     case workingSessions
@@ -152,6 +153,18 @@ final class HerdRouter {
     func openAnimal(_ animalID: UUID, in tab: AppTab = .herd) {
         if tab != .search { mode = .animals }
         setPath([.animal(animalID)], for: tab)
+    }
+
+    func openAnimalForEditing(_ animalID: UUID, in tab: AppTab = .herd) {
+        if tab != .search { mode = .animals }
+        setPath([.animalEdit(animalID)], for: tab)
+    }
+
+    func closeAnimalEditor(_ animalID: UUID, in tab: AppTab) {
+        let activePath = path(for: tab)
+        guard case .animalEdit(let presentedID) = activePath.last,
+              presentedID == animalID else { return }
+        setPath(Array(activePath.dropLast()), for: tab)
     }
 
     func openPasture(_ pastureID: UUID, in tab: AppTab = .herd) {
@@ -830,7 +843,7 @@ final class AppNavigationState {
         for route in path {
             let isValid: Bool
             switch route {
-            case .animal(let animalID):
+            case .animal(let animalID), .animalEdit(let animalID):
                 isValid = (try? validator.animalExists(id: animalID)) == true
             case .pasture(let pastureID):
                 isValid = (try? validator.pastureExists(id: pastureID)) == true
@@ -907,7 +920,7 @@ private extension HerdRoute {
         switch self {
         case .fieldChecks, .workingSessions:
             return true
-        case .animal, .pasture:
+        case .animal, .animalEdit, .pasture:
             return false
         }
     }
@@ -916,7 +929,7 @@ private extension HerdRoute {
         switch self {
         case .fieldChecks, .workingSessions:
             return true
-        case .animal, .pasture:
+        case .animal, .animalEdit, .pasture:
             return false
         }
     }
