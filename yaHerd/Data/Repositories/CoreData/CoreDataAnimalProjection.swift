@@ -548,6 +548,9 @@ enum CoreDataAnimalProjection {
                 details.append("Sire: \(display)")
             }
         }
+        if let pastureName = animal.currentPasture?.name, !pastureName.isEmpty {
+            details.append("Pasture: \(pastureName)")
+        }
         return details.isEmpty ? nil : details.joined(separator: " • ")
     }
 

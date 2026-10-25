@@ -395,7 +395,7 @@ final class CoreDataAnimalRepository:
             } else if dam != nil {
                 sire = try CoreDataAnimalMutation.inferSingleSire(
                     pastureID: pasture?.id ?? dam?.currentPasture?.id,
-                    excluding: id,
+                    excluding: input.damID,
                     herd: herd,
                     in: context
                 )

@@ -894,9 +894,9 @@ extension AnimalRepositoryContract {
             file: file,
             line: line
         )
-        XCTAssertNil(
+        XCTAssertEqual(
             birthBefore.details,
-            "The birth entry must not imply that today's pasture was the birthplace.",
+            "Pasture: \(originalPastureName)",
             file: file,
             line: line
         )
@@ -1150,8 +1150,8 @@ extension AnimalRepositoryContract {
         )
         XCTAssertEqual(
             birthAfter.details,
-            birthBefore.details,
-            "Renaming the live Pasture must not rewrite the historical Birth entry.",
+            "Pasture: \(renamedPastureName)",
+            "The primary Birth projection must derive its Pasture label from the current live relationship.",
             file: file,
             line: line
         )
