@@ -23,13 +23,22 @@ func XCTAssertThrowsErrorAsync<T>(
     }
 }
 
-// Tests use the actual Core Data pasture read/edit surface. Destructive pasture
-// operations are exercised separately through PastureDeletionTransactionWriting.
+// Composite of the protocols implemented by the current Core Data pasture repository.
+// Destructive pasture operations remain a separate awaited transaction.
 typealias TestPastureRepository =
     PastureListManagingRepository &
-    PastureDetailEditingRepository &
-    PastureCreateRepository &
-    PastureGroupListRepository &
-    PastureGroupDetailRepository &
-    PastureGroupEditorRepository &
-    PastureReferenceDataReader
+    PastureDetailReader &
+    PastureResidentAnimalReader &
+    PastureReferenceDataReader &
+    PastureExistenceChecking &
+    PastureNameChecking &
+    PastureCreating &
+    PastureUpdating &
+    PastureGroupListReader &
+    PastureGroupDetailReader &
+    PastureGroupExistenceChecking &
+    PastureGroupNameChecking &
+    PastureGroupCreating &
+    PastureGroupUpdating &
+    PastureGroupDeleting &
+    PastureGroupAssignmentWriting

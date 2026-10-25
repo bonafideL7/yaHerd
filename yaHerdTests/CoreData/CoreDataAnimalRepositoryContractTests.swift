@@ -1350,6 +1350,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             Set([localPasture.id, controlPasture.id])
         )
         let persistedContext = readOnlyAssembly.contextFactory.makeReadContext()
+        let expectedHerdID = environment.herdID
         try persistedContext.performAndWait {
             let storedPasture = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPasture.self, id: foreignPastureID, herdID: foreignHerdID,
@@ -1357,9 +1358,9 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             ))
             XCTAssertEqual(storedPasture.group?.id, targetGroup.id)
             XCTAssertEqual(storedPasture.herd.id, foreignHerdID)
-            let storedGroup = try XCTUnwrap(readOnlyAssembly.lookup.herdOwned(
+            let storedGroup = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPastureGroup.self, id: targetGroup.id,
-                herdID: environment.herdID, in: persistedContext
+                herdID: expectedHerdID, in: persistedContext
             ))
             XCTAssertEqual(storedGroup.name, "Target Rotation")
         }
