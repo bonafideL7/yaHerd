@@ -1115,14 +1115,14 @@ private final class CoreDataHomeReadModelContractEnvironment {
             makeHomeFieldCheckQueryReader: {
                 CoreDataReadModelActor(
                     contextFactory: self.assembly.contextFactory,
-                    lookup: self.CoreDataLookup(),
+                    lookup: CoreDataLookup(),
                     currentHerdID: { self.selection.currentHerdID }
                 )
             },
             makeHomeWorkingQueryReader: {
                 CoreDataReadModelActor(
                     contextFactory: self.assembly.contextFactory,
-                    lookup: self.CoreDataLookup(),
+                    lookup: CoreDataLookup(),
                     currentHerdID: { self.selection.currentHerdID }
                 )
             }

@@ -9,7 +9,7 @@ import XCTest
 @MainActor
 struct AnimalRepositoryContractFixture {
     let makeAnimalRepository: () -> any AnimalRepository
-    let makePastureRepository: () -> any PastureRepository
+    let makePastureRepository: () -> any TestPastureRepository
     let makeStatusReference: (_ name: String, _ baseStatus: AnimalStatus) throws -> AnimalStatusReferenceOption
 }
 
