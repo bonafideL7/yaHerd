@@ -32,7 +32,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         )
         let readModel = CoreDataReadModelActor(
             contextFactory: environment.assembly.contextFactory,
-            lookup: environment.assembly.lookup,
+            lookup: environment.CoreDataLookup(),
             currentHerdID: { environment.selection.currentHerdID }
         )
         let grazingDate = Date(timeIntervalSinceReferenceDate: 700_000)
@@ -157,7 +157,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
             let reopened = try await environment.makeReadOnlyAssembly()
             let reopenedReader = CoreDataReadModelActor(
                 contextFactory: reopened.contextFactory,
-                lookup: reopened.lookup,
+                lookup: CoreDataLookup(),
                 currentHerdID: { environment.selection.currentHerdID }
             )
             await XCTAssertThrowsErrorAsync(
@@ -191,7 +191,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let seedContext = try environment.assembly.contextFactory.makeWriteContext()
         try seedContext.performAndWait {
             let herd = try XCTUnwrap(
-                environment.assembly.lookup.herd(id: environment.herdID, in: seedContext)
+                environment.CoreDataLookup().herd(id: environment.herdID, in: seedContext)
             )
             let foreignHerd = CDHerd(context: seedContext)
             foreignHerd.id = foreignHerdID
@@ -248,7 +248,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let mutationContext = try environment.assembly.contextFactory.makeWriteContext()
         try mutationContext.performAndWait {
             let completed = try XCTUnwrap(
-                environment.assembly.lookup.herdOwned(
+                environment.CoreDataLookup().herdOwned(
                     CDFieldCheckSession.self,
                     id: completedID,
                     herdID: environment.herdID,
@@ -276,7 +276,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let reopened = try await environment.makeReadOnlyAssembly()
         let reopenedReader = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
-            lookup: reopened.lookup,
+            lookup: CoreDataLookup(),
             currentHerdID: { environment.selection.currentHerdID }
         )
         await XCTAssertThrowsErrorAsync(
@@ -373,7 +373,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
                 let mutationContext = try environment.assembly.contextFactory.makeWriteContext()
                 try mutationContext.performAndWait {
                     let target = try XCTUnwrap(
-                        environment.assembly.lookup.herdOwned(
+                        environment.CoreDataLookup().herdOwned(
                             CDFieldCheckSession.self,
                             id: targetSessionID,
                             herdID: targetSessionHerdID,
@@ -383,7 +383,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
                     switch kind {
                     case .finding:
                         let finding = try XCTUnwrap(
-                            environment.assembly.lookup.herdOwned(
+                            environment.CoreDataLookup().herdOwned(
                                 CDFieldCheckFinding.self,
                                 id: childID,
                                 herdID: childHerdID,
@@ -393,7 +393,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
                         finding.session = target
                     case .animalCheck:
                         let check = try XCTUnwrap(
-                            environment.assembly.lookup.herdOwned(
+                            environment.CoreDataLookup().herdOwned(
                                 CDFieldCheckAnimalCheck.self,
                                 id: childID,
                                 herdID: childHerdID,
@@ -431,7 +431,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
                 let reopened = try await environment.makeReadOnlyAssembly()
                 let reopenedHome = CoreDataReadModelActor(
                     contextFactory: reopened.contextFactory,
-                    lookup: reopened.lookup,
+                    lookup: CoreDataLookup(),
                     currentHerdID: { environment.selection.currentHerdID }
                 )
                 await XCTAssertThrowsErrorAsync(
@@ -539,7 +539,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
             let reopened = try await environment.makeReadOnlyAssembly()
             let reopenedReader = CoreDataReadModelActor(
                 contextFactory: reopened.contextFactory,
-                lookup: reopened.lookup,
+                lookup: CoreDataLookup(),
                 currentHerdID: { environment.selection.currentHerdID }
             )
             await XCTAssertThrowsErrorAsync(
@@ -641,7 +641,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         )
         let reader = CoreDataReadModelActor(
             contextFactory: environment.assembly.contextFactory,
-            lookup: environment.assembly.lookup,
+            lookup: environment.CoreDataLookup(),
             currentHerdID: { environment.selection.currentHerdID }
         )
         let originalHome = try await reader.fetchHomeTreatmentTemplates(limit: 10)
@@ -657,7 +657,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let writeContext = try environment.assembly.contextFactory.makeWriteContext()
         try writeContext.performAndWait {
             let herd = try XCTUnwrap(
-                environment.assembly.lookup.herd(
+                environment.CoreDataLookup().herd(
                     id: environment.herdID,
                     in: writeContext
                 )
@@ -697,7 +697,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
 
         let reopenedHome = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
-            lookup: reopened.lookup,
+            lookup: CoreDataLookup(),
             currentHerdID: { environment.selection.currentHerdID }
         )
         await XCTAssertThrowsErrorAsync(
@@ -709,7 +709,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let freshContext = reopened.contextFactory.makeReadContext()
         try freshContext.performAndWait {
             let corrupt = try XCTUnwrap(
-                reopened.lookup.herdOwned(
+                CoreDataLookup().herdOwned(
                     CDWorkingTreatmentTemplate.self,
                     id: corruptTemplateID,
                     herdID: environment.herdID,
@@ -718,7 +718,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
             )
             XCTAssertEqual(corrupt.itemsData, invalidPayload)
             let healthy = try XCTUnwrap(
-                reopened.lookup.herdOwned(
+                CoreDataLookup().herdOwned(
                     CDWorkingTreatmentTemplate.self,
                     id: controlID,
                     herdID: environment.herdID,
@@ -746,7 +746,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let context = try environment.assembly.contextFactory.makeWriteContext()
         try context.performAndWait {
             let herd = try XCTUnwrap(
-                environment.assembly.lookup.herd(
+                environment.CoreDataLookup().herd(
                     id: environment.herdID,
                     in: context
                 )
@@ -784,7 +784,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         )
         let homeReader = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
-            lookup: reopened.lookup,
+            lookup: CoreDataLookup(),
             currentHerdID: { environment.selection.currentHerdID }
         )
         let homeTemplates = try await homeReader.fetchHomeTreatmentTemplates(limit: 10)
@@ -804,7 +804,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let context = try environment.assembly.contextFactory.makeWriteContext()
         try context.performAndWait {
             let herd = try XCTUnwrap(
-                environment.assembly.lookup.herd(
+                environment.CoreDataLookup().herd(
                     id: environment.herdID,
                     in: context
                 )
@@ -833,7 +833,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         // The direct library and bounded Home read must agree on corruption.
         let liveHomeReader = CoreDataReadModelActor(
             contextFactory: environment.assembly.contextFactory,
-            lookup: environment.assembly.lookup,
+            lookup: environment.CoreDataLookup(),
             currentHerdID: { environment.selection.currentHerdID }
         )
         await XCTAssertThrowsErrorAsync(
@@ -852,7 +852,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         }
         let homeReader = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
-            lookup: reopened.lookup,
+            lookup: CoreDataLookup(),
             currentHerdID: { environment.selection.currentHerdID }
         )
         await XCTAssertThrowsErrorAsync(
@@ -900,7 +900,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let seedContext = try environment.assembly.contextFactory.makeWriteContext()
         try seedContext.performAndWait {
             let herd = try XCTUnwrap(
-                environment.assembly.lookup.herd(id: selectedHerdID, in: seedContext)
+                environment.CoreDataLookup().herd(id: selectedHerdID, in: seedContext)
             )
             let foreignHerd = CDHerd(context: seedContext)
             foreignHerd.id = foreignHerdID
@@ -930,7 +930,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
 
         let reader = CoreDataReadModelActor(
             contextFactory: environment.assembly.contextFactory,
-            lookup: environment.assembly.lookup,
+            lookup: environment.CoreDataLookup(),
             currentHerdID: { environment.selection.currentHerdID }
         )
         let firstPage = try await reader.fetchHomeTreatmentTemplates(limit: 1)
@@ -947,7 +947,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let collisionContext = try environment.assembly.contextFactory.makeWriteContext()
         try collisionContext.performAndWait {
             let herd = try XCTUnwrap(
-                environment.assembly.lookup.herd(id: selectedHerdID, in: collisionContext)
+                environment.CoreDataLookup().herd(id: selectedHerdID, in: collisionContext)
             )
             let duplicate = CDWorkingTreatmentTemplate(context: collisionContext)
             duplicate.id = boundaryID
@@ -978,7 +978,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let reopened = try await environment.makeReadOnlyAssembly()
         let reopenedReader = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
-            lookup: reopened.lookup,
+            lookup: CoreDataLookup(),
             currentHerdID: { environment.selection.currentHerdID }
         )
         await XCTAssertThrowsErrorAsync(
@@ -990,7 +990,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let inspection = reopened.contextFactory.makeReadContext()
         try inspection.performAndWait {
             let herd = try XCTUnwrap(
-                reopened.lookup.herd(id: selectedHerdID, in: inspection)
+                CoreDataLookup().herd(id: selectedHerdID, in: inspection)
             )
             let request = NSFetchRequest<CDWorkingTreatmentTemplate>(
                 entityName: CDWorkingTreatmentTemplate.coreDataEntityName
@@ -1115,14 +1115,14 @@ private final class CoreDataHomeReadModelContractEnvironment {
             makeHomeFieldCheckQueryReader: {
                 CoreDataReadModelActor(
                     contextFactory: self.assembly.contextFactory,
-                    lookup: self.assembly.lookup,
+                    lookup: self.CoreDataLookup(),
                     currentHerdID: { self.selection.currentHerdID }
                 )
             },
             makeHomeWorkingQueryReader: {
                 CoreDataReadModelActor(
                     contextFactory: self.assembly.contextFactory,
-                    lookup: self.assembly.lookup,
+                    lookup: self.CoreDataLookup(),
                     currentHerdID: { self.selection.currentHerdID }
                 )
             }
@@ -1151,7 +1151,7 @@ private final class CoreDataHomeReadModelContractEnvironment {
         let controlChildID = UUID()
         let context = try assembly.contextFactory.makeWriteContext()
         try context.performAndWait {
-            guard let herd = try assembly.lookup.herd(id: herdID, in: context) else {
+            guard let herd = try CoreDataLookup().herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
             let foreignHerd = CDHerd(context: context)
@@ -1246,7 +1246,7 @@ private final class CoreDataHomeReadModelContractEnvironment {
         try context.performAndWait {
             switch kind {
             case .finding:
-                guard let finding = try assembly.lookup.herdOwned(
+                guard let finding = try CoreDataLookup().herdOwned(
                     CDFieldCheckFinding.self,
                     id: existingID,
                     herdID: herdID,
@@ -1256,7 +1256,7 @@ private final class CoreDataHomeReadModelContractEnvironment {
                 }
                 finding.id = duplicateID
             case .animalCheck:
-                guard let check = try assembly.lookup.herdOwned(
+                guard let check = try CoreDataLookup().herdOwned(
                     CDFieldCheckAnimalCheck.self,
                     id: existingID,
                     herdID: herdID,
@@ -1275,7 +1275,7 @@ private final class CoreDataHomeReadModelContractEnvironment {
         let context = try assembly.contextFactory.makeWriteContext()
 
         return try context.performAndWait {
-            guard let herd = try assembly.lookup.herd(id: herdID, in: context) else {
+            guard let herd = try CoreDataLookup().herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
 
@@ -1326,7 +1326,7 @@ private final class CoreDataHomeReadModelContractEnvironment {
         let context = try assembly.contextFactory.makeWriteContext()
 
         return try context.performAndWait {
-            guard let herd = try assembly.lookup.herd(id: herdID, in: context) else {
+            guard let herd = try CoreDataLookup().herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
 

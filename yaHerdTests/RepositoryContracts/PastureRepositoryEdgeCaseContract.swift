@@ -823,7 +823,7 @@ enum PastureRepositoryEdgeCaseContract {
             animalCheckID: animalCheck.id,
             isCounted: true
         )
-        try archivedFieldChecks.updateNotes(sessionID: sessionID, notes: updatedNotes)
+        try await archivedFieldChecks.updateNotes(sessionID: sessionID, notes: updatedNotes)
         try await archivedFieldChecks.completeSession(id: sessionID)
 
         let reloadedFieldChecks = fixture.makeFieldCheckRepository()

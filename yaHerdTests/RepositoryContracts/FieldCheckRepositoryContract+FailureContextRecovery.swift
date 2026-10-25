@@ -358,16 +358,16 @@ extension FieldCheckRepositoryContract {
             }
         }
 
-        let stagedFindingID = try XCTUnwrap(
+        let unwrappedStagedFindingID = try XCTUnwrap(
             stagedFindingID,
             "The failpoint must identify the staged finding application UUID.",
             file: file,
             line: line
         )
         if let expectedFindingID {
-            XCTAssertEqual(stagedFindingID, expectedFindingID, file: file, line: line)
+            XCTAssertEqual(unwrappedStagedFindingID, expectedFindingID, file: file, line: line)
         }
-        return stagedFindingID
+        return unwrappedStagedFindingID
     }
 
     private static func assertFailureContextBaselineSurvivesFlush(

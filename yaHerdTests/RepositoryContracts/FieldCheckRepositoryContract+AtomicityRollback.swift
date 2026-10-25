@@ -607,8 +607,8 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString,
         line: UInt,
-        operation: () throws -> Void
-    ) throws -> UUID {
+        operation: () async throws -> Void
+    ) async throws -> UUID {
         var stagedFindingID: UUID?
 
         do {

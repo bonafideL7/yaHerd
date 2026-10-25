@@ -672,6 +672,7 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
             activeTags: [],
             inactiveTags: [],
             location: .pasture,
+            maternalOffspringCountIncludingArchived: 0,
             maternalOffspring: []
         )
     }
