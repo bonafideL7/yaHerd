@@ -7,7 +7,7 @@ import XCTest
 /// semantics remain a target for the production Core Data implementation.
 @MainActor
 struct PastureDeletionWorkflowContractFixture {
-    let makePastureRepository: () -> any PastureRepository
+    let makePastureRepository: () -> any TestPastureRepository
     let makeAnimalRepository: () -> any AnimalRepository
     let makeTagColorRepository: () -> any TagColorRepository
     let makeFieldCheckRepository: () -> any FieldCheckRepository

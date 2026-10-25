@@ -10,7 +10,7 @@ import XCTest
 struct FieldCheckRepositoryContractFixture {
     let makeFieldCheckRepository: () -> any FieldCheckRepository
     let makeAnimalRepository: () -> any AnimalRepository
-    let makePastureRepository: () -> any PastureRepository
+    let makePastureRepository: () -> any TestPastureRepository
     let makeTagColorRepository: () -> any TagColorRepository
 }
 

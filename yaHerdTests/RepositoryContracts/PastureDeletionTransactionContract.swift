@@ -17,7 +17,7 @@ import XCTest
 struct PastureDeletionTransactionContractProbe {
     let writer: any PastureDeletionTransactionWriting
     let plan: DeletePasturesTransactionPlan
-    let makePastureRepository: () -> any PastureRepository
+    let makePastureRepository: () -> any TestPastureRepository
     let makeAnimalRepository: () -> any AnimalRepository
     let makeFieldCheckRepository: () -> any FieldCheckRepository
     let makeDashboardQueryReader: () -> any DashboardQueryReading
@@ -58,7 +58,7 @@ struct PastureDeletionCorePersistenceMoveExpectation {
 struct PastureDeletionCorePersistenceContractProbe {
     let writer: any PastureDeletionTransactionWriting
     let plan: DeletePasturesTransactionPlan
-    let makePastureRepository: () -> any PastureRepository
+    let makePastureRepository: () -> any TestPastureRepository
     let makeAnimalRepository: () -> any AnimalRepository
     let makeAggregateReader: () -> any AnimalAggregateEditReading
     let executedOperations: () -> [PastureDeletionOperation]
@@ -1256,7 +1256,7 @@ enum PastureDeletionTransactionContract {
     private static func assertSurvivingPastureCountProjections(
         pastureID: UUID,
         expectedResidentCount: Int,
-        pastureRepository: any PastureRepository,
+        pastureRepository: any TestPastureRepository,
         dashboardRecords: DashboardRecords,
         dashboardPastures: [DashboardPastureRecord],
         file: StaticString,
