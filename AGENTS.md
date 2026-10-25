@@ -1,6 +1,6 @@
 # yaHerd Engineering and Code Review Instructions
 
-These instructions guide Codex implementation and code review. They do not require separate planning, tracking, or verification artifacts.
+These instructions guide ChatGPT production implementation and Codex code review. ChatGPT implements production changes and addresses review findings; Codex reviews PRs only and does not implement the feature. They do not require separate planning, tracking, or verification artifacts.
 
 ## Source of truth
 
@@ -20,7 +20,7 @@ Before changing production code:
 - If a fix grows into repeated workarounds, reassess the design rather than stacking patches.
 - Do not modify unrelated features or restore files or infrastructure intentionally removed by the user.
 
-Do not create Markdown documentation, dependency or navigation matrices, implementation trackers, automated tests, test targets, or CI workflows unless the user explicitly requests them. This file is retained to guide Codex reviews; it is not an instruction to generate more documentation.
+Do not create Markdown documentation, dependency or navigation matrices, implementation trackers, automated tests, test targets, or CI workflows unless the user explicitly requests them. These repository instructions guide ChatGPT implementation and Codex code reviews; they are not an instruction to generate more documentation.
 
 ## Persistence direction
 
@@ -34,6 +34,8 @@ yaHerd currently uses a local-only Core Data `NSPersistentContainer`. The approv
 
 The explicitly requested [CloudKit synchronization and collaboration specification](Info/CLOUDKIT_COLLABORATION.md) defines intended feature behavior, implementation stages, acceptance criteria, and CloudKit-specific review requirements. This is the only approved new feature document; it is not a progress tracker or evidence that features have shipped.
 
+ChatGPT owns implementation and PR fixes. Codex is used only for code review, not implementation, documentation authoring, test creation, or CI work.
+
 For any CloudKit, sharing, Herd selection, Core Data model migration, or related persistence work:
 
 - Read the specification and the current affected production source before making changes. The latest production code remains authoritative for existing implementation details; user-approved feature requirements determine intended behavior.
@@ -41,7 +43,7 @@ For any CloudKit, sharing, Herd selection, Core Data model migration, or related
 - Preserve existing data, application UUIDs, transaction semantics, repository boundaries, offline use, and recovery behavior.
 - Trace both private and shared store ownership, every relevant read/write path, remote-change invalidation, navigation, permissions, deletion, invitation lifecycle, and account changes.
 - If a technical approach in the specification conflicts with current code or verified platform behavior, investigate and select the smallest correct solution. Obtain approval before altering a product requirement; update the approved specification when warranted.
-- Review the entire actual change for production defects against the applicable acceptance criteria, and report what was really verified. Compilation or an absence of review comments does not establish cross-account synchronization.
+- ChatGPT inspects the final production diff, performs available builds and the applicable manual cases defined in Section 5 of the specification, and reports pass/fail/not-executed with environment limitations. Codex reviews the actual PR for production defects; ChatGPT fixes confirmed findings. Compilation or an absence of review comments does not establish cross-account synchronization.
 
 This user-requested specification is an exception to the restriction on creating additional Markdown documents. It does not authorize unrelated documentation, tracking frameworks, automated tests, or CI changes.
 
