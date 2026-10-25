@@ -199,6 +199,17 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
             foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 1_100)
             foreignHerd.updatedAt = foreignHerd.createdAt
 
+            let selectedPasture = CDPasture(context: seedContext)
+            selectedPasture.id = UUID()
+            selectedPasture.name = "Selected active pasture"
+            selectedPasture.sortOrder = 0
+            selectedPasture.herd = herd
+            let foreignPasture = CDPasture(context: seedContext)
+            foreignPasture.id = UUID()
+            foreignPasture.name = "Independent active pasture"
+            foreignPasture.sortOrder = 0
+            foreignPasture.herd = foreignHerd
+
             let rows: [(owner: CDHerd, id: UUID, finished: Bool, note: String)] = [
                 (herd, warningID, false, "selected warning"),
                 (herd, completedID, true, "selected completed history"),
@@ -219,10 +230,12 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
                 session.quickCalfCount = 0
                 session.quickBullCount = 0
                 session.quickSteerCount = 0
-                session.pastureIDSnapshot = UUID()
-                session.pastureNameSnapshot = "Historical pasture"
+                let pasture = row.owner === herd ? selectedPasture : foreignPasture
+                session.pastureIDSnapshot = pasture.id
+                session.pastureNameSnapshot = pasture.name
                 session.pastureArchivedAt = nil
                 session.herd = row.owner
+                session.pasture = pasture
             }
             try seedContext.save()
         }
@@ -1160,6 +1173,17 @@ private final class CoreDataHomeReadModelContractEnvironment {
             foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 1_100)
             foreignHerd.updatedAt = foreignHerd.createdAt
 
+            let selectedPasture = CDPasture(context: context)
+            selectedPasture.id = UUID()
+            selectedPasture.name = "Selected active pasture"
+            selectedPasture.sortOrder = 0
+            selectedPasture.herd = herd
+            let foreignPasture = CDPasture(context: context)
+            foreignPasture.id = UUID()
+            foreignPasture.name = "Independent active pasture"
+            foreignPasture.sortOrder = 0
+            foreignPasture.herd = foreignHerd
+
             let rows: [(owner: CDHerd, sessionID: UUID, childID: UUID, completed: Bool)] = [
                 (herd, warningSessionID, warningChildID, false),
                 (herd, completedSessionID, completedChildID, true),
@@ -1180,10 +1204,12 @@ private final class CoreDataHomeReadModelContractEnvironment {
                 session.quickCalfCount = 0
                 session.quickBullCount = 0
                 session.quickSteerCount = 0
-                session.pastureIDSnapshot = UUID()
-                session.pastureNameSnapshot = "Historical pasture"
+                let pasture = row.owner === herd ? selectedPasture : foreignPasture
+                session.pastureIDSnapshot = pasture.id
+                session.pastureNameSnapshot = pasture.name
                 session.pastureArchivedAt = nil
                 session.herd = row.owner
+                session.pasture = pasture
 
                 switch kind {
                 case .finding:
