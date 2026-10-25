@@ -63,6 +63,19 @@ struct AnimalListContentList: View {
                     }
                 } header: {
                     sectionHeader(for: section)
+                } footer: {
+                    if canStartInlineEntry && section.id == groupedAnimals.last?.id {
+                        // Measure the existing section's end. A separate clear List row
+                        // still creates a visible rounded group in insetGrouped style.
+                        Color.clear
+                            .frame(height: 0)
+                            .onGeometryChange(for: CGFloat.self) { proxy in
+                                proxy.frame(in: .named("animalListQuickEntry")).minY
+                            } action: { bottom in
+                                inlineQuickAddRowBottom = bottom
+                            }
+                            .onDisappear { inlineQuickAddRowBottom = nil }
+                    }
                 }
             }
 
@@ -70,16 +83,6 @@ struct AnimalListContentList: View {
                 inlineEntryRow(mode: .new)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
-            } else if canStartInlineEntry {
-                AnimalListInlineTapRow(onTap: onStartNewInlineEntry)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                    .onGeometryChange(for: CGFloat.self) { proxy in
-                        proxy.frame(in: .named("animalListQuickEntry")).maxY
-                    } action: { bottom in
-                        inlineQuickAddRowBottom = bottom
-                    }
-                    .onDisappear { inlineQuickAddRowBottom = nil }
             }
         }
         .environment(\.editMode, .constant(batchMode ? .active : .inactive))
