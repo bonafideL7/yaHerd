@@ -442,12 +442,13 @@ extension FieldCheckRepositoryContract {
                 targetAcresPerHead: 1.5
             )
         )
-        let animal = try fixture.makeAnimalRepository().create(
+        let animal = try makeRollbackCow(
             input: atomicityAnimalInput(
                 name: "Completion Rollback Animal",
                 tagNumber: "CP301",
                 pastureID: pasture.id
-            )
+            ),
+            using: fixture
         )
         let repository = fixture.makeFieldCheckRepository()
         let sessionID = try await repository.createSession(

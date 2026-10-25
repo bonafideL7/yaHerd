@@ -262,13 +262,14 @@ extension FieldCheckRepositoryContract {
                 targetAcresPerHead: 1.5
             )
         )
-        let animal = try fixture.makeAnimalRepository().create(
+        let animal = try makeRollbackCow(
             input: findingEdgeAnimalInput(
                 name: "Orphan Edit Animal",
                 tagNumber: "OE801",
                 tagColorID: color.id,
                 pastureID: pasture.id
-            )
+            ),
+            using: fixture
         )
 
         let repository = fixture.makeFieldCheckRepository()

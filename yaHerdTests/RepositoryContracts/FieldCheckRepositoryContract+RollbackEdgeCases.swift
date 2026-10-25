@@ -736,7 +736,7 @@ extension FieldCheckRepositoryContract {
     // The classifier distinguishes cows from heifers by maternal history. Keep
     // the Field Check roster limited to the intended animal(s) while making
     // cow-specific quick-count rollback scenarios biologically valid.
-    private static func makeRollbackCow(
+    static func makeRollbackCow(
         input: AnimalInput,
         using fixture: FieldCheckRepositoryContractFixture
     ) throws -> AnimalDetailSnapshot {
