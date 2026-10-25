@@ -91,8 +91,8 @@ struct AnimalListContentList: View {
         .background(Color.clear)
         .coordinateSpace(name: "animalListQuickEntry")
         .overlay(alignment: .bottom) {
-            // The trailing List row only covers its own height. Cover the rest of
-            // the visible blank area without adding empty scrollable content.
+            // Extend the tap target below the last section without inserting
+            // another List row or covering any existing animal rows.
             if canStartInlineEntry, let rowBottom = inlineQuickAddRowBottom {
                 GeometryReader { geometry in
                     if rowBottom > 0 && rowBottom < geometry.size.height {
