@@ -46,7 +46,8 @@ final class AccessibleControlContrastTests: XCTestCase {
             let scheme: ColorScheme = appearance == .dark ? .dark : .light
             let traits = UITraitCollection(userInterfaceStyle: appearance)
             let accent = try XCTUnwrap(
-                UIColor(named: "AccentColor", in: .main, compatibleWith: traits)
+                UIColor(named: "AccentColor", in: .main, compatibleWith: traits)?
+                    .resolvedColor(with: traits)
             )
             let semanticForeground = AccessibleControlContrast.accentForeground(in: scheme)
             let foreground = UIColor(semanticForeground)
@@ -125,8 +126,8 @@ final class AccessibleControlContrastTests: XCTestCase {
 
     private func resolvedColor(_ color: Color, traits: UITraitCollection) -> UIColor {
         if color == .accentColor {
-            return UIColor(named: "AccentColor", in: .main, compatibleWith: traits)
-                ?? UIColor(color).resolvedColor(with: traits)
+            return (UIColor(named: "AccentColor", in: .main, compatibleWith: traits)
+                ?? UIColor(color)).resolvedColor(with: traits)
         }
         return UIColor(color).resolvedColor(with: traits)
     }
