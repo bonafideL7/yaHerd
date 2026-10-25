@@ -332,7 +332,7 @@ private struct ParentDeletionAnimalSummaryState: Equatable {
     let pastureName: String?
     let location: AnimalLocation
     let lastPregnancyCheckDate: Date?
-    let lastPregnancyStatus: PregnancyResult?
+    let lastPregnancyStatus: AnimalPregnancyStatus?
     let expectedCalvingDate: Date?
     let lastTreatmentDate: Date?
 
@@ -1966,4 +1966,19 @@ enum AnimalAggregateCrossFeatureRevisionContract {
             return current.colorID != prior.colorID
         }
     }
+    private static func fetchDashboardAnimalRecord(
+        id: UUID,
+        reader: any DashboardQueryReading,
+        file: StaticString,
+        line: UInt
+    ) async throws -> DashboardAnimalRecord {
+        let records = try await reader.fetchDashboardRecords()
+        return try XCTUnwrap(
+            records.animals.first { $0.id == id },
+            "The Animal must remain visible in the Dashboard projection.",
+            file: file,
+            line: line
+        )
+    }
+
 }
