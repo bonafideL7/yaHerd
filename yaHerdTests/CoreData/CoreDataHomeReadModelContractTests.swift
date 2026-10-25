@@ -44,7 +44,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
             writePolicy: LocalDataWritePolicy(dataAccessMode: .readWrite)
         )
         let priorSequence = mutationCenter.currentSequence
-        marker.markPastureGrazedToday(id: grazed.id, on: grazingDate)
+        try marker.markPastureGrazedToday(id: grazed.id, on: grazingDate)
 
         XCTAssertEqual(mutationCenter.currentSequence, priorSequence + 1)
         XCTAssertEqual(mutationCenter.homeRevision, 1)

@@ -1613,7 +1613,7 @@ private final class CoreDataFieldCheckContractEnvironment {
     ) throws {
         let context = try assembly.contextFactory.makeWriteContext()
         try context.performAndWait {
-            guard let session = try assembly.lookup.herdOwned(
+            guard let session = try CoreDataLookup().herdOwned(
                 CDFieldCheckSession.self,
                 id: sessionID,
                 herdID: herdID,
@@ -1629,7 +1629,7 @@ private final class CoreDataFieldCheckContractEnvironment {
     private func rawQuickCowCount(sessionID: UUID) throws -> Int? {
         let context = assembly.contextFactory.makeReadContext()
         return try context.performAndWait {
-            try assembly.lookup.herdOwned(
+            try CoreDataLookup().herdOwned(
                 CDFieldCheckSession.self,
                 id: sessionID,
                 herdID: herdID,
@@ -1657,7 +1657,7 @@ private final class CoreDataFieldCheckContractEnvironment {
     ) throws {
         let context = try assembly.contextFactory.makeWriteContext()
         try context.performAndWait {
-            guard let finding = try assembly.lookup.herdOwned(
+            guard let finding = try CoreDataLookup().herdOwned(
                 CDFieldCheckFinding.self,
                 id: findingID,
                 herdID: herdID,
@@ -1677,7 +1677,7 @@ private final class CoreDataFieldCheckContractEnvironment {
     ) throws {
         let context = try assembly.contextFactory.makeWriteContext()
         try context.performAndWait {
-            guard let check = try assembly.lookup.herdOwned(
+            guard let check = try CoreDataLookup().herdOwned(
                 CDFieldCheckAnimalCheck.self,
                 id: animalCheckID,
                 herdID: herdID,
@@ -1696,12 +1696,12 @@ private final class CoreDataFieldCheckContractEnvironment {
     ) throws {
         let context = try assembly.contextFactory.makeWriteContext()
         try context.performAndWait {
-            guard let check = try assembly.lookup.herdOwned(
+            guard let check = try CoreDataLookup().herdOwned(
                 CDFieldCheckAnimalCheck.self,
                 id: animalCheckID,
                 herdID: herdID,
                 in: context
-            ), let target = try assembly.lookup.herd(id: targetHerdID, in: context) else {
+            ), let target = try CoreDataLookup().herd(id: targetHerdID, in: context) else {
                 throw CoreDataFieldCheckContractTestError.missingStagedAnimalCheck
             }
             check.herd = target
@@ -1715,12 +1715,12 @@ private final class CoreDataFieldCheckContractEnvironment {
     ) throws {
         let context = try assembly.contextFactory.makeWriteContext()
         try context.performAndWait {
-            guard let finding = try assembly.lookup.herdOwned(
+            guard let finding = try CoreDataLookup().herdOwned(
                 CDFieldCheckFinding.self,
                 id: findingID,
                 herdID: herdID,
                 in: context
-            ), let target = try assembly.lookup.herd(id: targetHerdID, in: context) else {
+            ), let target = try CoreDataLookup().herd(id: targetHerdID, in: context) else {
                 throw CoreDataFieldCheckContractTestError.missingStagedFinding
             }
             finding.herd = target
@@ -1735,12 +1735,12 @@ private final class CoreDataFieldCheckContractEnvironment {
     ) throws {
         let context = try assembly.contextFactory.makeWriteContext()
         try context.performAndWait {
-            guard let finding = try assembly.lookup.herdOwned(
+            guard let finding = try CoreDataLookup().herdOwned(
                 CDFieldCheckFinding.self,
                 id: findingID,
                 herdID: herdID,
                 in: context
-            ), let target = try assembly.lookup.herdOwned(
+            ), let target = try CoreDataLookup().herdOwned(
                 CDFieldCheckSession.self,
                 id: targetSessionID,
                 herdID: targetHerdID,
@@ -1971,9 +1971,7 @@ private final class CoreDataQueuedAnimalWriterReleaseProbe: @unchecked Sendable 
             await Task.yield()
         }
 
-        lock.lock()
-        observedQueuedWriter = observed
-        lock.unlock()
+        lock.withLock { observedQueuedWriter = observed }
         barrier.release()
     }
 }

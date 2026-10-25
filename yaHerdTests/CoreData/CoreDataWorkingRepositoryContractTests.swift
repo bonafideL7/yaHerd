@@ -39,7 +39,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         try await run { try await WorkingRepositoryContract.assertFinishAllowsUnworkedAnimalsAndPreservesQueueStatus(using: $0.fixture) }
         try await run { try await WorkingRepositoryContract.assertAnimalStateChangesDoNotImplicitlyEndWorkingOwnership(using: $0.fixture) }
         try await run { try await WorkingRepositoryContract.assertDeletingStaleSessionDoesNotUndoExternalAnimalMovement(using: $0.fixture) }
-        try await run { try await WorkingRepositoryContract.assertPersistedCancelledAndSkippedStatusesRemainReadableAndLocked(using: $0.fixture) }
+        try await run { try await WorkingRepositoryContract.assertPersistedCancelledAndSkippedStatusesRemainReadableAndLocked(using: $0.fixture, historicalStatusInjection: $0.historicalStatusInjection) }
         try await run {
             try await WorkingRepositoryContract.assertAnimalHardDeletionPreservesSessionOwnedTreatmentRows(
                 using: $0.fixture,
@@ -1648,6 +1648,34 @@ private final class CoreDataWorkingContractEnvironment {
             makeAnimalRepository: { self.makeAnimalRepository() },
             makePastureRepository: { self.makePastureRepository() },
             makeTagColorRepository: { self.makeTagColorRepository() }
+        )
+    }
+
+    var historicalStatusInjection: WorkingHistoricalStatusInjection {
+        WorkingHistoricalStatusInjection(
+            setPersistedStatuses: { sessionID, queueItemID, sessionStatus, queueStatus in
+                let context = try self.assembly.contextFactory.makeWriteContext()
+                let herdID = self.herdID
+                let lookup = CoreDataLookup()
+                try context.performAndWait {
+                    guard let session = try lookup.herdOwned(
+                        CDWorkingSession.self,
+                        id: sessionID,
+                        herdID: herdID,
+                        in: context
+                    ), let queueItem = try lookup.herdOwned(
+                        CDWorkingQueueItem.self,
+                        id: queueItemID,
+                        herdID: herdID,
+                        in: context
+                    ) else {
+                        throw WorkingRepositoryError.sessionNotFound
+                    }
+                    session.statusRawValue = sessionStatus.rawValue
+                    queueItem.statusRawValue = queueStatus.rawValue
+                    try context.save()
+                }
+            }
         )
     }
 
