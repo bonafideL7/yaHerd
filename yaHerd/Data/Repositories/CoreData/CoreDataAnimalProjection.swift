@@ -579,6 +579,7 @@ enum CoreDataAnimalReadGraphValidator {
         herdID: UUID,
         validateOffspringSummaries: Bool = false
     ) throws {
+        try validateRequiredReadRelationships(of: animal)
         guard animal.herd.id == herdID else {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDAnimal.coreDataEntityName,
@@ -753,12 +754,70 @@ enum CoreDataAnimalReadGraphValidator {
         }
     }
 
+    /// The CloudKit model permits temporarily absent relationships while remote
+    /// records arrive. Validate before using manually declared nonoptional
+    /// managed-object accessors; a missing link must not become a runtime trap.
+    private static func validateRequiredReadRelationships(of animal: CDAnimal) throws {
+        func requireHerd(_ object: NSManagedObject) throws {
+            _ = try CoreDataRequiredRelationship.resolve(
+                "herd", from: object, as: CDHerd.self
+            )
+        }
+
+        func requireAnimal(_ object: NSManagedObject) throws {
+            _ = try CoreDataRequiredRelationship.resolve(
+                "animal", from: object, as: CDAnimal.self
+            )
+        }
+
+        try requireHerd(animal)
+        if let pasture = animal.currentPasture { try requireHerd(pasture) }
+        if let session = animal.activeWorkingSession { try requireHerd(session) }
+        if let dam = animal.dam { try requireHerd(dam) }
+        if let sire = animal.sire { try requireHerd(sire) }
+        if let reference = animal.statusReference { try requireHerd(reference) }
+
+        for record in CoreDataAnimalProjection.managedHealthRecords(animal) {
+            try requireHerd(record)
+            try requireAnimal(record)
+            if let session = record.workingSession { try requireHerd(session) }
+        }
+        for check in CoreDataAnimalProjection.managedPregnancyChecks(animal) {
+            try requireHerd(check)
+            try requireAnimal(check)
+            if let sire = check.sire { try requireHerd(sire) }
+            if let session = check.workingSession { try requireHerd(session) }
+        }
+        for offspring in CoreDataAnimalProjection.managedMaternalOffspring(animal) {
+            try requireHerd(offspring)
+        }
+        for movement in CoreDataAnimalProjection.managedMovementRecords(animal) {
+            try requireHerd(movement)
+            try requireAnimal(movement)
+        }
+        for record in CoreDataAnimalProjection.managedStatusRecords(animal) {
+            try requireHerd(record)
+            try requireAnimal(record)
+        }
+    }
+
     static func validateTagRelationships(
         _ animal: CDAnimal,
         herdID: UUID
     ) throws {
         let tags = CoreDataAnimalProjection.managedTags(animal)
         for tag in tags {
+            _ = try CoreDataRequiredRelationship.resolve(
+                "herd", from: tag, as: CDHerd.self
+            )
+            _ = try CoreDataRequiredRelationship.resolve(
+                "animal", from: tag, as: CDAnimal.self
+            )
+            if let color = tag.color {
+                _ = try CoreDataRequiredRelationship.resolve(
+                    "herd", from: color, as: CDHerd.self
+                )
+            }
             guard tag.herd.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDAnimalTag.coreDataEntityName,
