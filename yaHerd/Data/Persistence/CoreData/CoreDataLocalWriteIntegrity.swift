@@ -1,4 +1,5 @@
 @preconcurrency import CoreData
+import Foundation
 
 /// Local saves must preserve the application-required fields while the CloudKit
 /// schema permits temporarily incomplete records during remote imports.
