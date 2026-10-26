@@ -1,6 +1,6 @@
 # yaHerd iCloud Synchronization and Herd Collaboration
 
-**Status:** Approved feature requirements and implementation guidance; NOT an implemented feature.
+**Status:** Approved feature requirements and implementation guidance; NOT an implemented feature. Core Data model changes are permitted when required by CloudKit; custom migration logic and speculative versioning infrastructure are not requested.
 **Agent assignments:** ChatGPT implements, verifies and addresses PR review findings. Codex reviews code only; do not delegate feature implementation or automated test/CI changes to Codex.
 **Requested outcome:** Offline-first device synchronization plus sharing and collaboration between different Apple Accounts.
 **Initial inspection baseline:** main commit 5a5b29b6f2c4588de0e1b187133a7d1ea98838cc (2026-10-25).
@@ -17,7 +17,7 @@ Use invitation-based sharing by default. The owner controls invitations and part
 
 Local work must not require a network connection. Persist successful local transactions immediately and synchronize when CloudKit can do so. The application must not promise immediate cross-device delivery, server-global transaction atomicity, or globally serialized offline edits. Show meaningful states for local save, cloud activity, account/permission problems, and recoverable conflicts. A successful local Core Data save is NOT proof of successful CloudKit export or import on another person's device.
 
-Existing installations must retain all local data, stable UUIDs, historical records, selected Herd identity where valid, and relationships throughout migration. Never silently replace, merge, duplicate, delete, or upload a Herd to the wrong Apple Account.
+Existing installations must retain all local data, stable UUIDs, historical records, selected Herd identity where valid, and relationships when upgrading to a CloudKit-compatible model. Never silently replace, merge, duplicate, delete, or upload a Herd to the wrong Apple Account.
 
 ### Explicit initial-scope decisions
 
@@ -27,7 +27,7 @@ Existing installations must retain all local data, stable UUIDs, historical reco
 - Permissions: native read-only/read-write share permissions; no farm-specific server-enforced roles or custom role engine.
 - Herd UI: multiple accessible Herds with one selected Herd. Keep the existing feature navigation patterns.
 - Settings: device-only personal UI preferences remain local unless a concrete Herd-owned setting must be shared. Herd tag colors and other modeled Herd records synchronize.
-- No SwiftData return, dual-write migration, custom sync server, custom CloudKit record replication engine, or unrelated architectural rewrite.
+- No SwiftData return, hand-written migration system, unnecessary Core Data model-version scaffolding, dual-write conversion, custom sync server, custom CloudKit record replication engine, or unrelated architectural rewrite. Use Core Data's supported automatic lightweight migration if verified necessary to open existing user stores after a required model change.
 - No automatic merge of Herds independently created on different devices. A name match does not prove shared identity.
 - No automatic hard deletion or recreation of records to hide distributed conflicts.
 - Do not expand the scope to cross-Herd links; Core Data relationships must remain inside the same CloudKit share/store, and user-permitted cross-Herd references require a separate design.
@@ -64,26 +64,26 @@ This section records verified code as of the baseline above. Re-check all paths,
 
 ## 4. Implementation stages and completion requirements
 
-The stages below form an implementation order, not a status matrix. ChatGPT implements production changes; Codex reviews only. Every stage: inspect latest code; trace affected callers, reads, writes, recovery and navigation; implement the smallest production change; verify with available Xcode tooling, direct inspection and relevant Section 5 manual cases; inspect final diff; request substantive Codex code review; correct genuine production defects; report runtime limitations. Do not create/modify tests or CI, or restore removed infrastructure, unless the user specifically asks. Implement only the requested stage and necessary prerequisites; do not roll into the next stage automatically.
+The stages below form an implementation order, not a status matrix. ChatGPT implements production changes; Codex reviews only. Every stage: inspect latest code; trace affected callers, reads, writes, recovery and navigation; implement the smallest production change; verify with available Xcode tooling, direct inspection and relevant Section 5 manual cases; inspect final diff; request substantive Codex code review; correct genuine production defects; report runtime limitations. Implement only the requested stage and necessary prerequisites; do not roll into the next stage automatically.
 
-### Stage 1: CloudKit-compatible Core Data model and safe migration
+### Stage 1: CloudKit-compatible Core Data model and existing-data compatibility
 
-**Purpose:** A versioned Core Data model valid for CloudKit without losing local records.
+**Purpose:** Make only the necessary Core Data model changes for CloudKit mirroring and keep existing local databases readable without custom migration logic.
 
-1. Preserve the pre-CloudKit model version in the existing xcdatamodeld bundle; add an explicit new version and select it correctly. Do not rewrite history to make migration appear unnecessary.
+1. Inspect the current Core Data model and determine the smallest changes required for CloudKit. Update the existing model directly where supported; do not create duplicate V1/V2 model files or version-selection machinery speculatively. Keep a prior model only if actual existing-store compatibility verification demonstrates it is needed.
 2. Inventory the actual entity model for all attributes, optionality, defaults, relationships, inverses, delete rules, constraints and entity configurations. CloudKit mirror compatibility is a hard constraint.
 3. Make relationships optional where required by Apple's Core Data CloudKit integration. Update the generated/manual managed-object interfaces and all callers of now-optional relationships; preserve domain-level required relationship validation separately.
 4. Review required attributes without defaults. Use a genuine semantic default only when valid; otherwise use optional storage plus guarded projections and validation. Do not invent dates, IDs or other business meaning.
 5. Verify unique constraints, unsupported relationships/configurations, inverses, delete rules and modeled relationship graph against the current SDK. Review entity syncability metadata, but do not assume syncable="NO" alone proves a CloudKit failure.
 6. Audit mapping/encoding of optional and missing imported fields in all Core Data projections, feature read models, seeders and transactions. Distinguish incomplete imports from corrupt data; never crash or silently create fabricated records.
-7. Choose and implement a supported explicit versioned migration path; the baseline store has automatic migration disabled. Preserve the pre-upgrade store, WAL/journal metadata and ability to diagnose failed migration. Do not manipulate SQLite files independently while Core Data owns them.
-8. Verify migration with actual pre-update app data: populated and empty Herds, archived animals, tags, parentage, pasture groups, movements, treatments, field checks, working sessions, and edge-case relationships.
+7. Check whether the required model changes are supported by Core Data's built-in lightweight migration. The current production store explicitly disables automatic migration: change that setting only when necessary, and only for writable stores. Do not implement a custom mapping, staging, or data-migration engine without a demonstrated need. Preserve existing SQLite data, WAL/journal metadata and read-only recovery behavior; never manipulate SQLite files independently while Core Data owns them.
+8. Verify real pre-update SQLite stores open successfully under the revised model with stable UUIDs, unchanged record counts and preserved history/relationships, including archived animals, tags, parentage, pasture groups, movements, treatments, field checks and working sessions. If automatic compatibility fails, investigate the exact model mismatch before adding new logic.
 9. Validate model compatibility using current Xcode/Apple APIs and development CloudKit schema tooling. Never initialize or mutate production schema from normal startup.
 10. Document only actual compatibility limitations in implementation output; no new status artifacts are required.
 
-**Accept when:** Existing data migrates and loads without changed UUIDs or lost history, valid local writes still function, and the new model passes actual development CloudKit compatibility validation. A successful build alone is insufficient.
+**Accept when:** Real existing databases open with unchanged UUIDs and preserved data/history, valid local writes still work, and the updated model passes development CloudKit compatibility validation. No custom migration implementation is introduced without demonstrated necessity. A successful build alone is insufficient.
 
-**Review focus:** Data loss, attribute/relationship semantics, migration failures/retries, optionality crashes, destructive delete-rule changes, unsupported schema evolution.
+**Review focus:** Data loss, required-versus-optional attribute/relationship semantics, existing-store opening failures, optionality crashes, destructive delete-rule changes, unsupported CloudKit schema evolution.
 
 ### Stage 2: Private and shared persistent stores and all-path routing
 
@@ -92,7 +92,7 @@ The stages below form an implementation order, not a status matrix. ChatGPT impl
 1. Configure iCloud/CloudKit capability, a stable CloudKit container identifier, correct development-team signing, Push Notifications and Remote notifications background mode as required by the actual target and SDK. Include all necessary debug/release entitlements and Info.plist settings.
 2. Implement NSPersistentCloudKitContainer inside the existing persistence wrapper; use separate, stable SQLite URLs and NSPersistentCloudKitContainerOptions database scopes .private and .shared. Preserve in-memory/read-only recovery paths without exporting recovery data.
 3. Enable persistent history tracking and store remote-change notifications for both stores. Distinguish local store-load failures from temporary CloudKit communication errors.
-4. Migrate/import the existing local database as the owned/private data source using Core Data-supported operations. Never mirror one physical store into private and shared scopes or blindly duplicate records.
+4. Retain the existing local database and application identities when adopting it as the owned/private store, using Core Data-supported persistent-store configuration. Do not write a data-copy or migration pipeline unless an actual store-layout requirement demands one. Never mirror one physical store into both private and shared scopes or blindly duplicate records.
 5. Expose a focused internal store resolver and store-qualified context behavior. Selected Herd -> owning persistent store must be authoritative and stable for each transaction.
 6. Restrict Herd-specific reads using NSFetchRequest.affectedStores or equivalent supported store scoping. Ensure unknown Herd IDs, duplicate IDs and cross-Herd references fail safely.
 7. Assign newly inserted managed objects to the correct store. Preserve a single-store atomic commit for multi-entity operations.
@@ -101,7 +101,7 @@ The stages below form an implementation order, not a status matrix. ChatGPT impl
 
 **Accept when:** Both stores load correctly; existing owned records stay in the private store; selected shared records read/write through the shared store; no cross-store insert or cross-Herd lookup succeeds; recovery cannot upload synthetic data.
 
-**Review focus:** Silent wrong-store writes, duplicate local records, context isolation, migration handoff, partial store-load failures, complete audit of direct saves.
+**Review focus:** Silent wrong-store writes, duplicate local records, context isolation, adoption of the existing store, partial store-load failures, complete audit of direct saves.
 
 ### Stage 3: Multi-Herd lifecycle, selection and navigation
 
@@ -207,7 +207,7 @@ The stages below form an implementation order, not a status matrix. ChatGPT impl
 
 ## 5. Executable manual test-case plan
 
-This is a behavior and release verification plan for ChatGPT to follow during implementation. It is **not** authorization to create or modify automated tests, test targets, CI, separate tracking files or other infrastructure. Codex reviews code and evidence, not implementation. Never mark a case passed without actually executing it.
+This is a behavior and release verification plan for ChatGPT to follow during implementation. Focused automated test creation and maintenance follow AGENTS.md; do not create separate tracking files, unnecessary testing infrastructure or unrelated CI changes. Codex reviews code and evidence, not implementation. Never mark a case passed without actually executing it.
 
 ### 5.1 Test environment, fixtures, and evidence
 
@@ -219,15 +219,15 @@ This is a behavior and release verification plan for ChatGPT to follow during im
 - **Cloud timing:** Wait for actual propagation/import and compare data, not an invented immediate timeout. CloudKit event success on one device alone does not prove another device received records. A prolonged stall needs a diagnosis, not an unsupported "synced" assertion.
 - **Failure injection:** Use safe development fixtures, network toggles, app termination, supported Xcode/CloudKit tooling and restorable stores. If an import-order, quota or server failure cannot be induced safely, mark the relevant subcase not executed; do not claim simulation occurred.
 
-### 5.2 Migration, schema and store isolation (Stages 1–2)
+### 5.2 Existing-store compatibility, schema and store isolation (Stages 1–2)
 
-**M01 — Existing populated store migration.** Setup: Install the prior local-only build with the representative data fixture. Steps: record counts/UUIDs and relationship/history samples; preserve a restorable original; install the new build; inspect all major features. **Pass:** No missing/duplicated data or changed application IDs, and previous CRUD behavior remains correct.
+**M01 — Existing populated store upgrade.** Setup: Install the prior local-only build with the representative data fixture. Steps: record counts/UUIDs and relationship/history samples; preserve a restorable original; install the new build; inspect all major features. **Pass:** No missing/duplicated data or changed application IDs, and previous CRUD behavior remains correct.
 
 **M02 — Empty upgrade and clean installation.** Setup: One originally empty local store and one fresh device. Steps: upgrade/launch while iCloud is present and absent. **Pass:** No accidental duplicate starter Herd, synthetic recovery upload, corrupt empty store or false "cloud empty" conclusion before import finishes.
 
-**M03 — Migration failure/retry.** Setup: Safe backed-up fixture and a controllable store-load/migration failure. Steps: interrupt or fail migration using supported development means and relaunch. **Pass:** Original data remains recoverable; no silent reset, duplicate roots, partial destructive conversion or forced upload. If not inducible, state limitation.
+**M03 — Existing-store compatibility failure/retry.** Setup: Safe backed-up fixture and a controllable store-load/migration failure. Steps: interrupt or fail migration using supported development means and relaunch. **Pass:** Original data remains recoverable; no silent reset, duplicate roots, partial destructive conversion or forced upload. If not inducible, state limitation.
 
-**M04 — Model and development schema compatibility.** Setup: Versioned model in development environment. Steps: run current SDK CloudKit model/schema validation, inspect attributes, relationships, inverses and constraints; intentionally initialize the development schema only. **Pass:** Compatible model, guarded optional imported values, unchanged production schema.
+**M04 — Model and development schema compatibility.** Setup: Updated Core Data model and existing-store fixture in development environment. Steps: run current SDK CloudKit model/schema validation, inspect attributes, relationships, inverses and constraints; intentionally initialize the development schema only. **Pass:** Compatible model, guarded optional imported values, unchanged production schema.
 
 **M05 — Owned/shared routing and isolation.** Setup: A owns private Herd P; B has shared Herd S. Steps: read, create, edit and delete representative records in each selected Herd; inspect their Core Data store memberships. **Pass:** Reads/writes use their true owning store and share; no cross-store relationships, foreign-Herd mutations or accidental duplication.
 
@@ -307,8 +307,8 @@ This is a behavior and release verification plan for ChatGPT to follow during im
 
 ### 5.7 Completion gates
 
-- **Stage 1:** M01–M04. Migration preservation and actual model validation are mandatory.
-- **Stage 2:** M05–M06 and related migration/fresh creation coverage. Wrong-store writes block progression.
+- **Stage 1:** M01–M04. Existing-data preservation and actual model compatibility validation are mandatory; custom migration code is not a default requirement.
+- **Stage 2:** M05–M06 and related existing-store adoption/fresh creation coverage. Wrong-store writes block progression.
 - **Stage 3:** H01–H03 and C07. Duplicate roots and cross-Herd data exposure block progression.
 - **Stage 4:** H04–H08. Real remote import/refresh behavior must be demonstrated when physical devices are available; simulated events cannot substitute.
 - **Stage 5:** S01–S06, S09–S10 and R03. Different-Apple-Account sharing and complete graph inclusion are mandatory for acceptance.
@@ -329,7 +329,7 @@ Before submitting each PR:
 4. Use Xcode build/direct source inspection; run the applicable Section 5 manual test cases when equipment and accounts permit, and report cases not executed.
 5. Inspect the final diff for scope, dead/duplicate logic, unintended changes and restored removed infrastructure.
 6. Request Codex code review against AGENTS.md and the applicable feature stage. ChatGPT fixes actual production defects.
-7. Report modified paths, evidence of verification, known gaps and unresolved risks. Do not modify tests or CI unless the user expressly instructs it.
+7. Report modified paths, evidence of verification, known gaps and unresolved risks. Add or maintain focused tests under AGENTS.md; do not change unrelated tests or CI infrastructure.
 
 Required changes to Scripts/verify-architecture.sh must be narrowly justified by approved CloudKit implementation. Keep its other architectural restrictions intact; do not rewrite automation or CI to create a false passing signal.
 
@@ -341,12 +341,12 @@ ChatGPT, not Codex, implements production changes, performs available verificati
 - Treat this document as approved intended product behavior, not a claim about current implementation or an instruction to preserve incorrect assumptions.
 - Perform only the user-requested stage and required dependent work. Preserve existing names/contracts whenever feasible; avoid duplicate abstractions or custom synchronization engines.
 - Address both normal and failure paths, including an absent account, sharing permission, imported graph incompleteness, wrong-store routing, stale navigation, user-data preservation and destructive operations where relevant.
-- Execute applicable Section 5 manual cases when the environment permits and clearly report unexecuted cases. Do not invent passing verification results, restore discarded code, author process artifacts or change automated tests/CI.
+- Execute applicable Section 5 manual cases when the environment permits and clearly report unexecuted cases. Add focused tests for new behavior under AGENTS.md; do not invent passing verification results, restore discarded code or author unrelated process artifacts.
 - Create a focused PR when requested, inspect comments, fix actual defects and report limitations. Do not merge contrary to user direction.
 
 Example request to ChatGPT (not Codex):
 
-"Implement Stage 2 in Info/CLOUDKIT_COLLABORATION.md. Follow AGENTS.md. Inspect current code first. Update production persistence and all related write paths, verify available builds and execution paths, review the final diff against Stage 2 acceptance criteria, and open a PR. Do not add documentation, tests, CI, or unrelated changes."
+"Implement Stage 2 in Info/CLOUDKIT_COLLABORATION.md. Follow AGENTS.md. Inspect current code and relevant tests first. Add focused tests for new behavior, make only necessary production changes, verify available builds and execution paths, review the final diff, and open a PR. Do not add unrelated documentation or infrastructure."
 
 ## 8. Codex code-review agent instructions (review only)
 
@@ -371,7 +371,7 @@ Conclude with implementation-stage satisfaction, concrete verified defects, buil
 ## 9. Release gates and reference resources
 
 Do NOT claim production completion until:
-- Local migration is safe and existing UUIDs/historical relationships are retained.
+- Existing stores open safely after required Core Data model changes; UUIDs and historical relationships remain intact without unnecessary custom migration code.
 - Private/shared store placement and all production read/write paths have been audited.
 - Multi-Herd selection, invitations, owner/editor/viewer permissions and revocation work.
 - Remote changes are visible without relaunch and navigation remains correctly scoped.

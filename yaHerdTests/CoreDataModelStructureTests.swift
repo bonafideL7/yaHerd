@@ -24,6 +24,101 @@ final class CoreDataModelStructureTests: XCTestCase {
         "WorkingTreatmentRecord"
     ]
 
+    /// Stage 1 preflight: the CloudKit-required storage nullability changes must
+    /// be inferable without a custom NSMappingModel or migration policy.
+    func testCloudKitNullabilityChangesCanBeLightweightMigrated() throws {
+        let originalModel = try loadModel()
+        let cloudKitModel = try XCTUnwrap(originalModel.copy() as? NSManagedObjectModel)
+
+        for entity in cloudKitModel.entities {
+            for attribute in entity.attributesByName.values {
+                attribute.isOptional = true
+            }
+            for relationship in entity.relationshipsByName.values {
+                relationship.isOptional = true
+            }
+        }
+
+        let mapping = try NSMappingModel.inferredMappingModel(
+            forSourceModel: originalModel,
+            destinationModel: cloudKitModel
+        )
+        XCTAssertEqual(mapping.entityMappings.count, Self.expectedEntities.count)
+    }
+
+    /// Exercise a real SQLite store instead of assuming schema inference is
+    /// sufficient to keep pre-update Herd and Pasture records intact.
+    func testCloudKitNullabilityLightweightMigrationPreservesExistingSQLiteData() throws {
+        let originalModel = try loadModel()
+        let cloudKitModel = try XCTUnwrap(originalModel.copy() as? NSManagedObjectModel)
+        for entity in cloudKitModel.entities {
+            entity.attributesByName.values.forEach { $0.isOptional = true }
+            entity.relationshipsByName.values.forEach { $0.isOptional = true }
+        }
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CloudKitModelMigration-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("pre-cloudkit.sqlite")
+        let herdID = UUID()
+        let pastureID = UUID()
+
+        let oldCoordinator = NSPersistentStoreCoordinator(managedObjectModel: originalModel)
+        let oldStore = try oldCoordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType,
+            configurationName: nil,
+            at: storeURL,
+            options: nil
+        )
+        let oldContext = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
+        oldContext.persistentStoreCoordinator = oldCoordinator
+        try oldContext.performAndWait {
+            let herd = NSEntityDescription.insertNewObject(forEntityName: "Herd", into: oldContext)
+            herd.setValue(herdID, forKey: "id")
+            herd.setValue("Existing Herd", forKey: "name")
+            herd.setValue(Date(timeIntervalSince1970: 100), forKey: "createdAt")
+            herd.setValue(Date(timeIntervalSince1970: 200), forKey: "updatedAt")
+
+            let pasture = NSEntityDescription.insertNewObject(forEntityName: "Pasture", into: oldContext)
+            pasture.setValue(pastureID, forKey: "id")
+            pasture.setValue("Existing Pasture", forKey: "name")
+            pasture.setValue(Int64(1), forKey: "sortOrder")
+            pasture.setValue(herd, forKey: "herd")
+            try oldContext.save()
+        }
+        oldContext.reset()
+        try oldCoordinator.remove(oldStore)
+
+        let migratedCoordinator = NSPersistentStoreCoordinator(managedObjectModel: cloudKitModel)
+        let migratedStore = try migratedCoordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType,
+            configurationName: nil,
+            at: storeURL,
+            options: [
+                NSMigratePersistentStoresAutomaticallyOption: true,
+                NSInferMappingModelAutomaticallyOption: true
+            ]
+        )
+        let readContext = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
+        readContext.persistentStoreCoordinator = migratedCoordinator
+        try readContext.performAndWait {
+            let herds = try readContext.fetch(NSFetchRequest<NSManagedObject>(entityName: "Herd"))
+            let pastures = try readContext.fetch(NSFetchRequest<NSManagedObject>(entityName: "Pasture"))
+            XCTAssertEqual(herds.count, 1)
+            XCTAssertEqual(herds.first?.value(forKey: "id") as? UUID, herdID)
+            XCTAssertEqual(herds.first?.value(forKey: "name") as? String, "Existing Herd")
+            XCTAssertEqual(pastures.count, 1)
+            XCTAssertEqual(pastures.first?.value(forKey: "id") as? UUID, pastureID)
+            XCTAssertEqual(pastures.first?.value(forKey: "herd") as? NSManagedObject, herds.first)
+        }
+        readContext.reset()
+        try migratedCoordinator.remove(migratedStore)
+    }
+
     func testModelLoadsWithExactDurableEntityInventory() throws {
         let model = try loadModel()
 
