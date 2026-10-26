@@ -1403,6 +1403,7 @@ final class CoreDataAnimalRepository:
                 }
 
                 do {
+                    try CoreDataLocalWriteIntegrity.validateChangedObjects(in: context)
                     try context.save()
                     return result
                 } catch {
