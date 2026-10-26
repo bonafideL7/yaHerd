@@ -74,7 +74,7 @@ enum CoreDataWorkingWorkDataMutation {
             record.session = session
         }
 
-        deletePregnancyChecks(session: session, animal: animal, in: context)
+        try deletePregnancyChecks(session: session, animal: animal, in: context)
         if WorkingWorkDataRules.shouldRecordPregnancyCheck(input.pregnancyCheck),
            let pregnancyInput = input.pregnancyCheck {
             let check = CDPregnancyCheck(context: context)
@@ -99,7 +99,7 @@ enum CoreDataWorkingWorkDataMutation {
             check.workingSession = session
         }
 
-        deleteHealthRecords(session: session, animal: animal, in: context)
+        try deleteHealthRecords(session: session, animal: animal, in: context)
 
         if input.castrationPerformed {
             try insertGeneratedHealthRecord(
@@ -135,10 +135,10 @@ enum CoreDataWorkingWorkDataMutation {
         session: CDWorkingSession,
         animal: CDAnimal,
         in context: NSManagedObjectContext
-    ) {
+    ) throws {
         deleteTreatmentRecords(session: session, animal: animal, in: context)
-        deletePregnancyChecks(session: session, animal: animal, in: context)
-        deleteHealthRecords(session: session, animal: animal, in: context)
+        try deletePregnancyChecks(session: session, animal: animal, in: context)
+        try deleteHealthRecords(session: session, animal: animal, in: context)
     }
 
     private static func insertGeneratedHealthRecord(
@@ -181,10 +181,15 @@ enum CoreDataWorkingWorkDataMutation {
         session: CDWorkingSession,
         animal: CDAnimal,
         in context: NSManagedObjectContext
-    ) {
+    ) throws {
         let checks = (session.pregnancyChecks?.allObjects as? [CDPregnancyCheck]) ?? []
-        for check in checks where check.animal.id == animal.id {
-            context.delete(check)
+        for check in checks {
+            let relatedAnimal = try CoreDataRequiredRelationship.resolve(
+                "animal", from: check, as: CDAnimal.self
+            )
+            if relatedAnimal.id == animal.id {
+                context.delete(check)
+            }
         }
     }
 
@@ -192,10 +197,15 @@ enum CoreDataWorkingWorkDataMutation {
         session: CDWorkingSession,
         animal: CDAnimal,
         in context: NSManagedObjectContext
-    ) {
+    ) throws {
         let records = (session.healthRecords?.allObjects as? [CDHealthRecord]) ?? []
-        for record in records where record.animal.id == animal.id {
-            context.delete(record)
+        for record in records {
+            let relatedAnimal = try CoreDataRequiredRelationship.resolve(
+                "animal", from: record, as: CDAnimal.self
+            )
+            if relatedAnimal.id == animal.id {
+                context.delete(record)
+            }
         }
     }
 }
