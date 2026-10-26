@@ -9,6 +9,7 @@ enum CoreDataPersistenceError: LocalizedError, Equatable {
     case tagColorDefaultMaterializationInProgress(herdID: UUID)
     case readOnlyStore
     case missingRequiredRelationship(entity: String, relationship: String)
+    case missingRequiredPersistedValue(entity: String, property: String)
 
     var errorDescription: String? {
         switch self {
@@ -32,6 +33,8 @@ enum CoreDataPersistenceError: LocalizedError, Equatable {
             return "Changes are disabled while the Core Data store is read-only."
         case let .missingRequiredRelationship(entity, relationship):
             return "A required \(relationship) relationship is unavailable on \(entity). The record may still be importing."
+        case let .missingRequiredPersistedValue(entity, property):
+            return "Cannot save \(entity) with missing required \(property)."
         }
     }
 }
