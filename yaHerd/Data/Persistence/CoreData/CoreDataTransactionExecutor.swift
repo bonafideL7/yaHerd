@@ -32,6 +32,7 @@ final class CoreDataTransactionExecutor {
                 try beforeSave?(context)
 
                 do {
+                    try CoreDataLocalWriteIntegrity.validateChangedObjects(in: context)
                     try context.save()
                     return result
                 } catch {
