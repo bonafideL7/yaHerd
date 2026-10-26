@@ -527,7 +527,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 if context.hasChanges {
                     try beforeSave?(context)
                     do {
-                        try context.save()
+                        try CoreDataLocalWriteIntegrity.validateChangedObjects(in: context)
+                    try context.save()
                     } catch {
                         context.rollback()
                         throw CoreDataPersistenceError.saveFailed(
