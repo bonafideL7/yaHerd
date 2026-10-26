@@ -376,7 +376,8 @@ final class CoreDataPastureRepository:
                 let result = try operation(context, herd)
                 if context.hasChanges {
                     do {
-                        try context.save()
+                        try CoreDataLocalWriteIntegrity.validateChangedObjects(in: context)
+                    try context.save()
                     } catch {
                         context.rollback()
                         throw CoreDataPersistenceError.saveFailed(
