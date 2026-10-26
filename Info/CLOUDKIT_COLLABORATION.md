@@ -64,7 +64,7 @@ This section records verified code as of the baseline above. Re-check all paths,
 
 ## 4. Implementation stages and completion requirements
 
-The stages below form an implementation order, not a status matrix. ChatGPT implements production changes; Codex reviews only. Every stage: inspect latest code; trace affected callers, reads, writes, recovery and navigation; implement the smallest production change; verify with available Xcode tooling, direct inspection and relevant Section 5 manual cases; inspect final diff; request substantive Codex code review; correct genuine production defects; report runtime limitations. Do not create/modify tests or CI, or restore removed infrastructure, unless the user specifically asks. Implement only the requested stage and necessary prerequisites; do not roll into the next stage automatically.
+The stages below form an implementation order, not a status matrix. ChatGPT implements production changes; Codex reviews only. Every stage: inspect latest code; trace affected callers, reads, writes, recovery and navigation; implement the smallest production change; verify with available Xcode tooling, direct inspection and relevant Section 5 manual cases; inspect final diff; request substantive Codex code review; correct genuine production defects; report runtime limitations. Implement only the requested stage and necessary prerequisites; do not roll into the next stage automatically.
 
 ### Stage 1: CloudKit-compatible Core Data model and safe migration
 
