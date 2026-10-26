@@ -29,13 +29,13 @@
         <attribute name="id" optional="YES" attributeType="UUID"/>
         <attribute name="name" optional="YES" attributeType="String"/>
         <attribute name="prefix" optional="YES" attributeType="String"/>
-        <attribute name="red" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
-        <attribute name="green" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
-        <attribute name="blue" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
-        <attribute name="alpha" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
-        <attribute name="sortOrder" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
-        <attribute name="isHidden" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
-        <attribute name="isDefault" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="red" optional="YES" attributeType="Double"/>
+        <attribute name="green" optional="YES" attributeType="Double"/>
+        <attribute name="blue" optional="YES" attributeType="Double"/>
+        <attribute name="alpha" optional="YES" attributeType="Double"/>
+        <attribute name="sortOrder" optional="YES" attributeType="Integer 64"/>
+        <attribute name="isHidden" optional="YES" attributeType="Boolean"/>
+        <attribute name="isDefault" optional="YES" attributeType="Boolean"/>
         <attribute name="createdAt" optional="YES" attributeType="Date"/>
         <attribute name="updatedAt" optional="YES" attributeType="Date"/>
         <relationship name="herd" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="tagColors" inverseEntity="Herd"/>
@@ -57,8 +57,8 @@
     <entity name="PastureGroup" representedClassName="CDPastureGroup" syncable="NO">
         <attribute name="id" optional="YES" attributeType="UUID"/>
         <attribute name="name" optional="YES" attributeType="String"/>
-        <attribute name="grazeDays" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
-        <attribute name="restDays" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="grazeDays" optional="YES" attributeType="Integer 64"/>
+        <attribute name="restDays" optional="YES" attributeType="Integer 64"/>
         <relationship name="herd" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="pastureGroups" inverseEntity="Herd"/>
         <relationship name="pastures" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Pasture" inverseName="group" inverseEntity="Pasture"/>
             <fetchIndex name="by_id">
@@ -68,10 +68,10 @@
     <entity name="Pasture" representedClassName="CDPasture" syncable="NO">
         <attribute name="id" optional="YES" attributeType="UUID"/>
         <attribute name="name" optional="YES" attributeType="String"/>
-        <attribute name="sortOrder" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
-        <attribute name="acreage" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
-        <attribute name="usableAcreage" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
-        <attribute name="targetAcresPerHead" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="sortOrder" optional="YES" attributeType="Integer 64"/>
+        <attribute name="acreage" optional="YES" attributeType="Double"/>
+        <attribute name="usableAcreage" optional="YES" attributeType="Double"/>
+        <attribute name="targetAcresPerHead" optional="YES" attributeType="Double"/>
         <attribute name="lastGrazedDate" optional="YES" attributeType="Date"/>
         <relationship name="herd" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="pastures" inverseEntity="Herd"/>
         <relationship name="group" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="PastureGroup" inverseName="pastures" inverseEntity="PastureGroup"/>
@@ -95,11 +95,11 @@
         <attribute name="birthDate" optional="YES" attributeType="Date"/>
         <attribute name="statusRawValue" optional="YES" attributeType="String"/>
         <attribute name="saleDate" optional="YES" attributeType="Date"/>
-        <attribute name="salePrice" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="salePrice" optional="YES" attributeType="Double"/>
         <attribute name="reasonSold" optional="YES" attributeType="String"/>
         <attribute name="deathDate" optional="YES" attributeType="Date"/>
         <attribute name="causeOfDeath" optional="YES" attributeType="String"/>
-        <attribute name="isArchived" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="isArchived" optional="YES" attributeType="Boolean"/>
         <attribute name="archivedAt" optional="YES" attributeType="Date"/>
         <attribute name="archiveReason" optional="YES" attributeType="String"/>
         <attribute name="distinguishingFeaturesData" optional="YES" attributeType="Binary"/>
@@ -137,8 +137,8 @@
     <entity name="AnimalTag" representedClassName="CDAnimalTag" syncable="NO">
         <attribute name="id" optional="YES" attributeType="UUID"/>
         <attribute name="number" optional="YES" attributeType="String"/>
-        <attribute name="isPrimary" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
-        <attribute name="isActive" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="isPrimary" optional="YES" attributeType="Boolean"/>
+        <attribute name="isActive" optional="YES" attributeType="Boolean"/>
         <attribute name="assignedAt" optional="YES" attributeType="Date"/>
         <attribute name="removedAt" optional="YES" attributeType="Date"/>
         <relationship name="herd" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="animalTags" inverseEntity="Herd"/>
@@ -198,7 +198,7 @@
         <attribute name="date" optional="YES" attributeType="Date"/>
         <attribute name="resultRawValue" optional="YES" attributeType="String"/>
         <attribute name="technician" optional="YES" attributeType="String"/>
-        <attribute name="estimatedDaysPregnant" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="estimatedDaysPregnant" optional="YES" attributeType="Integer 64"/>
         <attribute name="dueDate" optional="YES" attributeType="Date"/>
         <relationship name="herd" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="pregnancyChecks" inverseEntity="Herd"/>
         <relationship name="animal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="pregnancyChecks" inverseEntity="Animal"/>
@@ -213,12 +213,12 @@
         <attribute name="startedAt" optional="YES" attributeType="Date"/>
         <attribute name="completedAt" optional="YES" attributeType="Date"/>
         <attribute name="notes" optional="YES" attributeType="String"/>
-        <attribute name="expectedHeadCountSnapshot" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
-        <attribute name="quickCowCount" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
-        <attribute name="quickHeiferCount" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
-        <attribute name="quickCalfCount" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
-        <attribute name="quickBullCount" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
-        <attribute name="quickSteerCount" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="expectedHeadCountSnapshot" optional="YES" attributeType="Integer 64"/>
+        <attribute name="quickCowCount" optional="YES" attributeType="Integer 64"/>
+        <attribute name="quickHeiferCount" optional="YES" attributeType="Integer 64"/>
+        <attribute name="quickCalfCount" optional="YES" attributeType="Integer 64"/>
+        <attribute name="quickBullCount" optional="YES" attributeType="Integer 64"/>
+        <attribute name="quickSteerCount" optional="YES" attributeType="Integer 64"/>
         <attribute name="pastureIDSnapshot" optional="YES" attributeType="UUID"/>
         <attribute name="pastureNameSnapshot" optional="YES" attributeType="String"/>
         <attribute name="pastureArchivedAt" optional="YES" attributeType="Date"/>
@@ -246,7 +246,7 @@
         <attribute name="animalNameSnapshot" optional="YES" attributeType="String"/>
         <attribute name="animalSexRawValueSnapshot" optional="YES" attributeType="String"/>
         <attribute name="animalTypeRawValueSnapshot" optional="YES" attributeType="String"/>
-        <attribute name="wasExpectedAtStart" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="wasExpectedAtStart" optional="YES" attributeType="Boolean"/>
         <attribute name="countedAt" optional="YES" attributeType="Date"/>
         <attribute name="missingConfirmedAt" optional="YES" attributeType="Date"/>
         <relationship name="herd" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="fieldCheckAnimalChecks" inverseEntity="Herd"/>
@@ -344,8 +344,8 @@
         <attribute name="date" optional="YES" attributeType="Date"/>
         <attribute name="treatmentItemID" optional="YES" attributeType="UUID"/>
         <attribute name="itemNameSnapshot" optional="YES" attributeType="String"/>
-        <attribute name="given" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
-        <attribute name="doseAmount" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="given" optional="YES" attributeType="Boolean"/>
+        <attribute name="doseAmount" optional="YES" attributeType="Double"/>
         <attribute name="doseUnitRawValue" optional="YES" attributeType="String"/>
         <attribute name="administrationRouteRawValue" optional="YES" attributeType="String"/>
         <attribute name="animalIDSnapshot" optional="YES" attributeType="UUID"/>
