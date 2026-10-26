@@ -76,8 +76,11 @@ final class CoreDataPersistentContainer {
         }
         description.type = storeType
         description.shouldAddStoreAsynchronously = true
-        description.shouldMigrateStoreAutomatically = false
-        description.shouldInferMappingModelAutomatically = false
+        // Apply supported lightweight migrations only to writable SQLite stores.
+        // Read-only recovery and in-memory contexts must never migrate a disk store.
+        let allowsMigration = storeType == NSSQLiteStoreType && accessMode == .readWrite
+        description.shouldMigrateStoreAutomatically = allowsMigration
+        description.shouldInferMappingModelAutomatically = allowsMigration
         if accessMode == .readOnly {
             description.setOption(true as NSNumber, forKey: NSReadOnlyPersistentStoreOption)
         }
