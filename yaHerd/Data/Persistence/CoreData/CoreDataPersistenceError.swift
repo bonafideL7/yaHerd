@@ -8,6 +8,7 @@ enum CoreDataPersistenceError: LocalizedError, Equatable {
     case tagColorMaterializationInProgress(id: UUID, herdID: UUID)
     case tagColorDefaultMaterializationInProgress(herdID: UUID)
     case readOnlyStore
+    case missingRequiredRelationship(entity: String, relationship: String)
 
     var errorDescription: String? {
         switch self {
@@ -29,6 +30,8 @@ enum CoreDataPersistenceError: LocalizedError, Equatable {
             return "A tag color default is already being materialized in Herd \(herdID.uuidString). Retry the change after the in-flight transaction completes."
         case .readOnlyStore:
             return "Changes are disabled while the Core Data store is read-only."
+        case let .missingRequiredRelationship(entity, relationship):
+            return "A required \(relationship) relationship is unavailable on \(entity). The record may still be importing."
         }
     }
 }
