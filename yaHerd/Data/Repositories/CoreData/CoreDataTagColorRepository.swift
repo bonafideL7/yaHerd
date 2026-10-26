@@ -528,7 +528,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
                     try beforeSave?(context)
                     do {
                         try CoreDataLocalWriteIntegrity.validateChangedObjects(in: context)
-                    try context.save()
+                        try context.save()
                     } catch {
                         context.rollback()
                         throw CoreDataPersistenceError.saveFailed(
