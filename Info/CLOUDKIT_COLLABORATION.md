@@ -64,7 +64,7 @@ This section records verified code as of the baseline above. Re-check all paths,
 
 ## 4. Implementation stages and completion requirements
 
-The stages below form an implementation order, not a status matrix. ChatGPT implements production changes; Codex reviews only. Every stage: inspect latest code; trace affected callers, reads, writes, recovery and navigation; implement the smallest production change; verify with available Xcode tooling, direct inspection and relevant Section 5 manual cases; inspect final diff; request substantive Codex code review; correct genuine production defects; report runtime limitations. Implement only the requested stage and necessary prerequisites; do not roll into the next stage automatically.
+The stages below form an implementation order, not a status matrix. CloudKit stage PRs target the `feature/cloudkit-collaboration` integration branch, not `main`; only the final cumulative feature PR targets `main`. ChatGPT implements production changes; Codex reviews only. Every stage: inspect latest code; trace affected callers, reads, writes, recovery and navigation; implement the smallest production change; verify with available Xcode tooling, direct inspection and relevant Section 5 manual cases; inspect final diff; request substantive Codex code review; correct genuine production defects; report runtime limitations. Implement only the requested stage and necessary prerequisites; do not roll into the next stage automatically.
 
 ### Stage 1: CloudKit-compatible Core Data model and existing-data compatibility
 
@@ -320,7 +320,7 @@ Immediate release blockers include data loss, wrong-account upload, foreign-Herd
 
 ## 6. Pull-request implementation rules
 
-ChatGPT is the implementing agent and produces PR changes; Codex serves only as PR code reviewer. Use focused implementation stages as PR boundaries; a phase and its demonstrably necessary dependencies may be combined when they cannot function independently. Start each stage against latest merged main and inspect current code first. Do not assume an earlier stage was completed just because this document describes it.
+ChatGPT is the implementing agent and produces PR changes; Codex serves only as PR code reviewer. Use focused implementation stages as PR boundaries; a phase and its demonstrably necessary dependencies may be combined when they cannot function independently. Start each stage from the latest `feature/cloudkit-collaboration`, inspect the current integration code first, and merge the stage PR into that branch only after focused tests and review pass. Do not assume an earlier stage was completed just because this document describes it. A draft cumulative PR from the feature branch to `main` provides complete-diff review; never merge that PR until all eight stages and release gates have passed.
 
 Before submitting each PR:
 1. Identify the intended behavior and exact affected production call paths.
@@ -342,11 +342,11 @@ ChatGPT, not Codex, implements production changes, performs available verificati
 - Perform only the user-requested stage and required dependent work. Preserve existing names/contracts whenever feasible; avoid duplicate abstractions or custom synchronization engines.
 - Address both normal and failure paths, including an absent account, sharing permission, imported graph incompleteness, wrong-store routing, stale navigation, user-data preservation and destructive operations where relevant.
 - Execute applicable Section 5 manual cases when the environment permits and clearly report unexecuted cases. Add focused tests for new behavior under AGENTS.md; do not invent passing verification results, restore discarded code or author unrelated process artifacts.
-- Create a focused PR when requested, inspect comments, fix actual defects and report limitations. Do not merge contrary to user direction.
+- Create a focused stage PR targeting `feature/cloudkit-collaboration`, inspect comments, fix actual defects and report limitations. Never merge a CloudKit stage PR directly into `main`. Keep the cumulative feature PR into `main` in draft until integrated release verification and complete feature review are finished.
 
 Example request to ChatGPT (not Codex):
 
-"Implement Stage 2 in Info/CLOUDKIT_COLLABORATION.md. Follow AGENTS.md. Inspect current code and relevant tests first. Add focused tests for new behavior, make only necessary production changes, verify available builds and execution paths, review the final diff, and open a PR. Do not add unrelated documentation or infrastructure."
+"Implement the next CloudKit stage in Info/CLOUDKIT_COLLABORATION.md, branching from the latest feature/cloudkit-collaboration. Follow AGENTS.md. Inspect current integration code and relevant tests first. Add focused tests for new behavior, make only necessary production changes, verify available builds and execution paths, review the diff, and open a stage PR into feature/cloudkit-collaboration (not main). Do not add unrelated documentation or infrastructure."
 
 ## 8. Codex code-review agent instructions (review only)
 
