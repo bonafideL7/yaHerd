@@ -130,6 +130,72 @@ final class CoreDataModelStructureTests: XCTestCase {
         try migratedCoordinator.remove(migratedStore)
     }
 
+    func testMissingFieldCheckFindingSessionFailsWithoutDereferencingIt() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+
+        try context.performAndWait {
+            let finding = CDFieldCheckFinding(context: context)
+            finding.id = UUID()
+
+            XCTAssertThrowsError(
+                try FieldCheckMapper.makeFindingSnapshot(from: finding)
+            ) { error in
+                XCTAssertEqual(
+                    error as? CoreDataFieldCheckMappingError,
+                    .missingFindingSession(findingID: finding.id)
+                )
+            }
+            context.rollback()
+        }
+    }
+
+    func testOldRequiredFindingRelationshipStoreLoadsWithoutCustomMigration() async throws {
+        let currentModel = try loadModel()
+        let previousModel = try XCTUnwrap(currentModel.copy() as? NSManagedObjectModel)
+        let previousFinding = try entity(named: "FieldCheckFinding", in: previousModel)
+        try relationship(named: "session", in: previousFinding).isOptional = false
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ExistingFieldCheckStore-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("yaHerd.sqlite")
+        let herdID = UUID()
+
+        let sourceCoordinator = NSPersistentStoreCoordinator(managedObjectModel: previousModel)
+        let sourceStore = try sourceCoordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType,
+            configurationName: nil,
+            at: storeURL,
+            options: nil
+        )
+        let context = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
+        context.persistentStoreCoordinator = sourceCoordinator
+        try context.performAndWait {
+            let herd = NSEntityDescription.insertNewObject(forEntityName: "Herd", into: context)
+            herd.setValue(herdID, forKey: "id")
+            herd.setValue("Preserved Herd", forKey: "name")
+            herd.setValue(Date(timeIntervalSince1970: 100), forKey: "createdAt")
+            herd.setValue(Date(timeIntervalSince1970: 200), forKey: "updatedAt")
+            try context.save()
+        }
+        context.reset()
+        try sourceCoordinator.remove(sourceStore)
+
+        let reopened = try await CoreDataPersistentContainer.load(storeURL: storeURL)
+        let readContext = reopened.makeBackgroundContext()
+        try await readContext.perform {
+            let herds = try readContext.fetch(NSFetchRequest<NSManagedObject>(entityName: "Herd"))
+            XCTAssertEqual(herds.count, 1)
+            XCTAssertEqual(herds.first?.value(forKey: "id") as? UUID, herdID)
+            XCTAssertEqual(herds.first?.value(forKey: "name") as? String, "Preserved Herd")
+        }
+    }
+
     func testModelLoadsWithExactDurableEntityInventory() throws {
         let model = try loadModel()
 
