@@ -165,7 +165,7 @@ This is a behavior and release verification plan for ChatGPT to follow during im
 
 **M03 — Initial upload/interrupted sync retry.** Setup: Safe backed-up fixture, intentional CloudKit export failure and app termination. Steps: attempt an initial sync, interrupt it, then relaunch and retry. **Pass:** Original SQLite store is preserved; record IDs are stable; no missing records, duplicated Herds, or accidental account reassignment. If not inducible, state limitation.
 
-**M04 — Unchanged model and CloudKit record schema.** Setup: Original local Core Data model and development CloudKit environment. Steps: confirm no entity/model version change; inspect the explicit CloudKit record mapping, zone/share configuration and development schema. **Pass:** Original model and SQLite remain unchanged; all 18 modeled entities can be represented and safely reconciled; production CloudKit schema is unchanged.
+**M04 — Unchanged model and CloudKit record schema.** Setup: Original local Core Data model and development CloudKit environment. Steps: confirm no entity/model version change; inspect the explicit CloudKit record mapping, zone/share configuration and development schema. **Pass:** The original Core Data model and SQLite schema remain unchanged; all 18 modeled entities can be represented and safely reconciled; production CloudKit schema is unchanged.
 
 **M05 — Owned/shared CloudKit zone isolation.** Setup: A owns Herd P; B joins Herd S. Steps: read, create, edit and delete representative records in each selected Herd; inspect account/zone metadata and CloudKit record membership. **Pass:** The original local Core Data model is unchanged, data is scoped to the correct Herd and CloudKit zone/share, and no foreign-Herd changes or duplicate uploads occur.
 
@@ -201,7 +201,7 @@ This is a behavior and release verification plan for ChatGPT to follow during im
 
 **S05 — New records added after sharing.** Setup: A/B already share Herd. Steps: Add animal and tag, pasture/group, health/pregnancy/movement history, field-check children and working-session/treatment children from either authorized device. **Pass:** New descendants join the correct share and appear on other account; no manual re-sharing required.
 
-**S06 — Bidirectional read/write collaboration.** Setup: B invited as editor. Steps: B edits pasture/moves animal; A records treatment/field check; B modifies working session. **Pass:** Changes are locally atomic, use appropriate stores and converge with correct relationships/history.
+**S06 — Bidirectional read/write collaboration.** Setup: B invited as editor. Steps: B edits pasture/moves animal; A records treatment/field check; B modifies working session. **Pass:** Changes are locally atomic, use the correct Herd/CloudKit zones and converge with correct relationships/history.
 
 **S07 — Read-only access through every editing path.** Setup: B or C as read-only participant. Steps: Attempt inline/full editing, swipe/context-menu archive/delete/restore, bulk edits, tags, pastures, animal movements, health additions, field checks, templates and working-session actions. **Pass:** UI does not offer unauthorized actions, and repository commit paths reject bypasses; reads still work.
 
@@ -254,7 +254,7 @@ This is a behavior and release verification plan for ChatGPT to follow during im
 - **Stage 7:** C01–C08 and R04. Silent critical invariant corruption or destructive loss is a release blocker.
 - **Stage 8/release:** All applicable cases including R01–R06, production schema and TestFlight. Unexecuted device tests mean **not release verified**, not passed.
 
-Immediate release blockers include data loss, wrong-account upload, foreign-Herd/store access, unintended hard deletion, duplicate Herd/share creation, unauthorized committed edits, silently corrupted domain-critical invariants and invalid production CloudKit schema. Other findings are prioritized by actual production consequences. When a scenario cannot be safely reproduced, report that limitation instead of treating a successful build as behavioral verification.
+Immediate release blockers include data loss, wrong-account upload, foreign-Herd/CloudKit-zone access, unintended hard deletion, duplicate Herd/share creation, unauthorized committed edits, silently corrupted domain-critical invariants and invalid production CloudKit schema. Other findings are prioritized by actual production consequences. When a scenario cannot be safely reproduced, report that limitation instead of treating a successful build as behavioral verification.
 
 ## 6. Pull-request implementation rules
 
@@ -267,7 +267,7 @@ Before submitting each PR:
 4. Use Xcode build/direct source inspection; run the applicable Section 5 manual test cases when equipment and accounts permit, and report cases not executed.
 5. Inspect the final diff for scope, dead/duplicate logic, unintended changes and restored removed infrastructure.
 6. Request Codex code review against AGENTS.md and the applicable feature stage. ChatGPT fixes actual production defects.
-7. Report modified paths, evidence of verification, known gaps and unresolved risks. Do not modify tests or CI unless the user expressly instructs it.
+7. Report modified paths, evidence of verification, known gaps and unresolved risks. Add/maintain focused tests as required by AGENTS.md; modify CI only when a demonstrated technical requirement justifies it.
 
 Required changes to Scripts/verify-architecture.sh must be narrowly justified by approved CloudKit implementation. Keep its other architectural restrictions intact; do not rewrite automation or CI to create a false passing signal.
 
@@ -278,7 +278,7 @@ ChatGPT, not Codex, implements production changes, performs available verificati
 - Read root AGENTS.md and this feature specification, then read the latest actual source and relevant Apple API documentation.
 - Treat this document as approved intended product behavior, not a claim about current implementation or an instruction to preserve incorrect assumptions.
 - Perform only the user-requested stage and required dependent work. Preserve existing names/contracts whenever feasible; avoid duplicate abstractions or custom synchronization engines.
-- Address both normal and failure paths, including an absent account, sharing permission, imported graph incompleteness, wrong-store routing, stale navigation, user-data preservation and destructive operations where relevant.
+- Address both normal and failure paths, including an absent account, sharing permission, imported graph incompleteness, wrong-account/zone routing, stale navigation, user-data preservation and destructive operations where relevant.
 - Execute applicable Section 5 manual cases when the environment permits and clearly report unexecuted cases. Add focused tests for new behavior as required by AGENTS.md; do not invent passing results, restore discarded code or author unrelated process artifacts.
 - Create a focused PR when requested, inspect comments, fix actual defects and report limitations. Do not merge contrary to user direction.
 
