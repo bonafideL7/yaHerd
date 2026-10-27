@@ -469,7 +469,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
                         entityName: CDFieldCheckAnimalCheck.coreDataEntityName
                     )
                     return try readContext.fetch(request).map {
-                        (id: $0.id, herdID: $0.herd.id, sessionID: $0.session.id)
+                        (id: $0.id, herdID: $0.herd.id, sessionID: try XCTUnwrap($0.session).id)
                     }
                 }
                 XCTAssertEqual(persisted.count, 4)
@@ -582,7 +582,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
                     entityName: CDFieldCheckAnimalCheck.coreDataEntityName
                 )
                 return try readContext.fetch(request).map {
-                    (herdID: $0.herd.id, id: $0.id, completed: $0.session.completedAt != nil)
+                    (herdID: $0.herd.id, id: $0.id, completed: try XCTUnwrap($0.session).completedAt != nil)
                 }
             }
             XCTAssertEqual(physical.count, 4)
