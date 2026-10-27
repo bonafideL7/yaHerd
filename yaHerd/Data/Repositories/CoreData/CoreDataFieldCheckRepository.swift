@@ -627,7 +627,9 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 lookup: lookup,
                 in: context
             )
-            let session = finding.session
+            guard let session = finding.session else {
+                throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: finding.id)
+            }
             try Self.ensureSessionIsEditable(session)
 
             let oldLinkedAnimalID = finding.animalIDSnapshot
@@ -723,7 +725,10 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 lookup: lookup,
                 in: context
             )
-            try Self.ensureSessionCanUpdateFindingStatus(finding.session)
+            guard let session = finding.session else {
+                throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: finding.id)
+            }
+            try Self.ensureSessionCanUpdateFindingStatus(session)
 
             let linkedAnimalID = finding.animalIDSnapshot
             finding.statusRawValue = status.rawValue
@@ -738,7 +743,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             if try Self.findingType(finding) == .missingAnimal {
                 try Self.syncMissingStatus(
                     forAnimalID: linkedAnimalID,
-                    in: finding.session
+                    in: session
                 )
             }
         }
@@ -770,7 +775,9 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 lookup: lookup,
                 in: context
             )
-            let session = finding.session
+            guard let session = finding.session else {
+                throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: finding.id)
+            }
             try Self.ensureSessionIsEditable(session)
 
             let linkedAnimalID = finding.animalIDSnapshot
@@ -1003,11 +1010,14 @@ private extension CoreDataFieldCheckRepository {
         selectedHerd: CDHerd,
         expectedSession: CDFieldCheckSession? = nil
     ) throws {
+        guard let session = finding.session else {
+            throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: finding.id)
+        }
         try validateReadChildRelationship(
             entity: CDFieldCheckFinding.coreDataEntityName,
             id: finding.id,
             childHerd: finding.herd,
-            session: finding.session,
+            session: session,
             selectedHerd: selectedHerd,
             expectedSession: expectedSession
         )
@@ -1078,7 +1088,7 @@ private extension CoreDataFieldCheckRepository {
             id: id,
             herdID: herdID,
             in: context
-        ), finding.session.id == sessionID else {
+        ), finding.session?.id == sessionID else {
             throw FieldCheckRepositoryError.findingNotFound
         }
         return finding
