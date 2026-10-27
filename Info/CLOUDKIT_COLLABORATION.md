@@ -1,9 +1,9 @@
 # yaHerd iCloud Synchronization and Herd Collaboration
 
-**Status:** Approved feature requirements and implementation guidance; NOT an implemented feature.
+**Status:** Approved product requirements; **proposed architecture revision for review** to honor the later requirement of no Core Data schema versions or data migration. Synchronization is NOT implemented.
 **Agent assignments:** ChatGPT implements, verifies and addresses PR review findings. Codex reviews code only; do not delegate feature implementation or automated test/CI changes to Codex.
 **Requested outcome:** Offline-first device synchronization plus sharing and collaboration between different Apple Accounts.
-**Initial inspection baseline:** main commit 5a5b29b6f2c4588de0e1b187133a7d1ea98838cc (2026-10-25).
+**Inspection:** Core Data local-only implementation as restored by PR #255; inspect the latest main branch rather than assuming historical file state.
 **Platforms:** yaHerd iOS 26+, Swift 6, SwiftUI, Core Data.
 **Authority:** User-approved requirements establish intended behavior. Inspect current production code for actual implementation; the baseline and path names below are discovery aids, never an assertion that a later branch still has that structure.
 
@@ -17,30 +17,30 @@ Use invitation-based sharing by default. The owner controls invitations and part
 
 Local work must not require a network connection. Persist successful local transactions immediately and synchronize when CloudKit can do so. The application must not promise immediate cross-device delivery, server-global transaction atomicity, or globally serialized offline edits. Show meaningful states for local save, cloud activity, account/permission problems, and recoverable conflicts. A successful local Core Data save is NOT proof of successful CloudKit export or import on another person's device.
 
-Existing installations must retain all local data, stable UUIDs, historical records, selected Herd identity where valid, and relationships throughout migration. Never silently replace, merge, duplicate, delete, or upload a Herd to the wrong Apple Account.
+Existing installations must retain all local data, stable UUIDs, historical records, selected Herd identity where valid, and relationships when synchronization is enabled. Do not change or version the Core Data model or migrate the existing SQLite store. Never silently replace, merge, duplicate, delete, or upload a Herd to the wrong Apple Account.
 
 ### Explicit initial-scope decisions
 
 - Sharing boundary: one entire Herd and its owned data graph. No independent animal-level or pasture-level shares.
-- Persistence: Core Data with NSPersistentCloudKitContainer, using private and shared CloudKit database scopes and corresponding local stores.
+- Persistence: Keep the existing Core Data `NSPersistentContainer`, model, and SQLite data intact. **Proposed implementation:** `CKSyncEngine` for CloudKit private and shared databases, with a focused adapter mapping existing Core Data domain records to CloudKit records. The proposal needs approval before production implementation.
 - Herd ownership: the share creator/owner remains owner. Ownership transfer is not part of the initial feature.
 - Permissions: native read-only/read-write share permissions; no farm-specific server-enforced roles or custom role engine.
 - Herd UI: multiple accessible Herds with one selected Herd. Keep the existing feature navigation patterns.
 - Settings: device-only personal UI preferences remain local unless a concrete Herd-owned setting must be shared. Herd tag colors and other modeled Herd records synchronize.
-- No SwiftData return, dual-write migration, custom sync server, custom CloudKit record replication engine, or unrelated architectural rewrite.
+- No SwiftData return, Core Data schema/version migration, destructive store conversion, custom server, second application data model or unrelated architectural rewrite. A bounded CloudKit record adapter is unavoidable with `CKSyncEngine`; reuse the current repositories for business rules rather than implementing duplicate domain logic.
 - No automatic merge of Herds independently created on different devices. A name match does not prove shared identity.
 - No automatic hard deletion or recreation of records to hide distributed conflicts.
-- Do not expand the scope to cross-Herd links; Core Data relationships must remain inside the same CloudKit share/store, and user-permitted cross-Herd references require a separate design.
+- Do not expand the scope to cross-Herd links. CloudKit records must be confined to the intended Herd's record zone/share, and Core Data relationships must remain inside the owning Herd; cross-Herd references require a separate product decision.
 
 ## 2. Core architecture and invariants
 
-Keep the existing SwiftUI -> use case/domain repository -> Core Data repository -> persistence direction. CloudKit APIs, CKShare, NSManagedObjectID, NSPersistentStore and managed objects belong in platform/persistence adapters, not ordinary Domain or Presentation contracts. Prefer extending the current application persistence assembly, context factory, read-model actors, transaction executor, successful-mutation stream and Herd-scoped repositories. Avoid redundant write systems or another navigation framework.
+Keep the existing SwiftUI -> use case/domain repository -> Core Data repository -> persistence direction. CloudKit APIs, CKShare, CKRecord, CKRecordZone and managed objects belong in platform/persistence adapters, not Domain or Presentation contracts. Keep Core Data as the sole local source of truth; do not create a second persistence representation of application records. Extend the existing application assembly, repositories, mutation stream and Herd selection only where the actual sync path requires it.
 
-An owned Herd resides in the private CloudKit-backed store. Herds shared by other owners reside in the shared CloudKit-backed store. Select the correct store for each Herd. Store ownership is not implied by the Herd UUID alone, and every read, insert, update and delete must be scoped to the selected Herd and correct persistent store. Explicitly assign new managed objects to the owning store where required. Never create a relationship that crosses stores or crosses Herd ownership boundaries. Multi-entity local transactions must remain atomic in their own target store.
+Keep the existing local Core Data store and its local transaction semantics. For proposed explicit synchronization, each owned Herd maps to an isolated CloudKit custom record zone in its owner's private database; invited Herds are resolved through the participant's shared database. Record-zone identity and Apple Account/share ownership must be tracked independently of the Herd UUID. All local reads and writes stay Herd-scoped, and only authorized changes may be exported. Never upload to a different account or zone; preserve local multi-entity transaction atomicity.
 
-The Herd root is the unit of sharing. Audit every relationship and newly created child entity for actual share membership; do not assume that all downstream records are automatically shared merely because the root is shared. Verify Apple API behavior against the current SDK before finalizing the strategy.
+The Herd is the unit of sharing. With zone-wide `CKShare`, all CloudKit records in that Herd's zone are included; no unrelated Herd may share the zone. Verify real zone sharing and all child-record types, including records created after invitations, on two Apple Accounts.
 
-Keep application UUID identity stable. Core Data managed-object IDs are not domain identity and must not leak through repository interfaces. A UUID duplicate within a Herd, duplicate tag assignment, multiple active primary tags, invalid relationship, or conflicting state must be detected and addressed rather than ignored. Domain rules remain the authority for semantic validity; Core Data nullability required for CloudKit does not weaken logical domain validation.
+Keep application UUID identity stable. Core Data managed-object IDs are not domain identity and must not leak through repository interfaces. A UUID duplicate within a Herd, duplicate tag assignment, multiple active primary tags, invalid relationship, or conflicting state must be detected and addressed rather than ignored. Domain rules and the unchanged Core Data model remain the authority for local semantic validity. Stage and validate out-of-order remote records before atomically applying complete valid local changes; never weaken the model or synthesize IDs and required fields.
 
 CloudKit is eventually consistent. A Core Data write gate, actor, editor revision, and local transaction coordinator cannot coordinate or lock multiple offline devices. Distinguish local concurrency protection from cross-device conflict semantics.
 
@@ -48,13 +48,13 @@ CloudKit is eventually consistent. A Core Data write gate, actor, editor revisio
 
 This section records verified code as of the baseline above. Re-check all paths, declarations and callers on the branch being modified.
 
-- yaHerd/Data/Persistence/CoreData/CoreDataPersistentContainer.swift: NSPersistentContainer, one SQLite store at Application Support/yaHerd/yaHerd.sqlite, migration/inferred mapping disabled, asynchronous store load. Do not overwrite an existing database in the conversion.
-- yaHerd/Data/CoreData/yaHerdModel.xcdatamodeld/yaHerdModel.xcdatamodel/contents: 18 Core Data entities; inspected XML contains nonoptional relationships, nonoptional attributes without defaults, and syncable="NO" declarations. Confirm the actual current model and validate CloudKit rules with Xcode rather than assuming XML flags alone are a definitive compatibility test.
+- yaHerd/Data/Persistence/CoreData/CoreDataPersistentContainer.swift: `NSPersistentContainer`, one SQLite store at Application Support/yaHerd/yaHerd.sqlite, automatic migration/inferred mapping disabled, asynchronous store load. Preserve this store and model unchanged.
+- yaHerd/Data/CoreData/yaHerdModel.xcdatamodeld/yaHerdModel.xcdatamodel/contents: 18 entities, including required attributes and 26 required relationships. Apple requires optional relationships for automatic Core Data–CloudKit mirroring; this unchanged model is NOT eligible for that approach. Proposed explicit record sync does not invoke Core Data mirroring or require `syncable` changes.
 - yaHerd/Data/Persistence/CoreData/CoreDataAppHerdBootstrapper.swift: creates "My Herd" whenever it finds none, selects when one, and fails for more than one. Import timing and shared Herds make this behavior unsuitable.
 - yaHerd/App/Persistence/AppCurrentHerdSelection.swift: holds selected Herd UUID. yaHerd/App/Navigation/AppNavigationState.swift separately stores selectedHerdID for navigation restoration. Prevent divergence or stale cross-Herd navigation.
-- yaHerd/Data/Persistence/CoreData/CoreDataContextFactory.swift: fresh background contexts without selected-store assignment. The corresponding CoreDataTransactionExecutor.swift handles a subset of writes.
-- yaHerd/Data/Repositories/CoreData/CoreDataAnimalRepository.swift, CoreDataPastureRepository.swift, CoreDataTagColorRepository.swift and CoreDataWorkingTreatmentTemplateRepository.swift: direct context.save paths also exist. Audit ALL repository writes for store routing and authorization rather than assuming one shared transaction helper covers them.
-- yaHerd/Data/Persistence/CoreData/CoreDataLookup.swift: UUID and herd relationship lookups. Adapt to store-qualified resolution and potentially incomplete remote graphs.
+- yaHerd/Data/Persistence/CoreData/CoreDataContextFactory.swift: fresh background contexts for the existing local store; CoreDataTransactionExecutor.swift handles a subset of writes.
+- yaHerd/Data/Repositories/CoreData/CoreDataAnimalRepository.swift, CoreDataPastureRepository.swift, CoreDataTagColorRepository.swift and CoreDataWorkingTreatmentTemplateRepository.swift: direct `context.save()` paths also exist. Audit ALL mutations for durable change capture, correct Herd/account authorization and atomic remote application; the mutation event stream alone is not a durable outbox.
+- yaHerd/Data/Persistence/CoreData/CoreDataLookup.swift: UUID and Herd relationship lookups. Keep local graph consistency; staged remote CloudKit records must not be prematurely committed as incomplete Core Data objects.
 - yaHerd/Data/Repositories/CoreData/CoreDataReadModelActor.swift and other projections: read models often require complete relationship graphs and may dereference relationships directly. Remotely imported related records can arrive in stages.
 - yaHerd/App/Mutation/ApplicationMutationCenter.swift: only a local mutation source exists. Extend existing feature invalidation for remote changes.
 - yaHerd/App/Persistence/CoreDataAppPersistenceAssembly.swift and yaHerd/App/yaHerdApp.swift: existing construction, recovery and dependency wiring.
@@ -62,152 +62,90 @@ This section records verified code as of the baseline above. Re-check all paths,
 - Scripts/verify-architecture.sh: intentionally rejects CloudKit use, entitlement names and sync naming. Update narrowly when legitimate implementation requires CloudKit. Do not disable architecture checks indiscriminately.
 - yaHerd.xcodeproj/project.pbxproj and yaHerd/Info.plist: no production CloudKit entitlements/share acceptance setup in baseline.
 
-## 4. Implementation stages and completion requirements
+## 4. Proposed implementation stages and completion requirements
 
-The stages below form an implementation order, not a status matrix. ChatGPT implements production changes; Codex reviews only. Every stage: inspect latest code; trace affected callers, reads, writes, recovery and navigation; implement the smallest production change; verify with available Xcode tooling, direct inspection and relevant Section 5 manual cases; inspect final diff; request substantive Codex code review; correct genuine production defects; report runtime limitations. Implement only the requested stage and necessary prerequisites; do not roll into the next stage automatically.
+**Approval boundary:** These stages replace the earlier automatic `NSPersistentCloudKitContainer` approach **only if this proposed architecture is approved**. Apple requires optional relationships for automatic Core Data mirroring, whereas the current model has 26 required relationships. Retaining the current model and refusing data-model migration therefore requires explicit CloudKit record synchronization. `CKSyncEngine` handles transport, retry scheduling and change tokens; the app remains responsible for mapping records, identifying durable local changes, applying remote changes, account isolation and conflict resolution. Do not implement either incompatible architecture by assumption.
 
-### Stage 1: CloudKit-compatible Core Data model and safe migration
+### Stage 1: Prove schema-preserving synchronization feasibility
 
-**Purpose:** A versioned Core Data model valid for CloudKit without losing local records.
+1. Inspect the current 18 entities, CRUD/save entry points, local graph constraints, recovery paths, UUID identity and relationships. Preserve the existing model and database byte-for-byte in an unchanged local-only build.
+2. Validate Apple `CKSyncEngine` private/shared database support, account lifecycle and zone-wide `CKShare` capability using the actual target SDK, development entitlements and an isolated development fixture.
+3. Specify a stable, deterministic mapping between each existing entity's application UUID and its CloudKit record identity, zone, fields, history and references. Avoid serializing live managed object IDs or copying the database file as a CloudKit asset.
+4. Establish a durable, crash-recoverable way to detect changes made through ALL existing repository write paths, including deletes. Evaluate Core Data persistent-history tracking with the **unchanged entity model**, and verify it can be enabled safely for existing SQLite stores; otherwise design a reconciliation mechanism without introducing a second application data store. Do not rely only on volatile `ApplicationMutationCenter` notifications.
+5. Prove remote records can arrive out of order, be staged safely and be reconciled into fully valid local transactions, without creating placeholder Herds, inventing UUIDs or violating required relationships.
+6. Verify that a seeded populated local store can be read and reloaded without any schema migration. Keep all CloudKit test data in a development container.
 
-1. Preserve the pre-CloudKit model version in the existing xcdatamodeld bundle; add an explicit new version and select it correctly. Do not rewrite history to make migration appear unnecessary.
-2. Inventory the actual entity model for all attributes, optionality, defaults, relationships, inverses, delete rules, constraints and entity configurations. CloudKit mirror compatibility is a hard constraint.
-3. Make relationships optional where required by Apple's Core Data CloudKit integration. Update the generated/manual managed-object interfaces and all callers of now-optional relationships; preserve domain-level required relationship validation separately.
-4. Review required attributes without defaults. Use a genuine semantic default only when valid; otherwise use optional storage plus guarded projections and validation. Do not invent dates, IDs or other business meaning.
-5. Verify unique constraints, unsupported relationships/configurations, inverses, delete rules and modeled relationship graph against the current SDK. Review entity syncability metadata, but do not assume syncable="NO" alone proves a CloudKit failure.
-6. Audit mapping/encoding of optional and missing imported fields in all Core Data projections, feature read models, seeders and transactions. Distinguish incomplete imports from corrupt data; never crash or silently create fabricated records.
-7. Choose and implement a supported explicit versioned migration path; the baseline store has automatic migration disabled. Preserve the pre-upgrade store, WAL/journal metadata and ability to diagnose failed migration. Do not manipulate SQLite files independently while Core Data owns them.
-8. Verify migration with actual pre-update app data: populated and empty Herds, archived animals, tags, parentage, pasture groups, movements, treatments, field checks, working sessions, and edge-case relationships.
-9. Validate model compatibility using current Xcode/Apple APIs and development CloudKit schema tooling. Never initialize or mutate production schema from normal startup.
-10. Document only actual compatibility limitations in implementation output; no new status artifacts are required.
+**Accept when:** A focused executable development experiment demonstrates the unchanged model can support lossless record encoding/decoding, crash-safe change detection and staged relationship reconciliation. Existing records must not be rewritten or uploaded during this feasibility work. If this cannot be demonstrated, stop before implementing the sync engine and revisit the approved constraints.
 
-**Accept when:** Existing data migrates and loads without changed UUIDs or lost history, valid local writes still function, and the new model passes actual development CloudKit compatibility validation. A successful build alone is insufficient.
+### Stage 2: CloudKit record adapter and durable private/shared synchronization
 
-**Review focus:** Data loss, attribute/relationship semantics, migration failures/retries, optionality crashes, destructive delete-rule changes, unsupported schema evolution.
+1. Keep the existing local `NSPersistentContainer` and one authoritative Core Data graph. Add an isolated CloudKit adapter and `CKSyncEngine` instance per required database scope (`.private` and `.shared`). Do not add a shadow Core Data store.
+2. Use one custom CloudKit record zone per owned Herd and a zone-wide `CKShare`, so the intended entire Herd and future child records belong to the same share. Never place two Herds in one share zone.
+3. Persist the engine's opaque sync state, record system fields, pending changes, zone/account associations and any staging data safely across termination; isolate them by actual iCloud account and Herd. Avoid duplicate exports after retries.
+4. Treat existing local Herds as authoritative until explicitly associated with an Apple Account and zone; make the initial upload idempotent, with stable IDs, no automatic duplicate Herd creation, and no silent cross-account upload.
+5. Handle save success, failed export, partial remote import, deleted records, account switching, access revocation and interrupted sync separately. Use CKSyncEngine for transport; do not assume it applies records or resolves conflicts for the app.
+6. Feed validated imports into existing Core Data transaction and application-mutation pathways without bypassing permission/integrity checks or re-exporting remote updates indefinitely.
+7. Cover private and shared zones, all current entity types and all write paths with focused automated tests and real two-account development checks.
 
-### Stage 2: Private and shared persistent stores and all-path routing
+**Accept when:** Offline local writes remain durable; syncing preserves identities, completeness and history; restarts and retries do not lose/duplicate records; an owner and invited participant can exchange validated changes without corrupting the local model.
 
-**Purpose:** One CloudKit-enabled Core Data persistence boundary that can read owned and shared Herds safely.
+### Stage 3: Multi-Herd lifecycle and selection
 
-1. Configure iCloud/CloudKit capability, a stable CloudKit container identifier, correct development-team signing, Push Notifications and Remote notifications background mode as required by the actual target and SDK. Include all necessary debug/release entitlements and Info.plist settings.
-2. Implement NSPersistentCloudKitContainer inside the existing persistence wrapper; use separate, stable SQLite URLs and NSPersistentCloudKitContainerOptions database scopes .private and .shared. Preserve in-memory/read-only recovery paths without exporting recovery data.
-3. Enable persistent history tracking and store remote-change notifications for both stores. Distinguish local store-load failures from temporary CloudKit communication errors.
-4. Migrate/import the existing local database as the owned/private data source using Core Data-supported operations. Never mirror one physical store into private and shared scopes or blindly duplicate records.
-5. Expose a focused internal store resolver and store-qualified context behavior. Selected Herd -> owning persistent store must be authoritative and stable for each transaction.
-6. Restrict Herd-specific reads using NSFetchRequest.affectedStores or equivalent supported store scoping. Ensure unknown Herd IDs, duplicate IDs and cross-Herd references fail safely.
-7. Assign newly inserted managed objects to the correct store. Preserve a single-store atomic commit for multi-entity operations.
-8. Audit every save path, including synchronous animal, pasture, tag color, template, Herd, field check and working repositories, and asynchronous transaction executor. Apply consistent destination-store and error/rollback behavior without unnecessary duplicated abstractions.
-9. Validate that read actors, background contexts, seeders and recovery code do not accidentally read/write the wrong store. Retain concurrency isolation guarantees and existing app performance characteristics.
+1. Replace implicit zero/one/many Herd bootstrap behavior with explicit Herd discovery, Create Herd and Join Herd flows; a cloud import delay must not create an extra "My Herd".
+2. Keep `AppCurrentHerdSelection` and `AppNavigationState.selectedHerdID` consistent. Scope all reads, edits, async results, restored routes and drafts to the selected Herd and its verified account/zone identity.
+3. Protect private and shared Herd content across account changes, sign-out, invitation revocation and shared-Herd removal. Never leak the previous owner's data.
+4. Preserve existing navigation and repository interfaces unless an actual new Herd-selection capability requires extension.
 
-**Accept when:** Both stores load correctly; existing owned records stay in the private store; selected shared records read/write through the shared store; no cross-store insert or cross-Herd lookup succeeds; recovery cannot upload synthetic data.
+**Accept when:** Multiple owned/joined Herds coexist, switching cannot mix data, and unavailable or revoked Herds fail safely.
 
-**Review focus:** Silent wrong-store writes, duplicate local records, context isolation, migration handoff, partial store-load failures, complete audit of direct saves.
+### Stage 4: Remote updates, UI invalidation and sync status
 
-### Stage 3: Multi-Herd lifecycle, selection and navigation
+1. Use `CKSyncEngine` change events and the durable local mutation/reconciliation checkpoint for import/export progress; resume safely after interruption.
+2. Publish validated remote application changes through `ApplicationMutationCenter`, including dashboard, animals, pastures, field checks and working sessions, without treating local saves as proof of upload.
+3. Surface accurate pending, failed, unavailable-account and imported statuses. Keep remote batches idempotent and do not create feedback loops.
+4. Avoid logging private animal/medical details, Apple Account identifiers or share URLs.
 
-**Purpose:** A user can own multiple Herds and participate in others without a single-Herd startup assumption.
+**Accept when:** Updates from another device reach already-open screens without restart and do not misrepresent synchronization completion.
 
-1. Replace CoreDataAppHerdBootstrapper's zero/one/many implicit policy with explicit available-Herd discovery across private and shared stores. Initial CloudKit import may not be complete when the local query is empty.
-2. Provide explicit Create Herd and Join Herd flows; do not create a second "My Herd" automatically on every new device. Support deliberate offline Herd creation without confusing that creation with an empty iCloud database.
-3. Introduce minimal domain-facing Herd list/selection capabilities including stable application UUID, display name, owner/participant category and effective access where available.
-4. Make AppCurrentHerdSelection the authoritative application selection and coordinate it with AppNavigationState.selectedHerdID. Restore only selections still accessible; preserve coherent state if a read temporarily fails.
-5. Ensure async loads capture their originating Herd selection; results from Herd A must not be shown after switching to Herd B. Clear/revalidate navigation stacks, selected records, filters, active workflows and drafts as appropriate.
-6. Update CoreDataLookup, repositories and actors so Herd ID plus owning store identify each query. Never resolve the first equal ID from the wrong store.
-7. Detect newly imported/shared Herd roots and update the Herd list without restart. Distinguish "waiting for import" from truly empty data, removal of share, lost account authorization and local-store corruption.
-8. Handle selected-Herd removal or sharing revocation through navigational revalidation and accessible fallback state rather than an unrecoverable startup failure.
+### Stage 5: Complete Herd sharing lifecycle
 
-**Accept when:** Several owned and shared Herds can coexist; switching keeps all records and routes scoped; a new signed-in device does not create unwanted roots; revoked/missing selection does not leak old records.
+1. Create or reuse the correct zone-wide `CKShare` for the owned Herd; use invitation-only sharing and Apple's supported native sharing UI.
+2. Handle `CKShare.Metadata` acceptance, cold start, repeat invitations, expired links, permission changes, leaving, revocation and owner stop-sharing through the CloudKit API appropriate to explicit records.
+3. Preserve the distinction between share changes and actual imported local Herd availability. Confirm every modeled child record is in the correct zone, including later creations.
+4. Never delete local or cloud Herd records simply to resolve a stalled share or missing owner.
 
-**Review focus:** Selection coherence, UUID collisions, stale async results, restored routes, cloud-import races, transient errors.
+**Accept when:** Different Apple Accounts can share the entire Herd with stable record identities, working access changes and no accidental public sharing or cross-Herd leakage.
 
-### Stage 4: Remote history, invalidation and cloud status
+### Stage 6: Permissions at all write boundaries
 
-**Purpose:** Imported changes reach existing UI and application state correctly.
+1. Expose read-only/read-write/owner capability information independently of SwiftUI controls.
+2. Enforce owner/participant permission at every local mutation and outgoing CloudKit operation, including direct repository saves and bulk workflows; distinguish offline local edits from eventual server authorization.
+3. Revalidate access at commit/export and protect account-scoped local storage on sign-out/revocation.
+4. Preserve existing read-only recovery restrictions.
 
-1. Observe NSPersistentStoreRemoteChange and CloudKit container event notifications for setup, import and export activity. Track the relevant store identity.
-2. Implement persistent-history consumption on background contexts with a separate durable token for each store. Skip or coalesce locally authored transactions without missing genuine remote updates.
-3. Consume, classify and publish remote changes through ApplicationMutationCenter; extend ApplicationMutationSource rather than introducing independent feature-specific notification systems.
-4. Invalidate the proper home/dashboard/animals/pastures/field-check/working views, Herd inventory, selected-record details and navigation targets. Fall back to broad invalidation if event-to-feature mapping is uncertain.
-5. Advance history tokens only after successful processing; handle invalid history tokens, deletion/reset of stores, foreground return and repeated notifications safely. Do not purge Core Data history in a way that disrupts CloudKit exports.
-6. Account for share metadata changes separately from normal Core Data history; refresh invitation/ownership/permission state as needed.
-7. Report local-save success separately from cloud-event progress. Do not promise "fully synced on all devices" from a successful export event.
-8. Log actionable errors without exposing personal Apple Account identifiers, share URLs, medical notes or detailed private record contents.
+**Accept when:** A viewer cannot edit via alternate paths and revoked changes cannot be uploaded as authorized; offline limitations are reported without false guarantees.
 
-**Accept when:** A remote create/update/delete becomes visible in already-open relevant screens without restart; navigation survives remote removal safely; checkpoints and retries do not drop changes or emit endless duplicate updates.
+### Stage 7: Distributed integrity and conflict handling
 
-**Review focus:** Token corruption, incorrect author filtering, missed events, refresh loops, stale query generations, inaccurate status labels, privacy.
+1. Inventory existing aggregate revisions, identity invariants, tags, pasture membership, status, working sessions and history before defining conflict rules.
+2. Handle duplicate record IDs, concurrent offline edits, edits versus deletes, share revocation, missing remote parents and out-of-order child records without fabricated defaults or silent data loss.
+3. Stage remote changes until complete enough for existing Core Data constraints; apply each locally valid change atomically and checkpoint imports only after success.
+4. Avoid arbitrary winner selection, unlimited self-repair loops or assumptions of globally atomic multi-record CloudKit writes.
 
-### Stage 5: Create, accept and manage complete Herd shares
+**Accept when:** Repeated/reordered/conflicting updates preserve local invariants or produce recoverable user-visible conflicts.
 
-**Purpose:** Owner and invited participant can actually collaborate across different Apple Accounts.
+### Stage 8: Production readiness, account lifecycle and device verification
 
-1. Establish the selected Herd's true owning private store and share state. Query an existing share before attempting to create one; share creation and repeated presentation must be idempotent.
-2. Use NSPersistentCloudKitContainer's sharing APIs to create a CKShare for the intended Herd root and associate all required Herd-owned related entities. Verify the actual membership and share-zone placement of entities including children created after the original share.
-3. Set owner-approved invitation visibility and supported permissions. Default away from public/unrestricted URL access; prefer invitation-only sharing.
-4. Integrate Apple's native sharing UI (UICloudSharingController or a current supported SwiftUI bridge) with accessible Share/Manage Sharing actions.
-5. Set CKSharingSupported and implement supported scene-delegate acceptance callbacks, including cold-start connection options, while preserving current SwiftUI app initialization. Do not accept against an uninitialized or incorrect store.
-6. Accept incoming CKShare.Metadata using acceptShareInvitations(from:into:completion:) on the intended shared persistent store. Handle repeat/expired/revoked invitations and network errors without duplicating Herds.
-7. Treat invitation acceptance and eventual record import as distinct steps; show loading/available state until the shared Herd root is actually present.
-8. Implement owner participant-management operations and participant leave-sharing actions using Apple's approved APIs, including share persistence when a direct CKShare update needs it.
-9. Distinguish revoke participant, leave share, stop sharing and delete Herd in service logic, confirmations and recovery. Use destructive purge APIs only when that action's full consequences are intended.
-10. Verify that sharing does not create cross-store relationships or leave descendants outside the share unexpectedly.
+1. Add native Herd selection, invitation and sharing management in the existing iOS navigation patterns.
+2. Enable only the required CloudKit and remote-notification capabilities, inspect the actual development CloudKit record schema, and deploy only intentionally to production.
+3. Test existing installations and clean installs, account changes, revoked participants, recovery mode, offline operation, app termination and real cross-account synchronization.
+4. Run and review all applicable automated tests and the manual cases in Section 5; do not claim completion without physical-device and production-CloudKit verification.
 
-**Accept when:** Two physical devices using different Apple Accounts can share a populated Herd, exchange new and edited records, revoke/leave correctly, and relaunch or reaccept without duplication.
-
-**Review focus:** Share root, accidental public access, incomplete graph membership, scene cold launch, duplicate share creation, unintentional data deletion, owner vs participant capabilities.
-
-### Stage 6: Read/write permissions in all code paths
-
-**Purpose:** Permission enforcement exists at persistence/transaction boundaries and in the UI.
-
-1. Expose a persistence-neutral capability/authorization interface for the selected Herd. Resolve owner/participant role and record update/delete capabilities with appropriate CloudKit-backed APIs; account for temporary unknown/unavailable state.
-2. Enforce authorization at every mutation boundary, including direct repository saves and bulk actions, not only toolbar visibility.
-3. Disable/limit inline editing, context menus, swipe actions, add/edit/delete dialogs, animal move/archive/restore, field checks, health entries, working session completion, tag-color changes and other writes for read-only participants.
-4. Revalidate permission before commit. Avoid trusting an editor-open-time permission when revocation may have occurred.
-5. Maintain local recovery-mode write restrictions independently of Herd sharing authorization.
-6. Handle offline participants and permissions that cannot currently be refreshed honestly. CloudKit remains server-authoritative; never claim guaranteed immediate enforcement of a just-revoked remote permission while a device is offline.
-7. Preserve unsaved user input where feasible when access changes; offer specific non-destructive feedback.
-
-**Accept when:** Owner and read/write participant can perform allowed operations; viewer cannot write via ANY primary or alternate app path; revoked users cannot successfully upload new authorized changes after server revocation; UI states are accurate.
-
-**Review focus:** Hidden mutations, stale authorization, misleading offline guarantees, security/privacy leakage, save-vs-cloud-permission errors.
-
-### Stage 7: Remote integrity and conflict recovery
-
-**Purpose:** Distributed edits preserve domain invariants and expose irreconcilable outcomes.
-
-1. Inventory the existing local invariants and optimistic revisions for animal aggregates, tags, status references, pasture membership, pasture-group ordering, template naming, field-check sessions and working-session transitions.
-2. Keep local transaction boundaries and revision checks; propagate observed remote revisions into stale-editor handling.
-3. Add integrity inspection after relevant remote imports, allowing for temporarily incomplete relationship graphs. A missing parent during import is not automatically evidence of irreparable corruption.
-4. Detect duplicate logical identities/tag assignments, conflicting primary-tag state, invalid foreign-Herd or cross-store relationships, invalid working/field-check transitions and delete-vs-edit races.
-5. Preserve conflicting records when feasible. Do not invent replacement UUIDs, select arbitrary record winners, or silently re-create a remotely deleted business entity.
-6. Implement only the necessary domain-specific reconciliation or user-resolvable conflict presentation. Avoid repeated automatic repair writes that create endless sync loops.
-7. Treat app-local actor gates and Core Data transactions as local-only guarantees. For highly concurrent shared workflows, explicitly define whether eventual consistency with conflict recovery is sufficient; do not claim CloudKit provides globally atomic offline operations.
-8. Review hard-delete behavior and data-retention impact carefully in a multi-user environment.
-
-**Accept when:** Independent offline edits converge; same-record edits and destructive races have documented/recoverable behavior; critical tag, Herd and session invariants are not silently violated.
-
-**Review focus:** Semantic data loss, hidden last-writer effects, infinite repair loops, missing relationship dereferences, false guarantees of distributed atomicity.
-
-### Stage 8: UX, account lifecycle, production deployment and real-device verification
-
-**Purpose:** Usable and supportable sharing, safe account transitions, and a verified production CloudKit configuration.
-
-1. Add a native Herd picker, Create/Join affordances, Share/Manage Sharing controls, participant detail/leave controls, permission indications and navigation consistent with current iOS 26 design. Keep the feature accessible from existing Settings and Herd entry points.
-2. Surface meaningful iCloud availability/activity/error information. Distinguish local persistence, upload activity, pending import and permission errors. Do not label a Herd completely synchronized just because one device exported a transaction.
-3. Handle iCloud sign-out, account switch, unavailable account, share revocation, restored device and reinstall without exposing previous account content or uploading it under a different account. Inspect Apple's actual persistent-store/account behavior and choose an explicit safe protection strategy rather than assuming a store is automatically cleared.
-4. Preserve current read-only recovery and useful diagnostic export without unintentionally exporting private shared records or silently replacing the working database.
-5. Initialize and inspect the CloudKit DEVELOPMENT schema only with intentional developer workflows. Review schema implications before deployment; never perform schema initialization on normal production launch.
-6. Deploy verified schema to CloudKit PRODUCTION and validate TestFlight against production behavior. Plan schema evolution carefully because existing production fields/types cannot be casually removed.
-7. Execute the detailed Section 5 manual test cases across two different Apple Accounts and, if available, a second device on the owner's Account. Exercise offline work, cold-launch invitation acceptance, read-only access, revocation, multiple Herds, concurrent edits, pending import, local migration, account change, deletion, relaunch and interrupted sync.
-8. Inspect production logs/status for persistent errors, stalled export/import, unnecessary refresh and crashes. Describe unverified cases as limitations rather than declaring coverage.
-9. Perform the final security and user-data audit before production release.
-
-**Accept when:** The feature works across real distinct Apple Accounts, upgraded data is preserved, data does not cross account/Herd boundaries, production schema is deployed safely, and observed behavior matches requirements. Compilation alone is insufficient.
+**Accept when:** All important Herd data remains available and consistent after initial sync, real users can collaborate safely, and both local and cloud recovery are non-destructive.
 
 ## 5. Executable manual test-case plan
 
-This is a behavior and release verification plan for ChatGPT to follow during implementation. It is **not** authorization to create or modify automated tests, test targets, CI, separate tracking files or other infrastructure. Codex reviews code and evidence, not implementation. Never mark a case passed without actually executing it.
+This is a behavior and release verification plan for ChatGPT to follow during implementation. Write focused automated tests as required by AGENTS.md; do not create unrelated testing infrastructure, CI modifications or separate tracking files. Codex reviews code and evidence, not implementation. Never mark a case passed without actually executing it.
 
 ### 5.1 Test environment, fixtures, and evidence
 
@@ -219,19 +157,19 @@ This is a behavior and release verification plan for ChatGPT to follow during im
 - **Cloud timing:** Wait for actual propagation/import and compare data, not an invented immediate timeout. CloudKit event success on one device alone does not prove another device received records. A prolonged stall needs a diagnosis, not an unsupported "synced" assertion.
 - **Failure injection:** Use safe development fixtures, network toggles, app termination, supported Xcode/CloudKit tooling and restorable stores. If an import-order, quota or server failure cannot be induced safely, mark the relevant subcase not executed; do not claim simulation occurred.
 
-### 5.2 Migration, schema and store isolation (Stages 1–2)
+### 5.2 Existing-data preservation, CloudKit record mapping and account isolation (Stages 1–2)
 
-**M01 — Existing populated store migration.** Setup: Install the prior local-only build with the representative data fixture. Steps: record counts/UUIDs and relationship/history samples; preserve a restorable original; install the new build; inspect all major features. **Pass:** No missing/duplicated data or changed application IDs, and previous CRUD behavior remains correct.
+**M01 — Existing populated store adoption without model migration.** Setup: Install the prior local-only build with the representative data fixture. Steps: record counts/UUIDs and relationship/history samples; preserve a restorable original; install the new build; inspect all major features. **Pass:** No missing/duplicated data or changed application IDs, and previous CRUD behavior remains correct.
 
 **M02 — Empty upgrade and clean installation.** Setup: One originally empty local store and one fresh device. Steps: upgrade/launch while iCloud is present and absent. **Pass:** No accidental duplicate starter Herd, synthetic recovery upload, corrupt empty store or false "cloud empty" conclusion before import finishes.
 
-**M03 — Migration failure/retry.** Setup: Safe backed-up fixture and a controllable store-load/migration failure. Steps: interrupt or fail migration using supported development means and relaunch. **Pass:** Original data remains recoverable; no silent reset, duplicate roots, partial destructive conversion or forced upload. If not inducible, state limitation.
+**M03 — Initial upload/interrupted sync retry.** Setup: Safe backed-up fixture, intentional CloudKit export failure and app termination. Steps: attempt an initial sync, interrupt it, then relaunch and retry. **Pass:** Original SQLite store is preserved; record IDs are stable; no missing records, duplicated Herds, or accidental account reassignment. If not inducible, state limitation.
 
-**M04 — Model and development schema compatibility.** Setup: Versioned model in development environment. Steps: run current SDK CloudKit model/schema validation, inspect attributes, relationships, inverses and constraints; intentionally initialize the development schema only. **Pass:** Compatible model, guarded optional imported values, unchanged production schema.
+**M04 — Unchanged model and CloudKit record schema.** Setup: Original local Core Data model and development CloudKit environment. Steps: confirm no entity/model version change; inspect the explicit CloudKit record mapping, zone/share configuration and development schema. **Pass:** Original model and SQLite remain unchanged; all 18 modeled entities can be represented and safely reconciled; production CloudKit schema is unchanged.
 
-**M05 — Owned/shared routing and isolation.** Setup: A owns private Herd P; B has shared Herd S. Steps: read, create, edit and delete representative records in each selected Herd; inspect their Core Data store memberships. **Pass:** Reads/writes use their true owning store and share; no cross-store relationships, foreign-Herd mutations or accidental duplication.
+**M05 — Owned/shared CloudKit zone isolation.** Setup: A owns Herd P; B joins Herd S. Steps: read, create, edit and delete representative records in each selected Herd; inspect account/zone metadata and CloudKit record membership. **Pass:** The original local Core Data model is unchanged, data is scoped to the correct Herd and CloudKit zone/share, and no foreign-Herd changes or duplicate uploads occur.
 
-**M06 — Per-store failure and recovery.** Setup: Separate private/shared stores. Steps: induce a supported shared-store load/permission problem while observing the private store and recovery mode. **Pass:** Specific error is surfaced, unaffected data remains safe, and fallback/in-memory data is never uploaded as genuine Herd data.
+**M06 — Per-account/zone sync failure and recovery.** Setup: Local Core Data store, owner zone and shared zone. Steps: induce a shared-zone permission/network failure; observe unaffected local data, account isolation and recovery mode. **Pass:** A specific error is surfaced; unrelated Herds remain available; fallback/in-memory data is never uploaded.
 
 ### 5.3 Herd selection and synchronization (Stages 2–4)
 
@@ -253,7 +191,7 @@ This is a behavior and release verification plan for ChatGPT to follow during im
 
 ### 5.4 Share creation, invitations and access (Stages 5–6)
 
-**S01 — Share a populated Herd across accounts.** Setup: A owns a full Herd; B is a different Apple Account. Steps: create invitation, accept on B, inspect every modeled descendant type. **Pass:** Only the intended Herd and its complete child graph arrive in B's shared store with stable UUIDs.
+**S01 — Share a populated Herd across accounts.** Setup: A owns a full Herd; B is a different Apple Account. Steps: create invitation, accept on B, inspect every modeled descendant type. **Pass:** Only the intended Herd and its complete child graph arrive in B's shared CloudKit zone and local Herd with stable UUIDs.
 
 **S02 — Warm invitation acceptance.** Setup: yaHerd open on B. Steps: accept an invitation from iOS. **Pass:** Scene callback processes once, no duplicate Herd and correct pending-import/available states.
 
@@ -287,7 +225,7 @@ This is a behavior and release verification plan for ChatGPT to follow during im
 
 **C06 — Delete versus edit/open navigation.** Setup: A has animal editor open. Steps: B deletes that animal while A has unsaved edits; synchronize. **Pass:** No silent resurrection, crash, invalid route or unintended data loss; editor presents appropriate conflict/removal outcome.
 
-**C07 — Cross-Herd ownership safety.** Setup: At least two accessible Herds, potentially similar record identifiers in development fixture. Steps: attempt parent/pasture/child relationship or mutation against wrong Herd/store. **Pass:** Correct lookup and transaction rejection, no data leakage or foreign-store links.
+**C07 — Cross-Herd ownership safety.** Setup: At least two accessible Herds, potentially similar record identifiers in development fixture. Steps: attempt parent/pasture/child relationship or mutation against wrong Herd/CloudKit zone. **Pass:** Correct lookup and transaction rejection, no data leakage or foreign-Herd/zone links.
 
 **C08 — Reconciliation convergence.** Setup: Development fixture with remotely induced domain conflict. Steps: reconnect devices and observe history and repair activity. **Pass:** Bounded repair/user-actionable state, not indefinite automatic alternating writes.
 
@@ -307,8 +245,8 @@ This is a behavior and release verification plan for ChatGPT to follow during im
 
 ### 5.7 Completion gates
 
-- **Stage 1:** M01–M04. Migration preservation and actual model validation are mandatory.
-- **Stage 2:** M05–M06 and related migration/fresh creation coverage. Wrong-store writes block progression.
+- **Stage 1:** M01–M04. Preservation of the unchanged local model/data and actual CloudKit record-mapping feasibility are mandatory.
+- **Stage 2:** M05–M06 and initial upload/fresh-creation coverage. Wrong-account or wrong-zone writes block progression.
 - **Stage 3:** H01–H03 and C07. Duplicate roots and cross-Herd data exposure block progression.
 - **Stage 4:** H04–H08. Real remote import/refresh behavior must be demonstrated when physical devices are available; simulated events cannot substitute.
 - **Stage 5:** S01–S06, S09–S10 and R03. Different-Apple-Account sharing and complete graph inclusion are mandatory for acceptance.
@@ -341,22 +279,22 @@ ChatGPT, not Codex, implements production changes, performs available verificati
 - Treat this document as approved intended product behavior, not a claim about current implementation or an instruction to preserve incorrect assumptions.
 - Perform only the user-requested stage and required dependent work. Preserve existing names/contracts whenever feasible; avoid duplicate abstractions or custom synchronization engines.
 - Address both normal and failure paths, including an absent account, sharing permission, imported graph incompleteness, wrong-store routing, stale navigation, user-data preservation and destructive operations where relevant.
-- Execute applicable Section 5 manual cases when the environment permits and clearly report unexecuted cases. Do not invent passing verification results, restore discarded code, author process artifacts or change automated tests/CI.
+- Execute applicable Section 5 manual cases when the environment permits and clearly report unexecuted cases. Add focused tests for new behavior as required by AGENTS.md; do not invent passing results, restore discarded code or author unrelated process artifacts.
 - Create a focused PR when requested, inspect comments, fix actual defects and report limitations. Do not merge contrary to user direction.
 
 Example request to ChatGPT (not Codex):
 
-"Implement Stage 2 in Info/CLOUDKIT_COLLABORATION.md. Follow AGENTS.md. Inspect current code first. Update production persistence and all related write paths, verify available builds and execution paths, review the final diff against Stage 2 acceptance criteria, and open a PR. Do not add documentation, tests, CI, or unrelated changes."
+"Implement the approved next CloudKit stage in Info/CLOUDKIT_COLLABORATION.md. Follow AGENTS.md. Inspect production source and tests first; add focused regression/feature coverage, make the smallest justified production changes, verify with CI and direct path inspection, and open a reviewable PR. Do not restore unrelated infrastructure."
 
 ## 8. Codex code-review agent instructions (review only)
 
 Codex reviews code only. Do not implement a feature stage, modify production code, open an implementation PR, create automated tests or modify CI. Report findings to ChatGPT for production corrections. Review the actual PR diff and production execution paths against the requested stage and all affected feature-wide safety invariants. Do not review only this document, invent missing code based on an old plan, or assume tests have been run.
 
 Check specifically:
-- Migration and backup/recovery preserve application data and stable UUIDs.
-- Every relevant read and write correctly resolves Herd and owning store, including background and direct synchronous saves.
+- Existing data and backup/recovery preserve application data and stable UUIDs.
+- Every relevant read and write preserves Herd scope, account association and CloudKit zone identity, including all direct synchronous saves.
 - The share root and all intended child records are included; invitations and participants follow actual native CloudKit lifecycle and permissions.
-- There are no cross-Herd/cross-store links, duplicate roots or silently omitted child records.
+- There are no cross-Herd/cross-zone links, duplicate roots or silently omitted child records.
 - Read-only restrictions are enforced at commit paths; revocation and account switches do not expose/upload unauthorized data.
 - Remote changes update the mutation stream, feature lists, details, navigation and active workflows; history tokens and retries are safe.
 - Partial import does not crash strict projections or masquerade as permanent data corruption.
@@ -371,8 +309,8 @@ Conclude with implementation-stage satisfaction, concrete verified defects, buil
 ## 9. Release gates and reference resources
 
 Do NOT claim production completion until:
-- Local migration is safe and existing UUIDs/historical relationships are retained.
-- Private/shared store placement and all production read/write paths have been audited.
+- Existing SQLite/Core Data data remains unchanged when sync is enabled; stable UUIDs and historical relationships are retained.
+- Private/shared CloudKit zone routing, owner/account association and all production local write paths have been audited.
 - Multi-Herd selection, invitations, owner/editor/viewer permissions and revocation work.
 - Remote changes are visible without relaunch and navigation remains correctly scoped.
 - Offline conflicts, partial imports and destructive workflows have explainable/recoverable outcomes.
@@ -381,10 +319,10 @@ Do NOT claim production completion until:
 - The final implementation has been reviewed against actual code, not the expected diagram or successful build alone.
 
 Apple API references to check against the SDK in use:
-- https://developer.apple.com/documentation/coredata/mirroring-a-core-data-store-with-cloudkit
+- https://developer.apple.com/documentation/cloudkit/cksyncengine-5sie5
 - https://developer.apple.com/documentation/coredata/creating-a-core-data-model-for-cloudkit
 - https://developer.apple.com/documentation/coredata/sharing-core-data-objects-between-icloud-users
-- https://developer.apple.com/documentation/coredata/nspersistentcloudkitcontainer
+- https://developer.apple.com/documentation/cloudkit/shared-records
 - https://developer.apple.com/documentation/cloudkit/ckshare
 - https://developer.apple.com/documentation/coredata/consuming-relevant-store-changes
 
