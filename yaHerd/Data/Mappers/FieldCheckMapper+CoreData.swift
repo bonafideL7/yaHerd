@@ -5,6 +5,7 @@ enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
     case invalidFindingSeverity(findingID: UUID, value: String)
     case invalidFindingStatus(findingID: UUID, value: String)
     case missingFindingSession(findingID: UUID)
+    case missingAnimalCheckSession(checkID: UUID)
     case invalidAnimalSex(checkID: UUID, value: String)
     case invalidAnimalType(checkID: UUID, value: String)
 
@@ -18,6 +19,8 @@ enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
             return "The Field Check finding contains an invalid persisted status."
         case .missingFindingSession:
             return "The Field Check finding is missing its session relationship."
+        case .missingAnimalCheckSession:
+            return "The Field Check roster check is missing its session relationship."
         case .invalidAnimalSex:
             return "The Field Check roster entry contains an invalid persisted sex."
         case .invalidAnimalType:
@@ -31,6 +34,9 @@ enum FieldCheckMapper {
         from check: CDFieldCheckAnimalCheck,
         needsAttention: Bool
     ) throws -> FieldCheckAnimalCheckSnapshot {
+        guard check.session != nil else {
+            throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: check.id)
+        }
         guard let sex = Sex(rawValue: check.animalSexRawValueSnapshot) else {
             throw CoreDataFieldCheckMappingError.invalidAnimalSex(
                 checkID: check.id,
