@@ -339,6 +339,55 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         )
     }
 
+    func testOrphanedFieldCheckRosterFailsHomeAndDirectReadsWithoutDeletingData() async throws {
+        let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+        let fixture = try environment.seedOffWarningChildIdentityFixture(kind: .animalCheck)
+        let direct = CoreDataFieldCheckRepository(
+            selection: environment.selection,
+            assembly: environment.assembly
+        )
+        let home = environment.fixture.makeHomeFieldCheckQueryReader()
+
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let check = try XCTUnwrap(
+                CoreDataLookup().herdOwned(
+                    CDFieldCheckAnimalCheck.self,
+                    id: fixture.completedChildID,
+                    herdID: environment.herdID,
+                    in: context
+                )
+            )
+            check.session = nil
+            try context.save()
+        }
+
+        let expected = CoreDataFieldCheckMappingError.missingAnimalCheckSession(
+            checkID: fixture.completedChildID
+        )
+        XCTAssertThrowsError(try direct.fetchSessions()) { error in
+            XCTAssertEqual(error as? CoreDataFieldCheckMappingError, expected)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await home.fetchHomeFieldCheckRecords()
+        ) { error in
+            XCTAssertEqual(error as? CoreDataFieldCheckMappingError, expected)
+        }
+
+        let readContext = environment.assembly.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            let check = try XCTUnwrap(
+                CoreDataLookup().herdOwned(
+                    CDFieldCheckAnimalCheck.self,
+                    id: fixture.completedChildID,
+                    herdID: environment.herdID,
+                    in: readContext
+                )
+            )
+            XCTAssertNil(check.session, "A read failure must not repair or delete remote data.")
+        }
+    }
+
     func testHomeFieldCheckRejectsCrossHerdHistoricalChildSessionLinks() async throws {
         // Both relationship directions are material. Finding ownership from
         // selected child to foreign session is an existing Home safeguard;
