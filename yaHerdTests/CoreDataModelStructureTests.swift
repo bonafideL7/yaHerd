@@ -150,6 +150,26 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testMissingFieldCheckRosterSessionFailsWithoutDereferencingIt() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+
+        try context.performAndWait {
+            let check = CDFieldCheckAnimalCheck(context: context)
+            check.id = UUID()
+
+            XCTAssertThrowsError(
+                try FieldCheckMapper.makeAnimalCheckSnapshot(from: check, needsAttention: false)
+            ) { error in
+                XCTAssertEqual(
+                    error as? CoreDataFieldCheckMappingError,
+                    .missingAnimalCheckSession(checkID: check.id)
+                )
+            }
+            context.rollback()
+        }
+    }
+
     func testOldRequiredFindingRelationshipStoreLoadsWithoutCustomMigration() async throws {
         let currentModel = try loadModel()
         let previousModel = try XCTUnwrap(currentModel.copy() as? NSManagedObjectModel)
@@ -368,6 +388,7 @@ final class CoreDataModelStructureTests: XCTestCase {
         XCTAssertEqual(try relationship(named: "animalChecks", in: session).deleteRule, .cascadeDeleteRule)
         XCTAssertEqual(try relationship(named: "findings", in: session).deleteRule, .cascadeDeleteRule)
         XCTAssertTrue(try relationship(named: "session", in: finding).isOptional)
+        XCTAssertTrue(try relationship(named: "session", in: check).isOptional)
     }
 
     func testWorkingSnapshotsAndOwnershipMatchBlueprint() throws {
