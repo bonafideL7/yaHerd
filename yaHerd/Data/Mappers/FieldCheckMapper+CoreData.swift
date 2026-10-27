@@ -4,6 +4,7 @@ enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
     case invalidFindingType(findingID: UUID, value: String)
     case invalidFindingSeverity(findingID: UUID, value: String)
     case invalidFindingStatus(findingID: UUID, value: String)
+    case missingFindingSession(findingID: UUID)
     case invalidAnimalSex(checkID: UUID, value: String)
     case invalidAnimalType(checkID: UUID, value: String)
 
@@ -15,6 +16,8 @@ enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
             return "The Field Check finding contains an invalid persisted severity."
         case .invalidFindingStatus:
             return "The Field Check finding contains an invalid persisted status."
+        case .missingFindingSession:
+            return "The Field Check finding is missing its session relationship."
         case .invalidAnimalSex:
             return "The Field Check roster entry contains an invalid persisted sex."
         case .invalidAnimalType:
@@ -65,6 +68,9 @@ enum FieldCheckMapper {
     static func makeFindingSnapshot(
         from finding: CDFieldCheckFinding
     ) throws -> FieldCheckFindingSnapshot {
+        guard let session = finding.session else {
+            throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: finding.id)
+        }
         guard let type = FieldCheckFindingType(rawValue: finding.typeRawValue) else {
             throw CoreDataFieldCheckMappingError.invalidFindingType(
                 findingID: finding.id,
@@ -96,7 +102,7 @@ enum FieldCheckMapper {
                 ?? coreDataTrimmed(finding.animalNameSnapshot),
             animalDisplayTagColorID: finding.animalDisplayTagColorIDSnapshot,
             pastureName: coreDataTrimmed(finding.pastureNameSnapshot),
-            sessionID: finding.session.id
+            sessionID: session.id
         )
     }
 
