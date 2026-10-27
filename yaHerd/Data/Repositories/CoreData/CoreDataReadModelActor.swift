@@ -2381,6 +2381,9 @@ actor CoreDataReadModelActor:
         expectedSession: CDFieldCheckSession? = nil,
         herdID: UUID
     ) throws {
+        guard let session = finding.session else {
+            throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: finding.id)
+        }
         guard finding.herd.id == herdID else {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDFieldCheckFinding.coreDataEntityName,
@@ -2389,21 +2392,21 @@ actor CoreDataReadModelActor:
                 actualHerdID: finding.herd.id
             )
         }
-        guard finding.session.herd.id == herdID else {
+        guard session.herd.id == herdID else {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDFieldCheckSession.coreDataEntityName,
-                id: finding.session.id,
+                id: session.id,
                 expectedHerdID: herdID,
-                actualHerdID: finding.session.herd.id
+                actualHerdID: session.herd.id
             )
         }
         if let expectedSession,
-           finding.session.objectID != expectedSession.objectID {
+           session.objectID != expectedSession.objectID {
             throw CoreDataReadModelError.invalidSessionRelationship(
                 entity: CDFieldCheckFinding.coreDataEntityName,
                 id: finding.id,
                 expectedSessionID: expectedSession.id,
-                actualSessionID: finding.session.id
+                actualSessionID: session.id
             )
         }
     }
