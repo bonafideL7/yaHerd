@@ -367,7 +367,10 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 lookup: lookup,
                 in: context
             )
-            try Self.ensureSessionIsEditable(check.session)
+            guard let session = check.session else {
+                throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: check.id)
+            }
+            try Self.ensureSessionIsEditable(session)
 
             if isCounted {
                 check.countedAt = .now
@@ -375,7 +378,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             } else {
                 check.countedAt = nil
             }
-            try Self.normalizeQuickAnimalTypeCounts(for: check.session)
+            try Self.normalizeQuickAnimalTypeCounts(for: session)
         }
     }
 
@@ -407,7 +410,10 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 lookup: lookup,
                 in: context
             )
-            try Self.ensureSessionIsEditable(check.session)
+            guard let session = check.session else {
+                throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: check.id)
+            }
+            try Self.ensureSessionIsEditable(session)
 
             if isMissing {
                 check.missingConfirmedAt = .now
@@ -415,7 +421,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             } else {
                 check.missingConfirmedAt = nil
             }
-            try Self.normalizeQuickAnimalTypeCounts(for: check.session)
+            try Self.normalizeQuickAnimalTypeCounts(for: session)
         }
     }
 
@@ -968,11 +974,8 @@ private extension CoreDataFieldCheckRepository {
         // would miss it. Check both directions before building Domain snapshots.
         for session in sessions {
             for check in (session.animalChecks?.allObjects as? [CDFieldCheckAnimalCheck]) ?? [] {
-                try validateReadChildRelationship(
-                    entity: CDFieldCheckAnimalCheck.coreDataEntityName,
-                    id: check.id,
-                    childHerd: check.herd,
-                    session: check.session,
+                try validateAnimalCheckReadRelationship(
+                    check,
                     selectedHerd: herd,
                     expectedSession: session
                 )
@@ -989,11 +992,8 @@ private extension CoreDataFieldCheckRepository {
         // The reverse corruption (selected-Herd child attached to a foreign
         // session) will not appear in a selected session's inverse collection.
         for check in checks {
-            try validateReadChildRelationship(
-                entity: CDFieldCheckAnimalCheck.coreDataEntityName,
-                id: check.id,
-                childHerd: check.herd,
-                session: check.session,
+            try validateAnimalCheckReadRelationship(
+                check,
                 selectedHerd: herd
             )
         }
@@ -1003,6 +1003,24 @@ private extension CoreDataFieldCheckRepository {
                 selectedHerd: herd
             )
         }
+    }
+
+    nonisolated static func validateAnimalCheckReadRelationship(
+        _ check: CDFieldCheckAnimalCheck,
+        selectedHerd: CDHerd,
+        expectedSession: CDFieldCheckSession? = nil
+    ) throws {
+        guard let session = check.session else {
+            throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: check.id)
+        }
+        try validateReadChildRelationship(
+            entity: CDFieldCheckAnimalCheck.coreDataEntityName,
+            id: check.id,
+            childHerd: check.herd,
+            session: session,
+            selectedHerd: selectedHerd,
+            expectedSession: expectedSession
+        )
     }
 
     nonisolated static func validateFindingReadRelationship(
@@ -1070,7 +1088,7 @@ private extension CoreDataFieldCheckRepository {
             id: id,
             herdID: herdID,
             in: context
-        ), check.session.id == sessionID else {
+        ), check.session?.id == sessionID else {
             throw FieldCheckRepositoryError.animalCheckNotFound
         }
         return check
