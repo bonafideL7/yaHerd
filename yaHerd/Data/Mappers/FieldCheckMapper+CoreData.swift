@@ -65,11 +65,6 @@ enum FieldCheckMapper {
     static func makeFindingSnapshot(
         from finding: CDFieldCheckFinding
     ) throws -> FieldCheckFindingSnapshot {
-        let session = try CoreDataRequiredRelationship.resolve(
-            "session",
-            from: finding,
-            as: CDFieldCheckSession.self
-        )
         guard let type = FieldCheckFindingType(rawValue: finding.typeRawValue) else {
             throw CoreDataFieldCheckMappingError.invalidFindingType(
                 findingID: finding.id,
@@ -101,7 +96,7 @@ enum FieldCheckMapper {
                 ?? coreDataTrimmed(finding.animalNameSnapshot),
             animalDisplayTagColorID: finding.animalDisplayTagColorIDSnapshot,
             pastureName: coreDataTrimmed(finding.pastureNameSnapshot),
-            sessionID: session.id
+            sessionID: finding.session.id
         )
     }
 
