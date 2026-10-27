@@ -15,6 +15,6 @@ final class CDFieldCheckFinding: NSManagedObject {
     @NSManaged var animalNameSnapshot: String?
     @NSManaged var pastureNameSnapshot: String
     @NSManaged var herd: CDHerd
-    @NSManaged var session: CDFieldCheckSession
+    @NSManaged var session: CDFieldCheckSession?
     @NSManaged var animal: CDAnimal?
 }
