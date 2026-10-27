@@ -50,6 +50,17 @@ final class CoreDataModelStructureTests: XCTestCase {
     /// sufficient to keep pre-update Herd and Pasture records intact.
     func testCloudKitNullabilityLightweightMigrationPreservesExistingSQLiteData() throws {
         let originalModel = try loadModel()
+
+        // Model a source schema that is NOT in the application bundle. This
+        // exercises Core Data's source-model discovery from existing SQLite,
+        // rather than accidentally relying on the currently compiled .mom.
+        let originalHerd = try XCTUnwrap(originalModel.entitiesByName["Herd"])
+        let probe = NSAttributeDescription()
+        probe.name = "sourceModelCacheProbe"
+        probe.attributeType = .stringAttributeType
+        probe.isOptional = true
+        originalHerd.properties.append(probe)
+
         let cloudKitModel = try XCTUnwrap(originalModel.copy() as? NSManagedObjectModel)
         for entity in cloudKitModel.entities {
             entity.attributesByName.values.forEach { $0.isOptional = true }
