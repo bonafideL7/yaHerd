@@ -990,7 +990,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             let finding = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDFieldCheckFinding.self, id: findingID, herdID: herdID, in: freshContext
             ))
-            XCTAssertEqual(finding.session.id, fieldSessionID)
+            XCTAssertEqual(try XCTUnwrap(finding.session).id, fieldSessionID)
             XCTAssertNil(finding.animal)
             XCTAssertEqual(finding.animalIDSnapshot, removedAnimalID)
             XCTAssertEqual(finding.animalDisplayTagNumberSnapshot, "17")
