@@ -135,12 +135,7 @@ enum WorkingMapper {
             .map(makeTreatmentRecordSnapshot)
 
         let pregnancyCheck = try managedPregnancyChecks(session)
-            .filter { check in
-                let linkedAnimal = try CoreDataRequiredRelationship.resolve(
-                    "animal", from: check, as: CDAnimal.self
-                )
-                return linkedAnimal.id == animal.id
-            }
+            .filter { $0.animal.id == animal.id }
             .sorted {
                 if $0.date != $1.date {
                     return $0.date > $1.date
@@ -150,11 +145,8 @@ enum WorkingMapper {
             .first
             .map(makePregnancyCheckSnapshot)
 
-        let generatedHealth = try managedHealthRecords(session).filter { record in
-            let linkedAnimal = try CoreDataRequiredRelationship.resolve(
-                "animal", from: record, as: CDAnimal.self
-            )
-            return linkedAnimal.id == animal.id
+        let generatedHealth = managedHealthRecords(session).filter {
+            $0.animal.id == animal.id
         }
         let observationNotes = generatedHealth.first {
             $0.treatment == WorkingGeneratedHealthRecord.observation.treatmentName
