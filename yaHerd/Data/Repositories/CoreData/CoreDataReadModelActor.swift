@@ -2244,9 +2244,11 @@ actor CoreDataReadModelActor:
         )
         corruptCheckRequest.predicate = NSPredicate(
             format: """
+            (herd == %@ AND session == nil) OR
             (herd == %@ AND session.herd != %@) OR
             (session.herd == %@ AND herd != %@)
             """,
+            herd,
             herd,
             herd,
             herd,
@@ -2264,11 +2266,14 @@ actor CoreDataReadModelActor:
                     actualHerdID: check.herd.id
                 )
             }
+            guard let session = check.session else {
+                throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: check.id)
+            }
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDFieldCheckSession.coreDataEntityName,
-                id: check.session.id,
+                id: session.id,
                 expectedHerdID: herdID,
-                actualHerdID: check.session.herd.id
+                actualHerdID: session.herd.id
             )
         }
 
@@ -2334,12 +2339,15 @@ actor CoreDataReadModelActor:
                         actualHerdID: check.herd.id
                     )
                 }
-                guard check.session.objectID == session.objectID else {
+                guard let linkedSession = check.session else {
+                    throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: check.id)
+                }
+                guard linkedSession.objectID == session.objectID else {
                     throw CoreDataReadModelError.invalidSessionRelationship(
                         entity: CDFieldCheckAnimalCheck.coreDataEntityName,
                         id: check.id,
                         expectedSessionID: session.id,
-                        actualSessionID: check.session.id
+                        actualSessionID: linkedSession.id
                     )
                 }
             }
