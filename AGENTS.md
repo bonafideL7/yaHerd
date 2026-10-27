@@ -58,6 +58,17 @@ For any CloudKit, sharing, Herd selection, Core Data model migration, or related
 
 This user-requested specification is an exception to the restriction on creating additional Markdown documents. Related automated tests and CI changes follow the test-driven implementation requirements above; unrelated documentation and tracking frameworks remain out of scope.
 
+## CloudKit feature integration branch and final review
+
+For the ongoing CloudKit synchronization and Herd-sharing feature, `feature/cloudkit-collaboration` is the integration branch. It starts from the current `main` baseline but is **not** the production release branch. This rule applies only to CloudKit feature work; unrelated changes retain their normal branching process.
+
+- Start each new CloudKit stage/workstream branch from the latest `feature/cloudkit-collaboration` and open its PR **into that feature branch**, not `main`. Existing open CloudKit stage PRs must also be retargeted to this branch.
+- Each stage PR remains narrowly scoped, includes its affected production code and focused tests together, and must pass GitHub Actions test execution and substantive Codex review before merging into the integration branch. Do not bypass failing checks to accumulate incomplete work. Fix concrete defects in the stage PR; do not adjust unrelated CI or tests to obtain green checks.
+- Review stage changes against the current integration branch, including all previously merged CloudKit stages and relevant local application paths. Track dependencies via PR base/merges; do not create extra progress trackers or separate process artifacts.
+- Maintain one **draft feature-integration PR from `feature/cloudkit-collaboration` into `main`** so the complete cumulative diff is visible. Keep it draft throughout implementation; do not merge or mark ready until the entire requested feature is complete and all release gates in the CloudKit specification are satisfied.
+- Before the final merge, review the **full cumulative feature diff**, re-run the full test suite against the latest integration head, resolve Codex and human review findings, and perform the specification's real-device, multi-account and CloudKit production-environment verification. Earlier green stage PRs are not evidence that the integrated feature works.
+- Incorporate intervening `main` changes carefully when necessary without rewriting or discarding reviewed stage changes. Preserve the stable release branch and existing local data throughout feature development.
+
 ## Codex code review
 
 Review the **actual diff and affected production execution paths**, not documentation or imagined test coverage. Inspect all materially affected callers and the consequences of the proposed implementation, including relevant:
