@@ -311,7 +311,7 @@ final class CoreDataWorkingRepository:
                 return
             }
 
-            try CoreDataWorkingWorkDataMutation.deleteAll(
+            CoreDataWorkingWorkDataMutation.deleteAll(
                 session: resolved.session,
                 animal: animal,
                 in: context
