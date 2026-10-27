@@ -81,12 +81,7 @@ enum CoreDataAnimalMutation {
     }
 
     static func validateOwnedGraphIdentity(_ animal: CDAnimal) throws {
-        let herd = try CoreDataRequiredRelationship.resolve(
-            "herd",
-            from: animal,
-            as: CDHerd.self
-        )
-        let herdID = herd.id
+        let herdID = animal.herd.id
         try validateUniqueApplicationIDs(
             CoreDataAnimalProjection.managedTags(animal),
             herdID: herdID
