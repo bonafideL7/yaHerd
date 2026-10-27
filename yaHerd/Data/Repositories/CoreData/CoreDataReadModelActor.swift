@@ -2256,28 +2256,19 @@ actor CoreDataReadModelActor:
         corruptCheckRequest.relationshipKeyPathsForPrefetching = ["session", "herd"]
 
         if let check = try context.fetch(corruptCheckRequest).first {
-            let checkHerd = try CoreDataRequiredRelationship.resolve(
-                "herd", from: check, as: CDHerd.self
-            )
-            let session = try CoreDataRequiredRelationship.resolve(
-                "session", from: check, as: CDFieldCheckSession.self
-            )
-            let sessionHerd = try CoreDataRequiredRelationship.resolve(
-                "herd", from: session, as: CDHerd.self
-            )
-            guard checkHerd.objectID == herd.objectID else {
+            guard check.herd.objectID == herd.objectID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDFieldCheckAnimalCheck.coreDataEntityName,
                     id: check.id,
                     expectedHerdID: herdID,
-                    actualHerdID: checkHerd.id
+                    actualHerdID: check.herd.id
                 )
             }
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDFieldCheckSession.coreDataEntityName,
-                id: session.id,
+                id: check.session.id,
                 expectedHerdID: herdID,
-                actualHerdID: sessionHerd.id
+                actualHerdID: check.session.herd.id
             )
         }
 
@@ -2320,15 +2311,12 @@ actor CoreDataReadModelActor:
         )
 
         for session in sessions {
-            let sessionHerd = try CoreDataRequiredRelationship.resolve(
-                "herd", from: session, as: CDHerd.self
-            )
-            guard sessionHerd.id == herdID else {
+            guard session.herd.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDFieldCheckSession.coreDataEntityName,
                     id: session.id,
                     expectedHerdID: herdID,
-                    actualHerdID: sessionHerd.id
+                    actualHerdID: session.herd.id
                 )
             }
 
@@ -2338,26 +2326,20 @@ actor CoreDataReadModelActor:
                 herdID: herdID
             )
             for check in checks {
-                let checkHerd = try CoreDataRequiredRelationship.resolve(
-                    "herd", from: check, as: CDHerd.self
-                )
-                let linkedSession = try CoreDataRequiredRelationship.resolve(
-                    "session", from: check, as: CDFieldCheckSession.self
-                )
-                guard checkHerd.id == herdID else {
+                guard check.herd.id == herdID else {
                     throw CoreDataReadModelError.invalidHerdOwnership(
                         entity: CDFieldCheckAnimalCheck.coreDataEntityName,
                         id: check.id,
                         expectedHerdID: herdID,
-                        actualHerdID: checkHerd.id
+                        actualHerdID: check.herd.id
                     )
                 }
-                guard linkedSession.objectID == session.objectID else {
+                guard check.session.objectID == session.objectID else {
                     throw CoreDataReadModelError.invalidSessionRelationship(
                         entity: CDFieldCheckAnimalCheck.coreDataEntityName,
                         id: check.id,
                         expectedSessionID: session.id,
-                        actualSessionID: linkedSession.id
+                        actualSessionID: check.session.id
                     )
                 }
             }
@@ -2399,38 +2381,29 @@ actor CoreDataReadModelActor:
         expectedSession: CDFieldCheckSession? = nil,
         herdID: UUID
     ) throws {
-        let findingHerd = try CoreDataRequiredRelationship.resolve(
-            "herd", from: finding, as: CDHerd.self
-        )
-        let session = try CoreDataRequiredRelationship.resolve(
-            "session", from: finding, as: CDFieldCheckSession.self
-        )
-        let sessionHerd = try CoreDataRequiredRelationship.resolve(
-            "herd", from: session, as: CDHerd.self
-        )
-        guard findingHerd.id == herdID else {
+        guard finding.herd.id == herdID else {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDFieldCheckFinding.coreDataEntityName,
                 id: finding.id,
                 expectedHerdID: herdID,
-                actualHerdID: findingHerd.id
+                actualHerdID: finding.herd.id
             )
         }
-        guard sessionHerd.id == herdID else {
+        guard finding.session.herd.id == herdID else {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDFieldCheckSession.coreDataEntityName,
-                id: session.id,
+                id: finding.session.id,
                 expectedHerdID: herdID,
-                actualHerdID: sessionHerd.id
+                actualHerdID: finding.session.herd.id
             )
         }
         if let expectedSession,
-           session.objectID != expectedSession.objectID {
+           finding.session.objectID != expectedSession.objectID {
             throw CoreDataReadModelError.invalidSessionRelationship(
                 entity: CDFieldCheckFinding.coreDataEntityName,
                 id: finding.id,
                 expectedSessionID: expectedSession.id,
-                actualSessionID: session.id
+                actualSessionID: finding.session.id
             )
         }
     }
