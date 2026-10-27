@@ -301,7 +301,7 @@ final class CoreDataModelStructureTests: XCTestCase {
 
         XCTAssertEqual(try relationship(named: "animalChecks", in: session).deleteRule, .cascadeDeleteRule)
         XCTAssertEqual(try relationship(named: "findings", in: session).deleteRule, .cascadeDeleteRule)
-        XCTAssertFalse(try relationship(named: "session", in: finding).isOptional)
+        XCTAssertTrue(try relationship(named: "session", in: finding).isOptional)
     }
 
     func testWorkingSnapshotsAndOwnershipMatchBlueprint() throws {
