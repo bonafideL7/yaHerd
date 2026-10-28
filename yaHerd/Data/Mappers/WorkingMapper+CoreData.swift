@@ -268,8 +268,11 @@ enum WorkingMapper {
     static func treatmentTemplateItems(
         _ template: CDWorkingTreatmentTemplate
     ) throws -> [WorkingTreatmentPlanItem] {
+        guard let itemsData = template.itemsData else {
+            throw CoreDataWorkingMappingError.corruptTreatmentTemplate(templateID: template.id)
+        }
         do {
-            return try decodePersistedPlan(template.itemsData)
+            return try decodePersistedPlan(itemsData)
         } catch {
             throw CoreDataWorkingMappingError.corruptTreatmentTemplate(templateID: template.id)
         }
