@@ -112,6 +112,11 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         ) { error in
             XCTAssertEqual(error as? CoreDataWorkingRepositoryError, expectedError)
         }
+        await XCTAssertThrowsErrorAsync(
+            try await repository.deleteSession(id: sessionID)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingRepositoryError, expectedError)
+        }
 
         let readContext = environment.assembly.contextFactory.makeReadContext()
         try readContext.performAndWait {
@@ -124,6 +129,28 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                 )
             )
             XCTAssertNil(item.session)
+            XCTAssertNotNil(
+                try CoreDataLookup().herdOwned(
+                    CDWorkingSession.self,
+                    id: sessionID,
+                    herdID: environment.herdID,
+                    in: readContext
+                ),
+                "Rejected deletion must preserve the original Working session."
+            )
+            let persistedAnimal = try XCTUnwrap(
+                CoreDataLookup().herdOwned(
+                    CDAnimal.self,
+                    id: animal.id,
+                    herdID: environment.herdID,
+                    in: readContext
+                )
+            )
+            XCTAssertEqual(
+                persistedAnimal.activeWorkingSession?.id,
+                sessionID,
+                "Rejected deletion must preserve Working ownership and avoid discarding pasture recovery."
+            )
         }
     }
 
