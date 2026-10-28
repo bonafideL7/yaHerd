@@ -103,17 +103,14 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             try context.save()
         }
 
+        let expectedError = CoreDataWorkingRepositoryError.missingQueueSession(queueItemID: queueID)
+        XCTAssertThrowsError(try repository.fetchSessionDetail(id: sessionID)) { error in
+            XCTAssertEqual(error as? CoreDataWorkingRepositoryError, expectedError)
+        }
         XCTAssertThrowsError(
             try repository.fetchQueueItemEditor(sessionID: sessionID, queueItemID: queueID)
         ) { error in
-            XCTAssertEqual(
-                error as? CoreDataWorkingRepositoryError,
-                .invalidSessionRelationship(
-                    relationship: "WorkingQueueItem.session",
-                    expectedSessionID: sessionID,
-                    actualSessionID: nil
-                )
-            )
+            XCTAssertEqual(error as? CoreDataWorkingRepositoryError, expectedError)
         }
 
         let readContext = environment.assembly.contextFactory.makeReadContext()
