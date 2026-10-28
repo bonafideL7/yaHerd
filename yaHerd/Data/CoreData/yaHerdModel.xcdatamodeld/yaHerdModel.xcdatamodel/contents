@@ -102,7 +102,7 @@
         <attribute name="isArchived" optional="NO" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="archivedAt" optional="YES" attributeType="Date"/>
         <attribute name="archiveReason" optional="YES" attributeType="String"/>
-        <attribute name="distinguishingFeaturesData" optional="NO" attributeType="Binary"/>
+        <attribute name="distinguishingFeaturesData" optional="YES" attributeType="Binary"/>
         <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="animals" inverseEntity="Herd"/>
         <relationship name="statusReference" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="AnimalStatusReference" inverseName="animals" inverseEntity="AnimalStatusReference"/>
         <relationship name="currentPasture" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Pasture" inverseName="animals" inverseEntity="Pasture"/>

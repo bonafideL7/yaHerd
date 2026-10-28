@@ -181,6 +181,34 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testMissingAnimalDistinguishingFeaturesPayloadIsRejected() async throws {
+        let model = try loadModel()
+        let entity = try entity(named: "Animal", in: model)
+        XCTAssertTrue(try attribute(named: "distinguishingFeaturesData", in: entity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let animal = CDAnimal(context: context)
+            animal.id = UUID()
+            animal.distinguishingFeaturesData = nil
+
+            XCTAssertThrowsError(
+                try CoreDataAnimalProjection.distinguishingFeatures(animal)
+            ) { error in
+                XCTAssertEqual(
+                    error as? CoreDataAnimalRepositoryError,
+                    .corruptDistinguishingFeatures(animalID: animal.id)
+                )
+            }
+            XCTAssertNil(animal.distinguishingFeaturesData)
+
+            animal.distinguishingFeaturesData = Data("[]".utf8)
+            XCTAssertTrue(try CoreDataAnimalProjection.distinguishingFeatures(animal).isEmpty)
+            context.rollback()
+        }
+    }
+
     func testMissingFieldCheckFindingSessionFailsWithoutDereferencingIt() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let context = assembly.contextFactory.makeReadContext()

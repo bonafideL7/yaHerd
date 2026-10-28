@@ -9,9 +9,14 @@ enum CoreDataAnimalPayloadCodec {
     }
 
     static func decodeDistinguishingFeatures(
-        _ data: Data,
+        _ data: Data?,
         animalID: UUID
     ) throws -> [DistinguishingFeature] {
+        guard let data else {
+            throw CoreDataAnimalRepositoryError.corruptDistinguishingFeatures(
+                animalID: animalID
+            )
+        }
         do {
             return try JSONDecoder().decode([DistinguishingFeature].self, from: data)
         } catch {
