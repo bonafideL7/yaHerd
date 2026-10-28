@@ -351,7 +351,7 @@
         <attribute name="animalIDSnapshot" optional="NO" attributeType="UUID"/>
         <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="workingTreatmentRecords" inverseEntity="Herd"/>
         <relationship name="animal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="workingTreatmentRecords" inverseEntity="Animal"/>
-        <relationship name="session" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="WorkingSession" inverseName="treatmentRecords" inverseEntity="WorkingSession"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="WorkingSession" inverseName="treatmentRecords" inverseEntity="WorkingSession"/>
             <fetchIndex name="by_id">
             <fetchIndexElement property="id" type="Binary" order="ascending"/>
         </fetchIndex>
