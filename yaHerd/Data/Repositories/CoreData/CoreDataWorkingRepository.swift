@@ -416,6 +416,10 @@ final class CoreDataWorkingRepository:
                 throw WorkingRepositoryError.sessionNotFound
             }
 
+            // An imported queue row can temporarily lack its session link and
+            // therefore disappear from session.queueItems. Reject deletion
+            // before restoring animals or deleting session-owned history.
+            try Self.validateSelectedHerdWorkingRecordIdentity(herd: herd, in: context)
             try Self.validateSessionGraph(
                 session,
                 herdID: herd.id
