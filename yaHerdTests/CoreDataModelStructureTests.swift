@@ -130,6 +130,32 @@ final class CoreDataModelStructureTests: XCTestCase {
         try migratedCoordinator.remove(migratedStore)
     }
 
+    func testCloudKitTemplatePayloadAllowsMissingStorageButRejectsMissingDomainData() async throws {
+        let model = try loadModel()
+        let templateEntity = try entity(named: "WorkingTreatmentTemplate", in: model)
+        XCTAssertTrue(try attribute(named: "itemsData", in: templateEntity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+
+        try context.performAndWait {
+            let template = CDWorkingTreatmentTemplate(context: context)
+            template.id = UUID()
+            template.name = "Incomplete imported template"
+            template.itemsData = nil
+
+            XCTAssertThrowsError(
+                try WorkingMapper.treatmentTemplateItems(template)
+            ) { error in
+                XCTAssertEqual(
+                    error as? CoreDataWorkingMappingError,
+                    .corruptTreatmentTemplate(templateID: template.id)
+                )
+            }
+            context.rollback()
+        }
+    }
+
     func testMissingFieldCheckFindingSessionFailsWithoutDereferencingIt() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let context = assembly.contextFactory.makeReadContext()
