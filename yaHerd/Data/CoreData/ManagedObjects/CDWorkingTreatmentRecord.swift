@@ -14,5 +14,5 @@ final class CDWorkingTreatmentRecord: NSManagedObject {
     @NSManaged var animalIDSnapshot: UUID
     @NSManaged var herd: CDHerd
     @NSManaged var animal: CDAnimal?
-    @NSManaged var session: CDWorkingSession
+    @NSManaged var session: CDWorkingSession?
 }
