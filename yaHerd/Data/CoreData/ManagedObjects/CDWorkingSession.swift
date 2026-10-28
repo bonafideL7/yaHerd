@@ -7,7 +7,7 @@ final class CDWorkingSession: NSManagedObject {
     @NSManaged var date: Date
     @NSManaged var statusRawValue: String
     @NSManaged var treatmentTemplateNameSnapshot: String
-    @NSManaged var plannedTreatmentsData: Data
+    @NSManaged var plannedTreatmentsData: Data?
     @NSManaged var sourcePastureIDSnapshot: UUID
     @NSManaged var sourcePastureNameSnapshot: String
     @NSManaged var herd: CDHerd
