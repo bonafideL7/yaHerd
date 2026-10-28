@@ -279,11 +279,7 @@ enum CoreDataWorkingLifecycleMutation {
             )
         }
         guard let owningSession = item.session else {
-            throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
-                relationship: "WorkingQueueItem.session",
-                expectedSessionID: session.id,
-                actualSessionID: nil
-            )
+            throw CoreDataWorkingRepositoryError.missingQueueSession(queueItemID: item.id)
         }
         guard owningSession.herd.id == herd.id else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
