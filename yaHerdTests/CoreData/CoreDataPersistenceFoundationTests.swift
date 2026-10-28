@@ -833,7 +833,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             let queue = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDWorkingQueueItem.self, id: queueID, herdID: herdID, in: freshContext
             ))
-            XCTAssertEqual(queue.session.id, workingSessionID)
+            XCTAssertEqual(try XCTUnwrap(queue.session).id, workingSessionID)
             XCTAssertNil(queue.collectedFromPasture)
             XCTAssertNil(queue.destinationPasture)
             XCTAssertEqual(queue.collectedFromPastureIDSnapshot, removedPastureID)
@@ -1005,7 +1005,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             let queue = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDWorkingQueueItem.self, id: queueID, herdID: herdID, in: freshContext
             ))
-            XCTAssertEqual(queue.session.id, workingSessionID)
+            XCTAssertEqual(try XCTUnwrap(queue.session).id, workingSessionID)
             XCTAssertNil(queue.animal)
             XCTAssertEqual(queue.animalIDSnapshot, removedAnimalID)
             XCTAssertEqual(queue.animalTagNumberSnapshot, "17")
