@@ -334,7 +334,7 @@
         <relationship name="collectedFromPasture" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Pasture" inverseName="workingCollectedQueueItems" inverseEntity="Pasture"/>
         <relationship name="destinationPasture" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Pasture" inverseName="workingDestinationQueueItems" inverseEntity="Pasture"/>
         <relationship name="animal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="workingQueueItems" inverseEntity="Animal"/>
-        <relationship name="session" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="WorkingSession" inverseName="queueItems" inverseEntity="WorkingSession"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="WorkingSession" inverseName="queueItems" inverseEntity="WorkingSession"/>
             <fetchIndex name="by_id">
             <fetchIndexElement property="id" type="Binary" order="ascending"/>
         </fetchIndex>
