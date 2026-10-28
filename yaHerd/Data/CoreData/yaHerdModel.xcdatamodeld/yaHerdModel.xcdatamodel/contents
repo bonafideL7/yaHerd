@@ -284,7 +284,7 @@
     <entity name="WorkingTreatmentTemplate" representedClassName="CDWorkingTreatmentTemplate" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="name" optional="NO" attributeType="String"/>
-        <attribute name="itemsData" optional="NO" attributeType="Binary"/>
+        <attribute name="itemsData" optional="YES" attributeType="Binary"/>
         <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="workingTreatmentTemplates" inverseEntity="Herd"/>
             <fetchIndex name="by_id">
             <fetchIndexElement property="id" type="Binary" order="ascending"/>
