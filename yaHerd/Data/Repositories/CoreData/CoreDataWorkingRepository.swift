@@ -1219,18 +1219,25 @@ private extension CoreDataWorkingRepository {
         session: CDWorkingSession,
         herdID: UUID
     ) throws {
-        guard queueItem.session.herd.id == herdID else {
-            throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
-                relationship: "WorkingQueueItem.session",
-                expectedHerdID: herdID,
-                actualHerdID: queueItem.session.herd.id
-            )
-        }
-        guard queueItem.session.objectID == session.objectID else {
+        guard let owningSession = queueItem.session else {
             throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
                 relationship: "WorkingQueueItem.session",
                 expectedSessionID: session.id,
-                actualSessionID: queueItem.session.id
+                actualSessionID: nil
+            )
+        }
+        guard owningSession.herd.id == herdID else {
+            throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                relationship: "WorkingQueueItem.session",
+                expectedHerdID: herdID,
+                actualHerdID: owningSession.herd.id
+            )
+        }
+        guard owningSession.objectID == session.objectID else {
+            throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
+                relationship: "WorkingQueueItem.session",
+                expectedSessionID: session.id,
+                actualSessionID: owningSession.id
             )
         }
     }
