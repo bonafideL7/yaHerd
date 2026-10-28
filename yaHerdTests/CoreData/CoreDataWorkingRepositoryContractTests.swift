@@ -154,6 +154,110 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         }
     }
 
+    func testOrphanedWorkingTreatmentCannotDisappearFromSessionOrBeDeleted() async throws {
+        let environment = try await CoreDataWorkingContractEnvironment.make()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Treatment Orphan Pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let animal = try environment.makeAnimalRepository().create(
+            input: Self.animalInput(
+                name: "Treatment Orphan Cow",
+                tagNumber: "ORPHAN-TREATMENT",
+                pastureID: pasture.id
+            )
+        )
+        let working = environment.makeWorkingRepository()
+        let sessionID = try await working.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSinceReferenceDate: 204_000),
+                sourcePastureID: pasture.id,
+                treatmentTemplateName: "Existing Treatment Session",
+                plannedTreatments: [],
+                animalIDs: [animal.id]
+            )
+        )
+        let queueID = try XCTUnwrap(working.fetchSessionDetail(id: sessionID)?.queueItems.first?.id)
+        try await working.complete(
+            queueItemID: queueID,
+            inSessionID: sessionID,
+            treatmentEntries: [
+                WorkingTreatmentEntryInput(
+                    date: Date(timeIntervalSinceReferenceDate: 204_010),
+                    treatmentItemID: UUID(),
+                    itemName: "Recorded Treatment",
+                    given: true,
+                    dose: WorkingTreatmentDose(amount: 1, unit: .milliliter)
+                )
+            ],
+            pregnancyCheck: nil,
+            markCastrated: false,
+            observationNotes: ""
+        )
+        let recordID = try XCTUnwrap(
+            working.fetchQueueItemEditor(
+                sessionID: sessionID,
+                queueItemID: queueID
+            )?.treatmentRecords.first?.id
+        )
+
+        let writeContext = try environment.assembly.contextFactory.makeWriteContext()
+        try writeContext.performAndWait {
+            let record = try XCTUnwrap(
+                CoreDataLookup().herdOwned(
+                    CDWorkingTreatmentRecord.self,
+                    id: recordID,
+                    herdID: environment.herdID,
+                    in: writeContext
+                )
+            )
+            record.session = nil
+            try writeContext.save()
+        }
+
+        let expectedError = CoreDataWorkingRepositoryError.missingTreatmentSession(
+            recordID: recordID
+        )
+        XCTAssertThrowsError(try working.fetchSessionDetail(id: sessionID)) { error in
+            XCTAssertEqual(error as? CoreDataWorkingRepositoryError, expectedError)
+        }
+        XCTAssertThrowsError(
+            try working.fetchQueueItemEditor(sessionID: sessionID, queueItemID: queueID)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingRepositoryError, expectedError)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await working.deleteSession(id: sessionID)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingRepositoryError, expectedError)
+        }
+
+        let readContext = environment.assembly.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            let record = try XCTUnwrap(
+                CoreDataLookup().herdOwned(
+                    CDWorkingTreatmentRecord.self,
+                    id: recordID,
+                    herdID: environment.herdID,
+                    in: readContext
+                )
+            )
+            XCTAssertNil(record.session)
+            XCTAssertNotNil(
+                try CoreDataLookup().herdOwned(
+                    CDWorkingSession.self,
+                    id: sessionID,
+                    herdID: environment.herdID,
+                    in: readContext
+                )
+            )
+        }
+    }
+
     func testWorkingCoreDataReadsAndMutationsStayWithinSelectedHerd() async throws {
         let environment = try await CoreDataWorkingContractEnvironment.make()
         let primaryPasture = try environment.makePastureRepository().create(
