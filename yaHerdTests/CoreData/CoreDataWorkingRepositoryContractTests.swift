@@ -839,13 +839,14 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                 let request = NSFetchRequest<CDWorkingQueueItem>(
                     entityName: CDWorkingQueueItem.coreDataEntityName
                 )
-                return try context.fetch(request).map {
+                let rows: [CDWorkingQueueItem] = try context.fetch(request)
+                return try rows.map { row in
                     [
-                        $0.herd.id.uuidString,
-                        $0.session.id.uuidString,
-                        $0.id.uuidString,
-                        $0.animalIDSnapshot.uuidString,
-                        $0.statusRawValue
+                        row.herd.id.uuidString,
+                        try XCTUnwrap(row.session).id.uuidString,
+                        row.id.uuidString,
+                        row.animalIDSnapshot.uuidString,
+                        row.statusRawValue
                     ].joined(separator: "|")
                 }.sorted()
             }
@@ -1791,7 +1792,7 @@ private final class CoreDataWorkingContractEnvironment {
                         let queueIDs = Set(
                             context.insertedObjects.compactMap { object -> UUID? in
                                 guard let item = object as? CDWorkingQueueItem,
-                                      item.session.objectID == session.objectID else {
+                                      item.session?.objectID == session.objectID else {
                                     return nil
                                 }
                                 return item.id
