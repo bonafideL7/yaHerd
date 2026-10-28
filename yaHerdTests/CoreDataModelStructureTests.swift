@@ -399,6 +399,8 @@ final class CoreDataModelStructureTests: XCTestCase {
         XCTAssertFalse(try attribute(named: "sourcePastureIDSnapshot", in: session).isOptional)
         XCTAssertFalse(try attribute(named: "sourcePastureNameSnapshot", in: session).isOptional)
 
+        XCTAssertTrue(try relationship(named: "session", in: queue).isOptional)
+
         for snapshot in [
             "animalIDSnapshot",
             "animalTagNumberSnapshot",
