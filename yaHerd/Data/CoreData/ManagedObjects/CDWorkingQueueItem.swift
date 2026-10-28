@@ -18,7 +18,7 @@ final class CDWorkingQueueItem: NSManagedObject {
     @NSManaged var destinationPastureIDSnapshot: UUID?
     @NSManaged var destinationPastureNameSnapshot: String?
     @NSManaged var herd: CDHerd
-    @NSManaged var session: CDWorkingSession
+    @NSManaged var session: CDWorkingSession?
     @NSManaged var animal: CDAnimal?
     @NSManaged var collectedFromPasture: CDPasture?
     @NSManaged var destinationPasture: CDPasture?
