@@ -2,6 +2,7 @@
 import Foundation
 
 enum CoreDataWorkingRepositoryError: Error, Equatable {
+    case missingTreatmentSession(recordID: UUID)
     case missingQueueSession(queueItemID: UUID)
     case invalidHerdOwnership(
         relationship: String,
@@ -897,10 +898,14 @@ final class CoreDataWorkingRepository:
             entityName: CDWorkingTreatmentRecord.coreDataEntityName
         )
         treatmentRequest.predicate = NSPredicate(format: "herd == %@", herd)
+        let treatmentRecords = try context.fetch(treatmentRequest)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
-            context.fetch(treatmentRequest),
+            treatmentRecords,
             herdID: herd.id
         )
+        for record in treatmentRecords where record.session == nil {
+            throw CoreDataWorkingRepositoryError.missingTreatmentSession(recordID: record.id)
+        }
 
         // Health and pregnancy checks also belong to the Animal aggregate.
         // Validate their complete Herd scope, including standalone records,
@@ -1015,18 +1020,21 @@ final class CoreDataWorkingRepository:
                 expectedHerdID: herdID,
                 actualHerdID: record.herd.id
             )
-            guard record.session.herd.id == herdID else {
+            guard let owningSession = record.session else {
+                throw CoreDataWorkingRepositoryError.missingTreatmentSession(recordID: record.id)
+            }
+            guard owningSession.herd.id == herdID else {
                 throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                     relationship: "WorkingTreatmentRecord.session",
                     expectedHerdID: herdID,
-                    actualHerdID: record.session.herd.id
+                    actualHerdID: owningSession.herd.id
                 )
             }
-            guard record.session.objectID == session.objectID else {
+            guard owningSession.objectID == session.objectID else {
                 throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
                     relationship: "WorkingTreatmentRecord.session",
                     expectedSessionID: session.id,
-                    actualSessionID: record.session.id
+                    actualSessionID: owningSession.id
                 )
             }
             if let animal = record.animal {
