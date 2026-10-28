@@ -24,6 +24,28 @@ final class CoreDataModelStructureTests: XCTestCase {
         "WorkingTreatmentRecord"
     ]
 
+    func testRequiredScalarAttributesHaveCloudKitDefaults() throws {
+        let model = try loadModel()
+
+        for entity in model.entities {
+            for attribute in entity.attributesByName.values where !attribute.isOptional {
+                switch attribute.attributeType {
+                case .booleanAttributeType, .integer16AttributeType, .integer32AttributeType,
+                     .integer64AttributeType, .floatAttributeType, .doubleAttributeType:
+                    let expected: Double = entity.name == "TagColorDefinition"
+                        && attribute.name == "alpha" ? 1 : 0
+                    XCTAssertEqual(
+                        (attribute.defaultValue as? NSNumber)?.doubleValue,
+                        expected,
+                        "Missing or incorrect CloudKit default: \(entity.name ?? "<unnamed>").\(attribute.name)"
+                    )
+                default:
+                    break
+                }
+            }
+        }
+    }
+
     /// Stage 1 preflight: the CloudKit-required storage nullability changes must
     /// be inferable without a custom NSMappingModel or migration policy.
     func testCloudKitNullabilityChangesCanBeLightweightMigrated() throws {
