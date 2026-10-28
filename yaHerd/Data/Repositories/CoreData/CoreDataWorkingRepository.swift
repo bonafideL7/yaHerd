@@ -2,6 +2,7 @@
 import Foundation
 
 enum CoreDataWorkingRepositoryError: Error, Equatable {
+    case missingQueueSession(queueItemID: UUID)
     case invalidHerdOwnership(
         relationship: String,
         expectedHerdID: UUID,
@@ -879,10 +880,14 @@ final class CoreDataWorkingRepository:
             entityName: CDWorkingQueueItem.coreDataEntityName
         )
         queueRequest.predicate = NSPredicate(format: "herd == %@", herd)
+        let queueItems = try context.fetch(queueRequest)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
-            context.fetch(queueRequest),
+            queueItems,
             herdID: herd.id
         )
+        for item in queueItems where item.session == nil {
+            throw CoreDataWorkingRepositoryError.missingQueueSession(queueItemID: item.id)
+        }
 
         let treatmentRequest = NSFetchRequest<CDWorkingTreatmentRecord>(
             entityName: CDWorkingTreatmentRecord.coreDataEntityName
@@ -1220,11 +1225,7 @@ private extension CoreDataWorkingRepository {
         herdID: UUID
     ) throws {
         guard let owningSession = queueItem.session else {
-            throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
-                relationship: "WorkingQueueItem.session",
-                expectedSessionID: session.id,
-                actualSessionID: nil
-            )
+            throw CoreDataWorkingRepositoryError.missingQueueSession(queueItemID: queueItem.id)
         }
         guard owningSession.herd.id == herdID else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
