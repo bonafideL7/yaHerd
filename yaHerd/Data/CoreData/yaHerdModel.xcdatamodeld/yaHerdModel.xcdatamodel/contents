@@ -295,7 +295,7 @@
         <attribute name="date" optional="NO" attributeType="Date"/>
         <attribute name="statusRawValue" optional="NO" attributeType="String"/>
         <attribute name="treatmentTemplateNameSnapshot" optional="NO" attributeType="String"/>
-        <attribute name="plannedTreatmentsData" optional="NO" attributeType="Binary"/>
+        <attribute name="plannedTreatmentsData" optional="YES" attributeType="Binary"/>
         <attribute name="sourcePastureIDSnapshot" optional="NO" attributeType="UUID"/>
         <attribute name="sourcePastureNameSnapshot" optional="NO" attributeType="String"/>
         <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="workingSessions" inverseEntity="Herd"/>

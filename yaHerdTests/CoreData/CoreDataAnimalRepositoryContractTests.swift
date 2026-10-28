@@ -5434,9 +5434,12 @@ private final class CoreDataAnimalWorkingSessionReader: WorkingSessionDetailRead
             guard let status = WorkingSessionStatus(rawValue: session.statusRawValue) else {
                 throw CoreDataAnimalContractTestError.invalidWorkingSessionStatus
             }
+            guard let plannedTreatmentsData = session.plannedTreatmentsData else {
+                throw CoreDataWorkingMappingError.corruptPlannedTreatments(sessionID: session.id)
+            }
             let plannedTreatments = try JSONDecoder().decode(
                 [WorkingTreatmentPlanItem].self,
-                from: session.plannedTreatmentsData
+                from: plannedTreatmentsData
             )
             let queueItems = try ((session.queueItems?.allObjects as? [CDWorkingQueueItem]) ?? [])
                 .sorted { $0.id.uuidString < $1.id.uuidString }

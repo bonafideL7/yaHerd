@@ -258,8 +258,11 @@ enum WorkingMapper {
     }
 
     static func plannedTreatments(_ session: CDWorkingSession) throws -> [WorkingTreatmentPlanItem] {
+        guard let data = session.plannedTreatmentsData else {
+            throw CoreDataWorkingMappingError.corruptPlannedTreatments(sessionID: session.id)
+        }
         do {
-            return try decodePersistedPlan(session.plannedTreatmentsData)
+            return try decodePersistedPlan(data)
         } catch {
             throw CoreDataWorkingMappingError.corruptPlannedTreatments(sessionID: session.id)
         }

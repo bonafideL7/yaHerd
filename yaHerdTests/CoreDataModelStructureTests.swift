@@ -156,6 +156,31 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testCloudKitSessionPlanAllowsMissingStorageButRejectsMissingDomainData() async throws {
+        let model = try loadModel()
+        let sessionEntity = try entity(named: "WorkingSession", in: model)
+        XCTAssertTrue(try attribute(named: "plannedTreatmentsData", in: sessionEntity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+
+        try context.performAndWait {
+            let session = CDWorkingSession(context: context)
+            session.id = UUID()
+            session.plannedTreatmentsData = nil
+
+            XCTAssertThrowsError(
+                try WorkingMapper.plannedTreatments(session)
+            ) { error in
+                XCTAssertEqual(
+                    error as? CoreDataWorkingMappingError,
+                    .corruptPlannedTreatments(sessionID: session.id)
+                )
+            }
+            context.rollback()
+        }
+    }
+
     func testMissingFieldCheckFindingSessionFailsWithoutDereferencingIt() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let context = assembly.contextFactory.makeReadContext()
