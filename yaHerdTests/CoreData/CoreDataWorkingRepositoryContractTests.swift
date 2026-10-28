@@ -60,6 +60,76 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         try await run { try await WorkingRepositoryContract.assertCompletedQueueHistoryIgnoresLaterPastureRenames(using: $0.fixture) }
     }
 
+    func testOrphanedWorkingQueueItemFailsEditorLookupWithoutAlteringStoredHistory() async throws {
+        let environment = try await CoreDataWorkingContractEnvironment.make()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Working Queue Orphan Pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let animal = try environment.makeAnimalRepository().create(
+            input: Self.animalInput(
+                name: "Working Queue Orphan Cow",
+                tagNumber: "ORPHAN-QUEUE",
+                pastureID: pasture.id
+            )
+        )
+        let repository = environment.makeWorkingRepository()
+        let sessionID = try await repository.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSinceReferenceDate: 203_000),
+                sourcePastureID: pasture.id,
+                treatmentTemplateName: "Existing Working Session",
+                plannedTreatments: [],
+                animalIDs: [animal.id]
+            )
+        )
+        let original = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let queueID = try XCTUnwrap(original.queueItems.first?.id)
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let item = try XCTUnwrap(
+                CoreDataLookup().herdOwned(
+                    CDWorkingQueueItem.self,
+                    id: queueID,
+                    herdID: environment.herdID,
+                    in: context
+                )
+            )
+            item.session = nil
+            try context.save()
+        }
+
+        XCTAssertThrowsError(
+            try repository.fetchQueueItemEditor(sessionID: sessionID, queueItemID: queueID)
+        ) { error in
+            XCTAssertEqual(
+                error as? CoreDataWorkingRepositoryError,
+                .invalidSessionRelationship(
+                    relationship: "WorkingQueueItem.session",
+                    expectedSessionID: sessionID,
+                    actualSessionID: nil
+                )
+            )
+        }
+
+        let readContext = environment.assembly.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            let item = try XCTUnwrap(
+                CoreDataLookup().herdOwned(
+                    CDWorkingQueueItem.self,
+                    id: queueID,
+                    herdID: environment.herdID,
+                    in: readContext
+                )
+            )
+            XCTAssertNil(item.session)
+        }
+    }
+
     func testWorkingCoreDataReadsAndMutationsStayWithinSelectedHerd() async throws {
         let environment = try await CoreDataWorkingContractEnvironment.make()
         let primaryPasture = try environment.makePastureRepository().create(
