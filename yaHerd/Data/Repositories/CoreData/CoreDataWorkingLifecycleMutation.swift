@@ -278,18 +278,25 @@ enum CoreDataWorkingLifecycleMutation {
                 actualHerdID: item.herd.id
             )
         }
-        guard item.session.herd.id == herd.id else {
-            throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
-                relationship: "WorkingQueueItem.session",
-                expectedHerdID: herd.id,
-                actualHerdID: item.session.herd.id
-            )
-        }
-        guard item.session.objectID == session.objectID else {
+        guard let owningSession = item.session else {
             throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
                 relationship: "WorkingQueueItem.session",
                 expectedSessionID: session.id,
-                actualSessionID: item.session.id
+                actualSessionID: nil
+            )
+        }
+        guard owningSession.herd.id == herd.id else {
+            throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                relationship: "WorkingQueueItem.session",
+                expectedHerdID: herd.id,
+                actualHerdID: owningSession.herd.id
+            )
+        }
+        guard owningSession.objectID == session.objectID else {
+            throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
+                relationship: "WorkingQueueItem.session",
+                expectedSessionID: session.id,
+                actualSessionID: owningSession.id
             )
         }
 
