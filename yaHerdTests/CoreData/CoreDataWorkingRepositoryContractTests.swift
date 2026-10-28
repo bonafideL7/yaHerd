@@ -1308,16 +1308,17 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                 let request = NSFetchRequest<CDWorkingTreatmentRecord>(
                     entityName: CDWorkingTreatmentRecord.coreDataEntityName
                 )
-                return try context.fetch(request).map {
+                let records: [CDWorkingTreatmentRecord] = try context.fetch(request)
+                return try records.map { record in
                     [
-                        $0.herd.id.uuidString,
-                        $0.session.id.uuidString,
-                        $0.animalIDSnapshot.uuidString,
-                        $0.id.uuidString,
-                        $0.treatmentItemID.uuidString,
-                        $0.itemNameSnapshot,
-                        String($0.given),
-                        String($0.date.timeIntervalSinceReferenceDate)
+                        record.herd.id.uuidString,
+                        try XCTUnwrap(record.session).id.uuidString,
+                        record.animalIDSnapshot.uuidString,
+                        record.id.uuidString,
+                        record.treatmentItemID.uuidString,
+                        record.itemNameSnapshot,
+                        String(record.given),
+                        String(record.date.timeIntervalSinceReferenceDate)
                     ].joined(separator: "|")
                 }.sorted()
             }
