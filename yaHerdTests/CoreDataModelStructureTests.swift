@@ -400,6 +400,8 @@ final class CoreDataModelStructureTests: XCTestCase {
         XCTAssertFalse(try attribute(named: "sourcePastureNameSnapshot", in: session).isOptional)
 
         XCTAssertTrue(try relationship(named: "session", in: queue).isOptional)
+        let treatment = try entity(named: "WorkingTreatmentRecord", in: model)
+        XCTAssertTrue(try relationship(named: "session", in: treatment).isOptional)
 
         for snapshot in [
             "animalIDSnapshot",
