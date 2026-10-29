@@ -10,6 +10,6 @@ final class CDAnimalTag: NSManagedObject {
     @NSManaged var assignedAt: Date
     @NSManaged var removedAt: Date?
     @NSManaged var herd: CDHerd
-    @NSManaged var animal: CDAnimal
+    @NSManaged var animal: CDAnimal?
     @NSManaged var color: CDTagColorDefinition?
 }

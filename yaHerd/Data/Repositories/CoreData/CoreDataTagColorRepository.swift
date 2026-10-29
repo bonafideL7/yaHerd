@@ -1,6 +1,10 @@
 @preconcurrency import CoreData
 import Foundation
 
+enum CoreDataTagColorRepositoryError: Error, Equatable {
+    case missingTagAnimal(tagID: UUID)
+}
+
 @MainActor
 final class CoreDataTagColorRepository: TagColorRepository {
     private let selection: any CurrentHerdSelectionReading
@@ -623,8 +627,11 @@ final class CoreDataTagColorRepository: TagColorRepository {
         )
         var affectedAnimals: [UUID: CDAnimal] = [:]
         for tag in try context.fetch(tagRequest) {
+            guard let animal = tag.animal else {
+                throw CoreDataTagColorRepositoryError.missingTagAnimal(tagID: tag.id)
+            }
             tag.color = replacement
-            affectedAnimals[tag.animal.id] = tag.animal
+            affectedAnimals[animal.id] = animal
         }
 
         for animal in affectedAnimals.values {

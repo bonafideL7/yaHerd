@@ -1213,11 +1213,11 @@ private extension CoreDataWorkingRepository {
                     actualHerdID: tag.herd.id
                 )
             }
-            guard tag.animal.id == animal.id else {
+            guard tag.animal?.objectID == animal.objectID else {
                 throw CoreDataWorkingRepositoryError.invalidSnapshotRelationship(
                     relationship: "AnimalTag.animal",
                     expectedID: animal.id,
-                    actualID: tag.animal.id
+                    actualID: tag.animal?.id
                 )
             }
             if let color = tag.color,

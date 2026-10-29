@@ -379,6 +379,16 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testCloudKitAnimalTagOwnerIsNullableInStorageWithAnInverse() throws {
+        let model = try loadModel()
+        let tag = try entity(named: "AnimalTag", in: model)
+        let relationship = try relationship(named: "animal", in: tag)
+
+        XCTAssertTrue(relationship.isOptional)
+        XCTAssertEqual(relationship.destinationEntity?.name, "Animal")
+        XCTAssertEqual(relationship.inverseRelationship?.name, "tags")
+    }
+
     func testApplicationIDUniquenessIsRepositoryEnforced() throws {
         let model = try loadModel()
 
