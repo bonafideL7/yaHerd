@@ -124,7 +124,7 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
             ))
             let color = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDTagColorDefinition.self,
-                id: collision.id,
+                id: original.id,
                 herdID: environment.initialHerdID,
                 in: context
             ))
@@ -161,7 +161,7 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
                 in: inspection
             ))
             XCTAssertNil(tag.animal)
-            XCTAssertEqual(tag.color?.id, collision.id)
+            XCTAssertEqual(tag.color?.id, original.id)
         }
     }
 
