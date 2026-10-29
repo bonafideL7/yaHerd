@@ -46,12 +46,16 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
-    func testCloudKitRequiredFreeTextAttributesHaveEmptyDefaults() throws {
+    func testCloudKitSemanticallyEmptyTextAttributesHaveDefaults() throws {
         let model = try loadModel()
         let emptyIsValid: [(entity: String, attribute: String)] = [
             ("Animal", "name"),
             ("FieldCheckSession", "notes"),
-            ("FieldCheckFinding", "note")
+            ("FieldCheckFinding", "note"),
+            ("FieldCheckAnimalCheck", "rosterTagNumberSnapshot"),
+            ("FieldCheckAnimalCheck", "animalNameSnapshot"),
+            ("WorkingQueueItem", "animalTagNumberSnapshot"),
+            ("WorkingQueueItem", "animalNameSnapshot")
         ]
 
         for field in emptyIsValid {
