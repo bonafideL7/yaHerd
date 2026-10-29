@@ -690,6 +690,78 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         )
     }
 
+    func testImportedTemplateWithoutNameFailsLibraryAndHomeReadsWithoutRepairingData() async throws {
+        let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+        let templates = CoreDataWorkingTreatmentTemplateRepository(
+            selection: environment.selection,
+            assembly: environment.assembly
+        )
+        let healthyID = try templates.createTemplate(name: "Healthy Template", items: [])
+        let incompleteID = UUID()
+        let writeContext = try environment.assembly.contextFactory.makeWriteContext()
+        try writeContext.performAndWait {
+            let herd = try XCTUnwrap(CoreDataLookup().herd(id: environment.herdID, in: writeContext))
+            let incomplete = CDWorkingTreatmentTemplate(context: writeContext)
+            incomplete.id = incompleteID
+            incomplete.name = nil
+            incomplete.itemsData = Data("[]".utf8)
+            incomplete.herd = herd
+            try writeContext.save()
+        }
+
+        let reopened = try await environment.makeReadOnlyAssembly()
+        let reopenedTemplates = CoreDataWorkingTreatmentTemplateRepository(
+            selection: environment.selection,
+            assembly: reopened
+        )
+        XCTAssertEqual(
+            try reopenedTemplates.fetchTemplateDetail(id: healthyID)?.name,
+            "Healthy Template"
+        )
+
+        let expectedError = CoreDataWorkingMappingError.corruptTreatmentTemplate(
+            templateID: incompleteID
+        )
+        XCTAssertThrowsError(
+            try reopenedTemplates.fetchTemplateDetail(id: incompleteID)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+        XCTAssertThrowsError(try reopenedTemplates.fetchTemplates()) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+
+        let homeReader = CoreDataReadModelActor(
+            contextFactory: reopened.contextFactory,
+            lookup: CoreDataLookup(),
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await homeReader.fetchHomeTreatmentTemplates(limit: 10)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+
+        // An incomplete imported row must not be silently renamed while checking
+        // the uniqueness of a newly created template.
+        XCTAssertThrowsError(
+            try templates.createTemplate(name: "New Template", items: [])
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+
+        let inspection = reopened.contextFactory.makeReadContext()
+        try inspection.performAndWait {
+            let request = NSFetchRequest<CDWorkingTreatmentTemplate>(
+                entityName: CDWorkingTreatmentTemplate.coreDataEntityName
+            )
+            let saved = try inspection.fetch(request)
+            XCTAssertEqual(saved.count, 2)
+            XCTAssertNil(saved.first(where: { $0.id == incompleteID })?.name)
+            XCTAssertEqual(saved.first(where: { $0.id == healthyID })?.name, "Healthy Template")
+        }
+    }
+
     func testReopenedSQLiteTemplateReadDoesNotInventMissingTreatmentIdentity() async throws {
         let environment = try await CoreDataHomeReadModelContractEnvironment.make()
         let templates = CoreDataWorkingTreatmentTemplateRepository(
