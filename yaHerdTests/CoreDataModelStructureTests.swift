@@ -46,6 +46,26 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testCloudKitRequiredFreeTextAttributesHaveEmptyDefaults() throws {
+        let model = try loadModel()
+        let emptyIsValid: [(entity: String, attribute: String)] = [
+            ("Animal", "name"),
+            ("FieldCheckSession", "notes"),
+            ("FieldCheckFinding", "note")
+        ]
+
+        for field in emptyIsValid {
+            let entity = try entity(named: field.entity, in: model)
+            let attribute = try attribute(named: field.attribute, in: entity)
+            XCTAssertFalse(attribute.isOptional)
+            XCTAssertEqual(
+                attribute.defaultValue as? String,
+                "",
+                "Missing empty-string CloudKit default for \(field.entity).\(field.attribute)"
+            )
+        }
+    }
+
     /// Stage 1 preflight: the CloudKit-required storage nullability changes must
     /// be inferable without a custom NSMappingModel or migration policy.
     func testCloudKitNullabilityChangesCanBeLightweightMigrated() throws {
