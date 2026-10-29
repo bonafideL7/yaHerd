@@ -1225,7 +1225,7 @@ actor CoreDataReadModelActor:
                 let items = try WorkingMapper.treatmentTemplateItems(template)
                 return WorkingTreatmentTemplateSummary(
                     id: template.id,
-                    name: template.name,
+                    name: try WorkingMapper.treatmentTemplateName(template),
                     treatmentCount: items.count
                 )
             }

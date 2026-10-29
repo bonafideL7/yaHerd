@@ -46,7 +46,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
                 let items = try WorkingMapper.treatmentTemplateItems(template)
                 return WorkingTreatmentTemplateSummary(
                     id: template.id,
-                    name: template.name,
+                    name: try WorkingMapper.treatmentTemplateName(template),
                     treatmentCount: items.count
                 )
             }
@@ -72,7 +72,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
             }
             return WorkingTreatmentTemplateDetailSnapshot(
                 id: template.id,
-                name: template.name,
+                name: try WorkingMapper.treatmentTemplateName(template),
                 plannedTreatments: try WorkingMapper.treatmentTemplateItems(template)
             )
         }
@@ -237,8 +237,9 @@ final class CoreDataWorkingTreatmentTemplateRepository:
         in context: NSManagedObjectContext
     ) throws -> Bool {
         try fetchTemplates(herd: herd, in: context).contains { template in
-            template.id != id
-                && template.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+            guard template.id != id else { return false }
+            return try WorkingMapper.treatmentTemplateName(template)
+                .compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
         }
     }
 

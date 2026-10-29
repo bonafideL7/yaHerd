@@ -156,6 +156,7 @@ final class CoreDataModelStructureTests: XCTestCase {
         let model = try loadModel()
         let templateEntity = try entity(named: "WorkingTreatmentTemplate", in: model)
         XCTAssertTrue(try attribute(named: "itemsData", in: templateEntity).isOptional)
+        XCTAssertTrue(try attribute(named: "name", in: templateEntity).isOptional)
 
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let context = assembly.contextFactory.makeReadContext()
