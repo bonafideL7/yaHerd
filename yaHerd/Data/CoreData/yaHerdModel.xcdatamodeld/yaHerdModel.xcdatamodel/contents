@@ -294,7 +294,7 @@
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="date" optional="NO" attributeType="Date"/>
         <attribute name="statusRawValue" optional="NO" attributeType="String"/>
-        <attribute name="treatmentTemplateNameSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="treatmentTemplateNameSnapshot" optional="NO" attributeType="String" defaultValueString="Working Session"/>
         <attribute name="plannedTreatmentsData" optional="YES" attributeType="Binary"/>
         <attribute name="sourcePastureIDSnapshot" optional="NO" attributeType="UUID"/>
         <attribute name="sourcePastureNameSnapshot" optional="NO" attributeType="String"/>

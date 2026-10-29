@@ -70,6 +70,15 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testWorkingSessionTitleHasExistingRepositoryFallbackAsCloudKitDefault() throws {
+        let model = try loadModel()
+        let session = try entity(named: "WorkingSession", in: model)
+        let title = try attribute(named: "treatmentTemplateNameSnapshot", in: session)
+
+        XCTAssertFalse(title.isOptional)
+        XCTAssertEqual(title.defaultValue as? String, "Working Session")
+    }
+
     /// Stage 1 preflight: the CloudKit-required storage nullability changes must
     /// be inferable without a custom NSMappingModel or migration policy.
     func testCloudKitNullabilityChangesCanBeLightweightMigrated() throws {
