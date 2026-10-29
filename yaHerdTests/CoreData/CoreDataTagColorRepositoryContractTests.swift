@@ -95,6 +95,76 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
         }
     }
 
+    func testMissingImportedTagAnimalRejectsColorRemapAndRollsBack() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = CoreDataTagColorContractEnvironment(assembly: assembly)
+        try environment.seedInitialHerd()
+        let repository = environment.fixture.makeTagColorRepository()
+
+        let original = TagColorSnapshot(
+            name: "Before Remap Amber",
+            prefix: "BRA",
+            rgba: RGBAColor(r: 0.8, g: 0.5, b: 0.2)
+        )
+        let collision = TagColorSnapshot(
+            name: "Remap Target Blue",
+            prefix: "RTB",
+            rgba: RGBAColor(r: 0.2, g: 0.3, b: 0.8)
+        )
+        try repository.upsert(original)
+        try repository.upsert(collision)
+
+        // CloudKit may import the Tag before its owning Animal. Its Herd and
+        // Color exist, but its optional Animal relationship has not arrived.
+        let tagID = UUID()
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let herd = try XCTUnwrap(CoreDataLookup().herd(
+                id: environment.initialHerdID, in: context
+            ))
+            let color = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDTagColorDefinition.self,
+                id: collision.id,
+                herdID: environment.initialHerdID,
+                in: context
+            ))
+            let tag = CDAnimalTag(context: context)
+            tag.id = tagID
+            tag.number = "Unlinked"
+            tag.isPrimary = false
+            tag.isActive = false
+            tag.assignedAt = Date(timeIntervalSince1970: 100)
+            tag.removedAt = Date(timeIntervalSince1970: 200)
+            tag.herd = herd
+            tag.color = color
+            XCTAssertNil(tag.animal)
+            try context.save()
+        }
+
+        var renamed = original
+        renamed.name = collision.name
+        XCTAssertThrowsError(try repository.upsert(renamed)) {
+            XCTAssertEqual(
+                $0 as? CoreDataTagColorRepositoryError,
+                .missingTagAnimal(tagID: tagID)
+            )
+        }
+
+        XCTAssertEqual(try repository.fetchColor(id: original.id)?.name, original.name)
+        XCTAssertEqual(try repository.fetchColor(id: collision.id)?.name, collision.name)
+        let inspection = assembly.contextFactory.makeReadContext()
+        try inspection.performAndWait {
+            let tag = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimalTag.self,
+                id: tagID,
+                herdID: environment.initialHerdID,
+                in: inspection
+            ))
+            XCTAssertNil(tag.animal)
+            XCTAssertEqual(tag.color?.id, collision.id)
+        }
+    }
+
     func testHiddenReferencedCurrentAnimalColorResolvesThroughRealStore() async throws {
         try await run { fixture in
             let originalColorID = UUID()

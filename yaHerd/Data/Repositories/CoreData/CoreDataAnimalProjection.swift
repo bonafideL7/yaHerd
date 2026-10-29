@@ -772,12 +772,12 @@ enum CoreDataAnimalReadGraphValidator {
                     actualHerdID: tag.herd.id
                 )
             }
-            guard tag.animal.objectID == animal.objectID else {
+            guard tag.animal?.objectID == animal.objectID else {
                 throw CoreDataReadModelError.invalidAnimalRelationship(
                     entity: CDAnimalTag.coreDataEntityName,
                     id: tag.id,
                     expectedAnimalID: animal.id,
-                    actualAnimalID: tag.animal.id
+                    actualAnimalID: tag.animal?.id
                 )
             }
             if let color = tag.color,

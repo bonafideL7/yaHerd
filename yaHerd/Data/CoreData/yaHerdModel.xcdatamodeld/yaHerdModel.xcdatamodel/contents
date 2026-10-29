@@ -143,7 +143,7 @@
         <attribute name="removedAt" optional="YES" attributeType="Date"/>
         <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="animalTags" inverseEntity="Herd"/>
         <relationship name="color" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="TagColorDefinition" inverseName="tags" inverseEntity="TagColorDefinition"/>
-        <relationship name="animal" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="tags" inverseEntity="Animal"/>
+        <relationship name="animal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="tags" inverseEntity="Animal"/>
             <fetchIndex name="by_id">
             <fetchIndexElement property="id" type="Binary" order="ascending"/>
         </fetchIndex>
