@@ -90,7 +90,7 @@
     <entity name="Animal" representedClassName="CDAnimal" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="editorRevision" optional="NO" attributeType="UUID"/>
-        <attribute name="name" optional="NO" attributeType="String"/>
+        <attribute name="name" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="sexRawValue" optional="NO" attributeType="String"/>
         <attribute name="birthDate" optional="NO" attributeType="Date"/>
         <attribute name="statusRawValue" optional="NO" attributeType="String"/>
@@ -212,7 +212,7 @@
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="startedAt" optional="NO" attributeType="Date"/>
         <attribute name="completedAt" optional="YES" attributeType="Date"/>
-        <attribute name="notes" optional="NO" attributeType="String"/>
+        <attribute name="notes" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="expectedHeadCountSnapshot" optional="NO" attributeType="Integer 64" usesScalarValueType="YES" defaultValueString="0"/>
         <attribute name="quickCowCount" optional="NO" attributeType="Integer 64" usesScalarValueType="YES" defaultValueString="0"/>
         <attribute name="quickHeiferCount" optional="NO" attributeType="Integer 64" usesScalarValueType="YES" defaultValueString="0"/>
@@ -262,7 +262,7 @@
         <attribute name="typeRawValue" optional="NO" attributeType="String"/>
         <attribute name="severityRawValue" optional="NO" attributeType="String"/>
         <attribute name="statusRawValue" optional="NO" attributeType="String"/>
-        <attribute name="note" optional="NO" attributeType="String"/>
+        <attribute name="note" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="animalIDSnapshot" optional="YES" attributeType="UUID"/>
         <attribute name="animalDisplayTagNumberSnapshot" optional="YES" attributeType="String"/>
         <attribute name="animalDisplayTagColorIDSnapshot" optional="YES" attributeType="UUID"/>
