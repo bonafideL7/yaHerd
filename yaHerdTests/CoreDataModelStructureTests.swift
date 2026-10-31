@@ -231,6 +231,30 @@ final class CoreDataModelStructureTests: XCTestCase {
         try migratedCoordinator.remove(migratedStore)
     }
 
+    func testMissingPregnancyResultIsRejectedWithoutInventingUnknownResult() async throws {
+        let model = try loadModel()
+        let pregnancy = try entity(named: "PregnancyCheck", in: model)
+        XCTAssertTrue(try attribute(named: "resultRawValue", in: pregnancy).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let check = CDPregnancyCheck(context: context)
+            check.id = UUID()
+            check.date = .now
+            check.resultRawValue = nil
+
+            XCTAssertThrowsError(try WorkingMapper.makePregnancyCheckSnapshot(from: check)) { error in
+                XCTAssertEqual(
+                    error as? CoreDataWorkingMappingError,
+                    .invalidPregnancyResult(checkID: check.id, value: "")
+                )
+            }
+            XCTAssertNil(check.resultRawValue)
+            context.rollback()
+        }
+    }
+
     func testCloudKitTemplatePayloadAllowsMissingStorageButRejectsMissingDomainData() async throws {
         let model = try loadModel()
         let templateEntity = try entity(named: "WorkingTreatmentTemplate", in: model)
