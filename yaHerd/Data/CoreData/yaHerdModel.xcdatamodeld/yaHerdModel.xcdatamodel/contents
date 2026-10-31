@@ -245,7 +245,7 @@
         <attribute name="damRosterTagColorIDSnapshot" optional="YES" attributeType="UUID"/>
         <attribute name="animalNameSnapshot" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="animalSexRawValueSnapshot" optional="NO" attributeType="String" defaultValueString="unknown"/>
-        <attribute name="animalTypeRawValueSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="animalTypeRawValueSnapshot" optional="YES" attributeType="String"/>
         <attribute name="wasExpectedAtStart" optional="NO" attributeType="Boolean" usesScalarValueType="YES" defaultValueString="NO"/>
         <attribute name="countedAt" optional="YES" attributeType="Date"/>
         <attribute name="missingConfirmedAt" optional="YES" attributeType="Date"/>
