@@ -435,10 +435,11 @@ enum CoreDataAnimalProjection {
     }
 
     private static func pregnancyResult(_ check: CDPregnancyCheck) throws -> PregnancyResult {
-        guard let value = PregnancyResult(rawValue: check.resultRawValue) else {
+        guard let rawValue = check.resultRawValue,
+              let value = PregnancyResult(rawValue: rawValue) else {
             throw CoreDataAnimalRepositoryError.invalidPregnancyResultRawValue(
                 checkID: check.id,
-                value: check.resultRawValue
+                value: check.resultRawValue ?? ""
             )
         }
         return value
