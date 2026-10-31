@@ -5,7 +5,7 @@ import Foundation
 final class CDWorkingSession: NSManagedObject {
     @NSManaged var id: UUID
     @NSManaged var date: Date
-    @NSManaged var statusRawValue: String
+    @NSManaged var statusRawValue: String?
     @NSManaged var treatmentTemplateNameSnapshot: String
     @NSManaged var plannedTreatmentsData: Data?
     @NSManaged var sourcePastureIDSnapshot: UUID?
