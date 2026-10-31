@@ -4777,7 +4777,7 @@ private final class CoreDataAnimalContractEnvironment {
             }
             return PastureDeletionFieldCheckContractSnapshot(
                 pastureIDSnapshot: try XCTUnwrap(session.pastureIDSnapshot),
-                pastureNameSnapshot: try XCTUnwrap(session.pastureNameSnapshot),
+                pastureNameSnapshot: session.pastureNameSnapshot,
                 pastureArchivedAt: session.pastureArchivedAt,
                 livePastureID: session.pasture?.id
             )

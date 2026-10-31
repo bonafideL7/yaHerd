@@ -79,11 +79,12 @@ final class CoreDataModelStructureTests: XCTestCase {
         XCTAssertEqual(title.defaultValue as? String, "Working Session")
     }
 
-    func testCloudKitFieldCheckSessionPastureSnapshotsPreserveMissingAndHistoricalValues() async throws {
+    func testCloudKitFieldCheckSessionPastureSnapshotsPreserveUnknownAndHistoricalValues() async throws {
         let model = try loadModel()
         let sessionEntity = try entity(named: "FieldCheckSession", in: model)
         XCTAssertTrue(try attribute(named: "pastureIDSnapshot", in: sessionEntity).isOptional)
-        XCTAssertTrue(try attribute(named: "pastureNameSnapshot", in: sessionEntity).isOptional)
+        XCTAssertFalse(try attribute(named: "pastureNameSnapshot", in: sessionEntity).isOptional)
+        XCTAssertEqual(try attribute(named: "pastureNameSnapshot", in: sessionEntity).defaultValue as? String, "")
 
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let context = assembly.contextFactory.makeReadContext()
@@ -93,7 +94,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             session.startedAt = Date(timeIntervalSince1970: 1_000)
             session.notes = ""
             session.pastureIDSnapshot = nil
-            session.pastureNameSnapshot = nil
+            session.pastureNameSnapshot = ""
 
             let missingSummary = try FieldCheckMapper.makeSessionSummary(from: session)
             let missingDetail = try FieldCheckMapper.makeSessionDetail(from: session)
