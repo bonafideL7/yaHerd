@@ -13,7 +13,7 @@ final class CDFieldCheckSession: NSManagedObject {
     @NSManaged var quickCalfCount: Int64
     @NSManaged var quickBullCount: Int64
     @NSManaged var quickSteerCount: Int64
-    @NSManaged var pastureIDSnapshot: UUID
+    @NSManaged var pastureIDSnapshot: UUID?
     @NSManaged var pastureNameSnapshot: String
     @NSManaged var pastureArchivedAt: Date?
     @NSManaged var herd: CDHerd
