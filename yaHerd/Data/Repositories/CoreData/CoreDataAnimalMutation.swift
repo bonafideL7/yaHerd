@@ -12,7 +12,7 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
     case invalidAnimalSexRawValue(animalID: UUID, value: String)
     case invalidAnimalStatusRawValue(animalID: UUID, value: String)
     case invalidPregnancyResultRawValue(checkID: UUID, value: String)
-    case invalidStatusHistoryRawValue(recordID: UUID, value: String)
+    case invalidStatusHistoryRawValue(recordID: UUID, value: String?)
 
     var errorDescription: String? {
         switch self {
