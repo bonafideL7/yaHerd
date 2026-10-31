@@ -52,6 +52,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             ("Animal", "name"),
             ("FieldCheckSession", "notes"),
             ("FieldCheckFinding", "note"),
+            ("FieldCheckFinding", "pastureNameSnapshot"),
             ("FieldCheckAnimalCheck", "rosterTagNumberSnapshot"),
             ("FieldCheckAnimalCheck", "animalNameSnapshot"),
             ("WorkingQueueItem", "animalTagNumberSnapshot"),
