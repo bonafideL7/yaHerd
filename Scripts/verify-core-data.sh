@@ -55,7 +55,7 @@ ATTRIBUTE_CONTRACT = {
     "WorkingTreatmentTemplate": "id:UUID:R,name:String:O,itemsData:Binary:O",
     "WorkingSession": "id:UUID:R,date:Date:R,statusRawValue:String:R,treatmentTemplateNameSnapshot:String:R,plannedTreatmentsData:Binary:O,sourcePastureIDSnapshot:UUID:R,sourcePastureNameSnapshot:String:R",
     "WorkingQueueItem": "id:UUID:R,statusRawValue:String:R,completedAt:Date:O,animalIDSnapshot:UUID:R,animalTagNumberSnapshot:String:R,animalTagColorIDSnapshot:UUID:O,animalNameSnapshot:String:R,animalSexRawValueSnapshot:String:R,animalDamDisplayTagNumberSnapshot:String:O,animalDamDisplayTagColorIDSnapshot:UUID:O,collectedFromPastureIDSnapshot:UUID:O,collectedFromPastureNameSnapshot:String:O,destinationPastureIDSnapshot:UUID:O,destinationPastureNameSnapshot:String:O",
-    "WorkingTreatmentRecord": "id:UUID:R,date:Date:R,treatmentItemID:UUID:R,itemNameSnapshot:String:R,given:Boolean:R,doseAmount:Double:O,doseUnitRawValue:String:O,administrationRouteRawValue:String:O,animalIDSnapshot:UUID:R",
+    "WorkingTreatmentRecord": "id:UUID:R,date:Date:R,treatmentItemID:UUID:R,itemNameSnapshot:String:O,given:Boolean:R,doseAmount:Double:O,doseUnitRawValue:String:O,administrationRouteRawValue:String:O,animalIDSnapshot:UUID:R",
 }
 
 INDEX_CONTRACT = {
