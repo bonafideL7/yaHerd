@@ -196,7 +196,7 @@
     <entity name="PregnancyCheck" representedClassName="CDPregnancyCheck" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="date" optional="NO" attributeType="Date"/>
-        <attribute name="resultRawValue" optional="NO" attributeType="String"/>
+        <attribute name="resultRawValue" optional="YES" attributeType="String"/>
         <attribute name="technician" optional="YES" attributeType="String"/>
         <attribute name="estimatedDaysPregnant" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
         <attribute name="dueDate" optional="YES" attributeType="Date"/>
