@@ -79,6 +79,27 @@ final class CoreDataModelStructureTests: XCTestCase {
         XCTAssertEqual(title.defaultValue as? String, "Working Session")
     }
 
+    func testRequiredSexFieldsDefaultToDomainUnknownForCloudKit() throws {
+        let model = try loadModel()
+        let fields: [(entity: String, attribute: String)] = [
+            ("Animal", "sexRawValue"),
+            ("FieldCheckAnimalCheck", "animalSexRawValueSnapshot"),
+            ("WorkingQueueItem", "animalSexRawValueSnapshot")
+        ]
+
+        for field in fields {
+            let entity = try entity(named: field.entity, in: model)
+            let attribute = try attribute(named: field.attribute, in: entity)
+
+            XCTAssertFalse(attribute.isOptional)
+            XCTAssertEqual(
+                attribute.defaultValue as? String,
+                Sex.unknown.rawValue,
+                "Missing unknown-sex CloudKit default for \(field.entity).\(field.attribute)"
+            )
+        }
+    }
+
     /// Stage 1 preflight: the CloudKit-required storage nullability changes must
     /// be inferable without a custom NSMappingModel or migration policy.
     func testCloudKitNullabilityChangesCanBeLightweightMigrated() throws {
