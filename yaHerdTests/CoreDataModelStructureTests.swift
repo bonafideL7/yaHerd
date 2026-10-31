@@ -24,6 +24,24 @@ final class CoreDataModelStructureTests: XCTestCase {
         "WorkingTreatmentRecord"
     ]
 
+    func testWorkingTreatmentRecordRejectsMissingImportedItemName() async throws {
+        let model = try loadModel()
+        let entity = try entity(named: "WorkingTreatmentRecord", in: model)
+        XCTAssertTrue(try attribute(named: "itemNameSnapshot", in: entity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let record = CDWorkingTreatmentRecord(context: context)
+            record.id = UUID()
+            record.itemNameSnapshot = nil
+            XCTAssertThrowsError(try WorkingMapper.makeTreatmentRecordSnapshot(from: record)) { error in
+                XCTAssertEqual(error as? CoreDataWorkingMappingError, .corruptTreatmentRecord(recordID: record.id))
+            }
+            context.rollback()
+        }
+    }
+
     func testRequiredScalarAttributesHaveCloudKitDefaults() throws {
         let model = try loadModel()
 
