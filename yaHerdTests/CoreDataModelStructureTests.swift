@@ -96,6 +96,73 @@ final class CoreDataModelStructureTests: XCTestCase {
     }
 
 
+    func testCloudKitWorkingSourceSnapshotsPreserveAbsentAndHistoricalValues() async throws {
+        let model = try loadModel()
+        let entity = try entity(named: "WorkingSession", in: model)
+        XCTAssertTrue(try attribute(named: "sourcePastureIDSnapshot", in: entity).isOptional)
+        XCTAssertTrue(try attribute(named: "sourcePastureNameSnapshot", in: entity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let herd = CDHerd(context: context)
+            herd.id = UUID()
+            herd.name = "My Herd"
+            herd.createdAt = Date(timeIntervalSince1970: 100)
+            herd.updatedAt = herd.createdAt
+
+            let session = CDWorkingSession(context: context)
+            session.id = UUID()
+            session.date = Date(timeIntervalSince1970: 1_000)
+            session.statusRawValue = WorkingSessionStatus.active.rawValue
+            session.treatmentTemplateNameSnapshot = "Working Session"
+            session.plannedTreatmentsData = Data("[]".utf8)
+            session.herd = herd
+            session.sourcePastureIDSnapshot = nil
+            session.sourcePastureNameSnapshot = nil
+
+            try CoreDataWorkingRepository.validateSessionGraph(session, herdID: herd.id)
+            let missingSummary = try WorkingMapper.makeSessionSummary(from: session)
+            let missingDetail = try WorkingMapper.makeSessionDetail(from: session)
+            XCTAssertNil(missingSummary.sourcePastureName)
+            XCTAssertNil(missingDetail.sourcePastureID)
+            XCTAssertNil(missingDetail.sourcePastureName)
+            XCTAssertFalse(missingDetail.isSourcePastureAvailable)
+
+            let pasture = CDPasture(context: context)
+            pasture.id = UUID()
+            pasture.name = "North Pasture"
+            pasture.herd = herd
+            session.sourcePasture = pasture
+
+            XCTAssertThrowsError(
+                try CoreDataWorkingRepository.validateSessionGraph(session, herdID: herd.id)
+            ) { error in
+                XCTAssertEqual(
+                    error as? CoreDataWorkingRepositoryError,
+                    .invalidSnapshotRelationship(
+                        relationship: "WorkingSession.sourcePasture",
+                        expectedID: nil,
+                        actualID: pasture.id
+                    )
+                )
+            }
+
+            session.sourcePastureIDSnapshot = pasture.id
+            session.sourcePastureNameSnapshot = pasture.name
+            try CoreDataWorkingRepository.validateSessionGraph(session, herdID: herd.id)
+
+            let historicalSummary = try WorkingMapper.makeSessionSummary(from: session)
+            let historicalDetail = try WorkingMapper.makeSessionDetail(from: session)
+            XCTAssertEqual(historicalSummary.sourcePastureName, pasture.name)
+            XCTAssertEqual(historicalDetail.sourcePastureID, pasture.id)
+            XCTAssertEqual(historicalDetail.sourcePastureName, pasture.name)
+            XCTAssertTrue(historicalDetail.isSourcePastureAvailable)
+            context.rollback()
+        }
+    }
+
+
     func testRequiredScalarAttributesHaveCloudKitDefaults() throws {
         let model = try loadModel()
 
