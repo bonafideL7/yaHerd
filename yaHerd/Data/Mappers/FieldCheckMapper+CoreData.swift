@@ -96,7 +96,7 @@ enum FieldCheckMapper {
                 value: finding.severityRawValue ?? ""
             )
         }
-        guard let status = FieldCheckFindingStatus(rawValue: finding.statusRawValue) else {
+        guard let status = finding.statusRawValue.flatMap(FieldCheckFindingStatus.init(rawValue:)) else {
             throw CoreDataFieldCheckMappingError.invalidFindingStatus(
                 findingID: finding.id,
                 value: finding.statusRawValue
