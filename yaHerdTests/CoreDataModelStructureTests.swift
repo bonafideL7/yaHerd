@@ -265,6 +265,40 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testMissingImportedFindingTypeFailsWithoutInventingAType() async throws {
+        let model = try loadModel()
+        let findingEntity = try entity(named: "FieldCheckFinding", in: model)
+        XCTAssertTrue(try attribute(named: "typeRawValue", in: findingEntity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let session = CDFieldCheckSession(context: context)
+            session.id = UUID()
+            let finding = CDFieldCheckFinding(context: context)
+            finding.id = UUID()
+            finding.session = session
+            finding.typeRawValue = nil
+
+            XCTAssertThrowsError(try FieldCheckMapper.makeFindingSnapshot(from: finding)) { error in
+                XCTAssertEqual(
+                    error as? CoreDataFieldCheckMappingError,
+                    .invalidFindingType(findingID: finding.id, value: nil)
+                )
+            }
+            XCTAssertNil(finding.typeRawValue)
+
+            finding.typeRawValue = FieldCheckFindingType.generalObservation.rawValue
+            finding.severityRawValue = FieldCheckFindingSeverity.info.rawValue
+            finding.statusRawValue = FieldCheckFindingStatus.open.rawValue
+            finding.note = "Observed"
+            finding.recordedAt = Date()
+            let snapshot = try FieldCheckMapper.makeFindingSnapshot(from: finding)
+            XCTAssertEqual(snapshot.type, .generalObservation)
+            context.rollback()
+        }
+    }
+
     func testMissingFieldCheckFindingSessionFailsWithoutDereferencingIt() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let context = assembly.contextFactory.makeReadContext()
