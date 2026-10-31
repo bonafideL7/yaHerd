@@ -83,10 +83,10 @@ enum FieldCheckMapper {
                 value: finding.typeRawValue
             )
         }
-        guard let severity = FieldCheckFindingSeverity(rawValue: finding.severityRawValue) else {
+        guard let severity = finding.severityRawValue.flatMap(FieldCheckFindingSeverity.init(rawValue:)) else {
             throw CoreDataFieldCheckMappingError.invalidFindingSeverity(
                 findingID: finding.id,
-                value: finding.severityRawValue
+                value: finding.severityRawValue ?? ""
             )
         }
         guard let status = FieldCheckFindingStatus(rawValue: finding.statusRawValue) else {
