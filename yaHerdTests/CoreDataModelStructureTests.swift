@@ -79,6 +79,12 @@ final class CoreDataModelStructureTests: XCTestCase {
         XCTAssertEqual(title.defaultValue as? String, "Working Session")
     }
 
+    func testFieldCheckRosterAnimalTypeAllowsMissingCloudKitStorage() throws {
+        let model = try loadModel()
+        let check = try entity(named: "FieldCheckAnimalCheck", in: model)
+        XCTAssertTrue(try attribute(named: "animalTypeRawValueSnapshot", in: check).isOptional)
+    }
+
     /// Stage 1 preflight: the CloudKit-required storage nullability changes must
     /// be inferable without a custom NSMappingModel or migration policy.
     func testCloudKitNullabilityChangesCanBeLightweightMigrated() throws {

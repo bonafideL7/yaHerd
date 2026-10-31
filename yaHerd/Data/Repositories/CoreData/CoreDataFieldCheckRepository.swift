@@ -1333,14 +1333,7 @@ private extension CoreDataFieldCheckRepository {
         for session: CDFieldCheckSession
     ) throws -> [FieldCheckQuickCountRosterEntry] {
         try managedChecks(session).map { check in
-            guard let animalType = AnimalType(
-                rawValue: check.animalTypeRawValueSnapshot
-            ) else {
-                throw CoreDataFieldCheckMappingError.invalidAnimalType(
-                    checkID: check.id,
-                    value: check.animalTypeRawValueSnapshot
-                )
-            }
+            let animalType = try FieldCheckMapper.animalType(from: check)
             return FieldCheckQuickCountRosterEntry(
                 animalType: animalType,
                 wasExpectedAtStart: check.wasExpectedAtStart,
