@@ -241,10 +241,11 @@ enum WorkingMapper {
     static func makePregnancyCheckSnapshot(
         from check: CDPregnancyCheck
     ) throws -> WorkingPregnancyCheckSnapshot {
-        guard let result = PregnancyResult(rawValue: check.resultRawValue) else {
+        guard let rawValue = check.resultRawValue,
+              let result = PregnancyResult(rawValue: rawValue) else {
             throw CoreDataWorkingMappingError.invalidPregnancyResult(
                 checkID: check.id,
-                value: check.resultRawValue
+                value: check.resultRawValue ?? ""
             )
         }
 
