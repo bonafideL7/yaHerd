@@ -6,6 +6,64 @@ import XCTest
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
 
+    func testMissingImportedStatusReferenceBaseIsRejectedWithoutInventingAStatus() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let referenceID = UUID()
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let herd = try XCTUnwrap(CoreDataLookup().herd(id: environment.herdID, in: context))
+            let reference = CDAnimalStatusReference(context: context)
+            reference.id = referenceID
+            reference.name = "Imported reference"
+            reference.baseStatusRawValue = nil
+            reference.herd = herd
+            try context.save()
+        }
+
+        let repository = environment.makeAnimalRepository()
+        XCTAssertThrowsError(try repository.fetchStatusReferenceOptions()) { error in
+            XCTAssertEqual(
+                error as? CoreDataAnimalStatusReferenceRepositoryError,
+                .invalidBaseStatus(referenceID: referenceID, value: nil)
+            )
+        }
+
+        let readContext = assembly.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            XCTAssertThrowsError(
+                try CoreDataAnimalMutation.resolveStatusReference(
+                    id: referenceID,
+                    herdID: environment.herdID,
+                    lookup: CoreDataLookup(),
+                    in: readContext
+                )
+            ) { error in
+                XCTAssertEqual(
+                    error as? CoreDataAnimalStatusReferenceRepositoryError,
+                    .invalidBaseStatus(referenceID: referenceID, value: nil)
+                )
+            }
+        }
+
+        try context.performAndWait {
+            let reference = try XCTUnwrap(
+                CoreDataLookup().herdOwned(
+                    CDAnimalStatusReference.self,
+                    id: referenceID,
+                    herdID: environment.herdID,
+                    in: context
+                )
+            )
+            reference.baseStatusRawValue = AnimalStatus.active.rawValue
+            try context.save()
+        }
+        XCTAssertTrue(try repository.fetchStatusReferenceOptions().contains {
+            $0.id == referenceID && $0.baseStatus == .active
+        })
+    }
+
+
     func testImportedPastureGroupMissingNameIsRejectedWithoutInventingName() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await harness.makeAssembly()
