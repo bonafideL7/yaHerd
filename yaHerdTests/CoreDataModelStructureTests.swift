@@ -525,6 +525,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             session.id = UUID()
             let finding = CDFieldCheckFinding(context: context)
             finding.id = UUID()
+            finding.recordedAt = Date(timeIntervalSince1970: 1_000)
             finding.session = session
             finding.typeRawValue = FieldCheckFindingType.generalObservation.rawValue
             finding.statusRawValue = FieldCheckFindingStatus.open.rawValue
