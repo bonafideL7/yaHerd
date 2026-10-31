@@ -56,7 +56,7 @@
 </entity>
     <entity name="PastureGroup" representedClassName="CDPastureGroup" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
-        <attribute name="name" optional="NO" attributeType="String"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
         <attribute name="grazeDays" optional="NO" attributeType="Integer 64" usesScalarValueType="YES" defaultValueString="0"/>
         <attribute name="restDays" optional="NO" attributeType="Integer 64" usesScalarValueType="YES" defaultValueString="0"/>
         <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="pastureGroups" inverseEntity="Herd"/>
