@@ -1655,7 +1655,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                                     $0.animal.id.uuidString,
                                     $0.workingSession?.id.uuidString ?? "standalone",
                                     $0.id.uuidString,
-                                    $0.resultRawValue,
+                                    try XCTUnwrap($0.resultRawValue),
                                     String($0.date.timeIntervalSinceReferenceDate)
                                 ].joined(separator: "|")
                             }.sorted()
