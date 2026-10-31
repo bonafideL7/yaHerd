@@ -47,7 +47,7 @@
     <entity name="AnimalStatusReference" representedClassName="CDAnimalStatusReference" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="name" optional="NO" attributeType="String"/>
-        <attribute name="baseStatusRawValue" optional="NO" attributeType="String"/>
+        <attribute name="baseStatusRawValue" optional="YES" attributeType="String"/>
         <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="statusReferences" inverseEntity="Herd"/>
         <relationship name="animals" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Animal" inverseName="statusReference" inverseEntity="Animal"/>
             <fetchIndex name="by_id">
