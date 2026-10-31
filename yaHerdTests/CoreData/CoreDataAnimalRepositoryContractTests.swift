@@ -6,6 +6,46 @@ import XCTest
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
 
+    func testImportedPastureGroupMissingNameIsRejectedWithoutInventingName() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let repository = environment.makePastureRepository()
+        let group = try repository.createGroup(
+            input: PastureGroupInput(name: "Existing Rotation", grazeDays: 5, restDays: 20)
+        )
+        let pasture = try repository.create(
+            input: PastureInput(name: "Existing Pasture", acreage: 8, usableAcreage: 7, targetAcresPerHead: 1)
+        )
+        try repository.assignPasture(id: pasture.id, toGroupID: group.id)
+
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDPastureGroup.self, id: group.id, herdID: environment.herdID, in: context
+            ))
+            stored.name = nil
+            try context.save()
+        }
+
+        XCTAssertThrowsError(try repository.fetchPastureGroups()) {
+            XCTAssertEqual($0 as? PastureValidationError, .emptyName)
+        }
+        XCTAssertThrowsError(try repository.fetchPastureDetail(id: pasture.id)) {
+            XCTAssertEqual($0 as? PastureValidationError, .emptyName)
+        }
+        try context.performAndWait {
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDPastureGroup.self, id: group.id, herdID: environment.herdID, in: context
+            ))
+            XCTAssertNil(stored.name)
+            stored.name = "Existing Rotation"
+            try context.save()
+        }
+        XCTAssertEqual(try repository.fetchPastureGroups().first?.name, "Existing Rotation")
+        XCTAssertEqual(try repository.fetchPastureDetail(id: pasture.id)?.groupName, "Existing Rotation")
+    }
+
     func testFilteredDashboardAnimalReadsRejectSelectedHerdIDCollisionsOutsidePredicate() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await harness.makeAssembly()
