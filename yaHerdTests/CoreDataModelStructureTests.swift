@@ -24,6 +24,12 @@ final class CoreDataModelStructureTests: XCTestCase {
         "WorkingTreatmentRecord"
     ]
 
+    func testCloudKitStatusReferenceBaseStatusIsOptional() throws {
+        let model = try loadModel()
+        let entity = try entity(named: "AnimalStatusReference", in: model)
+        XCTAssertTrue(try attribute(named: "baseStatusRawValue", in: entity).isOptional)
+    }
+
     func testRequiredScalarAttributesHaveCloudKitDefaults() throws {
         let model = try loadModel()
 
