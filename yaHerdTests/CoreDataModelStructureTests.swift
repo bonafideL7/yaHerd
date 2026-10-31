@@ -265,6 +265,40 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testCloudKitFindingPastureNameIsOptionalWithoutLosingHistoricalSnapshot() async throws {
+        let model = try loadModel()
+        let entity = try entity(named: "FieldCheckFinding", in: model)
+        XCTAssertTrue(try attribute(named: "pastureNameSnapshot", in: entity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let session = CDFieldCheckSession(context: context)
+            session.id = UUID()
+
+            let finding = CDFieldCheckFinding(context: context)
+            finding.id = UUID()
+            finding.recordedAt = Date(timeIntervalSince1970: 100)
+            finding.typeRawValue = FieldCheckFindingType.generalObservation.rawValue
+            finding.severityRawValue = FieldCheckFindingSeverity.info.rawValue
+            finding.statusRawValue = FieldCheckFindingStatus.open.rawValue
+            finding.note = "Inspect fence"
+            finding.session = session
+
+            // A partially imported record has no name yet; do not fabricate one.
+            finding.pastureNameSnapshot = nil
+            XCTAssertNil(try FieldCheckMapper.makeFindingSnapshot(from: finding).pastureName)
+
+            // An existing recorded name remains an immutable historical snapshot.
+            finding.pastureNameSnapshot = "South Pasture"
+            XCTAssertEqual(
+                try FieldCheckMapper.makeFindingSnapshot(from: finding).pastureName,
+                "South Pasture"
+            )
+            context.rollback()
+        }
+    }
+
     func testMissingFieldCheckFindingSessionFailsWithoutDereferencingIt() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let context = assembly.contextFactory.makeReadContext()
