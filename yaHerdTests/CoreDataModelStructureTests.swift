@@ -42,6 +42,32 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testCloudKitStatusReferenceNameRejectsMissingImportedValue() async throws {
+        let model = try loadModel()
+        let entity = try entity(named: "AnimalStatusReference", in: model)
+        XCTAssertTrue(try attribute(named: "name", in: entity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let reference = CDAnimalStatusReference(context: context)
+            reference.id = UUID()
+            reference.name = nil
+            reference.baseStatusRawValue = AnimalStatus.active.rawValue
+
+            XCTAssertThrowsError(try CoreDataAnimalProjection.statusReferenceName(reference)) { error in
+                XCTAssertEqual(
+                    error as? CoreDataAnimalStatusReferenceRepositoryError,
+                    .invalidName(referenceID: reference.id)
+                )
+            }
+
+            reference.name = "Observed"
+            XCTAssertEqual(try CoreDataAnimalProjection.statusReferenceName(reference), "Observed")
+            context.rollback()
+        }
+    }
+
     func testCloudKitStatusReferenceBaseStatusIsOptional() throws {
         let model = try loadModel()
         let entity = try entity(named: "AnimalStatusReference", in: model)
