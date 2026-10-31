@@ -91,7 +91,7 @@
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="editorRevision" optional="NO" attributeType="UUID"/>
         <attribute name="name" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="sexRawValue" optional="NO" attributeType="String"/>
+        <attribute name="sexRawValue" optional="NO" attributeType="String" defaultValueString="unknown"/>
         <attribute name="birthDate" optional="NO" attributeType="Date"/>
         <attribute name="statusRawValue" optional="NO" attributeType="String"/>
         <attribute name="saleDate" optional="YES" attributeType="Date"/>
@@ -244,7 +244,7 @@
         <attribute name="damRosterTagNumberSnapshot" optional="YES" attributeType="String"/>
         <attribute name="damRosterTagColorIDSnapshot" optional="YES" attributeType="UUID"/>
         <attribute name="animalNameSnapshot" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="animalSexRawValueSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="animalSexRawValueSnapshot" optional="NO" attributeType="String" defaultValueString="unknown"/>
         <attribute name="animalTypeRawValueSnapshot" optional="NO" attributeType="String"/>
         <attribute name="wasExpectedAtStart" optional="NO" attributeType="Boolean" usesScalarValueType="YES" defaultValueString="NO"/>
         <attribute name="countedAt" optional="YES" attributeType="Date"/>
@@ -323,7 +323,7 @@
         <attribute name="animalTagNumberSnapshot" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="animalTagColorIDSnapshot" optional="YES" attributeType="UUID"/>
         <attribute name="animalNameSnapshot" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="animalSexRawValueSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="animalSexRawValueSnapshot" optional="NO" attributeType="String" defaultValueString="unknown"/>
         <attribute name="animalDamDisplayTagNumberSnapshot" optional="YES" attributeType="String"/>
         <attribute name="animalDamDisplayTagColorIDSnapshot" optional="YES" attributeType="UUID"/>
         <attribute name="collectedFromPastureIDSnapshot" optional="YES" attributeType="UUID"/>
