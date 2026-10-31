@@ -28,7 +28,7 @@
     <entity name="TagColorDefinition" representedClassName="CDTagColorDefinition" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="name" optional="NO" attributeType="String"/>
-        <attribute name="prefix" optional="NO" attributeType="String"/>
+        <attribute name="prefix" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="red" optional="NO" attributeType="Double" usesScalarValueType="YES" defaultValueString="0.0"/>
         <attribute name="green" optional="NO" attributeType="Double" usesScalarValueType="YES" defaultValueString="0.0"/>
         <attribute name="blue" optional="NO" attributeType="Double" usesScalarValueType="YES" defaultValueString="0.0"/>
