@@ -145,14 +145,16 @@ enum WorkingMapper {
             .first
             .map(makePregnancyCheckSnapshot)
 
-        let generatedHealth = managedHealthRecords(session).filter {
-            $0.animal.id == animal.id
-        }
+        let generatedHealth = try managedHealthRecords(session)
+            .filter { $0.animal.id == animal.id }
+            .map { record in
+                (record, try CoreDataAnimalProjection.healthTreatment(record))
+            }
         let observationNotes = generatedHealth.first {
-            $0.treatment == WorkingGeneratedHealthRecord.observation.treatmentName
-        }?.notes ?? ""
+            $0.1 == WorkingGeneratedHealthRecord.observation.treatmentName
+        }?.0.notes ?? ""
         let castrationPerformed = generatedHealth.contains {
-            $0.treatment == WorkingGeneratedHealthRecord.castration.treatmentName
+            $0.1 == WorkingGeneratedHealthRecord.castration.treatmentName
         }
 
         return WorkingQueueItemEditorSnapshot(
