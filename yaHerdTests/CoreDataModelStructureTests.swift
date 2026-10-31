@@ -48,6 +48,13 @@ final class CoreDataModelStructureTests: XCTestCase {
         XCTAssertTrue(try attribute(named: "baseStatusRawValue", in: entity).isOptional)
     }
 
+    func testFieldCheckRosterAnimalTypeAllowsMissingCloudKitStorage() throws {
+        let model = try loadModel()
+        let check = try entity(named: "FieldCheckAnimalCheck", in: model)
+        XCTAssertTrue(try attribute(named: "animalTypeRawValueSnapshot", in: check).isOptional)
+    }
+
+
     func testRequiredScalarAttributesHaveCloudKitDefaults() throws {
         let model = try loadModel()
 
