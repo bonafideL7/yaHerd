@@ -212,6 +212,35 @@ final class CoreDataModelStructureTests: XCTestCase {
     }
 
 
+    func testMissingImportedStatusHistoryIsRejectedWithoutInventingTransitions() async throws {
+        let model = try loadModel()
+        let entity = try entity(named: "StatusRecord", in: model)
+        XCTAssertTrue(try attribute(named: "oldStatusRawValue", in: entity).isOptional)
+        XCTAssertTrue(try attribute(named: "newStatusRawValue", in: entity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let record = CDStatusRecord(context: context)
+            record.id = UUID()
+            record.oldStatusRawValue = nil
+            record.newStatusRawValue = nil
+
+            XCTAssertThrowsError(try CoreDataAnimalProjection.statusHistoryValue(record.oldStatusRawValue, record: record)) { error in
+                XCTAssertEqual(error as? CoreDataAnimalRepositoryError,
+                               .invalidStatusHistoryRawValue(recordID: record.id, value: nil))
+            }
+            XCTAssertThrowsError(try CoreDataAnimalProjection.statusHistoryValue(record.newStatusRawValue, record: record)) { error in
+                XCTAssertEqual(error as? CoreDataAnimalRepositoryError,
+                               .invalidStatusHistoryRawValue(recordID: record.id, value: nil))
+            }
+
+            record.oldStatusRawValue = AnimalStatus.active.rawValue
+            XCTAssertEqual(try CoreDataAnimalProjection.statusHistoryValue(record.oldStatusRawValue, record: record), .active)
+            context.rollback()
+        }
+    }
+
     func testRequiredScalarAttributesHaveCloudKitDefaults() throws {
         let model = try loadModel()
 
