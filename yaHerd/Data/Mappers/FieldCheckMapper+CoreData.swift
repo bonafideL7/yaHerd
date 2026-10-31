@@ -7,7 +7,7 @@ enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
     case missingFindingSession(findingID: UUID)
     case missingAnimalCheckSession(checkID: UUID)
     case invalidAnimalSex(checkID: UUID, value: String)
-    case invalidAnimalType(checkID: UUID, value: String)
+    case invalidAnimalType(checkID: UUID, value: String?)
 
     var errorDescription: String? {
         switch self {
@@ -43,12 +43,7 @@ enum FieldCheckMapper {
                 value: check.animalSexRawValueSnapshot
             )
         }
-        guard let animalType = AnimalType(rawValue: check.animalTypeRawValueSnapshot) else {
-            throw CoreDataFieldCheckMappingError.invalidAnimalType(
-                checkID: check.id,
-                value: check.animalTypeRawValueSnapshot
-            )
-        }
+        let animalType = try animalType(from: check)
 
         return FieldCheckAnimalCheckSnapshot(
             id: check.id,
@@ -69,6 +64,17 @@ enum FieldCheckMapper {
             needsAttention: needsAttention,
             isMissing: check.missingConfirmedAt != nil
         )
+    }
+
+    static func animalType(from check: CDFieldCheckAnimalCheck) throws -> AnimalType {
+        guard let rawValue = check.animalTypeRawValueSnapshot,
+              let animalType = AnimalType(rawValue: rawValue) else {
+            throw CoreDataFieldCheckMappingError.invalidAnimalType(
+                checkID: check.id,
+                value: check.animalTypeRawValueSnapshot
+            )
+        }
+        return animalType
     }
 
     static func makeFindingSnapshot(
