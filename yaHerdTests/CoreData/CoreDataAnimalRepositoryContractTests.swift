@@ -1824,8 +1824,8 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
                     herdID: environment.herdID,
                     in: context
                 ))
-                return ((persisted.pregnancyChecks?.allObjects as? [CDPregnancyCheck]) ?? [])
-                    .map { (id: $0.id, result: $0.resultRawValue, dueDate: $0.dueDate) }
+                return try ((persisted.pregnancyChecks?.allObjects as? [CDPregnancyCheck]) ?? [])
+                    .map { (id: $0.id, result: try XCTUnwrap($0.resultRawValue), dueDate: $0.dueDate) }
             }
         XCTAssertEqual(checks.count, 2)
         XCTAssertEqual(Set(checks.map(\.id)).count, 2)
@@ -5621,7 +5621,7 @@ private final class CoreDataAnimalHealthContractControl: HealthRepositoryContrac
                     id: $0.id,
                     animalID: $0.animal.id,
                     date: $0.date,
-                    treatment: $0.treatment,
+                    treatment: try XCTUnwrap($0.treatment),
                     notes: $0.notes,
                     workingSessionID: $0.workingSession?.id
                 )
@@ -5644,7 +5644,7 @@ private final class CoreDataAnimalHealthContractControl: HealthRepositoryContrac
                     id: $0.id,
                     animalID: $0.animal.id,
                     date: $0.date,
-                    resultRawValue: $0.resultRawValue,
+                    resultRawValue: try XCTUnwrap($0.resultRawValue),
                     technician: $0.technician,
                     estimatedDaysPregnant: $0.estimatedDaysPregnant?.intValue,
                     dueDate: $0.dueDate,
