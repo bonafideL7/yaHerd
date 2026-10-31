@@ -1142,9 +1142,10 @@ private extension CoreDataFieldCheckRepository {
         if let pasture = session.pasture {
             return pasture
         }
+        guard let pastureID = session.pastureIDSnapshot else { return nil }
         return try lookup.herdOwned(
             CDPasture.self,
-            id: session.pastureIDSnapshot,
+            id: pastureID,
             herdID: herdID,
             in: context
         )
@@ -1350,9 +1351,7 @@ private extension CoreDataFieldCheckRepository {
     nonisolated static func findingType(
         _ finding: CDFieldCheckFinding
     ) throws -> FieldCheckFindingType {
-        guard let result = FieldCheckFindingType(
-            rawValue: finding.typeRawValue
-        ) else {
+        guard let result = finding.typeRawValue.flatMap(FieldCheckFindingType.init(rawValue:)) else {
             throw CoreDataFieldCheckMappingError.invalidFindingType(
                 findingID: finding.id,
                 value: finding.typeRawValue
@@ -1364,9 +1363,7 @@ private extension CoreDataFieldCheckRepository {
     nonisolated static func findingStatus(
         _ finding: CDFieldCheckFinding
     ) throws -> FieldCheckFindingStatus {
-        guard let result = FieldCheckFindingStatus(
-            rawValue: finding.statusRawValue
-        ) else {
+        guard let result = finding.statusRawValue.flatMap(FieldCheckFindingStatus.init(rawValue:)) else {
             throw CoreDataFieldCheckMappingError.invalidFindingStatus(
                 findingID: finding.id,
                 value: finding.statusRawValue
