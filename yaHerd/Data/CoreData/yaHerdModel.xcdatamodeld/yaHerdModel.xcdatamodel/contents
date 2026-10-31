@@ -343,7 +343,7 @@
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="date" optional="NO" attributeType="Date"/>
         <attribute name="treatmentItemID" optional="NO" attributeType="UUID"/>
-        <attribute name="itemNameSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="itemNameSnapshot" optional="YES" attributeType="String"/>
         <attribute name="given" optional="NO" attributeType="Boolean" usesScalarValueType="YES" defaultValueString="NO"/>
         <attribute name="doseAmount" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
         <attribute name="doseUnitRawValue" optional="YES" attributeType="String"/>
