@@ -89,6 +89,12 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testCloudKitPastureGroupNameAllowsMissingStorage() throws {
+        let model = try loadModel()
+        let group = try entity(named: "PastureGroup", in: model)
+        XCTAssertTrue(try attribute(named: "name", in: group).isOptional)
+    }
+
     func testWorkingSessionTitleHasExistingRepositoryFallbackAsCloudKitDefault() throws {
         let model = try loadModel()
         let session = try entity(named: "WorkingSession", in: model)
