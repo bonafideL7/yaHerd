@@ -267,7 +267,7 @@
         <attribute name="animalDisplayTagNumberSnapshot" optional="YES" attributeType="String"/>
         <attribute name="animalDisplayTagColorIDSnapshot" optional="YES" attributeType="UUID"/>
         <attribute name="animalNameSnapshot" optional="YES" attributeType="String"/>
-        <attribute name="pastureNameSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="pastureNameSnapshot" optional="NO" attributeType="String" defaultValueString=""/>
         <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="fieldCheckFindings" inverseEntity="Herd"/>
         <relationship name="animal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="fieldCheckFindings" inverseEntity="Animal"/>
         <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="FieldCheckSession" inverseName="findings" inverseEntity="FieldCheckSession"/>
