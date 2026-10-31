@@ -8,8 +8,8 @@ final class CDWorkingSession: NSManagedObject {
     @NSManaged var statusRawValue: String
     @NSManaged var treatmentTemplateNameSnapshot: String
     @NSManaged var plannedTreatmentsData: Data?
-    @NSManaged var sourcePastureIDSnapshot: UUID
-    @NSManaged var sourcePastureNameSnapshot: String
+    @NSManaged var sourcePastureIDSnapshot: UUID?
+    @NSManaged var sourcePastureNameSnapshot: String?
     @NSManaged var herd: CDHerd
     @NSManaged var sourcePasture: CDPasture?
     @NSManaged var queueItems: NSSet?
