@@ -455,11 +455,11 @@ enum CoreDataAnimalProjection {
         return value
     }
 
-    private static func statusHistoryValue(
-        _ rawValue: String,
+    static func statusHistoryValue(
+        _ rawValue: String?,
         record: CDStatusRecord
     ) throws -> AnimalStatus {
-        guard let value = AnimalStatus(rawValue: rawValue) else {
+        guard let rawValue, let value = AnimalStatus(rawValue: rawValue) else {
             throw CoreDataAnimalRepositoryError.invalidStatusHistoryRawValue(
                 recordID: record.id,
                 value: rawValue
