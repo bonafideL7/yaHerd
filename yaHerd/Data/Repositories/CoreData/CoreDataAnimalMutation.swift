@@ -175,6 +175,7 @@ enum CoreDataAnimalMutation {
                 value: reference.baseStatusRawValue
             )
         }
+        _ = try CoreDataAnimalProjection.statusReferenceName(reference)
         return reference
     }
 
