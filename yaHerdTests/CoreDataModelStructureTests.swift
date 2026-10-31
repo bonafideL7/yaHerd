@@ -42,6 +42,12 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testCloudKitStatusReferenceBaseStatusIsOptional() throws {
+        let model = try loadModel()
+        let entity = try entity(named: "AnimalStatusReference", in: model)
+        XCTAssertTrue(try attribute(named: "baseStatusRawValue", in: entity).isOptional)
+    }
+
     func testRequiredScalarAttributesHaveCloudKitDefaults() throws {
         let model = try loadModel()
 
@@ -645,8 +651,8 @@ final class CoreDataModelStructureTests: XCTestCase {
         let session = try entity(named: "WorkingSession", in: model)
         let queue = try entity(named: "WorkingQueueItem", in: model)
 
-        XCTAssertFalse(try attribute(named: "sourcePastureIDSnapshot", in: session).isOptional)
-        XCTAssertFalse(try attribute(named: "sourcePastureNameSnapshot", in: session).isOptional)
+        XCTAssertTrue(try attribute(named: "sourcePastureIDSnapshot", in: session).isOptional)
+        XCTAssertTrue(try attribute(named: "sourcePastureNameSnapshot", in: session).isOptional)
 
         XCTAssertTrue(try relationship(named: "session", in: queue).isOptional)
         let treatment = try entity(named: "WorkingTreatmentRecord", in: model)
