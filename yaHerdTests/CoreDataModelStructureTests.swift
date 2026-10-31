@@ -867,7 +867,7 @@ final class CoreDataModelStructureTests: XCTestCase {
         let check = try entity(named: "FieldCheckAnimalCheck", in: model)
         let finding = try entity(named: "FieldCheckFinding", in: model)
 
-        XCTAssertFalse(try attribute(named: "pastureIDSnapshot", in: session).isOptional)
+        XCTAssertTrue(try attribute(named: "pastureIDSnapshot", in: session).isOptional)
         XCTAssertFalse(try attribute(named: "pastureNameSnapshot", in: session).isOptional)
 
         XCTAssertFalse(try attribute(named: "animalIDSnapshot", in: check).isOptional)
