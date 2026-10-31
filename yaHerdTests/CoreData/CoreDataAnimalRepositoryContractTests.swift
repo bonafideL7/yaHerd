@@ -4776,8 +4776,8 @@ private final class CoreDataAnimalContractEnvironment {
                 throw CoreDataAnimalContractTestError.missingPreparedFieldCheck
             }
             return PastureDeletionFieldCheckContractSnapshot(
-                pastureIDSnapshot: session.pastureIDSnapshot,
-                pastureNameSnapshot: session.pastureNameSnapshot,
+                pastureIDSnapshot: try XCTUnwrap(session.pastureIDSnapshot),
+                pastureNameSnapshot: try XCTUnwrap(session.pastureNameSnapshot),
                 pastureArchivedAt: session.pastureArchivedAt,
                 livePastureID: session.pasture?.id
             )

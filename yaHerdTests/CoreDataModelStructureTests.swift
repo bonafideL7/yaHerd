@@ -79,6 +79,45 @@ final class CoreDataModelStructureTests: XCTestCase {
         XCTAssertEqual(title.defaultValue as? String, "Working Session")
     }
 
+    func testCloudKitFieldCheckSessionPastureSnapshotsPreserveMissingAndHistoricalValues() async throws {
+        let model = try loadModel()
+        let sessionEntity = try entity(named: "FieldCheckSession", in: model)
+        XCTAssertTrue(try attribute(named: "pastureIDSnapshot", in: sessionEntity).isOptional)
+        XCTAssertTrue(try attribute(named: "pastureNameSnapshot", in: sessionEntity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let session = CDFieldCheckSession(context: context)
+            session.id = UUID()
+            session.startedAt = Date(timeIntervalSince1970: 1_000)
+            session.notes = ""
+            session.pastureIDSnapshot = nil
+            session.pastureNameSnapshot = nil
+
+            let missingSummary = try FieldCheckMapper.makeSessionSummary(from: session)
+            let missingDetail = try FieldCheckMapper.makeSessionDetail(from: session)
+            XCTAssertNil(missingSummary.pastureID)
+            XCTAssertNil(missingSummary.pastureName)
+            XCTAssertNil(missingDetail.pastureID)
+            XCTAssertNil(missingDetail.pastureName)
+            XCTAssertEqual(missingSummary.displayTitle, "Pasture Check")
+            XCTAssertEqual(missingDetail.displayTitle, "Pasture Check")
+
+            let historicalPastureID = UUID()
+            session.pastureIDSnapshot = historicalPastureID
+            session.pastureNameSnapshot = "North Pasture"
+
+            let historicalSummary = try FieldCheckMapper.makeSessionSummary(from: session)
+            let historicalDetail = try FieldCheckMapper.makeSessionDetail(from: session)
+            XCTAssertEqual(historicalSummary.pastureID, historicalPastureID)
+            XCTAssertEqual(historicalSummary.pastureName, "North Pasture")
+            XCTAssertEqual(historicalDetail.pastureID, historicalPastureID)
+            XCTAssertEqual(historicalDetail.pastureName, "North Pasture")
+            context.rollback()
+        }
+    }
+
     /// Stage 1 preflight: the CloudKit-required storage nullability changes must
     /// be inferable without a custom NSMappingModel or migration policy.
     func testCloudKitNullabilityChangesCanBeLightweightMigrated() throws {
