@@ -296,8 +296,8 @@
         <attribute name="statusRawValue" optional="NO" attributeType="String"/>
         <attribute name="treatmentTemplateNameSnapshot" optional="NO" attributeType="String" defaultValueString="Working Session"/>
         <attribute name="plannedTreatmentsData" optional="YES" attributeType="Binary"/>
-        <attribute name="sourcePastureIDSnapshot" optional="NO" attributeType="UUID"/>
-        <attribute name="sourcePastureNameSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="sourcePastureIDSnapshot" optional="YES" attributeType="UUID"/>
+        <attribute name="sourcePastureNameSnapshot" optional="YES" attributeType="String"/>
         <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="workingSessions" inverseEntity="Herd"/>
         <relationship name="sourcePasture" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Pasture" inverseName="workingSourceSessions" inverseEntity="Pasture"/>
         <relationship name="activeAnimals" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Animal" inverseName="activeWorkingSession" inverseEntity="Animal"/>
