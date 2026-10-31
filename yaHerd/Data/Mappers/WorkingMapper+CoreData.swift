@@ -209,6 +209,10 @@ enum WorkingMapper {
             route = nil
         }
 
+        guard let itemName = record.itemNameSnapshot else {
+            throw CoreDataWorkingMappingError.corruptTreatmentRecord(recordID: record.id)
+        }
+
         let dose = WorkingTreatmentDose(
             amount: record.doseAmount?.doubleValue,
             unit: unit,
@@ -219,7 +223,7 @@ enum WorkingMapper {
                 WorkingTreatmentEntryInput(
                     date: record.date,
                     treatmentItemID: record.treatmentItemID,
-                    itemName: record.itemNameSnapshot,
+                    itemName: itemName,
                     given: record.given,
                     dose: dose
                 )
@@ -232,7 +236,7 @@ enum WorkingMapper {
             id: record.id,
             date: record.date,
             treatmentItemID: record.treatmentItemID,
-            itemName: record.itemNameSnapshot,
+            itemName: itemName,
             given: record.given,
             dose: dose
         )
