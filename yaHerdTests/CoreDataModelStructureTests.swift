@@ -68,6 +68,36 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testMissingImportedWorkingSessionStatusIsRejectedWithoutChangingLifecycle() async throws {
+        let model = try loadModel()
+        let entity = try entity(named: "WorkingSession", in: model)
+        XCTAssertTrue(try attribute(named: "statusRawValue", in: entity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let session = CDWorkingSession(context: context)
+            session.id = UUID()
+            session.date = Date(timeIntervalSince1970: 1_000)
+            session.statusRawValue = nil
+            session.treatmentTemplateNameSnapshot = "Working Session"
+            session.plannedTreatmentsData = Data("[]".utf8)
+
+            XCTAssertThrowsError(try WorkingMapper.makeSessionSummary(from: session)) { error in
+                XCTAssertEqual(
+                    error as? CoreDataWorkingMappingError,
+                    .invalidSessionStatus(sessionID: session.id, value: nil)
+                )
+            }
+            session.statusRawValue = WorkingSessionStatus.finished.rawValue
+            XCTAssertEqual(
+                try WorkingMapper.makeSessionSummary(from: session).status,
+                .finished
+            )
+            context.rollback()
+        }
+    }
+
     func testCloudKitStatusReferenceBaseStatusIsOptional() throws {
         let model = try loadModel()
         let entity = try entity(named: "AnimalStatusReference", in: model)
