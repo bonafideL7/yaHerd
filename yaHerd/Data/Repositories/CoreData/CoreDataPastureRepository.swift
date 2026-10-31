@@ -151,7 +151,7 @@ final class CoreDataPastureRepository:
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
             return try Self.fetchPastures(herd: herd, in: context).contains {
-                $0.id != id && $0.name?.caseInsensitiveCompare(normalized) == .orderedSame
+                $0.id != id && $0.name.caseInsensitiveCompare(normalized) == .orderedSame
             }
         }
     }
@@ -253,7 +253,7 @@ final class CoreDataPastureRepository:
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
             return try Self.fetchGroups(herd: herd, in: context).contains {
-                $0.id != id && $0.name.caseInsensitiveCompare(normalized) == .orderedSame
+                $0.id != id && $0.name?.caseInsensitiveCompare(normalized) == .orderedSame
             }
         }
     }
@@ -538,7 +538,7 @@ final class CoreDataPastureRepository:
             if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
             return $0.id.uuidString < $1.id.uuidString
         }
-        return PastureGroupDetailSnapshot(id: group.id, name: group.name, grazeDays: Int(group.grazeDays), restDays: Int(group.restDays), pastures: pastures)
+        return PastureGroupDetailSnapshot(id: group.id, name: try validatedGroupName(group), grazeDays: Int(group.grazeDays), restDays: Int(group.restDays), pastures: pastures)
     }
 
     private nonisolated static func pastureSort(_ lhs: CDPasture, _ rhs: CDPasture) -> Bool {
