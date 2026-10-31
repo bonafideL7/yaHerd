@@ -48,7 +48,7 @@ ATTRIBUTE_CONTRACT = {
     "MovementRecord": "id:UUID:R,date:Date:R,fromPastureIDSnapshot:UUID:O,fromPastureNameSnapshot:String:O,toPastureIDSnapshot:UUID:O,toPastureNameSnapshot:String:O",
     "StatusRecord": "id:UUID:R,date:Date:R,oldStatusRawValue:String:R,newStatusRawValue:String:R",
     "HealthRecord": "id:UUID:R,date:Date:R,treatment:String:R,notes:String:O",
-    "PregnancyCheck": "id:UUID:R,date:Date:R,resultRawValue:String:R,technician:String:O,estimatedDaysPregnant:Integer 64:O,dueDate:Date:O",
+    "PregnancyCheck": "id:UUID:R,date:Date:R,resultRawValue:String:O,technician:String:O,estimatedDaysPregnant:Integer 64:O,dueDate:Date:O",
     "FieldCheckSession": "id:UUID:R,startedAt:Date:R,completedAt:Date:O,notes:String:R,expectedHeadCountSnapshot:Integer 64:R,quickCowCount:Integer 64:R,quickHeiferCount:Integer 64:R,quickCalfCount:Integer 64:R,quickBullCount:Integer 64:R,quickSteerCount:Integer 64:R,pastureIDSnapshot:UUID:R,pastureNameSnapshot:String:R,pastureArchivedAt:Date:O",
     "FieldCheckAnimalCheck": "id:UUID:R,animalIDSnapshot:UUID:R,rosterTagNumberSnapshot:String:R,rosterTagColorIDSnapshot:UUID:O,damRosterTagNumberSnapshot:String:O,damRosterTagColorIDSnapshot:UUID:O,animalNameSnapshot:String:R,animalSexRawValueSnapshot:String:R,animalTypeRawValueSnapshot:String:R,wasExpectedAtStart:Boolean:R,countedAt:Date:O,missingConfirmedAt:Date:O",
     "FieldCheckFinding": "id:UUID:R,recordedAt:Date:R,typeRawValue:String:R,severityRawValue:String:R,statusRawValue:String:R,note:String:R,animalIDSnapshot:UUID:O,animalDisplayTagNumberSnapshot:String:O,animalDisplayTagColorIDSnapshot:UUID:O,animalNameSnapshot:String:O,pastureNameSnapshot:String:O",
