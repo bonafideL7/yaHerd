@@ -342,7 +342,8 @@ final class CoreDataWorkingRepository:
             ) else {
                 throw WorkingRepositoryError.sessionNotFound
             }
-            guard let status = WorkingSessionStatus(rawValue: session.statusRawValue) else {
+            guard let rawValue = session.statusRawValue,
+                  let status = WorkingSessionStatus(rawValue: rawValue) else {
                 throw CoreDataWorkingMappingError.invalidSessionStatus(
                     sessionID: session.id,
                     value: session.statusRawValue
@@ -384,7 +385,8 @@ final class CoreDataWorkingRepository:
             ) else {
                 throw WorkingRepositoryError.sessionNotFound
             }
-            guard let status = WorkingSessionStatus(rawValue: session.statusRawValue) else {
+            guard let rawValue = session.statusRawValue,
+                  let status = WorkingSessionStatus(rawValue: rawValue) else {
                 throw CoreDataWorkingMappingError.invalidSessionStatus(
                     sessionID: session.id,
                     value: session.statusRawValue
@@ -453,7 +455,8 @@ final class CoreDataWorkingRepository:
             ) else {
                 throw WorkingRepositoryError.sessionNotFound
             }
-            guard let status = WorkingSessionStatus(rawValue: session.statusRawValue) else {
+            guard let rawValue = session.statusRawValue,
+                  let status = WorkingSessionStatus(rawValue: rawValue) else {
                 throw CoreDataWorkingMappingError.invalidSessionStatus(
                     sessionID: session.id,
                     value: session.statusRawValue
@@ -656,7 +659,8 @@ final class CoreDataWorkingRepository:
             ) else {
                 throw WorkingRepositoryError.sessionNotFound
             }
-            guard let status = WorkingSessionStatus(rawValue: session.statusRawValue) else {
+            guard let rawValue = session.statusRawValue,
+                  let status = WorkingSessionStatus(rawValue: rawValue) else {
                 throw CoreDataWorkingMappingError.invalidSessionStatus(
                     sessionID: session.id,
                     value: session.statusRawValue
@@ -1274,7 +1278,8 @@ private extension CoreDataWorkingRepository {
         ) else {
             throw WorkingRepositoryError.sessionNotFound
         }
-        guard let status = WorkingSessionStatus(rawValue: session.statusRawValue) else {
+        guard let rawValue = session.statusRawValue,
+                  let status = WorkingSessionStatus(rawValue: rawValue) else {
             throw CoreDataWorkingMappingError.invalidSessionStatus(
                 sessionID: session.id,
                 value: session.statusRawValue
