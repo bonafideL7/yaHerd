@@ -3,11 +3,14 @@ import Foundation
 
 enum CoreDataAnimalStatusReferenceRepositoryError: LocalizedError, Equatable, Sendable {
     case invalidBaseStatus(referenceID: UUID, value: String?)
+    case invalidName(referenceID: UUID)
 
     var errorDescription: String? {
         switch self {
         case .invalidBaseStatus:
             return "The animal status reference contains an invalid persisted base-status value."
+        case .invalidName:
+            return "The animal status reference has no valid name."
         }
     }
 }
@@ -78,7 +81,7 @@ final class CoreDataAnimalStatusReferenceRepository: AnimalStatusReferenceReadin
                 }
                 return AnimalStatusReferenceOption(
                     id: reference.id,
-                    name: reference.name,
+                    name: try CoreDataAnimalProjection.statusReferenceName(reference),
                     baseStatus: baseStatus
                 )
             }
