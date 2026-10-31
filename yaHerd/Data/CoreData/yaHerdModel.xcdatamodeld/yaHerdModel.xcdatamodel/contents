@@ -220,7 +220,7 @@
         <attribute name="quickBullCount" optional="NO" attributeType="Integer 64" usesScalarValueType="YES" defaultValueString="0"/>
         <attribute name="quickSteerCount" optional="NO" attributeType="Integer 64" usesScalarValueType="YES" defaultValueString="0"/>
         <attribute name="pastureIDSnapshot" optional="YES" attributeType="UUID"/>
-        <attribute name="pastureNameSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="pastureNameSnapshot" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="pastureArchivedAt" optional="YES" attributeType="Date"/>
         <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="fieldCheckSessions" inverseEntity="Herd"/>
         <relationship name="pasture" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Pasture" inverseName="fieldCheckSessions" inverseEntity="Pasture"/>
