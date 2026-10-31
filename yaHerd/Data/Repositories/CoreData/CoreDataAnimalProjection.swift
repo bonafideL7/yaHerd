@@ -71,6 +71,9 @@ enum CoreDataAnimalProjection {
         }()
 
         let healthRecords = managedHealthRecords(animal)
+        for record in healthRecords {
+            _ = try healthTreatment(record)
+        }
         let sex = try sex(animal)
 
         return AnimalSummary(
@@ -229,7 +232,7 @@ enum CoreDataAnimalProjection {
                         id: "health:\(record.id.uuidString)",
                         date: record.date,
                         type: .health,
-                        title: record.treatment,
+                        title: try healthTreatment(record),
                         details: record.notes
                     ),
                     sourceID: record.id,
@@ -348,6 +351,13 @@ enum CoreDataAnimalProjection {
         (animal.tags?.allObjects as? [CDAnimalTag]) ?? []
     }
 
+    static func healthTreatment(_ record: CDHealthRecord) throws -> String {
+        guard let treatment = record.treatment else {
+            throw CoreDataAnimalRepositoryError.corruptHealthTreatment(recordID: record.id)
+        }
+        return treatment
+    }
+
     static func managedHealthRecords(_ animal: CDAnimal) -> [CDHealthRecord] {
         (animal.healthRecords?.allObjects as? [CDHealthRecord]) ?? []
     }
@@ -384,8 +394,8 @@ enum CoreDataAnimalProjection {
             sex: try sex(animal),
             birthDate: animal.birthDate,
             hasMaternalOffspring: !managedMaternalOffspring(animal).isEmpty,
-            hasCastrationOrBandingRecord: managedHealthRecords(animal).contains {
-                AnimalTypeClassifier.isCastrationOrBandingTreatment($0.treatment)
+            hasCastrationOrBandingRecord: try managedHealthRecords(animal).contains {
+                AnimalTypeClassifier.isCastrationOrBandingTreatment(try healthTreatment($0))
             },
             now: now,
             calendar: calendar
