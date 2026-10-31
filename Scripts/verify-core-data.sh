@@ -46,7 +46,7 @@ ATTRIBUTE_CONTRACT = {
     "Animal": "id:UUID:R,editorRevision:UUID:R,name:String:R,sexRawValue:String:R,birthDate:Date:R,statusRawValue:String:R,saleDate:Date:O,salePrice:Double:O,reasonSold:String:O,deathDate:Date:O,causeOfDeath:String:O,isArchived:Boolean:R,archivedAt:Date:O,archiveReason:String:O,distinguishingFeaturesData:Binary:O",
     "AnimalTag": "id:UUID:R,number:String:R,isPrimary:Boolean:R,isActive:Boolean:R,assignedAt:Date:R,removedAt:Date:O",
     "MovementRecord": "id:UUID:R,date:Date:R,fromPastureIDSnapshot:UUID:O,fromPastureNameSnapshot:String:O,toPastureIDSnapshot:UUID:O,toPastureNameSnapshot:String:O",
-    "StatusRecord": "id:UUID:R,date:Date:R,oldStatusRawValue:String:R,newStatusRawValue:String:R",
+    "StatusRecord": "id:UUID:R,date:Date:R,oldStatusRawValue:String:O,newStatusRawValue:String:O",
     "HealthRecord": "id:UUID:R,date:Date:R,treatment:String:O,notes:String:O",
     "PregnancyCheck": "id:UUID:R,date:Date:R,resultRawValue:String:O,technician:String:O,estimatedDaysPregnant:Integer 64:O,dueDate:Date:O",
     "FieldCheckSession": "id:UUID:R,startedAt:Date:R,completedAt:Date:O,notes:String:R,expectedHeadCountSnapshot:Integer 64:R,quickCowCount:Integer 64:R,quickHeiferCount:Integer 64:R,quickCalfCount:Integer 64:R,quickBullCount:Integer 64:R,quickSteerCount:Integer 64:R,pastureIDSnapshot:UUID:O,pastureNameSnapshot:String:R,pastureArchivedAt:Date:O",
