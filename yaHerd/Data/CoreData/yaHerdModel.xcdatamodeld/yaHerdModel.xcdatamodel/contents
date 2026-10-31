@@ -261,7 +261,7 @@
         <attribute name="recordedAt" optional="NO" attributeType="Date"/>
         <attribute name="typeRawValue" optional="NO" attributeType="String"/>
         <attribute name="severityRawValue" optional="NO" attributeType="String"/>
-        <attribute name="statusRawValue" optional="NO" attributeType="String"/>
+        <attribute name="statusRawValue" optional="YES" attributeType="String"/>
         <attribute name="note" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="animalIDSnapshot" optional="YES" attributeType="UUID"/>
         <attribute name="animalDisplayTagNumberSnapshot" optional="YES" attributeType="String"/>
