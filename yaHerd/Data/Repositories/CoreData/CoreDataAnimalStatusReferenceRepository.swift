@@ -2,7 +2,7 @@
 import Foundation
 
 enum CoreDataAnimalStatusReferenceRepositoryError: LocalizedError, Equatable, Sendable {
-    case invalidBaseStatus(referenceID: UUID, value: String)
+    case invalidBaseStatus(referenceID: UUID, value: String?)
 
     var errorDescription: String? {
         switch self {
@@ -69,7 +69,8 @@ final class CoreDataAnimalStatusReferenceRepository: AnimalStatusReferenceReadin
                 )
             }
             return try references.map { reference in
-                guard let baseStatus = AnimalStatus(rawValue: reference.baseStatusRawValue) else {
+                guard let value = reference.baseStatusRawValue,
+                      let baseStatus = AnimalStatus(rawValue: value) else {
                     throw CoreDataAnimalStatusReferenceRepositoryError.invalidBaseStatus(
                         referenceID: reference.id,
                         value: reference.baseStatusRawValue
