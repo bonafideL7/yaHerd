@@ -394,9 +394,9 @@ enum CoreDataAnimalProjection {
             sex: try sex(animal),
             birthDate: animal.birthDate,
             hasMaternalOffspring: !managedMaternalOffspring(animal).isEmpty,
-            hasCastrationOrBandingRecord: try managedHealthRecords(animal).contains {
-                AnimalTypeClassifier.isCastrationOrBandingTreatment(try healthTreatment($0))
-            },
+            hasCastrationOrBandingRecord: try managedHealthRecords(animal)
+                .map { try healthTreatment($0) }
+                .contains(where: AnimalTypeClassifier.isCastrationOrBandingTreatment),
             now: now,
             calendar: calendar
         )
