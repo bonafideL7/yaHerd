@@ -173,8 +173,8 @@
     <entity name="StatusRecord" representedClassName="CDStatusRecord" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="date" optional="NO" attributeType="Date"/>
-        <attribute name="oldStatusRawValue" optional="NO" attributeType="String"/>
-        <attribute name="newStatusRawValue" optional="NO" attributeType="String"/>
+        <attribute name="oldStatusRawValue" optional="YES" attributeType="String"/>
+        <attribute name="newStatusRawValue" optional="YES" attributeType="String"/>
         <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="statusRecords" inverseEntity="Herd"/>
         <relationship name="animal" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="statusRecords" inverseEntity="Animal"/>
             <fetchIndex name="by_id">
