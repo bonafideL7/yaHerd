@@ -1588,10 +1588,10 @@ actor CoreDataReadModelActor:
             birthDate: summary.birthDate,
             saleDate: animal.saleDate,
             deathDate: animal.deathDate,
-            healthRecords: healthRecords.map {
+            healthRecords: try healthRecords.map {
                 DashboardHealthRecord(
                     date: $0.date,
-                    treatment: $0.treatment,
+                    treatment: try CoreDataAnimalProjection.healthTreatment($0),
                     notes: $0.notes
                 )
             },
