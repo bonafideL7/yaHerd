@@ -1316,7 +1316,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                         record.animalIDSnapshot.uuidString,
                         record.id.uuidString,
                         record.treatmentItemID.uuidString,
-                        record.itemNameSnapshot,
+                        record.itemNameSnapshot ?? "<missing>",
                         String(record.given),
                         String(record.date.timeIntervalSinceReferenceDate)
                     ].joined(separator: "|")
