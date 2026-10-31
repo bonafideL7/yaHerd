@@ -219,7 +219,7 @@
         <attribute name="quickCalfCount" optional="NO" attributeType="Integer 64" usesScalarValueType="YES" defaultValueString="0"/>
         <attribute name="quickBullCount" optional="NO" attributeType="Integer 64" usesScalarValueType="YES" defaultValueString="0"/>
         <attribute name="quickSteerCount" optional="NO" attributeType="Integer 64" usesScalarValueType="YES" defaultValueString="0"/>
-        <attribute name="pastureIDSnapshot" optional="NO" attributeType="UUID"/>
+        <attribute name="pastureIDSnapshot" optional="YES" attributeType="UUID"/>
         <attribute name="pastureNameSnapshot" optional="NO" attributeType="String"/>
         <attribute name="pastureArchivedAt" optional="YES" attributeType="Date"/>
         <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="fieldCheckSessions" inverseEntity="Herd"/>
@@ -261,7 +261,7 @@
         <attribute name="recordedAt" optional="NO" attributeType="Date"/>
         <attribute name="typeRawValue" optional="YES" attributeType="String"/>
         <attribute name="severityRawValue" optional="YES" attributeType="String"/>
-        <attribute name="statusRawValue" optional="NO" attributeType="String"/>
+        <attribute name="statusRawValue" optional="YES" attributeType="String"/>
         <attribute name="note" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="animalIDSnapshot" optional="YES" attributeType="UUID"/>
         <attribute name="animalDisplayTagNumberSnapshot" optional="YES" attributeType="String"/>
