@@ -3,7 +3,7 @@ import Foundation
 enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
     case invalidFindingType(findingID: UUID, value: String)
     case invalidFindingSeverity(findingID: UUID, value: String)
-    case invalidFindingStatus(findingID: UUID, value: String)
+    case invalidFindingStatus(findingID: UUID, value: String?)
     case missingFindingSession(findingID: UUID)
     case missingAnimalCheckSession(checkID: UUID)
     case invalidAnimalSex(checkID: UUID, value: String)
