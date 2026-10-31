@@ -7,7 +7,7 @@ final class CDFieldCheckFinding: NSManagedObject {
     @NSManaged var recordedAt: Date
     @NSManaged var typeRawValue: String
     @NSManaged var severityRawValue: String
-    @NSManaged var statusRawValue: String
+    @NSManaged var statusRawValue: String?
     @NSManaged var note: String
     @NSManaged var animalIDSnapshot: UUID?
     @NSManaged var animalDisplayTagNumberSnapshot: String?
