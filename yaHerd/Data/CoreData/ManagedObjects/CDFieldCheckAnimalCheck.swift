@@ -11,7 +11,7 @@ final class CDFieldCheckAnimalCheck: NSManagedObject {
     @NSManaged var damRosterTagColorIDSnapshot: UUID?
     @NSManaged var animalNameSnapshot: String
     @NSManaged var animalSexRawValueSnapshot: String
-    @NSManaged var animalTypeRawValueSnapshot: String
+    @NSManaged var animalTypeRawValueSnapshot: String?
     @NSManaged var wasExpectedAtStart: Bool
     @NSManaged var countedAt: Date?
     @NSManaged var missingConfirmedAt: Date?
