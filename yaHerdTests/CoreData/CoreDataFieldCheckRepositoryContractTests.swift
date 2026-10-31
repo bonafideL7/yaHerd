@@ -209,8 +209,38 @@ final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
         try environment.setAnimalCheckRawValue(
             animalCheckID: checkID,
             key: "animalTypeRawValueSnapshot",
+            value: nil
+        )
+        XCTAssertThrowsError(
+            try environment.makeFieldCheckRepository().fetchSessionDetail(id: sessionID)
+        ) { error in
+            XCTAssertEqual(
+                error as? CoreDataFieldCheckMappingError,
+                .invalidAnimalType(checkID: checkID, value: nil)
+            )
+        }
+
+        do {
+            try await repository.setAnimalCheckCounted(
+                sessionID: sessionID,
+                animalCheckID: checkID,
+                isCounted: true
+            )
+            XCTFail("A missing imported animal type must reject quick-count mutations")
+        } catch {
+            XCTAssertEqual(
+                error as? CoreDataFieldCheckMappingError,
+                .invalidAnimalType(checkID: checkID, value: nil)
+            )
+        }
+
+        try environment.setAnimalCheckRawValue(
+            animalCheckID: checkID,
+            key: "animalTypeRawValueSnapshot",
             value: detail.animalChecks[0].animalType.rawValue
         )
+        let reloadedDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        XCTAssertFalse(try XCTUnwrap(reloadedDetail.animalChecks.first).wasCounted)
         try environment.setFindingRawValue(
             findingID: findingID,
             key: "statusRawValue",
@@ -1673,7 +1703,7 @@ private final class CoreDataFieldCheckContractEnvironment {
     func setAnimalCheckRawValue(
         animalCheckID: UUID,
         key: String,
-        value: String
+        value: String?
     ) throws {
         let context = try assembly.contextFactory.makeWriteContext()
         try context.performAndWait {
