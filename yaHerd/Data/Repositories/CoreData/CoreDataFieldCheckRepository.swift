@@ -818,7 +818,11 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
         let targetIDs = Set(ids)
         try await performWrite { context, herd in
             let sessions = try Self.fetchSessions(herd: herd, in: context)
-            for session in sessions where targetIDs.contains(session.pastureIDSnapshot) {
+            for session in sessions {
+                guard let pastureIDSnapshot = session.pastureIDSnapshot,
+                      targetIDs.contains(pastureIDSnapshot) else {
+                    continue
+                }
                 session.pastureArchivedAt = archivedAt
             }
         }
