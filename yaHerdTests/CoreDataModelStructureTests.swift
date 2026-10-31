@@ -68,6 +68,7 @@ final class CoreDataModelStructureTests: XCTestCase {
         let model = try loadModel()
         let emptyIsValid: [(entity: String, attribute: String)] = [
             ("Animal", "name"),
+            ("TagColorDefinition", "prefix"),
             ("FieldCheckSession", "notes"),
             ("FieldCheckFinding", "note"),
             ("FieldCheckAnimalCheck", "rosterTagNumberSnapshot"),
