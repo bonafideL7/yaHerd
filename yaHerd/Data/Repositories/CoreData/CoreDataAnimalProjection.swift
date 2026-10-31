@@ -154,7 +154,7 @@ enum CoreDataAnimalProjection {
             deathDate: animal.deathDate,
             causeOfDeath: animal.causeOfDeath,
             statusReferenceID: animal.statusReference?.id,
-            statusReferenceName: animal.statusReference?.name,
+            statusReferenceName: try animal.statusReference.map { try statusReferenceName($0) },
             isArchived: animal.isArchived,
             archivedAt: animal.archivedAt,
             archiveReason: animal.archiveReason,
@@ -166,6 +166,13 @@ enum CoreDataAnimalProjection {
                 try summary(offspring)
             }
         )
+    }
+
+    static func statusReferenceName(_ reference: CDAnimalStatusReference) throws -> String {
+        guard let name = reference.name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw CoreDataAnimalStatusReferenceRepositoryError.invalidName(referenceID: reference.id)
+        }
+        return name
     }
 
     static func parentOption(_ animal: CDAnimal) throws -> AnimalParentOption {
