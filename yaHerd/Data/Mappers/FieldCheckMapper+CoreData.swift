@@ -1,7 +1,7 @@
 import Foundation
 
 enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
-    case invalidFindingType(findingID: UUID, value: String)
+    case invalidFindingType(findingID: UUID, value: String?)
     case invalidFindingSeverity(findingID: UUID, value: String)
     case invalidFindingStatus(findingID: UUID, value: String)
     case missingFindingSession(findingID: UUID)
@@ -83,7 +83,8 @@ enum FieldCheckMapper {
         guard let session = finding.session else {
             throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: finding.id)
         }
-        guard let type = FieldCheckFindingType(rawValue: finding.typeRawValue) else {
+        guard let rawType = finding.typeRawValue,
+              let type = FieldCheckFindingType(rawValue: rawType) else {
             throw CoreDataFieldCheckMappingError.invalidFindingType(
                 findingID: finding.id,
                 value: finding.typeRawValue
