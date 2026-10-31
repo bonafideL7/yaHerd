@@ -40,7 +40,7 @@ CLASSES = {
 ATTRIBUTE_CONTRACT = {
     "Herd": "id:UUID:R,name:String:R,createdAt:Date:R,updatedAt:Date:R",
     "TagColorDefinition": "id:UUID:R,name:String:R,prefix:String:R,red:Double:R,green:Double:R,blue:Double:R,alpha:Double:R,sortOrder:Integer 64:R,isHidden:Boolean:R,isDefault:Boolean:R,createdAt:Date:R,updatedAt:Date:R",
-    "AnimalStatusReference": "id:UUID:R,name:String:R,baseStatusRawValue:String:R",
+    "AnimalStatusReference": "id:UUID:R,name:String:R,baseStatusRawValue:String:O",
     "PastureGroup": "id:UUID:R,name:String:O,grazeDays:Integer 64:R,restDays:Integer 64:R",
     "Pasture": "id:UUID:R,name:String:R,sortOrder:Integer 64:R,acreage:Double:O,usableAcreage:Double:O,targetAcresPerHead:Double:O,lastGrazedDate:Date:O",
     "Animal": "id:UUID:R,editorRevision:UUID:R,name:String:R,sexRawValue:String:R,birthDate:Date:R,statusRawValue:String:R,saleDate:Date:O,salePrice:Double:O,reasonSold:String:O,deathDate:Date:O,causeOfDeath:String:O,isArchived:Boolean:R,archivedAt:Date:O,archiveReason:String:O,distinguishingFeaturesData:Binary:O",
@@ -53,7 +53,7 @@ ATTRIBUTE_CONTRACT = {
     "FieldCheckAnimalCheck": "id:UUID:R,animalIDSnapshot:UUID:R,rosterTagNumberSnapshot:String:R,rosterTagColorIDSnapshot:UUID:O,damRosterTagNumberSnapshot:String:O,damRosterTagColorIDSnapshot:UUID:O,animalNameSnapshot:String:R,animalSexRawValueSnapshot:String:R,animalTypeRawValueSnapshot:String:R,wasExpectedAtStart:Boolean:R,countedAt:Date:O,missingConfirmedAt:Date:O",
     "FieldCheckFinding": "id:UUID:R,recordedAt:Date:R,typeRawValue:String:R,severityRawValue:String:R,statusRawValue:String:R,note:String:R,animalIDSnapshot:UUID:O,animalDisplayTagNumberSnapshot:String:O,animalDisplayTagColorIDSnapshot:UUID:O,animalNameSnapshot:String:O,pastureNameSnapshot:String:O",
     "WorkingTreatmentTemplate": "id:UUID:R,name:String:O,itemsData:Binary:O",
-    "WorkingSession": "id:UUID:R,date:Date:R,statusRawValue:String:R,treatmentTemplateNameSnapshot:String:R,plannedTreatmentsData:Binary:O,sourcePastureIDSnapshot:UUID:R,sourcePastureNameSnapshot:String:R",
+    "WorkingSession": "id:UUID:R,date:Date:R,statusRawValue:String:R,treatmentTemplateNameSnapshot:String:R,plannedTreatmentsData:Binary:O,sourcePastureIDSnapshot:UUID:O,sourcePastureNameSnapshot:String:O",
     "WorkingQueueItem": "id:UUID:R,statusRawValue:String:R,completedAt:Date:O,animalIDSnapshot:UUID:R,animalTagNumberSnapshot:String:R,animalTagColorIDSnapshot:UUID:O,animalNameSnapshot:String:R,animalSexRawValueSnapshot:String:R,animalDamDisplayTagNumberSnapshot:String:O,animalDamDisplayTagColorIDSnapshot:UUID:O,collectedFromPastureIDSnapshot:UUID:O,collectedFromPastureNameSnapshot:String:O,destinationPastureIDSnapshot:UUID:O,destinationPastureNameSnapshot:String:O",
     "WorkingTreatmentRecord": "id:UUID:R,date:Date:R,treatmentItemID:UUID:R,itemNameSnapshot:String:O,given:Boolean:R,doseAmount:Double:O,doseUnitRawValue:String:O,administrationRouteRawValue:String:O,animalIDSnapshot:UUID:R",
 }
