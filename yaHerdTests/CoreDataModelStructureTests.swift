@@ -24,6 +24,28 @@ final class CoreDataModelStructureTests: XCTestCase {
         "WorkingTreatmentRecord"
     ]
 
+    func testMissingHealthTreatmentIsRejectedWithoutFabricatingHistory() async throws {
+        let model = try loadModel()
+        let healthEntity = try entity(named: "HealthRecord", in: model)
+        XCTAssertTrue(try attribute(named: "treatment", in: healthEntity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let record = CDHealthRecord(context: context)
+            record.id = UUID()
+            record.treatment = nil
+            XCTAssertThrowsError(try CoreDataAnimalProjection.healthTreatment(record)) { error in
+                XCTAssertEqual(
+                    error as? CoreDataAnimalRepositoryError,
+                    .corruptHealthTreatment(recordID: record.id)
+                )
+            }
+            record.treatment = "Vaccination"
+            XCTAssertEqual(try CoreDataAnimalProjection.healthTreatment(record), "Vaccination")
+        }
+    }
+
     func testRequiredScalarAttributesHaveCloudKitDefaults() throws {
         let model = try loadModel()
 
