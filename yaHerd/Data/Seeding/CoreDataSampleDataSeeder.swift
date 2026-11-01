@@ -302,9 +302,9 @@ enum CoreDataSampleHerdFactory {
                 history.date = daysAgo(min(80 + index % 90, max(1, ageInDays - 1)))
                 let from = pastures[(index + 1) % pastures.count]
                 history.fromPastureIDSnapshot = from.id
-                history.fromPastureNameSnapshot = from.name
+                history.fromPastureNameSnapshot = try from.validatedName()
                 history.toPastureIDSnapshot = animal.currentPasture?.id
-                history.toPastureNameSnapshot = animal.currentPasture?.name
+                history.toPastureNameSnapshot = try animal.currentPasture.map { try $0.validatedName() }
                 history.herd = herd
                 history.animal = animal
             }
@@ -417,7 +417,7 @@ enum CoreDataSampleHerdFactory {
             session.quickBullCount = 0
             session.quickSteerCount = 0
             session.pastureIDSnapshot = pasture.id
-            session.pastureNameSnapshot = pasture.name
+            session.pastureNameSnapshot = try pasture.validatedName()
             session.pastureArchivedAt = nil
             session.pasture = pasture
             session.herd = herd
@@ -472,7 +472,7 @@ enum CoreDataSampleHerdFactory {
                     FieldCheckFindingStatus.resolved, .monitoring, .open
                 ][findingIndex].rawValue
                 finding.note = ["Pasture checked", "Observe eye", "Check trough"][findingIndex]
-                finding.pastureNameSnapshot = pasture.name
+                finding.pastureNameSnapshot = try pasture.validatedName()
                 finding.animalIDSnapshot = findingIndex == 2 ? nil : matching?.id
                 finding.animalDisplayTagNumberSnapshot =
                     findingIndex == 2 ? nil : primary?.number
