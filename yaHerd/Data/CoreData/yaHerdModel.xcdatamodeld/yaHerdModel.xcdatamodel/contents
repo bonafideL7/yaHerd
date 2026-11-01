@@ -238,7 +238,7 @@
 </entity>
     <entity name="FieldCheckAnimalCheck" representedClassName="CDFieldCheckAnimalCheck" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
-        <attribute name="animalIDSnapshot" optional="NO" attributeType="UUID"/>
+        <attribute name="animalIDSnapshot" optional="YES" attributeType="UUID"/>
         <attribute name="rosterTagNumberSnapshot" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="rosterTagColorIDSnapshot" optional="YES" attributeType="UUID"/>
         <attribute name="damRosterTagNumberSnapshot" optional="YES" attributeType="String"/>

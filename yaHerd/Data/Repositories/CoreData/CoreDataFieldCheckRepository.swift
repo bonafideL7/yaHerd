@@ -480,7 +480,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 throw FieldCheckRepositoryError.pastureNotFound
             }
 
-            if let existing = Self.animalCheck(for: animalID, in: session) {
+            if let existing = try Self.animalCheck(for: animalID, in: session) {
                 existing.countedAt = checkedAt
                 existing.missingConfirmedAt = nil
                 if animal.currentPasture?.id != destinationPasture.id {
@@ -556,8 +556,8 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 in: context
             )
             let linkedAnimalID = input.animalID ?? animal?.id
-            let check = linkedAnimalID.flatMap {
-                Self.animalCheck(for: $0, in: session)
+            let check = try linkedAnimalID.flatMap {
+                try Self.animalCheck(for: $0, in: session)
             }
 
             let finding = CDFieldCheckFinding(context: context)
@@ -650,8 +650,8 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 in: context
             )
             let linkedAnimalID = input.animalID ?? animal?.id
-            let check = linkedAnimalID.flatMap {
-                Self.animalCheck(for: $0, in: session)
+            let check = try linkedAnimalID.flatMap {
+                try Self.animalCheck(for: $0, in: session)
             }
 
             finding.recordedAt = input.recordedAt
@@ -1017,6 +1017,7 @@ private extension CoreDataFieldCheckRepository {
         guard let session = check.session else {
             throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: check.id)
         }
+        _ = try FieldCheckMapper.animalID(from: check)
         try validateReadChildRelationship(
             entity: CDFieldCheckAnimalCheck.coreDataEntityName,
             id: check.id,
@@ -1095,6 +1096,7 @@ private extension CoreDataFieldCheckRepository {
         ), check.session?.id == sessionID else {
             throw FieldCheckRepositoryError.animalCheckNotFound
         }
+        _ = try FieldCheckMapper.animalID(from: check)
         return check
     }
 
@@ -1230,7 +1232,7 @@ private extension CoreDataFieldCheckRepository {
         guard FieldCheckFindingRules.shouldMarkAnimalMissing(for: input.type),
               input.status != .resolved,
               let linkedAnimalID,
-              let check = animalCheck(for: linkedAnimalID, in: session) else {
+              let check = try animalCheck(for: linkedAnimalID, in: session) else {
             return
         }
 
@@ -1246,7 +1248,7 @@ private extension CoreDataFieldCheckRepository {
     ) throws {
         guard let animalID,
               let session,
-              let check = animalCheck(for: animalID, in: session) else {
+              let check = try animalCheck(for: animalID, in: session) else {
             return
         }
 
@@ -1283,10 +1285,15 @@ private extension CoreDataFieldCheckRepository {
     nonisolated static func animalCheck(
         for animalID: UUID,
         in session: CDFieldCheckSession
-    ) -> CDFieldCheckAnimalCheck? {
-        managedChecks(session).first {
-            $0.animalIDSnapshot == animalID
+    ) throws -> CDFieldCheckAnimalCheck? {
+        var matchedCheck: CDFieldCheckAnimalCheck?
+        for check in managedChecks(session) {
+            let storedAnimalID = try FieldCheckMapper.animalID(from: check)
+            if storedAnimalID == animalID {
+                matchedCheck = check
+            }
         }
+        return matchedCheck
     }
 
     nonisolated static func currentQuickAnimalTypeCounts(
@@ -1338,6 +1345,7 @@ private extension CoreDataFieldCheckRepository {
         for session: CDFieldCheckSession
     ) throws -> [FieldCheckQuickCountRosterEntry] {
         try managedChecks(session).map { check in
+            _ = try FieldCheckMapper.animalID(from: check)
             let animalType = try FieldCheckMapper.animalType(from: check)
             return FieldCheckQuickCountRosterEntry(
                 animalType: animalType,

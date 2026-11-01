@@ -114,6 +114,122 @@ final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
         )
     }
 
+    func testMissingImportedFieldCheckRosterAnimalIDBlocksUnsafeMutationsAndRestores() async throws {
+        let environment = try await makeEnvironment()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Imported roster identity",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let animal = try environment.makeAnimalRepository().create(
+            input: AnimalInput(
+                name: "Tracked animal",
+                tagNumber: "ID-1",
+                tagColorID: nil,
+                sex: .female,
+                birthDate: Date(timeIntervalSinceReferenceDate: 10_000),
+                status: .active,
+                pastureID: pasture.id,
+                sireID: nil,
+                damID: nil,
+                distinguishingFeatures: [],
+                saleDate: nil,
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        )
+        let repository = environment.makeFieldCheckRepository()
+        let sessionID = try await repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.id,
+                startedAt: Date(timeIntervalSinceReferenceDate: 95_000),
+                notes: "Imported identity"
+            )
+        )
+        let original = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID)?.animalChecks.first)
+        XCTAssertEqual(original.animalID, animal.id)
+
+        try environment.setAnimalCheckRawValue(
+            animalCheckID: original.id,
+            key: "animalIDSnapshot",
+            value: nil
+        )
+        XCTAssertThrowsError(try repository.fetchSessions()) { error in
+            XCTAssertEqual(
+                error as? CoreDataFieldCheckMappingError,
+                .missingAnimalIDSnapshot(checkID: original.id)
+            )
+        }
+        XCTAssertThrowsError(try repository.fetchSessionDetail(id: sessionID)) { error in
+            XCTAssertEqual(
+                error as? CoreDataFieldCheckMappingError,
+                .missingAnimalIDSnapshot(checkID: original.id)
+            )
+        }
+        do {
+            try await repository.setAnimalCheckCounted(
+                sessionID: sessionID,
+                animalCheckID: original.id,
+                isCounted: true
+            )
+            XCTFail("Count mutation must reject a roster item without an animal ID.")
+        } catch {
+            XCTAssertEqual(
+                error as? CoreDataFieldCheckMappingError,
+                .missingAnimalIDSnapshot(checkID: original.id)
+            )
+        }
+        do {
+            try await repository.addTrackedAnimalToSession(
+                sessionID: sessionID,
+                animalID: animal.id,
+                checkedAt: Date(timeIntervalSinceReferenceDate: 95_100)
+            )
+            XCTFail("Do not create a duplicate roster item for an unidentified animal.")
+        } catch {
+            XCTAssertEqual(
+                error as? CoreDataFieldCheckMappingError,
+                .missingAnimalIDSnapshot(checkID: original.id)
+            )
+        }
+        do {
+            try await repository.addFinding(
+                sessionID: sessionID,
+                input: FieldCheckFindingInput(
+                    recordedAt: Date(timeIntervalSinceReferenceDate: 95_200),
+                    type: .missingAnimal,
+                    severity: .warning,
+                    status: .open,
+                    note: "Must not attach to the wrong roster entry",
+                    animalID: animal.id
+                )
+            )
+            XCTFail("Finding mutation must not silently ignore invalid roster identity.")
+        } catch {
+            XCTAssertEqual(
+                error as? CoreDataFieldCheckMappingError,
+                .missingAnimalIDSnapshot(checkID: original.id)
+            )
+        }
+
+        try environment.setAnimalCheckRawValue(
+            animalCheckID: original.id,
+            key: "animalIDSnapshot",
+            value: animal.id
+        )
+        let restored = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        XCTAssertEqual(restored.animalChecks.count, 1)
+        XCTAssertEqual(restored.animalChecks.first?.animalID, animal.id)
+        XCTAssertFalse(try XCTUnwrap(restored.animalChecks.first).wasCounted)
+        XCTAssertTrue(restored.findings.isEmpty)
+    }
+
     func testCorruptPersistedFieldCheckEnumsFailProjection() async throws {
         let environment = try await makeEnvironment()
         let pasture = try environment.makePastureRepository().create(
