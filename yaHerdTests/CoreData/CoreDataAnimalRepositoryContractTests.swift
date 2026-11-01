@@ -4815,7 +4815,7 @@ private final class CoreDataAnimalContractEnvironment {
             return try context.fetch(request).map {
                 PastureDeletionMovementRecordContractSnapshot(
                     id: $0.id,
-                    date: $0.date,
+                    date: try XCTUnwrap($0.date),
                     fromPastureIDSnapshot: $0.fromPastureIDSnapshot,
                     fromPastureNameSnapshot: $0.fromPastureNameSnapshot,
                     toPastureIDSnapshot: $0.toPastureIDSnapshot,
