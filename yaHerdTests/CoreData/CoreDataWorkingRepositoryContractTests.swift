@@ -5,6 +5,97 @@ import XCTest
 
 @MainActor
 final class CoreDataWorkingRepositoryContractTests: XCTestCase {
+    func testImportedDestinationWithoutNameCannotCorruptWorkingQueueOrCompletionHistory() async throws {
+        let environment = try await CoreDataWorkingContractEnvironment.make()
+        let pastures = environment.makePastureRepository()
+        let source = try pastures.create(input: PastureInput(
+            name: "Source", acreage: nil, usableAcreage: nil, targetAcresPerHead: nil
+        ))
+        let destination = try pastures.create(input: PastureInput(
+            name: "Destination", acreage: nil, usableAcreage: nil, targetAcresPerHead: nil
+        ))
+        let animal = try environment.makeAnimalRepository().create(
+            input: Self.animalInput(name: "Cow", tagNumber: "NAME-1", pastureID: source.id)
+        )
+        let working = environment.makeWorkingRepository()
+        let sessionID = try await working.startSession(input: WorkingSessionStartInput(
+            date: Date(timeIntervalSinceReferenceDate: 207_000),
+            sourcePastureID: source.id,
+            treatmentTemplateName: "Working",
+            plannedTreatments: [],
+            animalIDs: [animal.id]
+        ))
+        let before = try XCTUnwrap(working.fetchSessionDetail(id: sessionID))
+        let queueID = try XCTUnwrap(before.queueItems.first?.id)
+        let herdID = environment.herdID
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDPasture.self, id: destination.id, herdID: herdID, in: context
+            ))
+            stored.name = nil
+            try context.save()
+        }
+
+        await XCTAssertThrowsErrorAsync(
+            try await working.saveEdits(
+                forQueueItemID: queueID,
+                inSessionID: sessionID,
+                input: WorkingSessionAnimalEditInput(
+                    status: .done,
+                    completedAt: nil,
+                    destinationPastureID: destination.id,
+                    treatmentEntries: [],
+                    pregnancyCheck: nil,
+                    castrationPerformed: false,
+                    observationNotes: ""
+                )
+            )
+        ) { error in
+            XCTAssertEqual(error as? PastureValidationError, .emptyName)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await working.completeSession(
+                id: sessionID,
+                assignments: [WorkingQueueDestinationAssignment(
+                    queueItemID: queueID, destinationPastureID: destination.id
+                )]
+            )
+        ) { error in
+            XCTAssertEqual(error as? PastureValidationError, .emptyName)
+        }
+        XCTAssertEqual(try working.fetchSessionDetail(id: sessionID), before)
+
+        try context.performAndWait {
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDPasture.self, id: destination.id, herdID: herdID, in: context
+            ))
+            stored.name = destination.name
+            try context.save()
+        }
+        try await working.saveEdits(
+            forQueueItemID: queueID,
+            inSessionID: sessionID,
+            input: WorkingSessionAnimalEditInput(
+                status: .done,
+                completedAt: nil,
+                destinationPastureID: destination.id,
+                treatmentEntries: [],
+                pregnancyCheck: nil,
+                castrationPerformed: false,
+                observationNotes: ""
+            )
+        )
+        try await working.completeSession(
+            id: sessionID,
+            assignments: [WorkingQueueDestinationAssignment(
+                queueItemID: queueID, destinationPastureID: destination.id
+            )]
+        )
+        let finished = try XCTUnwrap(working.fetchSessionDetail(id: sessionID))
+        XCTAssertEqual(finished.queueItems.first?.destinationPastureName, destination.name)
+    }
+
     func testMissingImportedQueueAnimalIDBlocksReadsAndMutationsWithoutHistoryLoss() async throws {
         let environment = try await CoreDataWorkingContractEnvironment.make()
         let pasture = try environment.makePastureRepository().create(
