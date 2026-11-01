@@ -14,11 +14,12 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let original = try repository.create(input: PastureInput(
             name: "North Pasture", acreage: 18, usableAcreage: nil, targetAcresPerHead: nil
         ))
+        let herdID = try XCTUnwrap(environment.selection.currentHerdID)
         let context = try environment.assembly.contextFactory.makeWriteContext()
         try context.performAndWait {
             let pasture = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPasture.self, id: original.id,
-                herdID: try XCTUnwrap(environment.selection.currentHerdID), in: context
+                herdID: herdID, in: context
             ))
             pasture.name = nil
             try context.save()
@@ -58,14 +59,15 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         try context.performAndWait {
             let pasture = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPasture.self, id: original.id,
-                herdID: try XCTUnwrap(environment.selection.currentHerdID), in: context
+                herdID: herdID, in: context
             ))
             pasture.name = original.name
             try context.save()
         }
         XCTAssertEqual(try repository.fetchPastureDetail(id: original.id), original)
         XCTAssertEqual(try repository.fetchPastureOptions().first?.name, original.name)
-        XCTAssertEqual(try await readModel.fetchDashboardPastureRecords().first?.name, original.name)
+        let restoredDashboard = try await readModel.fetchDashboardPastureRecords()
+        XCTAssertEqual(restoredDashboard.first?.name, original.name)
     }
 
     func testCoreDataGrazingCommandRefreshesDashboardAndPreservesOtherPastures() async throws {
