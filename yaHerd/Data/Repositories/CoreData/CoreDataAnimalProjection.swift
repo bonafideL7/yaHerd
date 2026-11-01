@@ -266,11 +266,14 @@ enum CoreDataAnimalProjection {
         }
 
         for movement in managedMovementRecords(animal) {
+            guard let movementDate = movement.date else {
+                throw CoreDataAnimalRepositoryError.missingMovementDate(recordID: movement.id)
+            }
             events.append(
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
                         id: "movement:\(movement.id.uuidString)",
-                        date: movement.date,
+                        date: movementDate,
                         type: .movement,
                         title: "Pasture Movement",
                         details: "\(movement.fromPastureNameSnapshot ?? "—") → \(movement.toPastureNameSnapshot ?? "—")"
