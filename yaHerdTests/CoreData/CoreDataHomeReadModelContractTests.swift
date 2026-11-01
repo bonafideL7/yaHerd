@@ -297,7 +297,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
                 session.quickSteerCount = 0
                 let pasture = row.owner === herd ? selectedPasture : foreignPasture
                 session.pastureIDSnapshot = pasture.id
-                session.pastureNameSnapshot = pasture.name
+                session.pastureNameSnapshot = try pasture.validatedName()
                 session.pastureArchivedAt = nil
                 session.herd = row.owner
                 session.pasture = pasture
@@ -1392,7 +1392,7 @@ private final class CoreDataHomeReadModelContractEnvironment {
                 session.quickSteerCount = 0
                 let pasture = row.owner === herd ? selectedPasture : foreignPasture
                 session.pastureIDSnapshot = pasture.id
-                session.pastureNameSnapshot = pasture.name
+                session.pastureNameSnapshot = try pasture.validatedName()
                 session.pastureArchivedAt = nil
                 session.herd = row.owner
                 session.pasture = pasture
