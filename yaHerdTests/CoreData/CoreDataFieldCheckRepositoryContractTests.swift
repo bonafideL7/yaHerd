@@ -1819,7 +1819,7 @@ private final class CoreDataFieldCheckContractEnvironment {
     func setAnimalCheckRawValue(
         animalCheckID: UUID,
         key: String,
-        value: String?
+        value: Any?
     ) throws {
         let context = try assembly.contextFactory.makeWriteContext()
         try context.performAndWait {
