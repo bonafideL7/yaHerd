@@ -1019,6 +1019,10 @@ final class CoreDataWorkingRepository:
         }
 
         for record in treatmentRecords {
+            guard record.treatmentItemID != nil,
+                  record.animalIDSnapshot != nil else {
+                throw CoreDataWorkingMappingError.corruptTreatmentRecord(recordID: record.id)
+            }
             try validateHerdOwnership(
                 relationship: "WorkingSession.treatmentRecords",
                 expectedHerdID: herdID,
