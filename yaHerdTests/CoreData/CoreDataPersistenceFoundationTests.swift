@@ -1065,7 +1065,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         session.quickBullCount = 0
         session.quickSteerCount = 0
         session.pastureIDSnapshot = pasture.id
-        session.pastureNameSnapshot = pasture.name
+        session.pastureNameSnapshot = try pasture.validatedName()
         session.herd = herd
         session.pasture = pasture
         return session
