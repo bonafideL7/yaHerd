@@ -758,7 +758,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
                 in: context
             )
 
-            let fieldSession = Self.makeFieldCheckSession(
+            let fieldSession = try Self.makeFieldCheckSession(
                 id: fieldSessionID,
                 pasture: pasture,
                 herd: herd,
@@ -889,7 +889,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             movement.herd = herd
             movement.animal = animal
 
-            let fieldSession = Self.makeFieldCheckSession(
+            let fieldSession = try Self.makeFieldCheckSession(
                 id: fieldSessionID,
                 pasture: pasture,
                 herd: herd,
@@ -1053,7 +1053,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         herd: CDHerd,
         startedAt: Date,
         in context: NSManagedObjectContext
-    ) -> CDFieldCheckSession {
+    ) throws -> CDFieldCheckSession {
         let session = CDFieldCheckSession(context: context)
         session.id = id
         session.startedAt = startedAt
