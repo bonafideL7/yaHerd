@@ -206,18 +206,21 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             )?.treatmentRecords.first?.id
         )
         let context = try environment.assembly.contextFactory.makeWriteContext()
+        let herdID = environment.herdID
 
-        func updateRecord(_ change: (CDWorkingTreatmentRecord) throws -> Void) throws {
+        func updateRecord(
+            _ change: @Sendable (CDWorkingTreatmentRecord, NSManagedObjectContext) throws -> Void
+        ) throws {
             try context.performAndWait {
                 let record = try XCTUnwrap(
                     CoreDataLookup().herdOwned(
                         CDWorkingTreatmentRecord.self,
                         id: recordID,
-                        herdID: environment.herdID,
+                        herdID: herdID,
                         in: context
                     )
                 )
-                try change(record)
+                try change(record, context)
                 try context.save()
                 context.refreshAllObjects()
             }
@@ -253,13 +256,13 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
         }
 
-        try updateRecord { record in
+        try updateRecord { record, context in
             record.animalIDSnapshot = animal.id
             record.animal = try XCTUnwrap(
                 CoreDataLookup().herdOwned(
                     CDAnimal.self,
                     id: animal.id,
-                    herdID: environment.herdID,
+                    herdID: herdID,
                     in: context
                 )
             )
