@@ -667,6 +667,41 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testMissingImportedWorkingQueueStatusIsRejectedAndCanRecover() async throws {
+        let model = try loadModel()
+        let entity = try entity(named: "WorkingQueueItem", in: model)
+        XCTAssertTrue(try attribute(named: "statusRawValue", in: entity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let item = CDWorkingQueueItem(context: context)
+            item.id = UUID()
+            item.animalIDSnapshot = UUID()
+            item.animalSexRawValueSnapshot = Sex.unknown.rawValue
+            item.statusRawValue = nil
+
+            XCTAssertThrowsError(try WorkingMapper.makeQueueItemSnapshot(from: item)) { error in
+                XCTAssertEqual(
+                    error as? CoreDataWorkingMappingError,
+                    .invalidQueueStatus(queueItemID: item.id, value: nil)
+                )
+            }
+
+            item.statusRawValue = "invalid"
+            XCTAssertThrowsError(try WorkingMapper.makeQueueItemSnapshot(from: item)) { error in
+                XCTAssertEqual(
+                    error as? CoreDataWorkingMappingError,
+                    .invalidQueueStatus(queueItemID: item.id, value: "invalid")
+                )
+            }
+
+            item.statusRawValue = WorkingQueueStatus.queued.rawValue
+            XCTAssertEqual(try WorkingMapper.makeQueueItemSnapshot(from: item).status, .queued)
+            context.rollback()
+        }
+    }
+
     func testMissingImportedFindingStatusIsRejectedAndCanRecover() async throws {
         let model = try loadModel()
         let entity = try entity(named: "FieldCheckFinding", in: model)
