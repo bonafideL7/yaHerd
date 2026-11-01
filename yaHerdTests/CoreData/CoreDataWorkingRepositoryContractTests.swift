@@ -154,6 +154,115 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         }
     }
 
+    func testMissingImportedTreatmentIdentifiersBlockReadsAndWorkDataDeletion() async throws {
+        let environment = try await CoreDataWorkingContractEnvironment.make()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Treatment Identifier Pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let animal = try environment.makeAnimalRepository().create(
+            input: Self.animalInput(
+                name: "Treatment Identifier Cow",
+                tagNumber: "MISSING-TREATMENT-ID",
+                pastureID: pasture.id
+            )
+        )
+        let working = environment.makeWorkingRepository()
+        let sessionID = try await working.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSinceReferenceDate: 205_000),
+                sourcePastureID: pasture.id,
+                treatmentTemplateName: "Existing Treatment Session",
+                plannedTreatments: [],
+                animalIDs: [animal.id]
+            )
+        )
+        let queueID = try XCTUnwrap(working.fetchSessionDetail(id: sessionID)?.queueItems.first?.id)
+        let itemID = UUID()
+        try await working.complete(
+            queueItemID: queueID,
+            inSessionID: sessionID,
+            treatmentEntries: [
+                WorkingTreatmentEntryInput(
+                    date: Date(timeIntervalSinceReferenceDate: 205_010),
+                    treatmentItemID: itemID,
+                    itemName: "Recorded Treatment",
+                    given: true,
+                    dose: WorkingTreatmentDose(amount: 1, unit: .milliliter)
+                )
+            ],
+            pregnancyCheck: nil,
+            markCastrated: false,
+            observationNotes: ""
+        )
+        let recordID = try XCTUnwrap(
+            working.fetchQueueItemEditor(
+                sessionID: sessionID,
+                queueItemID: queueID
+            )?.treatmentRecords.first?.id
+        )
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+
+        func updateRecord(_ change: (CDWorkingTreatmentRecord) -> Void) throws {
+            try context.performAndWait {
+                let record = try XCTUnwrap(
+                    CoreDataLookup().herdOwned(
+                        CDWorkingTreatmentRecord.self,
+                        id: recordID,
+                        herdID: environment.herdID,
+                        in: context
+                    )
+                )
+                change(record)
+                try context.save()
+                context.refreshAllObjects()
+            }
+        }
+
+        try updateRecord { $0.treatmentItemID = nil }
+        let expectedError = CoreDataWorkingMappingError.corruptTreatmentRecord(recordID: recordID)
+        XCTAssertThrowsError(try working.fetchSessionDetail(id: sessionID)) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+        XCTAssertThrowsError(
+            try working.fetchQueueItemEditor(sessionID: sessionID, queueItemID: queueID)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await working.deleteWorkData(forQueueItemID: queueID, inSessionID: sessionID)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+
+        try updateRecord {
+            $0.treatmentItemID = itemID
+            $0.animal = nil
+            $0.animalIDSnapshot = nil
+        }
+        XCTAssertThrowsError(try working.fetchSessionDetail(id: sessionID)) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await working.deleteWorkData(forQueueItemID: queueID, inSessionID: sessionID)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+
+        try updateRecord { $0.animalIDSnapshot = animal.id }
+        XCTAssertEqual(
+            try working.fetchQueueItemEditor(
+                sessionID: sessionID,
+                queueItemID: queueID
+            )?.treatmentRecords.first?.treatmentItemID,
+            itemID
+        )
+    }
+
     func testOrphanedWorkingTreatmentCannotDisappearFromSessionOrBeDeleted() async throws {
         let environment = try await CoreDataWorkingContractEnvironment.make()
         let pasture = try environment.makePastureRepository().create(
