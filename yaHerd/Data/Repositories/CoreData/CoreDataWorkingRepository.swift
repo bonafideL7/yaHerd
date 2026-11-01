@@ -277,11 +277,13 @@ final class CoreDataWorkingRepository:
                 in: context
             )
 
+            let destinationName = try destination.map { try $0.validatedName() }
+
             resolved.queueItem.statusRawValue = statusRawValue
             resolved.queueItem.completedAt = completedAt
             resolved.queueItem.destinationPasture = destination
             resolved.queueItem.destinationPastureIDSnapshot = destination?.id
-            resolved.queueItem.destinationPastureNameSnapshot = destination?.name
+            resolved.queueItem.destinationPastureNameSnapshot = destinationName
 
             try CoreDataWorkingWorkDataMutation.replace(
                 session: resolved.session,
