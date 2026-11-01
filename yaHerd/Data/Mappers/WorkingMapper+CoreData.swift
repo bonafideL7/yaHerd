@@ -4,6 +4,7 @@ import Foundation
 enum CoreDataWorkingMappingError: Error, Equatable {
     case invalidSessionStatus(sessionID: UUID, value: String?)
     case invalidQueueStatus(queueItemID: UUID, value: String?)
+    case missingQueueAnimalID(queueItemID: UUID)
     case invalidAnimalSex(queueItemID: UUID, value: String)
     case invalidPregnancyResult(checkID: UUID, value: String)
     case invalidDoseUnit(recordID: UUID, value: String)
@@ -58,8 +59,18 @@ private struct CoreDataWorkingTreatmentPlanItemPayload: Decodable {
 }
 
 enum WorkingMapper {
+    static func queueAnimalID(from item: CDWorkingQueueItem) throws -> UUID {
+        guard let animalID = item.animalIDSnapshot else {
+            throw CoreDataWorkingMappingError.missingQueueAnimalID(queueItemID: item.id)
+        }
+        return animalID
+    }
+
     static func makeSessionSummary(from session: CDWorkingSession) throws -> WorkingSessionSummary {
         let queueItems = managedQueueItems(session)
+        for item in queueItems {
+            _ = try queueAnimalID(from: item)
+        }
         return WorkingSessionSummary(
             id: session.id,
             date: session.date,
@@ -92,11 +103,12 @@ enum WorkingMapper {
     }
 
     static func makeQueueItemSnapshot(from item: CDWorkingQueueItem) throws -> WorkingQueueItemSnapshot {
-        WorkingQueueItemSnapshot(
+        let animalID = try queueAnimalID(from: item)
+        return WorkingQueueItemSnapshot(
             id: item.id,
             status: try queueStatus(item),
             completedAt: item.completedAt,
-            animalID: item.animalIDSnapshot,
+            animalID: animalID,
             animalName: item.animalNameSnapshot,
             animalDisplayTagNumber: item.animalTagNumberSnapshot,
             animalDisplayTagColorID: item.animalTagColorIDSnapshot,
@@ -115,10 +127,11 @@ enum WorkingMapper {
         queueItem: CDWorkingQueueItem,
         animal: CDAnimal
     ) throws -> WorkingQueueItemEditorSnapshot {
+        let animalID = try queueAnimalID(from: queueItem)
         let plannedTreatments = try plannedTreatments(session)
         let treatmentRecords = try managedTreatmentRecords(session)
             .filter {
-                $0.animalIDSnapshot == queueItem.animalIDSnapshot
+                $0.animalIDSnapshot == animalID
                     && $0.animal?.id == animal.id
             }
             .sorted { lhs, rhs in
@@ -168,7 +181,7 @@ enum WorkingMapper {
             completedAt: queueItem.completedAt,
             collectedFromPastureName: queueItem.collectedFromPastureNameSnapshot,
             destinationPastureID: queueItem.destinationPastureIDSnapshot,
-            animalID: queueItem.animalIDSnapshot,
+            animalID: animalID,
             animalDisplayTagNumber: queueItem.animalTagNumberSnapshot,
             animalDisplayTagColorID: queueItem.animalTagColorIDSnapshot,
             animalDamDisplayTagNumber: queueItem.animalDamDisplayTagNumberSnapshot,
