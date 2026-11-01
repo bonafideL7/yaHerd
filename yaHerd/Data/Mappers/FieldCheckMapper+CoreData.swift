@@ -6,6 +6,7 @@ enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
     case invalidFindingStatus(findingID: UUID, value: String?)
     case missingFindingSession(findingID: UUID)
     case missingAnimalCheckSession(checkID: UUID)
+    case missingAnimalIDSnapshot(checkID: UUID)
     case invalidAnimalSex(checkID: UUID, value: String)
     case invalidAnimalType(checkID: UUID, value: String?)
 
@@ -21,6 +22,8 @@ enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
             return "The Field Check finding is missing its session relationship."
         case .missingAnimalCheckSession:
             return "The Field Check roster check is missing its session relationship."
+        case .missingAnimalIDSnapshot:
+            return "The Field Check roster entry is missing its historical animal identifier."
         case .invalidAnimalSex:
             return "The Field Check roster entry contains an invalid persisted sex."
         case .invalidAnimalType:
@@ -30,6 +33,13 @@ enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
 }
 
 enum FieldCheckMapper {
+    static func animalID(from check: CDFieldCheckAnimalCheck) throws -> UUID {
+        guard let animalID = check.animalIDSnapshot else {
+            throw CoreDataFieldCheckMappingError.missingAnimalIDSnapshot(checkID: check.id)
+        }
+        return animalID
+    }
+
     static func makeAnimalCheckSnapshot(
         from check: CDFieldCheckAnimalCheck,
         needsAttention: Bool
@@ -37,6 +47,7 @@ enum FieldCheckMapper {
         guard check.session != nil else {
             throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: check.id)
         }
+        let animalID = try animalID(from: check)
         guard let sex = Sex(rawValue: check.animalSexRawValueSnapshot) else {
             throw CoreDataFieldCheckMappingError.invalidAnimalSex(
                 checkID: check.id,
@@ -47,7 +58,7 @@ enum FieldCheckMapper {
 
         return FieldCheckAnimalCheckSnapshot(
             id: check.id,
-            animalID: check.animalIDSnapshot,
+            animalID: animalID,
             displayTagNumber: AnimalDisplayTagFormatter.displayTagNumber(
                 from: check.rosterTagNumberSnapshot
             ),
@@ -188,10 +199,11 @@ private extension FieldCheckMapper {
     ) throws -> [FieldCheckAnimalCheckSnapshot] {
         try checks
             .map { check in
-                try makeAnimalCheckSnapshot(
+                let animalID = try animalID(from: check)
+                return try makeAnimalCheckSnapshot(
                     from: check,
                     needsAttention: FieldCheckAnimalAttentionRules.shouldNeedAttention(
-                        animalID: check.animalIDSnapshot,
+                        animalID: animalID,
                         findings: findings
                     )
                 )

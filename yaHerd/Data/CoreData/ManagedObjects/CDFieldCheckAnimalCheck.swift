@@ -4,7 +4,7 @@ import Foundation
 @objc(CDFieldCheckAnimalCheck)
 final class CDFieldCheckAnimalCheck: NSManagedObject {
     @NSManaged var id: UUID
-    @NSManaged var animalIDSnapshot: UUID
+    @NSManaged var animalIDSnapshot: UUID?
     @NSManaged var rosterTagNumberSnapshot: String
     @NSManaged var rosterTagColorIDSnapshot: UUID?
     @NSManaged var damRosterTagNumberSnapshot: String?

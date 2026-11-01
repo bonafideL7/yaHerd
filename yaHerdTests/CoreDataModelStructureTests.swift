@@ -1038,7 +1038,7 @@ final class CoreDataModelStructureTests: XCTestCase {
         XCTAssertTrue(try attribute(named: "pastureIDSnapshot", in: session).isOptional)
         XCTAssertFalse(try attribute(named: "pastureNameSnapshot", in: session).isOptional)
 
-        XCTAssertFalse(try attribute(named: "animalIDSnapshot", in: check).isOptional)
+        XCTAssertTrue(try attribute(named: "animalIDSnapshot", in: check).isOptional)
         XCTAssertTrue(try attribute(named: "damRosterTagNumberSnapshot", in: check).isOptional)
         XCTAssertNil(check.propertiesByName["note"])
 
