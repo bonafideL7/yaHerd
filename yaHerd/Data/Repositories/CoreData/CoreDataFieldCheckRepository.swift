@@ -1289,7 +1289,7 @@ private extension CoreDataFieldCheckRepository {
         var matchedCheck: CDFieldCheckAnimalCheck?
         for check in managedChecks(session) {
             let storedAnimalID = try FieldCheckMapper.animalID(from: check)
-            if storedAnimalID == animalID {
+            if storedAnimalID == animalID && matchedCheck == nil {
                 matchedCheck = check
             }
         }
