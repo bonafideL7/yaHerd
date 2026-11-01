@@ -1174,7 +1174,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                         row.herd.id.uuidString,
                         try XCTUnwrap(row.session).id.uuidString,
                         row.id.uuidString,
-                        row.animalIDSnapshot.uuidString,
+                        try WorkingMapper.queueAnimalID(from: row).uuidString,
                         try XCTUnwrap(row.statusRawValue)
                     ].joined(separator: "|")
                 }.sorted()
