@@ -207,7 +207,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         )
         let context = try environment.assembly.contextFactory.makeWriteContext()
 
-        func updateRecord(_ change: (CDWorkingTreatmentRecord) -> Void) throws {
+        func updateRecord(_ change: (CDWorkingTreatmentRecord) throws -> Void) throws {
             try context.performAndWait {
                 let record = try XCTUnwrap(
                     CoreDataLookup().herdOwned(
@@ -217,7 +217,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                         in: context
                     )
                 )
-                change(record)
+                try change(record)
                 try context.save()
                 context.refreshAllObjects()
             }
@@ -253,7 +253,17 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
         }
 
-        try updateRecord { $0.animalIDSnapshot = animal.id }
+        try updateRecord { record in
+            record.animalIDSnapshot = animal.id
+            record.animal = try XCTUnwrap(
+                CoreDataLookup().herdOwned(
+                    CDAnimal.self,
+                    id: animal.id,
+                    herdID: environment.herdID,
+                    in: context
+                )
+            )
+        }
         XCTAssertEqual(
             try working.fetchQueueItemEditor(
                 sessionID: sessionID,
