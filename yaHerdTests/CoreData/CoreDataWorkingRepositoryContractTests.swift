@@ -524,7 +524,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                         $0.id.uuidString,
                         $0.sourcePasture?.id.uuidString ?? "nil",
                         $0.sourcePastureIDSnapshot?.uuidString ?? "nil",
-                        $0.statusRawValue
+                        $0.statusRawValue ?? "nil"
                     ].joined(separator: "|")
                 }.sorted()
             }
@@ -727,7 +727,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                     [
                         $0.herd.id.uuidString,
                         $0.id.uuidString,
-                        $0.statusRawValue,
+                        $0.statusRawValue ?? "nil",
                         $0.treatmentTemplateNameSnapshot
                     ].joined(separator: "|")
                 }.sorted()
