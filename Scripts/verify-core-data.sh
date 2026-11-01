@@ -45,7 +45,7 @@ ATTRIBUTE_CONTRACT = {
     "Pasture": "id:UUID:R,name:String:O,sortOrder:Integer 64:R,acreage:Double:O,usableAcreage:Double:O,targetAcresPerHead:Double:O,lastGrazedDate:Date:O",
     "Animal": "id:UUID:R,editorRevision:UUID:R,name:String:R,sexRawValue:String:R,birthDate:Date:R,statusRawValue:String:R,saleDate:Date:O,salePrice:Double:O,reasonSold:String:O,deathDate:Date:O,causeOfDeath:String:O,isArchived:Boolean:R,archivedAt:Date:O,archiveReason:String:O,distinguishingFeaturesData:Binary:O",
     "AnimalTag": "id:UUID:R,number:String:R,isPrimary:Boolean:R,isActive:Boolean:R,assignedAt:Date:R,removedAt:Date:O",
-    "MovementRecord": "id:UUID:R,date:Date:R,fromPastureIDSnapshot:UUID:O,fromPastureNameSnapshot:String:O,toPastureIDSnapshot:UUID:O,toPastureNameSnapshot:String:O",
+    "MovementRecord": "id:UUID:R,date:Date:O,fromPastureIDSnapshot:UUID:O,fromPastureNameSnapshot:String:O,toPastureIDSnapshot:UUID:O,toPastureNameSnapshot:String:O",
     "StatusRecord": "id:UUID:R,date:Date:R,oldStatusRawValue:String:O,newStatusRawValue:String:O",
     "HealthRecord": "id:UUID:R,date:Date:R,treatment:String:O,notes:String:O",
     "PregnancyCheck": "id:UUID:R,date:Date:R,resultRawValue:String:O,technician:String:O,estimatedDaysPregnant:Integer 64:O,dueDate:Date:O",
