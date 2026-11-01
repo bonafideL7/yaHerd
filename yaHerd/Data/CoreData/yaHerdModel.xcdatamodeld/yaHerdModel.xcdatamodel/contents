@@ -342,13 +342,13 @@
     <entity name="WorkingTreatmentRecord" representedClassName="CDWorkingTreatmentRecord" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="date" optional="NO" attributeType="Date"/>
-        <attribute name="treatmentItemID" optional="NO" attributeType="UUID"/>
+        <attribute name="treatmentItemID" optional="YES" attributeType="UUID"/>
         <attribute name="itemNameSnapshot" optional="YES" attributeType="String"/>
         <attribute name="given" optional="NO" attributeType="Boolean" usesScalarValueType="YES" defaultValueString="NO"/>
         <attribute name="doseAmount" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
         <attribute name="doseUnitRawValue" optional="YES" attributeType="String"/>
         <attribute name="administrationRouteRawValue" optional="YES" attributeType="String"/>
-        <attribute name="animalIDSnapshot" optional="NO" attributeType="UUID"/>
+        <attribute name="animalIDSnapshot" optional="YES" attributeType="UUID"/>
         <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="workingTreatmentRecords" inverseEntity="Herd"/>
         <relationship name="animal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="workingTreatmentRecords" inverseEntity="Animal"/>
         <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="WorkingSession" inverseName="treatmentRecords" inverseEntity="WorkingSession"/>
