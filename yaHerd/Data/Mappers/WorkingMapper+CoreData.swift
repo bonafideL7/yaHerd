@@ -3,7 +3,7 @@ import Foundation
 
 enum CoreDataWorkingMappingError: Error, Equatable {
     case invalidSessionStatus(sessionID: UUID, value: String?)
-    case invalidQueueStatus(queueItemID: UUID, value: String)
+    case invalidQueueStatus(queueItemID: UUID, value: String?)
     case invalidAnimalSex(queueItemID: UUID, value: String)
     case invalidPregnancyResult(checkID: UUID, value: String)
     case invalidDoseUnit(recordID: UUID, value: String)
@@ -318,7 +318,8 @@ enum WorkingMapper {
     }
 
     private static func queueStatus(_ item: CDWorkingQueueItem) throws -> WorkingQueueStatus {
-        guard let status = WorkingQueueStatus(rawValue: item.statusRawValue) else {
+        guard let rawValue = item.statusRawValue,
+              let status = WorkingQueueStatus(rawValue: rawValue) else {
             throw CoreDataWorkingMappingError.invalidQueueStatus(
                 queueItemID: item.id,
                 value: item.statusRawValue
