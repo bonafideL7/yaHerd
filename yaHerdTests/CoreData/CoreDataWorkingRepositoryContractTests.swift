@@ -1422,9 +1422,9 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                     [
                         record.herd.id.uuidString,
                         try XCTUnwrap(record.session).id.uuidString,
-                        record.animalIDSnapshot.uuidString,
+                        try XCTUnwrap(record.animalIDSnapshot).uuidString,
                         record.id.uuidString,
-                        record.treatmentItemID.uuidString,
+                        try XCTUnwrap(record.treatmentItemID).uuidString,
                         record.itemNameSnapshot ?? "<missing>",
                         String(record.given),
                         String(record.date.timeIntervalSinceReferenceDate)
