@@ -155,10 +155,9 @@ final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
         let original = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID)?.animalChecks.first)
         XCTAssertEqual(original.animalID, animal.id)
 
-        try environment.setAnimalCheckRawValue(
+        try environment.setAnimalCheckIDSnapshot(
             animalCheckID: original.id,
-            key: "animalIDSnapshot",
-            value: nil
+            animalID: nil
         )
         XCTAssertThrowsError(try repository.fetchSessions()) { error in
             XCTAssertEqual(
@@ -218,10 +217,9 @@ final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
             )
         }
 
-        try environment.setAnimalCheckRawValue(
+        try environment.setAnimalCheckIDSnapshot(
             animalCheckID: original.id,
-            key: "animalIDSnapshot",
-            value: animal.id
+            animalID: animal.id
         )
         let restored = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
         XCTAssertEqual(restored.animalChecks.count, 1)
@@ -1819,7 +1817,7 @@ private final class CoreDataFieldCheckContractEnvironment {
     func setAnimalCheckRawValue(
         animalCheckID: UUID,
         key: String,
-        value: Any?
+        value: String?
     ) throws {
         let context = try assembly.contextFactory.makeWriteContext()
         try context.performAndWait {
@@ -1832,6 +1830,25 @@ private final class CoreDataFieldCheckContractEnvironment {
                 throw CoreDataFieldCheckContractTestError.missingStagedAnimalCheck
             }
             check.setValue(value, forKey: key)
+            try context.save()
+        }
+    }
+
+    func setAnimalCheckIDSnapshot(
+        animalCheckID: UUID,
+        animalID: UUID?
+    ) throws {
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            guard let check = try CoreDataLookup().herdOwned(
+                CDFieldCheckAnimalCheck.self,
+                id: animalCheckID,
+                herdID: herdID,
+                in: context
+            ) else {
+                throw CoreDataFieldCheckContractTestError.missingStagedAnimalCheck
+            }
+            check.animalIDSnapshot = animalID
             try context.save()
         }
     }
