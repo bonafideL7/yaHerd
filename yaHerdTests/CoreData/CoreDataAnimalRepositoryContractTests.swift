@@ -5529,7 +5529,8 @@ private final class CoreDataAnimalWorkingSessionReader: WorkingSessionDetailRead
             ) else {
                 return nil
             }
-            guard let status = WorkingSessionStatus(rawValue: session.statusRawValue) else {
+            guard let rawStatus = session.statusRawValue,
+                  let status = WorkingSessionStatus(rawValue: rawStatus) else {
                 throw CoreDataAnimalContractTestError.invalidWorkingSessionStatus
             }
             guard let plannedTreatmentsData = session.plannedTreatmentsData else {
