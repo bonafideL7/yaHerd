@@ -492,6 +492,8 @@ enum CoreDataAnimalMutation {
         guard source?.id != pasture?.id else {
             return
         }
+        let sourceName = try source.map { try $0.validatedName() }
+        let destinationName = try pasture.map { try $0.validatedName() }
 
         let movement = CDMovementRecord(context: context)
         movement.id = try uniqueID(
@@ -502,9 +504,9 @@ enum CoreDataAnimalMutation {
         )
         movement.date = date
         movement.fromPastureIDSnapshot = source?.id
-        movement.fromPastureNameSnapshot = source?.name
+        movement.fromPastureNameSnapshot = sourceName
         movement.toPastureIDSnapshot = pasture?.id
-        movement.toPastureNameSnapshot = pasture?.name
+        movement.toPastureNameSnapshot = destinationName
         movement.herd = herd
         movement.animal = animal
 
