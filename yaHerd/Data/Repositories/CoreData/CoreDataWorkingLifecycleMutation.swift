@@ -96,10 +96,11 @@ enum CoreDataWorkingLifecycleMutation {
         for entry in plan {
             let item = entry.queueItem
             let destination = entry.destination
+            let destinationName = try destination.validatedName()
 
             item.destinationPasture = destination
             item.destinationPastureIDSnapshot = destination.id
-            item.destinationPastureNameSnapshot = destination.name
+            item.destinationPastureNameSnapshot = destinationName
 
             guard let animal = item.animal else {
                 continue
@@ -115,7 +116,7 @@ enum CoreDataWorkingLifecycleMutation {
                     ?? session.sourcePastureNameSnapshot
             } else {
                 sourceID = animal.currentPasture?.id
-                sourceName = animal.currentPasture?.name
+                sourceName = try animal.currentPasture.map { try $0.validatedName() }
             }
 
             let shouldMove = isOwnedBySession
@@ -137,7 +138,7 @@ enum CoreDataWorkingLifecycleMutation {
             movement.fromPastureIDSnapshot = sourceID
             movement.fromPastureNameSnapshot = sourceName
             movement.toPastureIDSnapshot = destination.id
-            movement.toPastureNameSnapshot = destination.name
+            movement.toPastureNameSnapshot = destinationName
             movement.herd = herd
             movement.animal = animal
 
