@@ -5554,7 +5554,7 @@ private final class CoreDataAnimalWorkingSessionReader: WorkingSessionDetailRead
                         id: item.id,
                         status: queueStatus,
                         completedAt: item.completedAt,
-                        animalID: item.animalIDSnapshot,
+                        animalID: try WorkingMapper.queueAnimalID(from: item),
                         animalName: item.animalNameSnapshot,
                         animalDisplayTagNumber: item.animalTagNumberSnapshot,
                         animalDisplayTagColorID: item.animalTagColorIDSnapshot,
