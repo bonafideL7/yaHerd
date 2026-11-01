@@ -414,6 +414,50 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testMissingImportedPastureNameCannotCreateMovementHistory() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let herd = CDHerd(context: context)
+            herd.id = UUID()
+            herd.name = "Sample Herd"
+            herd.createdAt = Date(timeIntervalSinceReferenceDate: 100)
+            herd.updatedAt = herd.createdAt
+
+            let source = CDPasture(context: context)
+            source.id = UUID()
+            source.name = nil
+            source.herd = herd
+            let destination = CDPasture(context: context)
+            destination.id = UUID()
+            destination.name = "South"
+            destination.herd = herd
+            let animal = CDAnimal(context: context)
+            animal.id = UUID()
+            animal.herd = herd
+            animal.currentPasture = source
+
+            XCTAssertThrowsError(try CoreDataAnimalMutation.move(
+                animal, to: destination, herd: herd, in: context, at: Date()
+            )) { error in
+                XCTAssertEqual(error as? PastureValidationError, .emptyName)
+            }
+            XCTAssertEqual(animal.currentPasture?.id, source.id)
+            XCTAssertFalse(context.insertedObjects.contains { $0 is CDMovementRecord })
+
+            source.name = "North"
+            destination.name = nil
+            XCTAssertThrowsError(try CoreDataAnimalMutation.move(
+                animal, to: destination, herd: herd, in: context, at: Date()
+            )) { error in
+                XCTAssertEqual(error as? PastureValidationError, .emptyName)
+            }
+            XCTAssertEqual(animal.currentPasture?.id, source.id)
+            XCTAssertFalse(context.insertedObjects.contains { $0 is CDMovementRecord })
+            context.rollback()
+        }
+    }
+
     func testCloudKitPastureGroupNameAllowsMissingStorage() throws {
         let model = try loadModel()
         let group = try entity(named: "PastureGroup", in: model)
