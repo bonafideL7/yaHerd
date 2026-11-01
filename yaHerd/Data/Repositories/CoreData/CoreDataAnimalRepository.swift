@@ -183,7 +183,7 @@ final class CoreDataAnimalRepository:
                 damID: dam.id,
                 damDisplayName: try CoreDataAnimalProjection.parentOption(dam).displayName,
                 pastureID: dam.currentPasture?.id,
-                pastureName: dam.currentPasture?.name,
+                pastureName: try dam.currentPasture.map { try $0.validatedName() },
                 inferredSireID: inferredSire?.id,
                 inferredSireDisplayName: try inferredSire.map {
                     try CoreDataAnimalProjection.parentOption($0).displayName

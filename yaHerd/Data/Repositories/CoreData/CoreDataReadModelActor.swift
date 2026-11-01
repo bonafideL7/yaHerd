@@ -822,7 +822,7 @@ actor CoreDataReadModelActor:
                         status: try CoreDataAnimalProjection.status(animal),
                         displayTagNumber: animalListDisplayTagNumber(animal),
                         pastureSortKey: sortOrder == .pasture
-                            ? animalListPastureSortKey(animal)
+                            ? try animalListPastureSortKey(animal)
                             : ""
                     )
                 )
@@ -949,12 +949,12 @@ actor CoreDataReadModelActor:
 
     private static func animalListPastureSortKey(
         _ animal: CDAnimal
-    ) -> String {
+    ) throws -> String {
         if animal.activeWorkingSession != nil {
             return "0-working-pen"
         }
-        if let name = animal.currentPasture?.name, !name.isEmpty {
-            return "1-\(name.lowercased())"
+        if let pasture = animal.currentPasture {
+            return "1-\(try pasture.validatedName().lowercased())"
         }
         return "2-no-pasture"
     }
@@ -1053,7 +1053,7 @@ actor CoreDataReadModelActor:
                     options.append(
                         PastureOption(
                             id: pasture.id,
-                            name: pasture.name
+                            name: try pasture.validatedName()
                         )
                     )
                 }
@@ -1736,7 +1736,7 @@ actor CoreDataReadModelActor:
 
             return DashboardPastureRecord(
                 id: pasture.id,
-                name: pasture.name,
+                name: try pasture.validatedName(),
                 acreage: pasture.acreage?.doubleValue,
                 usableAcreage: pasture.usableAcreage?.doubleValue,
                 targetAcresPerHead: pasture.targetAcresPerHead?.doubleValue,

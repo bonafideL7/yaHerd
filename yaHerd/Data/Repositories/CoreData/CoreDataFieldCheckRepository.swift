@@ -204,7 +204,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             session.quickBullCount = 0
             session.quickSteerCount = 0
             session.pastureIDSnapshot = pasture.id
-            session.pastureNameSnapshot = pasture.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            session.pastureNameSnapshot = try pasture.validatedName().trimmingCharacters(in: .whitespacesAndNewlines)
             session.pastureArchivedAt = nil
             session.herd = herd
             session.pasture = pasture
