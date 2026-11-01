@@ -159,7 +159,7 @@
 </entity>
     <entity name="MovementRecord" representedClassName="CDMovementRecord" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
-        <attribute name="date" optional="NO" attributeType="Date"/>
+        <attribute name="date" optional="YES" attributeType="Date"/>
         <attribute name="fromPastureIDSnapshot" optional="YES" attributeType="UUID"/>
         <attribute name="fromPastureNameSnapshot" optional="YES" attributeType="String"/>
         <attribute name="toPastureIDSnapshot" optional="YES" attributeType="UUID"/>
