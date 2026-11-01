@@ -691,8 +691,8 @@ final class CoreDataWorkingRepository:
             }
 
             let existingAnimalIDs = Set(
-                ((session.queueItems?.allObjects as? [CDWorkingQueueItem]) ?? [])
-                    .map(\.animalIDSnapshot)
+                try ((session.queueItems?.allObjects as? [CDWorkingQueueItem]) ?? [])
+                    .map { try WorkingMapper.queueAnimalID(from: $0) }
             )
             let candidates = animals.map {
                 WorkingCollectionCandidate(
@@ -1244,6 +1244,7 @@ private extension CoreDataWorkingRepository {
         session: CDWorkingSession,
         herdID: UUID
     ) throws {
+        _ = try WorkingMapper.queueAnimalID(from: queueItem)
         guard let owningSession = queueItem.session else {
             throw CoreDataWorkingRepositoryError.missingQueueSession(queueItemID: queueItem.id)
         }
