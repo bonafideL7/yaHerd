@@ -3,6 +3,32 @@ import XCTest
 @testable import yaHerd
 
 final class CoreDataModelStructureTests: XCTestCase {
+    func testCloudKitWorkingQueueAnimalIDRequiresARealImportedIdentity() async throws {
+        let model = try loadModel()
+        let entity = try entity(named: "WorkingQueueItem", in: model)
+        XCTAssertTrue(try attribute(named: "animalIDSnapshot", in: entity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let item = CDWorkingQueueItem(context: context)
+            item.id = UUID()
+            item.animalIDSnapshot = nil
+
+            XCTAssertThrowsError(try WorkingMapper.queueAnimalID(from: item)) { error in
+                XCTAssertEqual(
+                    error as? CoreDataWorkingMappingError,
+                    .missingQueueAnimalID(queueItemID: item.id)
+                )
+            }
+
+            let existingID = UUID()
+            item.animalIDSnapshot = existingID
+            XCTAssertEqual(try WorkingMapper.queueAnimalID(from: item), existingID)
+            context.rollback()
+        }
+    }
+
     private static let expectedEntities: Set<String> = [
         "Herd",
         "TagColorDefinition",
