@@ -950,7 +950,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                         try XCTUnwrap(row.session).id.uuidString,
                         row.id.uuidString,
                         row.animalIDSnapshot.uuidString,
-                        row.statusRawValue
+                        try XCTUnwrap(row.statusRawValue)
                     ].joined(separator: "|")
                 }.sorted()
             }
