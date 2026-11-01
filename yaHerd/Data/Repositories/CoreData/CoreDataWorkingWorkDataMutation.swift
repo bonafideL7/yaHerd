@@ -48,7 +48,7 @@ enum CoreDataWorkingWorkDataMutation {
             in: context
         )
 
-        deleteTreatmentRecords(session: session, animal: animal, in: context)
+        try deleteTreatmentRecords(session: session, animal: animal, in: context)
         for entry in input.treatmentEntries {
             let record = CDWorkingTreatmentRecord(context: context)
             record.id = try CoreDataAnimalMutation.uniqueID(
@@ -135,8 +135,8 @@ enum CoreDataWorkingWorkDataMutation {
         session: CDWorkingSession,
         animal: CDAnimal,
         in context: NSManagedObjectContext
-    ) {
-        deleteTreatmentRecords(session: session, animal: animal, in: context)
+    ) throws {
+        try deleteTreatmentRecords(session: session, animal: animal, in: context)
         deletePregnancyChecks(session: session, animal: animal, in: context)
         deleteHealthRecords(session: session, animal: animal, in: context)
     }
@@ -170,8 +170,14 @@ enum CoreDataWorkingWorkDataMutation {
         session: CDWorkingSession,
         animal: CDAnimal,
         in context: NSManagedObjectContext
-    ) {
+    ) throws {
         let records = (session.treatmentRecords?.allObjects as? [CDWorkingTreatmentRecord]) ?? []
+        for record in records {
+            guard record.treatmentItemID != nil,
+                  record.animalIDSnapshot != nil else {
+                throw CoreDataWorkingMappingError.corruptTreatmentRecord(recordID: record.id)
+            }
+        }
         for record in records where record.animalIDSnapshot == animal.id {
             context.delete(record)
         }
