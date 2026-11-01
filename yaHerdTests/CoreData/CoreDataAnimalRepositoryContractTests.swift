@@ -5543,7 +5543,8 @@ private final class CoreDataAnimalWorkingSessionReader: WorkingSessionDetailRead
             let queueItems = try ((session.queueItems?.allObjects as? [CDWorkingQueueItem]) ?? [])
                 .sorted { $0.id.uuidString < $1.id.uuidString }
                 .map { item -> WorkingQueueItemSnapshot in
-                    guard let queueStatus = WorkingQueueStatus(rawValue: item.statusRawValue) else {
+                    guard let rawQueueStatus = item.statusRawValue,
+                          let queueStatus = WorkingQueueStatus(rawValue: rawQueueStatus) else {
                         throw CoreDataAnimalContractTestError.invalidWorkingQueueStatus
                     }
                     guard let sex = Sex(rawValue: item.animalSexRawValueSnapshot) else {
