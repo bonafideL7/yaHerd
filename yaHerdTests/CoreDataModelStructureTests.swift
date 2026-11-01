@@ -1092,8 +1092,8 @@ final class CoreDataModelStructureTests: XCTestCase {
         let treatment = try entity(named: "WorkingTreatmentRecord", in: model)
         XCTAssertTrue(try relationship(named: "session", in: treatment).isOptional)
 
+        XCTAssertTrue(try attribute(named: "animalIDSnapshot", in: queue).isOptional)
         for snapshot in [
-            "animalIDSnapshot",
             "animalTagNumberSnapshot",
             "animalNameSnapshot",
             "animalSexRawValueSnapshot"
