@@ -226,7 +226,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             }
         }
 
-        try updateRecord { $0.treatmentItemID = nil }
+        try updateRecord { record, _ in record.treatmentItemID = nil }
         let expectedError = CoreDataWorkingMappingError.corruptTreatmentRecord(recordID: recordID)
         XCTAssertThrowsError(try working.fetchSessionDetail(id: sessionID)) { error in
             XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
@@ -242,10 +242,10 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
         }
 
-        try updateRecord {
-            $0.treatmentItemID = itemID
-            $0.animal = nil
-            $0.animalIDSnapshot = nil
+        try updateRecord { record, _ in
+            record.treatmentItemID = itemID
+            record.animal = nil
+            record.animalIDSnapshot = nil
         }
         XCTAssertThrowsError(try working.fetchSessionDetail(id: sessionID)) { error in
             XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
