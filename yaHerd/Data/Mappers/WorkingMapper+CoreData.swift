@@ -211,7 +211,9 @@ enum WorkingMapper {
             route = nil
         }
 
-        guard let itemName = record.itemNameSnapshot else {
+        guard let itemName = record.itemNameSnapshot,
+              let treatmentItemID = record.treatmentItemID,
+              record.animalIDSnapshot != nil else {
             throw CoreDataWorkingMappingError.corruptTreatmentRecord(recordID: record.id)
         }
 
@@ -224,7 +226,7 @@ enum WorkingMapper {
             try WorkingTreatmentPlanRules.validate([
                 WorkingTreatmentEntryInput(
                     date: record.date,
-                    treatmentItemID: record.treatmentItemID,
+                    treatmentItemID: treatmentItemID,
                     itemName: itemName,
                     given: record.given,
                     dose: dose
@@ -237,7 +239,7 @@ enum WorkingMapper {
         return WorkingTreatmentRecordSnapshot(
             id: record.id,
             date: record.date,
-            treatmentItemID: record.treatmentItemID,
+            treatmentItemID: treatmentItemID,
             itemName: itemName,
             given: record.given,
             dose: dose
