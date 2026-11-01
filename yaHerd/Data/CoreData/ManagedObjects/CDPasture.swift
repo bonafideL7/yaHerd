@@ -4,7 +4,7 @@ import Foundation
 @objc(CDPasture)
 final class CDPasture: NSManagedObject {
     @NSManaged var id: UUID
-    @NSManaged var name: String
+    @NSManaged var name: String?
     @NSManaged var sortOrder: Int64
     @NSManaged var acreage: NSNumber?
     @NSManaged var usableAcreage: NSNumber?
@@ -17,4 +17,11 @@ final class CDPasture: NSManagedObject {
     @NSManaged var workingCollectedQueueItems: NSSet?
     @NSManaged var workingDestinationQueueItems: NSSet?
     @NSManaged var fieldCheckSessions: NSSet?
+
+    func validatedName() throws -> String {
+        guard let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw PastureValidationError.emptyName
+        }
+        return name
+    }
 }

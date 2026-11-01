@@ -5,6 +5,69 @@ import XCTest
 
 @MainActor
 final class CoreDataHomeReadModelContractTests: XCTestCase {
+    func testMissingImportedPastureNameBlocksReadsWithoutLosingThePasture() async throws {
+        let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+        let repository = CoreDataPastureRepository(
+            selection: environment.selection,
+            assembly: environment.assembly
+        )
+        let original = try repository.create(input: PastureInput(
+            name: "North Pasture", acreage: 18, usableAcreage: nil, targetAcresPerHead: nil
+        ))
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let pasture = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDPasture.self, id: original.id,
+                herdID: try XCTUnwrap(environment.selection.currentHerdID), in: context
+            ))
+            pasture.name = nil
+            try context.save()
+        }
+
+        XCTAssertThrowsError(try repository.fetchPastures()) {
+            XCTAssertEqual($0 as? PastureValidationError, .emptyName)
+        }
+        XCTAssertThrowsError(try repository.fetchPastureDetail(id: original.id)) {
+            XCTAssertEqual($0 as? PastureValidationError, .emptyName)
+        }
+        XCTAssertThrowsError(try repository.fetchPastureOptions()) {
+            XCTAssertEqual($0 as? PastureValidationError, .emptyName)
+        }
+        XCTAssertThrowsError(try repository.nameExists("North Pasture", excluding: nil)) {
+            XCTAssertEqual($0 as? PastureValidationError, .emptyName)
+        }
+
+        let readModel = CoreDataReadModelActor(
+            contextFactory: environment.assembly.contextFactory,
+            lookup: CoreDataLookup(),
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        do {
+            _ = try await readModel.fetchDashboardPastureRecords()
+            XCTFail("Dashboard must reject an imported pasture with no name")
+        } catch {
+            XCTAssertEqual(error as? PastureValidationError, .emptyName)
+        }
+        do {
+            _ = try await readModel.fetchAnimalPastureOptions(limit: 50)
+            XCTFail("Animal pasture picker must reject missing names")
+        } catch {
+            XCTAssertEqual(error as? PastureValidationError, .emptyName)
+        }
+
+        try context.performAndWait {
+            let pasture = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDPasture.self, id: original.id,
+                herdID: try XCTUnwrap(environment.selection.currentHerdID), in: context
+            ))
+            pasture.name = original.name
+            try context.save()
+        }
+        XCTAssertEqual(try repository.fetchPastureDetail(id: original.id), original)
+        XCTAssertEqual(try repository.fetchPastureOptions().first?.name, original.name)
+        XCTAssertEqual(try await readModel.fetchDashboardPastureRecords().first?.name, original.name)
+    }
+
     func testCoreDataGrazingCommandRefreshesDashboardAndPreservesOtherPastures() async throws {
         let environment = try await CoreDataHomeReadModelContractEnvironment.make()
         let pastures = CoreDataPastureRepository(

@@ -620,7 +620,7 @@ final class CoreDataWorkingRepository:
             session.treatmentTemplateNameSnapshot = templateName
             session.plannedTreatmentsData = plannedTreatmentsData
             session.sourcePastureIDSnapshot = sourcePasture.id
-            session.sourcePastureNameSnapshot = sourcePasture.name
+            session.sourcePastureNameSnapshot = try sourcePasture.validatedName()
             session.herd = herd
             session.sourcePasture = sourcePasture
 
@@ -1469,7 +1469,7 @@ private extension CoreDataWorkingRepository {
         item.animalDamDisplayTagNumberSnapshot = damDisplayTagNumber
         item.animalDamDisplayTagColorIDSnapshot = damPrimary?.colorID
         item.collectedFromPastureIDSnapshot = sourcePasture.id
-        item.collectedFromPastureNameSnapshot = sourcePasture.name
+        item.collectedFromPastureNameSnapshot = try sourcePasture.validatedName()
         item.destinationPastureIDSnapshot = nil
         item.destinationPastureNameSnapshot = nil
         item.herd = herd

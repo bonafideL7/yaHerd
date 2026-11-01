@@ -392,6 +392,28 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testCloudKitPastureNameRequiresARealImportedName() async throws {
+        let model = try loadModel()
+        let pastureEntity = try entity(named: "Pasture", in: model)
+        XCTAssertTrue(try attribute(named: "name", in: pastureEntity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let pasture = CDPasture(context: context)
+            pasture.id = UUID()
+            pasture.name = nil
+            XCTAssertThrowsError(try pasture.validatedName()) { error in
+                XCTAssertEqual(error as? PastureValidationError, .emptyName)
+            }
+            pasture.name = "  "
+            XCTAssertThrowsError(try pasture.validatedName())
+            pasture.name = "North Pasture"
+            XCTAssertEqual(try pasture.validatedName(), "North Pasture")
+            context.rollback()
+        }
+    }
+
     func testCloudKitPastureGroupNameAllowsMissingStorage() throws {
         let model = try loadModel()
         let group = try entity(named: "PastureGroup", in: model)

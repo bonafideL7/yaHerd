@@ -133,11 +133,11 @@ final class CoreDataPastureRepository:
             guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
             return try Self.fetchPastures(herd: herd, in: context)
                 .sorted { left, right in
-                    let nameOrder = left.name.localizedStandardCompare(right.name)
+                    let nameOrder = (left.name ?? "").localizedStandardCompare(right.name ?? "")
                     if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
                     return left.id.uuidString < right.id.uuidString
                 }
-                .map { PastureOption(id: $0.id, name: $0.name) }
+                .map { PastureOption(id: $0.id, name: try $0.validatedName()) }
         }
     }
 
@@ -151,7 +151,7 @@ final class CoreDataPastureRepository:
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
             return try Self.fetchPastures(herd: herd, in: context).contains {
-                $0.id != id && $0.name.caseInsensitiveCompare(normalized) == .orderedSame
+                $0.id != id && $0.name?.caseInsensitiveCompare(normalized) == .orderedSame
             }
         }
     }
@@ -402,6 +402,9 @@ final class CoreDataPastureRepository:
         ]
         let pastures = try context.fetch(request)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(pastures, herdID: herd.id)
+        for pasture in pastures {
+            _ = try pasture.validatedName()
+        }
         return pastures
     }
 
@@ -441,6 +444,7 @@ final class CoreDataPastureRepository:
         _ pasture: CDPasture,
         herdID: UUID
     ) throws {
+        _ = try pasture.validatedName()
         try validateHerdOwnership(
             entity: CDPasture.coreDataEntityName,
             id: pasture.id,
@@ -485,6 +489,7 @@ final class CoreDataPastureRepository:
             selectedHerdID: herdID
         )
         for pasture in group.pastures as? Set<CDPasture> ?? [] {
+            _ = try pasture.validatedName()
             try validateHerdOwnership(
                 entity: CDPasture.coreDataEntityName,
                 id: pasture.id,
@@ -503,7 +508,7 @@ final class CoreDataPastureRepository:
     private nonisolated static func summary(_ pasture: CDPasture, herdID: UUID) throws -> PastureSummary {
         try validatePastureReadGraph(pasture, herdID: herdID)
         return PastureSummary(
-            id: pasture.id, name: pasture.name,
+            id: pasture.id, name: try pasture.validatedName(),
             acreage: pasture.acreage?.doubleValue, usableAcreage: pasture.usableAcreage?.doubleValue,
             targetAcresPerHead: pasture.targetAcresPerHead?.doubleValue,
             activeAnimalCount: activeAnimalCount(pasture), sortOrder: Int(pasture.sortOrder),
@@ -515,7 +520,7 @@ final class CoreDataPastureRepository:
     private nonisolated static func detail(_ pasture: CDPasture, herdID: UUID) throws -> PastureDetailSnapshot {
         try validatePastureReadGraph(pasture, herdID: herdID)
         return PastureDetailSnapshot(
-            id: pasture.id, name: pasture.name,
+            id: pasture.id, name: try pasture.validatedName(),
             acreage: pasture.acreage?.doubleValue, usableAcreage: pasture.usableAcreage?.doubleValue,
             targetAcresPerHead: pasture.targetAcresPerHead?.doubleValue,
             activeAnimalCount: activeAnimalCount(pasture), lastGrazedDate: pasture.lastGrazedDate,
@@ -543,7 +548,7 @@ final class CoreDataPastureRepository:
 
     private nonisolated static func pastureSort(_ lhs: CDPasture, _ rhs: CDPasture) -> Bool {
         if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
-        let nameOrder = lhs.name.localizedStandardCompare(rhs.name)
+        let nameOrder = (lhs.name ?? "").localizedStandardCompare(rhs.name ?? "")
         if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
         return lhs.id.uuidString < rhs.id.uuidString
     }

@@ -67,7 +67,7 @@
 </entity>
     <entity name="Pasture" representedClassName="CDPasture" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
-        <attribute name="name" optional="NO" attributeType="String"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
         <attribute name="sortOrder" optional="NO" attributeType="Integer 64" usesScalarValueType="YES" defaultValueString="0"/>
         <attribute name="acreage" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
         <attribute name="usableAcreage" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
