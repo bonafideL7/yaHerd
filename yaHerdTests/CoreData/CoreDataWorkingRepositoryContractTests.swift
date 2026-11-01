@@ -5,6 +5,109 @@ import XCTest
 
 @MainActor
 final class CoreDataWorkingRepositoryContractTests: XCTestCase {
+    func testMissingImportedQueueAnimalIDBlocksReadsAndMutationsWithoutHistoryLoss() async throws {
+        let environment = try await CoreDataWorkingContractEnvironment.make()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Imported Queue Identity Pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let animal = try environment.makeAnimalRepository().create(
+            input: Self.animalInput(
+                name: "Existing Queue Cow",
+                tagNumber: "QUEUE-ID-1",
+                pastureID: pasture.id
+            )
+        )
+        let otherAnimal = try environment.makeAnimalRepository().create(
+            input: Self.animalInput(
+                name: "Uncollected Cow",
+                tagNumber: "QUEUE-ID-2",
+                pastureID: pasture.id
+            )
+        )
+        let working = environment.makeWorkingRepository()
+        let sessionID = try await working.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSinceReferenceDate: 206_000),
+                sourcePastureID: pasture.id,
+                treatmentTemplateName: "Existing Queue",
+                plannedTreatments: [],
+                animalIDs: [animal.id]
+            )
+        )
+        let queueID = try XCTUnwrap(working.fetchSessionDetail(id: sessionID)?.queueItems.first?.id)
+        let herdID = environment.herdID
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+
+        try context.performAndWait {
+            let queue = try XCTUnwrap(
+                CoreDataLookup().herdOwned(
+                    CDWorkingQueueItem.self,
+                    id: queueID,
+                    herdID: herdID,
+                    in: context
+                )
+            )
+            queue.animalIDSnapshot = nil
+            try context.save()
+        }
+
+        let expectedError = CoreDataWorkingMappingError.missingQueueAnimalID(queueItemID: queueID)
+        XCTAssertThrowsError(try working.fetchSessions()) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+        XCTAssertThrowsError(try working.fetchSessionDetail(id: sessionID)) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+        XCTAssertThrowsError(
+            try working.fetchQueueItemEditor(sessionID: sessionID, queueItemID: queueID)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await working.collectAnimals(sessionID: sessionID, animalIDs: [otherAnimal.id])
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await working.deleteWorkData(forQueueItemID: queueID, inSessionID: sessionID)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await working.deleteSession(id: sessionID)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+
+        try context.performAndWait {
+            let queue = try XCTUnwrap(
+                CoreDataLookup().herdOwned(
+                    CDWorkingQueueItem.self,
+                    id: queueID,
+                    herdID: herdID,
+                    in: context
+                )
+            )
+            XCTAssertNil(queue.animalIDSnapshot)
+            XCTAssertEqual(queue.animal?.id, animal.id)
+            XCTAssertEqual(queue.session?.id, sessionID)
+            queue.animalIDSnapshot = animal.id
+            try context.save()
+        }
+
+        let restored = try XCTUnwrap(working.fetchSessionDetail(id: sessionID))
+        XCTAssertEqual(restored.queueItems.count, 1)
+        XCTAssertEqual(restored.queueItems.first?.animalID, animal.id)
+        try await working.collectAnimals(sessionID: sessionID, animalIDs: [otherAnimal.id])
+        let collected = try XCTUnwrap(working.fetchSessionDetail(id: sessionID))
+        XCTAssertEqual(Set(collected.queueItems.map(\.animalID)), Set([animal.id, otherAnimal.id]))
+    }
+
     func testWorkingCoreDataReadAndValidationContracts() async throws {
         try await run { try await WorkingRepositoryContract.assertSessionStartAndReadProjections(using: $0.fixture) }
         try await run { try await WorkingRepositoryContract.assertStartAllEligibleAnimalsAndValidation(using: $0.fixture) }
