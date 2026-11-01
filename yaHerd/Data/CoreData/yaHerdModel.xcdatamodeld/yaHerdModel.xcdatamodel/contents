@@ -317,7 +317,7 @@
 </entity>
     <entity name="WorkingQueueItem" representedClassName="CDWorkingQueueItem" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
-        <attribute name="statusRawValue" optional="NO" attributeType="String"/>
+        <attribute name="statusRawValue" optional="YES" attributeType="String"/>
         <attribute name="completedAt" optional="YES" attributeType="Date"/>
         <attribute name="animalIDSnapshot" optional="NO" attributeType="UUID"/>
         <attribute name="animalTagNumberSnapshot" optional="NO" attributeType="String" defaultValueString=""/>
