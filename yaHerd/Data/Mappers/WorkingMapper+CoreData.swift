@@ -12,6 +12,7 @@ enum CoreDataWorkingMappingError: Error, Equatable {
     case corruptPlannedTreatments(sessionID: UUID)
     case corruptTreatmentTemplate(templateID: UUID)
     case corruptTreatmentRecord(recordID: UUID)
+    case missingTreatmentDate(recordID: UUID)
 }
 
 private struct CoreDataWorkingTreatmentPlanItemPayload: Decodable {
@@ -134,18 +135,19 @@ enum WorkingMapper {
                 $0.animalIDSnapshot == animalID
                     && $0.animal?.id == animal.id
             }
+            .map { record in (record: record, date: try treatmentDate(record)) }
             .sorted { lhs, rhs in
-                let leftIndex = plannedTreatments.firstIndex { $0.id == lhs.treatmentItemID } ?? Int.max
-                let rightIndex = plannedTreatments.firstIndex { $0.id == rhs.treatmentItemID } ?? Int.max
+                let leftIndex = plannedTreatments.firstIndex { $0.id == lhs.record.treatmentItemID } ?? Int.max
+                let rightIndex = plannedTreatments.firstIndex { $0.id == rhs.record.treatmentItemID } ?? Int.max
                 if leftIndex != rightIndex {
                     return leftIndex < rightIndex
                 }
                 if lhs.date != rhs.date {
                     return lhs.date > rhs.date
                 }
-                return lhs.id.uuidString < rhs.id.uuidString
+                return lhs.record.id.uuidString < rhs.record.id.uuidString
             }
-            .map(makeTreatmentRecordSnapshot)
+            .map { try makeTreatmentRecordSnapshot(from: $0.record) }
 
         let pregnancyCheck = try managedPregnancyChecks(session)
             .filter { $0.animal.id == animal.id }
@@ -198,9 +200,17 @@ enum WorkingMapper {
         )
     }
 
+    static func treatmentDate(_ record: CDWorkingTreatmentRecord) throws -> Date {
+        guard let date = record.date else {
+            throw CoreDataWorkingMappingError.missingTreatmentDate(recordID: record.id)
+        }
+        return date
+    }
+
     static func makeTreatmentRecordSnapshot(
         from record: CDWorkingTreatmentRecord
     ) throws -> WorkingTreatmentRecordSnapshot {
+        let date = try treatmentDate(record)
         let unit: WorkingTreatmentDoseUnit?
         if let rawValue = record.doseUnitRawValue {
             guard let decoded = WorkingTreatmentDoseUnit(rawValue: rawValue) else {
@@ -241,7 +251,7 @@ enum WorkingMapper {
         do {
             try WorkingTreatmentPlanRules.validate([
                 WorkingTreatmentEntryInput(
-                    date: record.date,
+                    date: date,
                     treatmentItemID: treatmentItemID,
                     itemName: itemName,
                     given: record.given,
@@ -254,7 +264,7 @@ enum WorkingMapper {
 
         return WorkingTreatmentRecordSnapshot(
             id: record.id,
-            date: record.date,
+            date: date,
             treatmentItemID: treatmentItemID,
             itemName: itemName,
             given: record.given,
