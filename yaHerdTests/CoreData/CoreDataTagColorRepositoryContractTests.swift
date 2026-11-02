@@ -831,8 +831,8 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
                 )
                 return try context.fetch(request).map { color in
                     [
-                        color.herd.id.uuidString, color.id.uuidString, color.name,
-                        color.prefix, String(color.sortOrder), String(color.isHidden),
+                        color.herd.id.uuidString, color.id.uuidString,
+                        color.name ?? "<missing>", color.prefix, String(color.sortOrder), String(color.isHidden),
                         String(color.isDefault),
                         color.updatedAt.map { String($0.timeIntervalSinceReferenceDate) } ?? "<missing>"
                     ].joined(separator: "|")
