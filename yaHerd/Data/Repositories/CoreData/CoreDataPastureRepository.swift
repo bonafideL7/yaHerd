@@ -97,6 +97,7 @@ final class CoreDataPastureRepository:
                 herdID: herdID
             )
             let residents = try candidates.filter { animal in
+                _ = try CoreDataAnimalProjection.birthDate(animal)
                 let status = try CoreDataAnimalProjection.status(animal)
                 return !animal.isArchived && status == .active
             }
@@ -504,6 +505,7 @@ final class CoreDataPastureRepository:
 
     private nonisolated static func activeAnimalCount(_ pasture: CDPasture) throws -> Int {
         try (pasture.animals as? Set<CDAnimal> ?? []).filter { animal in
+            _ = try CoreDataAnimalProjection.birthDate(animal)
             let status = try CoreDataAnimalProjection.status(animal)
             return !animal.isArchived && status == .active
         }.count

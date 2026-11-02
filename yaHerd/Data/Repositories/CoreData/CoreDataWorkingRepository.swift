@@ -446,6 +446,7 @@ final class CoreDataWorkingRepository:
             let activeAnimals = (session.activeAnimals?.allObjects as? [CDAnimal]) ?? []
             for animal in queueAnimals + treatmentAnimals + healthAnimals + pregnancyAnimals + activeAnimals {
                 _ = try CoreDataAnimalMutation.aggregateTagStates(animal)
+                _ = try CoreDataAnimalProjection.birthDate(animal)
             }
 
             try CoreDataWorkingLifecycleMutation.restoreOwnedAnimalsBeforeDeleting(

@@ -7,7 +7,7 @@ final class CDAnimal: NSManagedObject {
     @NSManaged var editorRevision: UUID?
     @NSManaged var name: String
     @NSManaged var sexRawValue: String
-    @NSManaged var birthDate: Date
+    @NSManaged var birthDate: Date?
     @NSManaged var statusRawValue: String?
     @NSManaged var saleDate: Date?
     @NSManaged var salePrice: NSNumber?

@@ -92,7 +92,7 @@
         <attribute name="editorRevision" optional="YES" attributeType="UUID"/>
         <attribute name="name" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="sexRawValue" optional="NO" attributeType="String" defaultValueString="unknown"/>
-        <attribute name="birthDate" optional="NO" attributeType="Date"/>
+        <attribute name="birthDate" optional="YES" attributeType="Date"/>
         <attribute name="statusRawValue" optional="YES" attributeType="String"/>
         <attribute name="saleDate" optional="YES" attributeType="Date"/>
         <attribute name="salePrice" optional="YES" attributeType="Double" usesScalarValueType="YES"/>

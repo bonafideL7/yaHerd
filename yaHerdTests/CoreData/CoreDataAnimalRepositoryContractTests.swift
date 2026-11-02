@@ -76,6 +76,75 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         XCTAssertEqual(restored.activeTags.first?.id, tagID)
     }
 
+    func testImportedAnimalWithoutBirthDateRejectsReadsMutationsAndCountsUntilRestored() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let animals = environment.makeAnimalRepository()
+        let pastures = environment.makePastureRepository()
+        let pasture = try pastures.create(
+            input: PastureInput(name: "Imported Date Pasture", acreage: 8, usableAcreage: 7, targetAcresPerHead: 1)
+        )
+        let input = readGraphAnimalInput(
+            name: "Imported Date Animal", tag: "DATE-01", pastureID: pasture.id
+        )
+        let animal = try animals.create(input: input)
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            stored.birthDate = nil
+            try context.save()
+        }
+
+        let expected = CoreDataAnimalRepositoryError.missingAnimalBirthDate(animalID: animal.id)
+        XCTAssertThrowsError(try animals.fetchAnimals()) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try animals.fetchAnimalDetail(id: animal.id)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try animals.update(id: animal.id, input: input)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try animals.archive(ids: [animal.id])) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try animals.restore(ids: [animal.id])) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try animals.delete(ids: [animal.id])) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try animals.move(ids: [animal.id], toPastureID: nil)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try pastures.fetchResidentAnimals(pastureID: pasture.id)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        let dashboard = environment.makeDashboardQueryReader()
+        do {
+            _ = try await dashboard.fetchDashboardAnimalRecords(kind: .active)
+            XCTFail("A Dashboard query must reject a missing imported birth date.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataAnimalRepositoryError, expected)
+        }
+
+        try context.performAndWait {
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            XCTAssertNil(stored.birthDate)
+            XCTAssertEqual(stored.name, input.name)
+            XCTAssertFalse(stored.isArchived)
+            XCTAssertEqual(stored.currentPasture?.id, pasture.id)
+            stored.birthDate = input.birthDate
+            try context.save()
+        }
+        XCTAssertEqual(try animals.fetchAnimalDetail(id: animal.id)?.birthDate, input.birthDate)
+        XCTAssertEqual(try pastures.fetchResidentAnimals(pastureID: pasture.id).map(\.id), [animal.id])
+    }
+
     func testImportedAnimalWithoutStatusRejectsReadsEditsAndPastureCountsUntilRestored() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)

@@ -200,7 +200,7 @@ enum WorkingMapper {
             animalDamDisplayTagNumber: queueItem.animalDamDisplayTagNumberSnapshot,
             animalDamDisplayTagColorID: queueItem.animalDamDisplayTagColorIDSnapshot,
             animalSex: try animalSex(queueItem),
-            animalAgeInMonths: AnimalAgeFormatter.ageInMonths(from: animal.birthDate),
+            animalAgeInMonths: AnimalAgeFormatter.ageInMonths(from: try CoreDataAnimalProjection.birthDate(animal)),
             treatmentRecords: treatmentRecords,
             pregnancyCheck: pregnancyCheck,
             castrationPerformedInSession: castrationPerformed,

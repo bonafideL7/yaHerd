@@ -5,6 +5,124 @@ import XCTest
 
 @MainActor
 final class CoreDataWorkingRepositoryContractTests: XCTestCase {
+    func testMissingImportedBirthDateBlocksWorkingHistoryMutationAndSessionDeletion() async throws {
+        let environment = try await CoreDataWorkingContractEnvironment.make()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(name: "Birth History Pasture", acreage: 10, usableAcreage: 9, targetAcresPerHead: 1)
+        )
+        let animal = try environment.makeAnimalRepository().create(
+            input: Self.animalInput(name: "Birth History Cow", tagNumber: "BIRTH-HIST", pastureID: pasture.id)
+        )
+        let working = environment.makeWorkingRepository()
+        let sessionID = try await working.startSession(input: WorkingSessionStartInput(
+            date: Date(timeIntervalSinceReferenceDate: 209_000),
+            sourcePastureID: pasture.id,
+            treatmentTemplateName: "Birth History",
+            plannedTreatments: [],
+            animalIDs: [animal.id]
+        ))
+        let queueID = try XCTUnwrap(working.fetchSessionDetail(id: sessionID)?.queueItems.first?.id)
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        let herdID = environment.herdID
+        let birthDate = try context.performAndWait { () throws -> Date in
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: herdID, in: context
+            ))
+            let date = try XCTUnwrap(stored.birthDate)
+            stored.birthDate = nil
+            try context.save()
+            return date
+        }
+        let expected = CoreDataAnimalRepositoryError.missingAnimalBirthDate(animalID: animal.id)
+
+        await XCTAssertThrowsErrorAsync(
+            try await working.complete(
+                queueItemID: queueID,
+                inSessionID: sessionID,
+                treatmentEntries: [],
+                pregnancyCheck: nil,
+                markCastrated: false,
+                observationNotes: "Must not save"
+            )
+        ) { XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected) }
+
+        await XCTAssertThrowsErrorAsync(
+            try await working.saveEdits(
+                forQueueItemID: queueID,
+                inSessionID: sessionID,
+                input: WorkingSessionAnimalEditInput(
+                    status: .done,
+                    completedAt: nil,
+                    destinationPastureID: pasture.id,
+                    treatmentEntries: [],
+                    pregnancyCheck: nil,
+                    castrationPerformed: false,
+                    observationNotes: "Must not save"
+                )
+            )
+        ) { XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected) }
+
+        await XCTAssertThrowsErrorAsync(
+            try await working.deleteWorkData(forQueueItemID: queueID, inSessionID: sessionID)
+        ) { XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected) }
+
+        try context.performAndWait {
+            let session = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDWorkingSession.self, id: sessionID, herdID: herdID, in: context
+            ))
+            let item = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDWorkingQueueItem.self, id: queueID, herdID: herdID, in: context
+            ))
+            XCTAssertEqual(item.statusRawValue, WorkingQueueStatus.queued.rawValue)
+            XCTAssertTrue((session.healthRecords?.allObjects ?? []).isEmpty)
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: herdID, in: context
+            ))
+            XCTAssertNil(stored.birthDate)
+            stored.birthDate = birthDate
+            try context.save()
+        }
+
+        try await working.complete(
+            queueItemID: queueID,
+            inSessionID: sessionID,
+            treatmentEntries: [],
+            pregnancyCheck: nil,
+            markCastrated: false,
+            observationNotes: "Retain the real history"
+        )
+        try await working.completeSession(
+            id: sessionID,
+            assignments: [WorkingQueueDestinationAssignment(
+                queueItemID: queueID, destinationPastureID: pasture.id
+            )]
+        )
+        try context.performAndWait {
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: herdID, in: context
+            ))
+            stored.birthDate = nil
+            try context.save()
+        }
+        await XCTAssertThrowsErrorAsync(try await working.deleteSession(id: sessionID)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        try context.performAndWait {
+            let session = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDWorkingSession.self, id: sessionID, herdID: herdID, in: context
+            ))
+            XCTAssertEqual((session.healthRecords?.allObjects ?? []).count, 1)
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: herdID, in: context
+            ))
+            XCTAssertNil(stored.birthDate)
+            stored.birthDate = birthDate
+            try context.save()
+        }
+        try await working.deleteSession(id: sessionID)
+        XCTAssertNil(try working.fetchSessionDetail(id: sessionID))
+    }
+
     func testMissingImportedTagNumberBlocksWorkingHistoryEditsAndFinishedSessionDeletion() async throws {
         let environment = try await CoreDataWorkingContractEnvironment.make()
         let pasture = try environment.makePastureRepository().create(

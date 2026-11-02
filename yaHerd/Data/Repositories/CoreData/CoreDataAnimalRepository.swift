@@ -505,6 +505,7 @@ final class CoreDataAnimalRepository:
                 return
             }
             for animal in targets {
+                _ = try CoreDataAnimalProjection.birthDate(animal)
                 _ = try CoreDataAnimalProjection.status(animal)
                 _ = try CoreDataAnimalMutation.aggregateTagStates(animal)
             }
@@ -544,6 +545,7 @@ final class CoreDataAnimalRepository:
         let date = Date()
         try performWrite { context, herd in
             for animal in try CoreDataAnimalMutation.fetchAnimals(ids: ids, herd: herd, in: context) {
+                _ = try CoreDataAnimalProjection.birthDate(animal)
                 _ = try CoreDataAnimalProjection.status(animal)
                 _ = try CoreDataAnimalMutation.aggregateTagStates(animal)
                 _ = CoreDataAnimalMutation.applyArchiveState(
@@ -561,6 +563,7 @@ final class CoreDataAnimalRepository:
         }
         try performWrite { context, herd in
             for animal in try CoreDataAnimalMutation.fetchAnimals(ids: ids, herd: herd, in: context) {
+                _ = try CoreDataAnimalProjection.birthDate(animal)
                 _ = try CoreDataAnimalProjection.status(animal)
                 _ = try CoreDataAnimalMutation.aggregateTagStates(animal)
                 _ = CoreDataAnimalMutation.applyArchiveState(
@@ -588,6 +591,7 @@ final class CoreDataAnimalRepository:
                 in: context
             )
             for animal in try CoreDataAnimalMutation.fetchAnimals(ids: ids, herd: herd, in: context) {
+                _ = try CoreDataAnimalProjection.birthDate(animal)
                 _ = try CoreDataAnimalMutation.aggregateTagStates(animal)
                 guard animal.currentPasture?.id != pasture?.id else {
                     continue

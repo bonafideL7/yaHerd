@@ -219,6 +219,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
                 herdID: herd.id
             )
             let activeResidents = try residents.filter { animal in
+                _ = try CoreDataAnimalProjection.birthDate(animal)
                 let status = try CoreDataAnimalProjection.status(animal)
                 return !animal.isArchived && status == .active
             }
@@ -340,6 +341,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
                   targetIDs.contains(currentID) else {
                 continue
             }
+            _ = try CoreDataAnimalProjection.birthDate(animal)
             let status = try CoreDataAnimalProjection.status(animal)
             if !animal.isArchived && status == .active {
                 throw PastureDeletionTransactionError.residentSetChanged(

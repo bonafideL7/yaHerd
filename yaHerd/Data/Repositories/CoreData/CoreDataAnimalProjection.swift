@@ -98,7 +98,7 @@ enum CoreDataAnimalProjection {
             ),
             firstDistinguishingFeature: try distinguishingFeatures(animal)
                 .firstOrderedDistinguishingFeatureDescription,
-            birthDate: animal.birthDate,
+            birthDate: try birthDate(animal),
             status: try status(animal),
             isArchived: animal.isArchived,
             pastureID: animal.currentPasture?.id,
@@ -124,11 +124,11 @@ enum CoreDataAnimalProjection {
         let primary = try primaryTagFields(managedTags(animal))
         let maternalOffspring = try managedMaternalOffspring(animal)
             .map { offspring in
-                (animal: offspring, tagNumber: try primaryTagFields(managedTags(offspring)).number)
+                (animal: offspring, birthDate: try birthDate(offspring), tagNumber: try primaryTagFields(managedTags(offspring)).number)
             }
             .sorted { lhs, rhs in
-                if lhs.animal.birthDate != rhs.animal.birthDate {
-                    return lhs.animal.birthDate > rhs.animal.birthDate
+                if lhs.birthDate != rhs.birthDate {
+                    return lhs.birthDate > rhs.birthDate
                 }
                 let tagOrder = lhs.tagNumber.localizedStandardCompare(rhs.tagNumber)
                 if tagOrder != .orderedSame {
@@ -144,7 +144,7 @@ enum CoreDataAnimalProjection {
             displayTagColorID: primary.colorID,
             sex: try sex(animal),
             animalType: try animalType(animal),
-            birthDate: animal.birthDate,
+            birthDate: try birthDate(animal),
             status: try status(animal),
             pastureID: animal.currentPasture?.id,
             pastureName: try animal.currentPasture.map { try $0.validatedName() },
@@ -212,7 +212,7 @@ enum CoreDataAnimalProjection {
             TimelineProjectionEvent(
                 event: AnimalTimelineEvent(
                     id: "birth:primary:\(animal.id.uuidString)",
-                    date: animal.birthDate,
+                    date: try birthDate(animal),
                     type: .birth,
                     title: "Birth",
                     details: try birthEventDetails(animal)
@@ -227,7 +227,7 @@ enum CoreDataAnimalProjection {
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
                         id: "birth:offspring:\(offspring.id.uuidString)",
-                        date: offspring.birthDate,
+                        date: try birthDate(offspring),
                         type: .birth,
                         title: "Offspring Recorded",
                         details: try offspringBirthEventDetails(offspring)
@@ -373,6 +373,13 @@ enum CoreDataAnimalProjection {
         )
     }
 
+    static func birthDate(_ animal: CDAnimal) throws -> Date {
+        guard let date = animal.birthDate else {
+            throw CoreDataAnimalRepositoryError.missingAnimalBirthDate(animalID: animal.id)
+        }
+        return date
+    }
+
     static func tagAssignmentDate(_ tag: CDAnimalTag) throws -> Date {
         guard let assignedAt = tag.assignedAt else {
             throw CoreDataAnimalRepositoryError.missingTagAssignmentDate(tagID: tag.id)
@@ -439,7 +446,7 @@ enum CoreDataAnimalProjection {
     ) throws -> AnimalType {
         AnimalTypeClassifier.classify(
             sex: try sex(animal),
-            birthDate: animal.birthDate,
+            birthDate: try birthDate(animal),
             hasMaternalOffspring: !managedMaternalOffspring(animal).isEmpty,
             hasCastrationOrBandingRecord: try managedHealthRecords(animal)
                 .map { try healthTreatment($0) }

@@ -13,6 +13,7 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
     case missingTagAssignmentDate(tagID: UUID)
     case missingAnimalTagNumber(tagID: UUID)
     case missingAnimalEditorRevision(animalID: UUID)
+    case missingAnimalBirthDate(animalID: UUID)
     case missingPregnancyDate(recordID: UUID)
     case missingMovementDate(recordID: UUID)
     case missingStatusHistoryDate(recordID: UUID)
@@ -45,6 +46,8 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
             return "An imported animal tag has no number."
         case .missingAnimalEditorRevision:
             return "An animal has no editor revision."
+        case .missingAnimalBirthDate:
+            return "An imported animal has no birth date."
         case .missingPregnancyDate:
             return "A pregnancy check has no date."
         case .missingMovementDate:
@@ -113,6 +116,7 @@ enum CoreDataAnimalMutation {
 
     static func validateOwnedGraphIdentity(_ animal: CDAnimal) throws {
         _ = try requiredEditorRevision(animal)
+        _ = try CoreDataAnimalProjection.birthDate(animal)
         _ = try CoreDataAnimalProjection.status(animal)
         let herdID = animal.herd.id
         let tags = CoreDataAnimalProjection.managedTags(animal)
@@ -306,7 +310,7 @@ enum CoreDataAnimalMutation {
         AnimalAggregateAttributes(
             name: animal.name,
             sex: try CoreDataAnimalProjection.sex(animal),
-            birthDate: animal.birthDate,
+            birthDate: try CoreDataAnimalProjection.birthDate(animal),
             status: try CoreDataAnimalProjection.status(animal),
             pastureID: animal.currentPasture?.id,
             sireID: animal.sire?.id,
@@ -645,6 +649,7 @@ enum CoreDataAnimalMutation {
 
     static func rotateRevision(_ animal: CDAnimal) throws {
         _ = try requiredEditorRevision(animal)
+        _ = try CoreDataAnimalProjection.birthDate(animal)
         _ = try CoreDataAnimalProjection.status(animal)
         _ = try aggregateTagStates(animal)
         animal.editorRevision = UUID()
@@ -686,7 +691,7 @@ enum CoreDataAnimalMutation {
                 id: $0.id,
                 pastureID: $0.currentPasture?.id,
                 sex: try CoreDataAnimalProjection.sex($0),
-                birthDate: $0.birthDate,
+                birthDate: try CoreDataAnimalProjection.birthDate($0),
                 status: try CoreDataAnimalProjection.status($0),
                 isArchived: $0.isArchived,
                 animalType: try CoreDataAnimalProjection.animalType($0)

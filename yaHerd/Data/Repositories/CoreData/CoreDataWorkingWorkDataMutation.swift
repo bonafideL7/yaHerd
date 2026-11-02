@@ -36,6 +36,7 @@ enum CoreDataWorkingWorkDataMutation {
         lookup: CoreDataLookup,
         in context: NSManagedObjectContext
     ) throws {
+        _ = try CoreDataAnimalProjection.birthDate(animal)
         _ = try CoreDataAnimalMutation.aggregateTagStates(animal)
         let plannedTreatments = try WorkingMapper.plannedTreatments(session)
         try WorkingTreatmentPlanRules.validate(
@@ -137,6 +138,7 @@ enum CoreDataWorkingWorkDataMutation {
         animal: CDAnimal,
         in context: NSManagedObjectContext
     ) throws {
+        _ = try CoreDataAnimalProjection.birthDate(animal)
         _ = try CoreDataAnimalMutation.aggregateTagStates(animal)
         try deleteTreatmentRecords(session: session, animal: animal, in: context)
         deletePregnancyChecks(session: session, animal: animal, in: context)
