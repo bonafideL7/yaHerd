@@ -1025,6 +1025,7 @@ final class CoreDataWorkingRepository:
                   record.animalIDSnapshot != nil else {
                 throw CoreDataWorkingMappingError.corruptTreatmentRecord(recordID: record.id)
             }
+            try WorkingMapper.treatmentDate(record)
             try validateHerdOwnership(
                 relationship: "WorkingSession.treatmentRecords",
                 expectedHerdID: herdID,
