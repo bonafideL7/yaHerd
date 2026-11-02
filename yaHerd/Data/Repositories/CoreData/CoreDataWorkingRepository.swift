@@ -431,6 +431,23 @@ final class CoreDataWorkingRepository:
                 session,
                 herdID: herd.id
             )
+
+            // Finished sessions may have no animals left in their working pen.
+            // Deleting the session still removes its linked treatment, health,
+            // and pregnancy history, so validate every affected live Animal.
+            let queueAnimals = ((session.queueItems?.allObjects as? [CDWorkingQueueItem]) ?? [])
+                .compactMap(\.animal)
+            let treatmentAnimals = ((session.treatmentRecords?.allObjects as? [CDWorkingTreatmentRecord]) ?? [])
+                .compactMap(\.animal)
+            let healthAnimals = ((session.healthRecords?.allObjects as? [CDHealthRecord]) ?? [])
+                .map(\.animal)
+            let pregnancyAnimals = ((session.pregnancyChecks?.allObjects as? [CDPregnancyCheck]) ?? [])
+                .map(\.animal)
+            let activeAnimals = (session.activeAnimals?.allObjects as? [CDAnimal]) ?? []
+            for animal in queueAnimals + treatmentAnimals + healthAnimals + pregnancyAnimals + activeAnimals {
+                _ = try CoreDataAnimalMutation.aggregateTagStates(animal)
+            }
+
             try CoreDataWorkingLifecycleMutation.restoreOwnedAnimalsBeforeDeleting(
                 session: session,
                 herd: herd
