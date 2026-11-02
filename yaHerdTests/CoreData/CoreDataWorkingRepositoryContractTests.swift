@@ -348,7 +348,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         }
     }
 
-    func testMissingImportedTreatmentIdentifiersBlockReadsAndWorkDataDeletion() async throws {
+    func testMissingImportedTreatmentIdentifiersOrDateBlockReadsAndWorkDataDeletion() async throws {
         let environment = try await CoreDataWorkingContractEnvironment.make()
         let pasture = try environment.makePastureRepository().create(
             input: PastureInput(
@@ -467,6 +467,33 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                 queueItemID: queueID
             )?.treatmentRecords.first?.treatmentItemID,
             itemID
+        )
+
+        let historicalDate = Date(timeIntervalSinceReferenceDate: 205_010)
+        try updateRecord { record, _ in record.date = nil }
+        let missingDateError = CoreDataWorkingMappingError.missingTreatmentDate(recordID: recordID)
+        XCTAssertThrowsError(try working.fetchSessionDetail(id: sessionID)) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, missingDateError)
+        }
+        XCTAssertThrowsError(
+            try working.fetchQueueItemEditor(sessionID: sessionID, queueItemID: queueID)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, missingDateError)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await working.deleteWorkData(forQueueItemID: queueID, inSessionID: sessionID)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, missingDateError)
+        }
+
+        try updateRecord { record, _ in record.date = historicalDate }
+        XCTAssertNotNil(try working.fetchSessionDetail(id: sessionID))
+        XCTAssertEqual(
+            try working.fetchQueueItemEditor(
+                sessionID: sessionID,
+                queueItemID: queueID
+            )?.treatmentRecords.first?.date,
+            historicalDate
         )
     }
 
@@ -1634,7 +1661,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                         try XCTUnwrap(record.treatmentItemID).uuidString,
                         record.itemNameSnapshot ?? "<missing>",
                         String(record.given),
-                        String(record.date.timeIntervalSinceReferenceDate)
+                        String(try XCTUnwrap(record.date).timeIntervalSinceReferenceDate)
                     ].joined(separator: "|")
                 }.sorted()
             }
