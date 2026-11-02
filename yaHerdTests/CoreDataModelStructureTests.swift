@@ -70,6 +70,61 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testCloudKitHealthHistoryRejectsMissingImportedDate() async throws {
+        let model = try loadModel()
+        let entity = try entity(named: "HealthRecord", in: model)
+        XCTAssertTrue(try attribute(named: "date", in: entity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let herd = CDHerd(context: context)
+            herd.id = UUID()
+            herd.name = "Sample Herd"
+
+            let animal = CDAnimal(context: context)
+            animal.id = UUID()
+            animal.editorRevision = UUID()
+            animal.herd = herd
+            animal.name = "Sample Animal"
+            animal.birthDate = Date(timeIntervalSinceReferenceDate: 100)
+            animal.statusRawValue = AnimalStatus.active.rawValue
+            animal.distinguishingFeaturesData = Data("[]".utf8)
+
+            let health = CDHealthRecord(context: context)
+            health.id = UUID()
+            health.herd = herd
+            health.animal = animal
+            health.treatment = "Vaccination"
+            health.date = nil
+
+            XCTAssertThrowsError(try CoreDataAnimalProjection.timeline(animal)) { error in
+                XCTAssertEqual(
+                    error as? CoreDataAnimalRepositoryError,
+                    .missingHealthDate(recordID: health.id)
+                )
+            }
+            XCTAssertThrowsError(try CoreDataAnimalProjection.summary(animal)) { error in
+                XCTAssertEqual(
+                    error as? CoreDataAnimalRepositoryError,
+                    .missingHealthDate(recordID: health.id)
+                )
+            }
+
+            let historicalDate = Date(timeIntervalSinceReferenceDate: 200)
+            health.date = historicalDate
+            let timeline = try CoreDataAnimalProjection.timeline(animal)
+            XCTAssertTrue(timeline.contains {
+                $0.id == "health:\(health.id.uuidString)" && $0.date == historicalDate
+            })
+            XCTAssertEqual(
+                try CoreDataAnimalProjection.summary(animal).lastTreatmentDate,
+                historicalDate
+            )
+            context.rollback()
+        }
+    }
+
     func testCloudKitStatusHistoryRejectsMissingImportedDate() async throws {
         let model = try loadModel()
         let entity = try entity(named: "StatusRecord", in: model)

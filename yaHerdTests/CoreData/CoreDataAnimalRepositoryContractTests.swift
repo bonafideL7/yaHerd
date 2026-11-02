@@ -5622,7 +5622,7 @@ private final class CoreDataAnimalHealthContractControl: HealthRepositoryContrac
                 HealthRecordContractSnapshot(
                     id: $0.id,
                     animalID: $0.animal.id,
-                    date: $0.date,
+                    date: try XCTUnwrap($0.date),
                     treatment: try XCTUnwrap($0.treatment),
                     notes: $0.notes,
                     workingSessionID: $0.workingSession?.id
