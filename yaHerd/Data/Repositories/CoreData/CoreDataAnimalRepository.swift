@@ -608,7 +608,7 @@ final class CoreDataAnimalRepository:
             let tags = CoreDataAnimalProjection.managedTags(animal)
             let shouldBePrimary = AnimalTagService.shouldMakeAddedTagPrimary(
                 isPrimary: input.isPrimary,
-                existingTags: tags.map(CoreDataAnimalProjection.tagState)
+                existingTags: try tags.map(CoreDataAnimalProjection.tagState)
             )
             let tag = CDAnimalTag(context: context)
             tag.id = try CoreDataAnimalMutation.uniqueID(
@@ -630,7 +630,7 @@ final class CoreDataAnimalRepository:
             )
             tag.herd = herd
             tag.animal = animal
-            CoreDataAnimalMutation.enforceActivePrimary(
+            try CoreDataAnimalMutation.enforceActivePrimary(
                 in: CoreDataAnimalProjection.managedTags(animal),
                 preferredPrimaryID: shouldBePrimary ? tag.id : nil
             )
@@ -669,20 +669,20 @@ final class CoreDataAnimalRepository:
             let tags = CoreDataAnimalProjection.managedTags(animal)
             if tag.isActive {
                 if input.isPrimary {
-                    CoreDataAnimalMutation.enforceActivePrimary(
+                    try CoreDataAnimalMutation.enforceActivePrimary(
                         in: tags,
                         preferredPrimaryID: tag.id
                     )
                 } else {
                     tag.isPrimary = false
-                    CoreDataAnimalMutation.enforceActivePrimary(
+                    try CoreDataAnimalMutation.enforceActivePrimary(
                         in: tags,
                         excludedFallbackID: tag.id
                     )
                 }
             } else {
                 tag.isPrimary = false
-                CoreDataAnimalMutation.enforceActivePrimary(in: tags)
+                try CoreDataAnimalMutation.enforceActivePrimary(in: tags)
             }
 
             if before != CoreDataAnimalMutation.aggregateTagStates(animal) {
@@ -710,7 +710,7 @@ final class CoreDataAnimalRepository:
             let before = CoreDataAnimalMutation.aggregateTagStates(animal)
             tag.isActive = true
             tag.removedAt = nil
-            CoreDataAnimalMutation.enforceActivePrimary(
+            try CoreDataAnimalMutation.enforceActivePrimary(
                 in: CoreDataAnimalProjection.managedTags(animal),
                 preferredPrimaryID: tag.id
             )
@@ -740,7 +740,7 @@ final class CoreDataAnimalRepository:
             let before = CoreDataAnimalMutation.aggregateTagStates(animal)
             let replacementID = AnimalTagService.replacementPrimaryTagID(
                 afterRetiring: tag.id,
-                from: tags.map(CoreDataAnimalProjection.tagState)
+                from: try tags.map(CoreDataAnimalProjection.tagState)
             )
             tag.isActive = false
             tag.isPrimary = false
@@ -753,7 +753,7 @@ final class CoreDataAnimalRepository:
                 replacement.isActive = true
                 replacement.removedAt = nil
             }
-            CoreDataAnimalMutation.enforceActivePrimary(
+            try CoreDataAnimalMutation.enforceActivePrimary(
                 in: tags,
                 preferredPrimaryID: replacementID
             )
@@ -1053,7 +1053,7 @@ final class CoreDataAnimalRepository:
     ) throws {
         let normalizedNumber = number.trimmingCharacters(in: .whitespacesAndNewlines)
         let tags = CoreDataAnimalProjection.managedTags(animal)
-        let states = tags.map(CoreDataAnimalProjection.tagState)
+        let states = try tags.map(CoreDataAnimalProjection.tagState)
         let primaryID = AnimalTagService.primaryTag(in: states)?.id
         let primary = primaryID.flatMap { id in tags.first { $0.id == id } }
 
@@ -1066,7 +1066,7 @@ final class CoreDataAnimalRepository:
             if primary.removedAt == nil {
                 primary.removedAt = date
             }
-            CoreDataAnimalMutation.enforceActivePrimary(
+            try CoreDataAnimalMutation.enforceActivePrimary(
                 in: tags,
                 excludedFallbackID: primary.id
             )
@@ -1118,6 +1118,9 @@ final class CoreDataAnimalRepository:
             in: context
         ) else {
             throw AnimalValidationError.animalNotFound
+        }
+        for tag in CoreDataAnimalProjection.managedTags(animal) {
+            _ = try CoreDataAnimalProjection.tagAssignmentDate(tag)
         }
         return animal
     }
