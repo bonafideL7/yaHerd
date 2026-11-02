@@ -1,6 +1,7 @@
 import Foundation
 
 enum CoreDataHerdMappingError: Error, Equatable {
+    case missingName(herdID: UUID)
     case missingCreatedAt(herdID: UUID)
     case missingUpdatedAt(herdID: UUID)
 }
