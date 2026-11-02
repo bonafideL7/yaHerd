@@ -32,6 +32,13 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
         }
 
+        XCTAssertThrowsError(try repository.update(
+            id: created.id,
+            input: readGraphAnimalInput(name: "Legacy Overwrite", tag: "REV-01")
+        )) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+
         let attempted = UpdateAnimalAggregateTransaction(
             animalID: created.id,
             expectedRevision: original.revision,
@@ -3776,7 +3783,7 @@ private final class CoreDataAnimalContractEnvironment {
 
             animal.activeWorkingSession = session
             animal.currentPasture = nil
-            CoreDataAnimalMutation.rotateRevision(animal)
+            try CoreDataAnimalMutation.rotateRevision(animal)
             try context.save()
         }
     }
