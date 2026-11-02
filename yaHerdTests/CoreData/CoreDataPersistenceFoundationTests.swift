@@ -450,10 +450,11 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         do {
             try await assembly.transactionExecutor.performWrite { context in
                 let invalidHerd = CDHerd(context: context)
-                invalidHerd.id = invalidHerdID
+                invalidHerd.name = "Invalid Missing Identity"
                 invalidHerd.createdAt = Date(timeIntervalSince1970: 100)
                 invalidHerd.updatedAt = Date(timeIntervalSince1970: 100)
-                // Required name intentionally left unset to force Core Data validation failure.
+                // The UUID identity is still required and has no default. Saving
+                // this row must fail Core Data validation and roll back the write.
             }
             XCTFail("Saving an invalid required persisted value must fail.")
         } catch let error as CoreDataPersistenceError {
@@ -575,10 +576,11 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
                 )
 
                 let invalid = CDHerd(context: context)
-                invalid.id = invalidHerdID
+                invalid.name = "Invalid Missing Identity"
                 invalid.createdAt = originalUpdatedAt
                 invalid.updatedAt = originalUpdatedAt
-                // Required name is absent: Core Data's actual save must fail validation.
+                // A missing required UUID must fail the actual Core Data save,
+                // rolling back the mixed transaction across both entity types.
             }
             XCTFail("The mixed transaction must fail during Core Data save.")
         } catch let error as CoreDataPersistenceError {
