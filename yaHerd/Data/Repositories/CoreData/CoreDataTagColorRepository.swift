@@ -388,11 +388,15 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 let canonical = colors.first {
                     !$0.isDeleted && $0.id == defaultColor.id
                 }
-                let competingNameRows = try colors.filter {
-                    !$0.isDeleted
-                        && $0 !== canonical
-                        && !currentBuiltInIDs.contains($0.id)
-                        && (try TagColorLibraryRules.normalizedNameKey(Self.requireLabels(from: $0).name)) == normalizedDefaultName
+                let competingNameRows = try colors.filter { candidate in
+                    guard !candidate.isDeleted,
+                          candidate !== canonical,
+                          !currentBuiltInIDs.contains(candidate.id) else {
+                        return false
+                    }
+                    return try TagColorLibraryRules.normalizedNameKey(
+                        Self.requireLabels(from: candidate).name
+                    ) == normalizedDefaultName
                 }
 
                 let target: CDTagColorDefinition
