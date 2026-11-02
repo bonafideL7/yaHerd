@@ -1590,7 +1590,7 @@ actor CoreDataReadModelActor:
             deathDate: animal.deathDate,
             healthRecords: try healthRecords.map {
                 DashboardHealthRecord(
-                    date: $0.date,
+                    date: try CoreDataAnimalProjection.healthDate($0),
                     treatment: try CoreDataAnimalProjection.healthTreatment($0),
                     notes: $0.notes
                 )

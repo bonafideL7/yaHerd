@@ -71,8 +71,9 @@ enum CoreDataAnimalProjection {
         }()
 
         let healthRecords = managedHealthRecords(animal)
-        for record in healthRecords {
+        let healthDates = try healthRecords.map { record in
             _ = try healthTreatment(record)
+            return try healthDate(record)
         }
         let sex = try sex(animal)
 
@@ -102,7 +103,7 @@ enum CoreDataAnimalProjection {
             lastPregnancyCheckDate: latestPregnancyCheck?.date,
             lastPregnancyStatus: pregnancyStatus(latestPregnancyResult),
             expectedCalvingDate: expectedCalvingDate,
-            lastTreatmentDate: healthRecords.map(\.date).max()
+            lastTreatmentDate: healthDates.max()
         )
     }
 
@@ -237,7 +238,7 @@ enum CoreDataAnimalProjection {
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
                         id: "health:\(record.id.uuidString)",
-                        date: record.date,
+                        date: try healthDate(record),
                         type: .health,
                         title: try healthTreatment(record),
                         details: record.notes
@@ -362,6 +363,13 @@ enum CoreDataAnimalProjection {
 
     static func managedTags(_ animal: CDAnimal) -> [CDAnimalTag] {
         (animal.tags?.allObjects as? [CDAnimalTag]) ?? []
+    }
+
+    static func healthDate(_ record: CDHealthRecord) throws -> Date {
+        guard let date = record.date else {
+            throw CoreDataAnimalRepositoryError.missingHealthDate(recordID: record.id)
+        }
+        return date
     }
 
     static func healthTreatment(_ record: CDHealthRecord) throws -> String {

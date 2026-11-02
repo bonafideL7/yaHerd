@@ -183,7 +183,7 @@
 </entity>
     <entity name="HealthRecord" representedClassName="CDHealthRecord" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
-        <attribute name="date" optional="NO" attributeType="Date"/>
+        <attribute name="date" optional="YES" attributeType="Date"/>
         <attribute name="treatment" optional="YES" attributeType="String"/>
         <attribute name="notes" optional="YES" attributeType="String"/>
         <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="healthRecords" inverseEntity="Herd"/>
