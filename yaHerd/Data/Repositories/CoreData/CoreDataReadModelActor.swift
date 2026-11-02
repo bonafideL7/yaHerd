@@ -2225,6 +2225,20 @@ actor CoreDataReadModelActor:
         herdID: UUID,
         in context: NSManagedObjectContext
     ) throws {
+        // Home can show a count without hydrating findings when more than one is open.
+        // Reject imported undated history before that path silently accepts it.
+        let undatedRequest = NSFetchRequest<CDFieldCheckFinding>(
+            entityName: CDFieldCheckFinding.coreDataEntityName
+        )
+        undatedRequest.predicate = NSPredicate(
+            format: "herd == %@ AND recordedAt == nil",
+            herd
+        )
+        undatedRequest.fetchLimit = 1
+        if let undated = try context.fetch(undatedRequest).first {
+            throw CoreDataFieldCheckMappingError.missingFindingDate(findingID: undated.id)
+        }
+
         let corruptRequest = NSFetchRequest<CDFieldCheckFinding>(
             entityName: CDFieldCheckFinding.coreDataEntityName
         )
