@@ -18,6 +18,7 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
     case missingMovementDate(recordID: UUID)
     case missingMovementAnimalRelationship(recordID: UUID)
     case missingStatusHistoryDate(recordID: UUID)
+    case missingStatusHistoryAnimalRelationship(recordID: UUID)
     case invalidAnimalSexRawValue(animalID: UUID, value: String)
     case invalidAnimalStatusRawValue(animalID: UUID, value: String?)
     case invalidPregnancyResultRawValue(checkID: UUID, value: String)
@@ -57,6 +58,8 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
             return "An imported movement history record has no animal relationship."
         case .missingStatusHistoryDate:
             return "A status history record has no date."
+        case .missingStatusHistoryAnimalRelationship:
+            return "An imported status history record has no animal relationship."
         case .invalidAnimalSexRawValue:
             return "The animal contains an invalid persisted sex value."
         case .invalidAnimalStatusRawValue:

@@ -8,5 +8,5 @@ final class CDStatusRecord: NSManagedObject {
     @NSManaged var oldStatusRawValue: String?
     @NSManaged var newStatusRawValue: String?
     @NSManaged var herd: CDHerd
-    @NSManaged var animal: CDAnimal
+    @NSManaged var animal: CDAnimal?
 }
