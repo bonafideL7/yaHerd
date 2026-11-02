@@ -199,6 +199,93 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         XCTAssertEqual(Set(collected.queueItems.map(\.animalID)), Set([animal.id, otherAnimal.id]))
     }
 
+    func testMissingImportedWorkingSessionDateRejectsReadsAndMutationsWithoutLosingHistory() async throws {
+        let environment = try await CoreDataWorkingContractEnvironment.make()
+        let pasture = try environment.makePastureRepository().create(input: PastureInput(
+            name: "Working Date Pasture",
+            acreage: 20,
+            usableAcreage: 18,
+            targetAcresPerHead: 1.5
+        ))
+        let animal = try environment.makeAnimalRepository().create(input: Self.animalInput(
+            name: "Date Cow", tagNumber: "WORK-DATE-1", pastureID: pasture.id
+        ))
+        let working = environment.makeWorkingRepository()
+        let historicalDate = Calendar.autoupdatingCurrent.startOfDay(
+            for: Date(timeIntervalSinceReferenceDate: 206_000)
+        )
+        let sessionID = try await working.startSession(input: WorkingSessionStartInput(
+            date: historicalDate,
+            sourcePastureID: pasture.id,
+            treatmentTemplateName: "Existing Working",
+            plannedTreatments: [],
+            animalIDs: [animal.id]
+        ))
+        let queueID = try XCTUnwrap(working.fetchSessionDetail(id: sessionID)?.queueItems.first?.id)
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let session = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDWorkingSession.self, id: sessionID, herdID: environment.herdID, in: context
+            ))
+            session.date = nil
+            try context.save()
+        }
+
+        let expectedError = CoreDataWorkingMappingError.missingSessionDate(sessionID: sessionID)
+        XCTAssertThrowsError(try working.fetchSessions()) {
+            XCTAssertEqual($0 as? CoreDataWorkingMappingError, expectedError)
+        }
+        XCTAssertThrowsError(try working.fetchSessionDetail(id: sessionID)) {
+            XCTAssertEqual($0 as? CoreDataWorkingMappingError, expectedError)
+        }
+        XCTAssertThrowsError(try working.fetchQueueItemEditor(sessionID: sessionID, queueItemID: queueID)) {
+            XCTAssertEqual($0 as? CoreDataWorkingMappingError, expectedError)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await working.deleteWorkData(forQueueItemID: queueID, inSessionID: sessionID)
+        ) {
+            XCTAssertEqual($0 as? CoreDataWorkingMappingError, expectedError)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await working.collectAnimals(sessionID: sessionID, animalIDs: [animal.id])
+        ) {
+            XCTAssertEqual($0 as? CoreDataWorkingMappingError, expectedError)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await working.completeSession(id: sessionID, assignments: [])
+        ) {
+            XCTAssertEqual($0 as? CoreDataWorkingMappingError, expectedError)
+        }
+        await XCTAssertThrowsErrorAsync(try await working.reopenSession(id: sessionID)) {
+            XCTAssertEqual($0 as? CoreDataWorkingMappingError, expectedError)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await working.updateSessionTreatments(id: sessionID, plannedTreatments: [])
+        ) {
+            XCTAssertEqual($0 as? CoreDataWorkingMappingError, expectedError)
+        }
+        await XCTAssertThrowsErrorAsync(try await working.deleteSession(id: sessionID)) {
+            XCTAssertEqual($0 as? CoreDataWorkingMappingError, expectedError)
+        }
+
+        try context.performAndWait {
+            let session = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDWorkingSession.self, id: sessionID, herdID: environment.herdID, in: context
+            ))
+            XCTAssertNil(session.date)
+            XCTAssertEqual(session.queueItems?.count, 1)
+            session.date = historicalDate
+            try context.save()
+        }
+
+        XCTAssertEqual(try working.fetchSessionDetail(id: sessionID)?.date, historicalDate)
+        XCTAssertEqual(try working.fetchSessions().first?.date, historicalDate)
+        XCTAssertEqual(
+            try working.fetchQueueItemEditor(sessionID: sessionID, queueItemID: queueID)?.sessionDate,
+            historicalDate
+        )
+    }
+
     func testWorkingCoreDataReadAndValidationContracts() async throws {
         try await run { try await WorkingRepositoryContract.assertSessionStartAndReadProjections(using: $0.fixture) }
         try await run { try await WorkingRepositoryContract.assertStartAllEligibleAnimalsAndValidation(using: $0.fixture) }

@@ -292,7 +292,7 @@
 </entity>
     <entity name="WorkingSession" representedClassName="CDWorkingSession" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
-        <attribute name="date" optional="NO" attributeType="Date"/>
+        <attribute name="date" optional="YES" attributeType="Date"/>
         <attribute name="statusRawValue" optional="YES" attributeType="String"/>
         <attribute name="treatmentTemplateNameSnapshot" optional="NO" attributeType="String" defaultValueString="Working Session"/>
         <attribute name="plannedTreatmentsData" optional="YES" attributeType="Binary"/>

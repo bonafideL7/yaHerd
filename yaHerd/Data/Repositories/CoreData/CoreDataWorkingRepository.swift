@@ -96,15 +96,15 @@ final class CoreDataWorkingRepository:
             try Self.validateSelectedHerdWorkingRecordIdentity(herd: herd, in: context)
 
             return try sessions
+                .map { session in
+                    try Self.validateSessionGraph(session, herdID: herdID)
+                    return try WorkingMapper.makeSessionSummary(from: session)
+                }
                 .sorted {
                     if $0.date != $1.date {
                         return $0.date > $1.date
                     }
                     return $0.id.uuidString < $1.id.uuidString
-                }
-                .map { session in
-                    try Self.validateSessionGraph(session, herdID: herdID)
-                    return try WorkingMapper.makeSessionSummary(from: session)
                 }
         }
     }
@@ -344,6 +344,7 @@ final class CoreDataWorkingRepository:
             ) else {
                 throw WorkingRepositoryError.sessionNotFound
             }
+            _ = try WorkingMapper.sessionDate(session)
             guard let rawValue = session.statusRawValue,
                   let status = WorkingSessionStatus(rawValue: rawValue) else {
                 throw CoreDataWorkingMappingError.invalidSessionStatus(
@@ -387,6 +388,7 @@ final class CoreDataWorkingRepository:
             ) else {
                 throw WorkingRepositoryError.sessionNotFound
             }
+            _ = try WorkingMapper.sessionDate(session)
             guard let rawValue = session.statusRawValue,
                   let status = WorkingSessionStatus(rawValue: rawValue) else {
                 throw CoreDataWorkingMappingError.invalidSessionStatus(
@@ -457,6 +459,7 @@ final class CoreDataWorkingRepository:
             ) else {
                 throw WorkingRepositoryError.sessionNotFound
             }
+            _ = try WorkingMapper.sessionDate(session)
             guard let rawValue = session.statusRawValue,
                   let status = WorkingSessionStatus(rawValue: rawValue) else {
                 throw CoreDataWorkingMappingError.invalidSessionStatus(
@@ -661,6 +664,7 @@ final class CoreDataWorkingRepository:
             ) else {
                 throw WorkingRepositoryError.sessionNotFound
             }
+            _ = try WorkingMapper.sessionDate(session)
             guard let rawValue = session.statusRawValue,
                   let status = WorkingSessionStatus(rawValue: rawValue) else {
                 throw CoreDataWorkingMappingError.invalidSessionStatus(
@@ -939,6 +943,7 @@ final class CoreDataWorkingRepository:
         _ session: CDWorkingSession,
         herdID: UUID
     ) throws {
+        _ = try WorkingMapper.sessionDate(session)
         try validateHerdOwnership(
             relationship: "WorkingSession.herd",
             expectedHerdID: herdID,
@@ -1286,6 +1291,7 @@ private extension CoreDataWorkingRepository {
         ) else {
             throw WorkingRepositoryError.sessionNotFound
         }
+        _ = try WorkingMapper.sessionDate(session)
         guard let rawValue = session.statusRawValue,
                   let status = WorkingSessionStatus(rawValue: rawValue) else {
             throw CoreDataWorkingMappingError.invalidSessionStatus(

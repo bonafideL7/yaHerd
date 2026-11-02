@@ -13,6 +13,7 @@ enum CoreDataWorkingMappingError: Error, Equatable {
     case corruptTreatmentTemplate(templateID: UUID)
     case corruptTreatmentRecord(recordID: UUID)
     case missingTreatmentDate(recordID: UUID)
+    case missingSessionDate(sessionID: UUID)
 }
 
 private struct CoreDataWorkingTreatmentPlanItemPayload: Decodable {
@@ -60,6 +61,13 @@ private struct CoreDataWorkingTreatmentPlanItemPayload: Decodable {
 }
 
 enum WorkingMapper {
+    static func sessionDate(_ session: CDWorkingSession) throws -> Date {
+        guard let date = session.date else {
+            throw CoreDataWorkingMappingError.missingSessionDate(sessionID: session.id)
+        }
+        return date
+    }
+
     static func queueAnimalID(from item: CDWorkingQueueItem) throws -> UUID {
         guard let animalID = item.animalIDSnapshot else {
             throw CoreDataWorkingMappingError.missingQueueAnimalID(queueItemID: item.id)
@@ -74,7 +82,7 @@ enum WorkingMapper {
         }
         return WorkingSessionSummary(
             id: session.id,
-            date: session.date,
+            date: try sessionDate(session),
             status: try workingStatus(session),
             sourcePastureName: session.sourcePastureNameSnapshot,
             treatmentTemplateName: session.treatmentTemplateNameSnapshot,
@@ -92,7 +100,7 @@ enum WorkingMapper {
 
         return WorkingSessionDetailSnapshot(
             id: session.id,
-            date: session.date,
+            date: try sessionDate(session),
             status: try workingStatus(session),
             sourcePastureID: session.sourcePastureIDSnapshot,
             sourcePastureName: session.sourcePastureNameSnapshot,
@@ -178,7 +186,7 @@ enum WorkingMapper {
         return WorkingQueueItemEditorSnapshot(
             id: queueItem.id,
             sessionID: session.id,
-            sessionDate: session.date,
+            sessionDate: try sessionDate(session),
             sessionStatus: try workingStatus(session),
             sessionSourcePastureName: session.sourcePastureNameSnapshot,
             plannedTreatments: plannedTreatments,
