@@ -66,6 +66,7 @@ final class CoreDataAnimalRepository:
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
+            try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
             return try CoreDataAnimalMutation.fetchAnimals(herd: herd, in: context)
                 .map { animal in
                     try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
@@ -79,7 +80,7 @@ final class CoreDataAnimalRepository:
     func fetchAnimalDetail(id: UUID) throws -> AnimalDetailSnapshot? {
         let (context, herdID) = try makeReadScope()
         return try context.performAndWait {
-            guard try lookup.herd(id: herdID, in: context) != nil else {
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
             guard let animal = try lookup.herdOwned(
@@ -90,6 +91,7 @@ final class CoreDataAnimalRepository:
             ) else {
                 return nil
             }
+            try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
             try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
                 animal, herdID: herdID, validateOffspringSummaries: true
             )
@@ -111,6 +113,7 @@ final class CoreDataAnimalRepository:
             ) else {
                 return []
             }
+            try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
             // Until its animal relationship imports, a movement cannot be attributed to
             // a timeline. Report an incomplete Herd history instead of omitting it.
             let unlinkedMovements = NSFetchRequest<CDMovementRecord>(
@@ -228,7 +231,7 @@ final class CoreDataAnimalRepository:
     ) throws -> AnimalAggregateEditSnapshot? {
         let (context, herdID) = try makeReadScope()
         return try context.performAndWait {
-            guard try lookup.herd(id: herdID, in: context) != nil else {
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
             guard let animal = try lookup.herdOwned(
@@ -239,6 +242,7 @@ final class CoreDataAnimalRepository:
             ) else {
                 return nil
             }
+            try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
             try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
                 animal, herdID: herdID, validateOffspringSummaries: true
             )

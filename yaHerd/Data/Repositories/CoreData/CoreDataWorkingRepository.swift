@@ -440,7 +440,7 @@ final class CoreDataWorkingRepository:
             let treatmentAnimals = ((session.treatmentRecords?.allObjects as? [CDWorkingTreatmentRecord]) ?? [])
                 .compactMap(\.animal)
             let healthAnimals = ((session.healthRecords?.allObjects as? [CDHealthRecord]) ?? [])
-                .map(\.animal)
+                .compactMap(\.animal)
             let pregnancyAnimals = ((session.pregnancyChecks?.allObjects as? [CDPregnancyCheck]) ?? [])
                 .map(\.animal)
             let activeAnimals = (session.activeAnimals?.allObjects as? [CDAnimal]) ?? []
@@ -942,10 +942,16 @@ final class CoreDataWorkingRepository:
             entityName: CDHealthRecord.coreDataEntityName
         )
         healthRequest.predicate = NSPredicate(format: "herd == %@", herd)
+        let healthRecords = try context.fetch(healthRequest)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
-            context.fetch(healthRequest),
+            healthRecords,
             herdID: herd.id
         )
+        for record in healthRecords where record.workingSession != nil && record.animal == nil {
+            throw CoreDataAnimalRepositoryError.missingHealthAnimalRelationship(
+                recordID: record.id
+            )
+        }
 
         let pregnancyRequest = NSFetchRequest<CDPregnancyCheck>(
             entityName: CDPregnancyCheck.coreDataEntityName
@@ -1112,10 +1118,15 @@ final class CoreDataWorkingRepository:
                     actualSessionID: workingSession.id
                 )
             }
+            guard let animal = record.animal else {
+                throw CoreDataAnimalRepositoryError.missingHealthAnimalRelationship(
+                    recordID: record.id
+                )
+            }
             try validateHerdOwnership(
                 relationship: "HealthRecord.animal",
                 expectedHerdID: herdID,
-                actualHerdID: record.animal.herd.id
+                actualHerdID: animal.herd.id
             )
         }
 

@@ -5,6 +5,74 @@ import XCTest
 
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
+    func testImportedHealthWithoutAnimalPreservesOriginalTreatmentUntilRestored() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let repository = environment.makeAnimalRepository()
+        let animal = try repository.create(
+            input: readGraphAnimalInput(name: "Imported Health", tag: "HEALTH-IMPORTED")
+        )
+        let context = try assembly.contextFactory.makeWriteContext()
+        let lookup = CoreDataLookup()
+        let recordID = UUID()
+        let historicalDate = Date(timeIntervalSinceReferenceDate: 210_000)
+        let timelineID = "health:\(recordID.uuidString)"
+        try context.performAndWait {
+            let stored = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            let record = CDHealthRecord(context: context)
+            record.id = recordID
+            record.date = historicalDate
+            record.treatment = "Imported vaccination"
+            record.notes = "Original clinical note"
+            record.herd = stored.herd
+            record.animal = stored
+            try context.save()
+        }
+        XCTAssertEqual(
+            try repository.fetchAnimals().first(where: { $0.id == animal.id })?.lastTreatmentDate,
+            historicalDate
+        )
+        XCTAssertTrue(try repository.fetchTimeline(id: animal.id).contains { $0.id == timelineID })
+        try context.performAndWait {
+            let record = try XCTUnwrap(lookup.herdOwned(
+                CDHealthRecord.self, id: recordID, herdID: environment.herdID, in: context
+            ))
+            record.animal = nil
+            try context.save()
+        }
+        let expected = CoreDataAnimalRepositoryError.missingHealthAnimalRelationship(recordID: recordID)
+        XCTAssertThrowsError(try repository.fetchAnimals()) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchAnimalDetail(id: animal.id)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchTimeline(id: animal.id)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        try context.performAndWait {
+            let record = try XCTUnwrap(lookup.herdOwned(
+                CDHealthRecord.self, id: recordID, herdID: environment.herdID, in: context
+            ))
+            XCTAssertNil(record.animal)
+            XCTAssertEqual(record.date, historicalDate)
+            XCTAssertEqual(record.treatment, "Imported vaccination")
+            XCTAssertEqual(record.notes, "Original clinical note")
+            let stored = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            record.animal = stored
+            try context.save()
+        }
+        XCTAssertEqual(
+            try repository.fetchAnimals().first(where: { $0.id == animal.id })?.lastTreatmentDate,
+            historicalDate
+        )
+        XCTAssertTrue(try repository.fetchTimeline(id: animal.id).contains { $0.id == timelineID })
+    }
+
     func testImportedStatusWithoutAnimalRelationshipPreservesTransitionsUntilRestored() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)

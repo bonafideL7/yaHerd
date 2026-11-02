@@ -87,6 +87,8 @@ actor CoreDataReadModelActor:
                 throw HerdRepositoryError.missingHerd
             }
 
+            try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
+
             // The 25 displayed active Working sessions are a bounded view,
             // not a bound on their complete-Herd application UUID integrity.
             try Self.validateHerdApplicationIDs(
@@ -1406,6 +1408,7 @@ actor CoreDataReadModelActor:
         herdID: UUID,
         in context: NSManagedObjectContext
     ) throws {
+        try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
         let invalidEnumRequest = NSFetchRequest<CDAnimal>(
             entityName: CDAnimal.coreDataEntityName
         )

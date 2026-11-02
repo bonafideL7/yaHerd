@@ -101,7 +101,7 @@ enum CoreDataWorkingWorkDataMutation {
             check.workingSession = session
         }
 
-        deleteHealthRecords(session: session, animal: animal, in: context)
+        try deleteHealthRecords(session: session, animal: animal, in: context)
 
         if input.castrationPerformed {
             try insertGeneratedHealthRecord(
@@ -142,7 +142,7 @@ enum CoreDataWorkingWorkDataMutation {
         _ = try CoreDataAnimalMutation.aggregateTagStates(animal)
         try deleteTreatmentRecords(session: session, animal: animal, in: context)
         deletePregnancyChecks(session: session, animal: animal, in: context)
-        deleteHealthRecords(session: session, animal: animal, in: context)
+        try deleteHealthRecords(session: session, animal: animal, in: context)
     }
 
     private static func insertGeneratedHealthRecord(
@@ -203,9 +203,14 @@ enum CoreDataWorkingWorkDataMutation {
         session: CDWorkingSession,
         animal: CDAnimal,
         in context: NSManagedObjectContext
-    ) {
+    ) throws {
         let records = (session.healthRecords?.allObjects as? [CDHealthRecord]) ?? []
-        for record in records where record.animal.id == animal.id {
+        if let unlinked = records.first(where: { $0.animal == nil }) {
+            throw CoreDataAnimalRepositoryError.missingHealthAnimalRelationship(
+                recordID: unlinked.id
+            )
+        }
+        for record in records where record.animal?.id == animal.id {
             context.delete(record)
         }
     }

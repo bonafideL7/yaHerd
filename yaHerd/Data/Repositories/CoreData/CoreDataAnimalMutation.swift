@@ -10,6 +10,7 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
     case corruptDistinguishingFeatures(animalID: UUID)
     case corruptHealthTreatment(recordID: UUID)
     case missingHealthDate(recordID: UUID)
+    case missingHealthAnimalRelationship(recordID: UUID)
     case missingTagAssignmentDate(tagID: UUID)
     case missingAnimalTagNumber(tagID: UUID)
     case missingAnimalEditorRevision(animalID: UUID)
@@ -42,6 +43,8 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
             return "A health record has no treatment name."
         case .missingHealthDate:
             return "A health history record has no date."
+        case .missingHealthAnimalRelationship:
+            return "An imported health record has no animal relationship."
         case .missingTagAssignmentDate:
             return "An animal tag has no assignment date."
         case .missingAnimalTagNumber:
@@ -109,6 +112,23 @@ enum CoreDataAnimalMutation {
                 entity: Object.coreDataEntityName,
                 id: duplicate.key,
                 herdID: herdID
+            )
+        }
+    }
+
+    // A remote HealthRecord may arrive before its related Animal.
+    static func validateLinkedHealthHistory(
+        herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) throws {
+        let request = NSFetchRequest<CDHealthRecord>(
+            entityName: CDHealthRecord.coreDataEntityName
+        )
+        request.predicate = NSPredicate(format: "herd == %@ AND animal == nil", herd)
+        request.fetchLimit = 1
+        if let record = try context.fetch(request).first {
+            throw CoreDataAnimalRepositoryError.missingHealthAnimalRelationship(
+                recordID: record.id
             )
         }
     }

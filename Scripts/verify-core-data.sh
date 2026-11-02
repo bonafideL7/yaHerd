@@ -84,7 +84,7 @@ RELATIONSHIP_CONTRACT = {
     "AnimalTag": "herd:Herd:R:1:Nullify:animalTags,color:TagColorDefinition:O:1:Nullify:tags,animal:Animal:O:1:Nullify:tags",
     "MovementRecord": "herd:Herd:R:1:Nullify:movementRecords,animal:Animal:O:1:Nullify:movementRecords",
     "StatusRecord": "herd:Herd:R:1:Nullify:statusRecords,animal:Animal:O:1:Nullify:statusRecords",
-    "HealthRecord": "herd:Herd:R:1:Nullify:healthRecords,animal:Animal:R:1:Nullify:healthRecords,workingSession:WorkingSession:O:1:Nullify:healthRecords",
+    "HealthRecord": "herd:Herd:R:1:Nullify:healthRecords,animal:Animal:O:1:Nullify:healthRecords,workingSession:WorkingSession:O:1:Nullify:healthRecords",
     "PregnancyCheck": "herd:Herd:R:1:Nullify:pregnancyChecks,animal:Animal:R:1:Nullify:pregnancyChecks,sire:Animal:O:1:Nullify:pregnancyChecksAsSire,workingSession:WorkingSession:O:1:Nullify:pregnancyChecks",
     "FieldCheckSession": "herd:Herd:R:1:Nullify:fieldCheckSessions,pasture:Pasture:O:1:Nullify:fieldCheckSessions,animalChecks:FieldCheckAnimalCheck:O:M:Cascade:session,findings:FieldCheckFinding:O:M:Cascade:session",
     "FieldCheckAnimalCheck": "herd:Herd:R:1:Nullify:fieldCheckAnimalChecks,animal:Animal:O:1:Nullify:fieldCheckAnimalChecks,session:FieldCheckSession:O:1:Nullify:animalChecks",

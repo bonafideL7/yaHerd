@@ -5,6 +5,77 @@ import XCTest
 
 @MainActor
 final class CoreDataWorkingRepositoryContractTests: XCTestCase {
+    func testImportedWorkingHealthWithoutAnimalBlocksEditsAndDeletionUntilRestored() async throws {
+        let environment = try await CoreDataWorkingContractEnvironment.make()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(name: "Health History Pasture", acreage: 10, usableAcreage: 9, targetAcresPerHead: 1)
+        )
+        let animal = try environment.makeAnimalRepository().create(
+            input: Self.animalInput(name: "Health History Cow", tagNumber: "HEALTH-HIST", pastureID: pasture.id)
+        )
+        let working = environment.makeWorkingRepository()
+        let sessionID = try await working.startSession(input: WorkingSessionStartInput(
+            date: Date(timeIntervalSinceReferenceDate: 211_000),
+            sourcePastureID: pasture.id,
+            treatmentTemplateName: "Health History",
+            plannedTreatments: [],
+            animalIDs: [animal.id]
+        ))
+        let queueID = try XCTUnwrap(working.fetchSessionDetail(id: sessionID)?.queueItems.first?.id)
+        try await working.complete(
+            queueItemID: queueID, inSessionID: sessionID, treatmentEntries: [],
+            pregnancyCheck: nil, markCastrated: false, observationNotes: "Retained clinical note"
+        )
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        let herdID = environment.herdID
+        let healthID = try context.performAndWait { () throws -> UUID in
+            let session = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDWorkingSession.self, id: sessionID, herdID: herdID, in: context
+            ))
+            let record = try XCTUnwrap(
+                (session.healthRecords?.allObjects as? [CDHealthRecord])?.first
+            )
+            let id = record.id
+            record.animal = nil
+            try context.save()
+            return id
+        }
+        let expected = CoreDataAnimalRepositoryError.missingHealthAnimalRelationship(recordID: healthID)
+        XCTAssertThrowsError(try working.fetchSessionDetail(id: sessionID)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try working.fetchQueueItemEditor(
+            sessionID: sessionID, queueItemID: queueID
+        )) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await working.deleteWorkData(forQueueItemID: queueID, inSessionID: sessionID)
+        ) { XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected) }
+        await XCTAssertThrowsErrorAsync(try await working.deleteSession(id: sessionID)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        try context.performAndWait {
+            let record = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDHealthRecord.self, id: healthID, herdID: herdID, in: context
+            ))
+            XCTAssertNil(record.animal)
+            XCTAssertEqual(record.notes, "Retained clinical note")
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: herdID, in: context
+            ))
+            record.animal = stored
+            try context.save()
+        }
+        XCTAssertNotNil(try working.fetchSessionDetail(id: sessionID))
+        try await working.deleteWorkData(forQueueItemID: queueID, inSessionID: sessionID)
+        try context.performAndWait {
+            XCTAssertNil(try CoreDataLookup().herdOwned(
+                CDHealthRecord.self, id: healthID, herdID: herdID, in: context
+            ))
+        }
+    }
+
     func testMissingImportedBirthDateBlocksWorkingHistoryMutationAndSessionDeletion() async throws {
         let environment = try await CoreDataWorkingContractEnvironment.make()
         let pasture = try environment.makePastureRepository().create(

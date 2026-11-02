@@ -172,7 +172,14 @@ enum WorkingMapper {
             .map { try makePregnancyCheckSnapshot(from: $0.check) }
 
         let generatedHealth = try managedHealthRecords(session)
-            .filter { $0.animal.id == animal.id }
+            .filter { record in
+                guard let linked = record.animal else {
+                    throw CoreDataAnimalRepositoryError.missingHealthAnimalRelationship(
+                        recordID: record.id
+                    )
+                }
+                return linked.id == animal.id
+            }
             .map { record in
                 (record, try CoreDataAnimalProjection.healthTreatment(record))
             }
