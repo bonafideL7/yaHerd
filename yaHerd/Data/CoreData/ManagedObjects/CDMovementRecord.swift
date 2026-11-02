@@ -10,5 +10,5 @@ final class CDMovementRecord: NSManagedObject {
     @NSManaged var toPastureIDSnapshot: UUID?
     @NSManaged var toPastureNameSnapshot: String?
     @NSManaged var herd: CDHerd
-    @NSManaged var animal: CDAnimal
+    @NSManaged var animal: CDAnimal?
 }

@@ -5,6 +5,67 @@ import XCTest
 
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
+    func testImportedMovementWithoutAnimalRelationshipPreservesHistoryUntilRestored() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let repository = environment.makeAnimalRepository()
+        let animal = try repository.create(
+            input: readGraphAnimalInput(name: "Imported Movement", tag: "MOVE-IMPORTED")
+        )
+        let context = try assembly.contextFactory.makeWriteContext()
+        let lookup = CoreDataLookup()
+        let recordID = UUID()
+        let originalDate = Date(timeIntervalSinceReferenceDate: 206_000)
+        let timelineID = "movement:\(recordID.uuidString)"
+
+        try context.performAndWait {
+            let storedAnimal = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            let record = CDMovementRecord(context: context)
+            record.id = recordID
+            record.date = originalDate
+            record.fromPastureNameSnapshot = "First"
+            record.toPastureNameSnapshot = "Second"
+            record.herd = storedAnimal.herd
+            record.animal = storedAnimal
+            try context.save()
+        }
+        XCTAssertTrue(try repository.fetchTimeline(id: animal.id).contains { $0.id == timelineID })
+
+        try context.performAndWait {
+            let record = try XCTUnwrap(lookup.herdOwned(
+                CDMovementRecord.self, id: recordID, herdID: environment.herdID, in: context
+            ))
+            record.animal = nil
+            try context.save()
+        }
+
+        let expected = CoreDataAnimalRepositoryError.missingMovementAnimalRelationship(
+            recordID: recordID
+        )
+        XCTAssertThrowsError(try repository.fetchTimeline(id: animal.id)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertEqual(try repository.fetchAnimalDetail(id: animal.id)?.id, animal.id)
+
+        try context.performAndWait {
+            let record = try XCTUnwrap(lookup.herdOwned(
+                CDMovementRecord.self, id: recordID, herdID: environment.herdID, in: context
+            ))
+            XCTAssertNil(record.animal)
+            XCTAssertEqual(record.date, originalDate)
+            XCTAssertEqual(record.fromPastureNameSnapshot, "First")
+            XCTAssertEqual(record.toPastureNameSnapshot, "Second")
+            let storedAnimal = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            record.animal = storedAnimal
+            try context.save()
+        }
+        XCTAssertTrue(try repository.fetchTimeline(id: animal.id).contains { $0.id == timelineID })
+    }
+
 
     func testImportedAnimalTagWithoutNumberRejectsReadsAndEditsUntilRestored() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
@@ -1351,7 +1412,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             request.predicate = NSPredicate(format: "id == %@", movementID as NSUUID)
             let movement = try XCTUnwrap(readContext.fetch(request).first)
             XCTAssertEqual(movement.herd.id, foreignHerdID)
-            XCTAssertEqual(movement.animal.id, animal.id)
+            XCTAssertEqual(movement.animal?.id, animal.id)
         }
     }
 

@@ -795,12 +795,12 @@ enum CoreDataAnimalReadGraphValidator {
                     actualHerdID: movement.herd.id
                 )
             }
-            guard movement.animal.objectID == animal.objectID else {
+            guard movement.animal?.objectID == animal.objectID else {
                 throw CoreDataReadModelError.invalidAnimalRelationship(
                     entity: CDMovementRecord.coreDataEntityName,
                     id: movement.id,
                     expectedAnimalID: animal.id,
-                    actualAnimalID: movement.animal.id
+                    actualAnimalID: movement.animal?.id
                 )
             }
         }

@@ -100,8 +100,23 @@ final class CoreDataAnimalRepository:
     func fetchTimeline(id: UUID) throws -> [AnimalTimelineEvent] {
         let (context, herdID) = try makeReadScope()
         return try context.performAndWait {
-            guard try lookup.herd(id: herdID, in: context) != nil else {
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
+            }
+            // Until its animal relationship imports, a movement cannot be attributed to
+            // a timeline. Report an incomplete Herd history instead of omitting it.
+            let unlinkedMovements = NSFetchRequest<CDMovementRecord>(
+                entityName: CDMovementRecord.coreDataEntityName
+            )
+            unlinkedMovements.predicate = NSPredicate(
+                format: "herd == %@ AND animal == nil",
+                herd
+            )
+            unlinkedMovements.fetchLimit = 1
+            if let record = try context.fetch(unlinkedMovements).first {
+                throw CoreDataAnimalRepositoryError.missingMovementAnimalRelationship(
+                    recordID: record.id
+                )
             }
             guard let animal = try lookup.herdOwned(
                 CDAnimal.self,
