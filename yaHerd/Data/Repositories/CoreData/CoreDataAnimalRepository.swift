@@ -214,7 +214,7 @@ final class CoreDataAnimalRepository:
             )
             return AnimalAggregateEditSnapshot(
                 animal: try CoreDataAnimalProjection.detail(animal),
-                revision: AnimalAggregateRevision(value: animal.editorRevision)
+                revision: AnimalAggregateRevision(value: try CoreDataAnimalMutation.requiredEditorRevision(animal))
             )
         }
     }
@@ -950,7 +950,7 @@ final class CoreDataAnimalRepository:
 
             return AnimalAggregateEditSnapshot(
                 animal: try CoreDataAnimalProjection.detail(animal),
-                revision: AnimalAggregateRevision(value: animal.editorRevision)
+                revision: AnimalAggregateRevision(value: try CoreDataAnimalMutation.requiredEditorRevision(animal))
             )
         }
     }
@@ -1003,7 +1003,7 @@ final class CoreDataAnimalRepository:
                     animalID: transaction.animalID
                 )
             }
-            guard animal.editorRevision == transaction.expectedRevision.value else {
+            guard try CoreDataAnimalMutation.requiredEditorRevision(animal) == transaction.expectedRevision.value else {
                 throw AnimalAggregateTransactionError.staleRevision(
                     animalID: transaction.animalID
                 )
@@ -1033,7 +1033,7 @@ final class CoreDataAnimalRepository:
             return AggregateUpdateWriteResult(
                 snapshot: AnimalAggregateEditSnapshot(
                     animal: try CoreDataAnimalProjection.detail(animal),
-                    revision: AnimalAggregateRevision(value: animal.editorRevision)
+                    revision: AnimalAggregateRevision(value: try CoreDataAnimalMutation.requiredEditorRevision(animal))
                 ),
                 didStageChanges: didStageChanges
             )
@@ -1240,7 +1240,7 @@ final class CoreDataAnimalRepository:
             ) else {
                 return .aggregateNotFound(animalID: animalID)
             }
-            guard animal.editorRevision != expectedRevision.value else {
+            guard try CoreDataAnimalMutation.requiredEditorRevision(animal) != expectedRevision.value else {
                 return nil
             }
             return .staleRevision(animalID: animalID)
