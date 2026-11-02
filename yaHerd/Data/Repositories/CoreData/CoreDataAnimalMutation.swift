@@ -10,6 +10,7 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
     case corruptDistinguishingFeatures(animalID: UUID)
     case corruptHealthTreatment(recordID: UUID)
     case missingMovementDate(recordID: UUID)
+    case missingStatusHistoryDate(recordID: UUID)
     case invalidAnimalSexRawValue(animalID: UUID, value: String)
     case invalidAnimalStatusRawValue(animalID: UUID, value: String)
     case invalidPregnancyResultRawValue(checkID: UUID, value: String)
@@ -33,6 +34,8 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
             return "A health record has no treatment name."
         case .missingMovementDate:
             return "A movement history record has no date."
+        case .missingStatusHistoryDate:
+            return "A status history record has no date."
         case .invalidAnimalSexRawValue:
             return "The animal contains an invalid persisted sex value."
         case .invalidAnimalStatusRawValue:
