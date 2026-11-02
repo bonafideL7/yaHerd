@@ -39,6 +39,15 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         XCTAssertThrowsError(try animals.update(id: animal.id, input: originalInput)) {
             XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, missingStatus)
         }
+        for mutation in [
+            { try animals.archive(ids: [animal.id]) },
+            { try animals.restore(ids: [animal.id]) },
+            { try animals.delete(ids: [animal.id]) }
+        ] {
+            XCTAssertThrowsError(try mutation()) {
+                XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, missingStatus)
+            }
+        }
         XCTAssertThrowsError(try pastures.fetchPastures()) {
             XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, missingStatus)
         }
@@ -65,6 +74,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             ))
             XCTAssertNil(stored.statusRawValue)
             XCTAssertEqual(stored.name, "Imported Status Animal")
+            XCTAssertFalse(stored.isArchived)
             stored.statusRawValue = AnimalStatus.active.rawValue
             try context.save()
         }
