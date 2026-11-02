@@ -126,6 +126,21 @@ final class CoreDataAnimalRepository:
                     recordID: record.id
                 )
             }
+            // An imported status transition may precede its animal relationship.
+            // Reject incomplete Herd history instead of displaying a partial timeline.
+            let unlinkedStatuses = NSFetchRequest<CDStatusRecord>(
+                entityName: CDStatusRecord.coreDataEntityName
+            )
+            unlinkedStatuses.predicate = NSPredicate(
+                format: "herd == %@ AND animal == nil",
+                herd
+            )
+            unlinkedStatuses.fetchLimit = 1
+            if let record = try context.fetch(unlinkedStatuses).first {
+                throw CoreDataAnimalRepositoryError.missingStatusHistoryAnimalRelationship(
+                    recordID: record.id
+                )
+            }
             try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
                 animal, herdID: herdID, validateOffspringSummaries: true
             )

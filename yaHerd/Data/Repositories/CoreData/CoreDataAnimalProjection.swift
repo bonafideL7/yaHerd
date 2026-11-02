@@ -813,12 +813,12 @@ enum CoreDataAnimalReadGraphValidator {
                     actualHerdID: statusRecord.herd.id
                 )
             }
-            guard statusRecord.animal.objectID == animal.objectID else {
+            guard statusRecord.animal?.objectID == animal.objectID else {
                 throw CoreDataReadModelError.invalidAnimalRelationship(
                     entity: CDStatusRecord.coreDataEntityName,
                     id: statusRecord.id,
                     expectedAnimalID: animal.id,
-                    actualAnimalID: statusRecord.animal.id
+                    actualAnimalID: statusRecord.animal?.id
                 )
             }
         }
