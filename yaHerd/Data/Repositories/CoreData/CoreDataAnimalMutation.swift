@@ -638,7 +638,8 @@ enum CoreDataAnimalMutation {
         }
     }
 
-    static func rotateRevision(_ animal: CDAnimal) {
+    static func rotateRevision(_ animal: CDAnimal) throws {
+        _ = try requiredEditorRevision(animal)
         animal.editorRevision = UUID()
     }
 
