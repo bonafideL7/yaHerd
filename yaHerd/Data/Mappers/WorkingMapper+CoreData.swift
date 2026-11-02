@@ -149,14 +149,17 @@ enum WorkingMapper {
 
         let pregnancyCheck = try managedPregnancyChecks(session)
             .filter { $0.animal.id == animal.id }
+            .map { check in
+                (check: check, date: try CoreDataAnimalProjection.pregnancyDate(check))
+            }
             .sorted {
                 if $0.date != $1.date {
                     return $0.date > $1.date
                 }
-                return $0.id.uuidString < $1.id.uuidString
+                return $0.check.id.uuidString < $1.check.id.uuidString
             }
             .first
-            .map(makePregnancyCheckSnapshot)
+            .map { try makePregnancyCheckSnapshot(from: $0.check) }
 
         let generatedHealth = try managedHealthRecords(session)
             .filter { $0.animal.id == animal.id }
@@ -271,7 +274,7 @@ enum WorkingMapper {
         }
 
         return WorkingPregnancyCheckSnapshot(
-            date: check.date,
+            date: try CoreDataAnimalProjection.pregnancyDate(check),
             result: result,
             estimatedDaysPregnant: check.estimatedDaysPregnant?.intValue,
             dueDate: check.dueDate,
