@@ -44,23 +44,27 @@ enum CoreDataAnimalProjection {
         let primary = primaryTagFields(tags)
         let damPrimary = animal.dam.map { primaryTagFields(managedTags($0)) }
 
-        let pregnancyChecks = managedPregnancyChecks(animal)
+        // Validate every imported date before selecting the newest pregnancy check.
+        // A missing date cannot be treated as older than a valid historical event.
+        let pregnancyChecks = try managedPregnancyChecks(animal).map { check in
+            (check: check, date: try pregnancyDate(check))
+        }
         // Prefer the newest date, then the smallest persisted UUID on ties.
         // Match WorkingMapper.makeQueueItemEditorSnapshot's pregnancy-check ordering.
         let latestPregnancyCheck = pregnancyChecks.max { lhs, rhs in
             if lhs.date != rhs.date {
                 return lhs.date < rhs.date
             }
-            return lhs.id.uuidString > rhs.id.uuidString
+            return lhs.check.id.uuidString > rhs.check.id.uuidString
         }
         let latestPregnancyResult = try latestPregnancyCheck.map {
-            try pregnancyResult($0)
+            try pregnancyResult($0.check)
         }
         let expectedCalvingDate: Date? = {
             guard latestPregnancyResult == .pregnant, let latestPregnancyCheck else {
                 return nil
             }
-            if let dueDate = latestPregnancyCheck.dueDate {
+            if let dueDate = latestPregnancyCheck.check.dueDate {
                 return dueDate
             }
             return Calendar.current.date(
@@ -255,7 +259,7 @@ enum CoreDataAnimalProjection {
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
                         id: "pregnancy:\(check.id.uuidString)",
-                        date: check.date,
+                        date: try pregnancyDate(check),
                         type: .pregnancy,
                         title: "Pregnancy Check: \(result.rawValue.capitalized)",
                         details: check.technician
@@ -385,6 +389,13 @@ enum CoreDataAnimalProjection {
 
     static func managedPregnancyChecks(_ animal: CDAnimal) -> [CDPregnancyCheck] {
         (animal.pregnancyChecks?.allObjects as? [CDPregnancyCheck]) ?? []
+    }
+
+    static func pregnancyDate(_ check: CDPregnancyCheck) throws -> Date {
+        guard let date = check.date else {
+            throw CoreDataAnimalRepositoryError.missingPregnancyDate(recordID: check.id)
+        }
+        return date
     }
 
     static func managedMovementRecords(_ animal: CDAnimal) -> [CDMovementRecord] {

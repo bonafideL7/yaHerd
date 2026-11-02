@@ -125,6 +125,85 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testCloudKitPregnancyHistoryRejectsMissingImportedDate() async throws {
+        let model = try loadModel()
+        let entity = try entity(named: "PregnancyCheck", in: model)
+        XCTAssertTrue(try attribute(named: "date", in: entity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let herd = CDHerd(context: context)
+            herd.id = UUID()
+            herd.name = "Sample Herd"
+
+            let animal = CDAnimal(context: context)
+            animal.id = UUID()
+            animal.editorRevision = UUID()
+            animal.herd = herd
+            animal.name = "Sample Cow"
+            animal.sexRawValue = Sex.female.rawValue
+            animal.birthDate = Date(timeIntervalSinceReferenceDate: 100)
+            animal.statusRawValue = AnimalStatus.active.rawValue
+            animal.distinguishingFeaturesData = Data("[]".utf8)
+
+            let older = CDPregnancyCheck(context: context)
+            older.id = UUID()
+            older.herd = herd
+            older.animal = animal
+            older.date = Date(timeIntervalSinceReferenceDate: 200)
+            older.resultRawValue = PregnancyResult.pregnant.rawValue
+
+            let imported = CDPregnancyCheck(context: context)
+            imported.id = UUID()
+            imported.herd = herd
+            imported.animal = animal
+            imported.date = nil
+            imported.resultRawValue = PregnancyResult.pregnant.rawValue
+
+            XCTAssertThrowsError(try CoreDataAnimalProjection.summary(animal)) { error in
+                XCTAssertEqual(
+                    error as? CoreDataAnimalRepositoryError,
+                    .missingPregnancyDate(recordID: imported.id)
+                )
+            }
+            XCTAssertThrowsError(try CoreDataAnimalProjection.timeline(animal)) { error in
+                XCTAssertEqual(
+                    error as? CoreDataAnimalRepositoryError,
+                    .missingPregnancyDate(recordID: imported.id)
+                )
+            }
+            XCTAssertThrowsError(try WorkingMapper.makePregnancyCheckSnapshot(from: imported)) { error in
+                XCTAssertEqual(
+                    error as? CoreDataAnimalRepositoryError,
+                    .missingPregnancyDate(recordID: imported.id)
+                )
+            }
+            XCTAssertNil(imported.date)
+
+            let historicalDate = Date(timeIntervalSinceReferenceDate: 300)
+            imported.date = historicalDate
+            let summary = try CoreDataAnimalProjection.summary(animal)
+            XCTAssertEqual(summary.lastPregnancyCheckDate, historicalDate)
+            XCTAssertEqual(
+                summary.expectedCalvingDate,
+                Calendar.current.date(
+                    byAdding: .day,
+                    value: CattleReproductionRules.gestationDays,
+                    to: historicalDate
+                )
+            )
+            XCTAssertTrue(try CoreDataAnimalProjection.timeline(animal).contains {
+                $0.id == "pregnancy:\(imported.id.uuidString)" && $0.date == historicalDate
+            })
+            XCTAssertEqual(
+                try WorkingMapper.makePregnancyCheckSnapshot(from: imported).date,
+                historicalDate
+            )
+            context.rollback()
+        }
+    }
+
     func testCloudKitStatusHistoryRejectsMissingImportedDate() async throws {
         let model = try loadModel()
         let entity = try entity(named: "StatusRecord", in: model)
