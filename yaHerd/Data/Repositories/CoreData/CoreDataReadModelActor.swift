@@ -121,6 +121,22 @@ actor CoreDataReadModelActor:
                 herdAnimals: animals
             )
 
+            // A bounded chronological fetch can exclude a remotely imported undated
+            // session. Check all selected-Herd active candidates before applying
+            // the display limit; retain incomplete records for eventual restoration.
+            let missingDateRequest = NSFetchRequest<CDWorkingSession>(
+                entityName: CDWorkingSession.coreDataEntityName
+            )
+            missingDateRequest.predicate = NSPredicate(
+                format: "herd == %@ AND statusRawValue == %@ AND date == nil",
+                herd,
+                WorkingSessionStatus.active.rawValue
+            )
+            missingDateRequest.fetchLimit = 1
+            if let incomplete = try context.fetch(missingDateRequest).first {
+                _ = try WorkingMapper.sessionDate(incomplete)
+            }
+
             let workingRequest = NSFetchRequest<CDWorkingSession>(
                 entityName: CDWorkingSession.coreDataEntityName
             )

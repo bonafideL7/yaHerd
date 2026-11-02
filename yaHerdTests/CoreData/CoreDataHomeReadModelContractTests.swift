@@ -5,6 +5,62 @@ import XCTest
 
 @MainActor
 final class CoreDataHomeReadModelContractTests: XCTestCase {
+    func testDashboardRejectsUndatedImportedSessionBeyondTwentyFiveSessionLimit() async throws {
+        let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+        let herdID = try XCTUnwrap(environment.selection.currentHerdID)
+        let missingSessionID = UUID()
+        let restoredDate = Date(timeIntervalSinceReferenceDate: 4_000_000)
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let herd = try XCTUnwrap(CoreDataLookup().herd(id: herdID, in: context))
+            for index in 0..<25 {
+                let session = CDWorkingSession(context: context)
+                session.id = UUID()
+                session.herd = herd
+                session.date = Date(
+                    timeIntervalSinceReferenceDate: 100_000 + TimeInterval(index * 86_400)
+                )
+                session.statusRawValue = WorkingSessionStatus.active.rawValue
+                session.treatmentTemplateNameSnapshot = "Dated Session"
+            }
+            let incomplete = CDWorkingSession(context: context)
+            incomplete.id = missingSessionID
+            incomplete.herd = herd
+            incomplete.date = nil
+            incomplete.statusRawValue = WorkingSessionStatus.active.rawValue
+            incomplete.treatmentTemplateNameSnapshot = "Imported Session"
+            try context.save()
+        }
+
+        let readModel = CoreDataReadModelActor(
+            contextFactory: environment.assembly.contextFactory,
+            lookup: CoreDataLookup(),
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        do {
+            _ = try await readModel.fetchDashboardRecords()
+            XCTFail("A bounded dashboard must still reject incomplete active session chronology.")
+        } catch {
+            XCTAssertEqual(
+                error as? CoreDataWorkingMappingError,
+                .missingSessionDate(sessionID: missingSessionID)
+            )
+        }
+        try context.performAndWait {
+            let incomplete = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDWorkingSession.self, id: missingSessionID, herdID: herdID, in: context
+            ))
+            XCTAssertNil(incomplete.date)
+            incomplete.date = restoredDate
+            try context.save()
+        }
+
+        let dashboard = try await readModel.fetchDashboardRecords()
+        XCTAssertEqual(dashboard.workingSessions.count, 25)
+        XCTAssertEqual(dashboard.workingSessions.first?.id, missingSessionID)
+        XCTAssertEqual(dashboard.workingSessions.first?.date, restoredDate)
+    }
+
     func testMissingImportedPastureNameBlocksReadsWithoutLosingThePasture() async throws {
         let environment = try await CoreDataHomeReadModelContractEnvironment.make()
         let repository = CoreDataPastureRepository(
