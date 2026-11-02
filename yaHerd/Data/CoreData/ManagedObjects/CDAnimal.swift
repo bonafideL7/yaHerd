@@ -4,7 +4,7 @@ import Foundation
 @objc(CDAnimal)
 final class CDAnimal: NSManagedObject {
     @NSManaged var id: UUID
-    @NSManaged var editorRevision: UUID
+    @NSManaged var editorRevision: UUID?
     @NSManaged var name: String
     @NSManaged var sexRawValue: String
     @NSManaged var birthDate: Date
