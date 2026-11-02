@@ -3,6 +3,8 @@ import Foundation
 
 enum CoreDataTagColorRepositoryError: Error, Equatable {
     case missingTagAnimal(tagID: UUID)
+    case missingName(colorID: UUID)
+    case missingPrefix(colorID: UUID)
     case missingCreatedAt(colorID: UUID)
     case missingUpdatedAt(colorID: UUID)
 }
@@ -122,8 +124,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
             )
             let existingByID = colors.first { $0.id == color.id }
             let nameKey = TagColorLibraryRules.normalizedNameKey(cleanedName)
-            let existingByName = colors.first {
-                TagColorLibraryRules.normalizedNameKey($0.name) == nameKey
+            let existingByName = try colors.first {
+                try TagColorLibraryRules.normalizedNameKey(Self.requireLabels(from: $0).name) == nameKey
             }
             let seedBuiltIns = Self.seedBuiltIns()
             let builtInIDs = Set(seedBuiltIns.map(\.id))
@@ -386,11 +388,11 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 let canonical = colors.first {
                     !$0.isDeleted && $0.id == defaultColor.id
                 }
-                let competingNameRows = colors.filter {
+                let competingNameRows = try colors.filter {
                     !$0.isDeleted
                         && $0 !== canonical
                         && !currentBuiltInIDs.contains($0.id)
-                        && TagColorLibraryRules.normalizedNameKey($0.name) == normalizedDefaultName
+                        && (try TagColorLibraryRules.normalizedNameKey(Self.requireLabels(from: $0).name)) == normalizedDefaultName
                 }
 
                 let target: CDTagColorDefinition
@@ -580,6 +582,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         // A partial CloudKit import must not be normalized, deleted or
         // rewritten by an unrelated Tag Color mutation.
         for color in colors {
+            _ = try Self.requireLabels(from: color)
             _ = try Self.requireTimestamps(from: color)
         }
         return colors
@@ -607,6 +610,18 @@ final class CoreDataTagColorRepository: TagColorRepository {
         return color
     }
 
+    private nonisolated static func requireLabels(
+        from color: CDTagColorDefinition
+    ) throws -> (name: String, prefix: String) {
+        guard let name = color.name else {
+            throw CoreDataTagColorRepositoryError.missingName(colorID: color.id)
+        }
+        guard let prefix = color.prefix else {
+            throw CoreDataTagColorRepositoryError.missingPrefix(colorID: color.id)
+        }
+        return (name, prefix)
+    }
+
     private nonisolated static func requireTimestamps(
         from color: CDTagColorDefinition
     ) throws -> (createdAt: Date, updatedAt: Date) {
@@ -620,11 +635,12 @@ final class CoreDataTagColorRepository: TagColorRepository {
     }
 
     private nonisolated static func snapshot(from color: CDTagColorDefinition) throws -> TagColorSnapshot {
+        let labels = try requireLabels(from: color)
         let timestamps = try requireTimestamps(from: color)
         return TagColorSnapshot(
             id: color.id,
-            name: color.name,
-            prefix: color.prefix,
+            name: labels.name,
+            prefix: labels.prefix,
             rgba: RGBAColor(r: color.red, g: color.green, b: color.blue, a: color.alpha),
             sortOrder: Int(color.sortOrder),
             isDefault: color.isDefault,
