@@ -197,7 +197,7 @@ enum CoreDataAnimalProjection {
     static func tagSnapshot(_ tag: CDAnimalTag) throws -> AnimalTagSnapshot {
         AnimalTagSnapshot(
             id: tag.id,
-            number: tag.number,
+            number: try tagNumber(tag),
             colorID: tag.color?.id,
             isPrimary: tag.isPrimary,
             isActive: tag.isActive,
@@ -312,7 +312,7 @@ enum CoreDataAnimalProjection {
         }
 
         for tag in managedTags(animal) {
-            let normalizedNumber = tag.number.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalizedNumber = try tagNumber(tag).trimmingCharacters(in: .whitespacesAndNewlines)
             events.append(
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
@@ -354,10 +354,17 @@ enum CoreDataAnimalProjection {
         )
     }
 
+    static func tagNumber(_ tag: CDAnimalTag) throws -> String {
+        guard let number = tag.number else {
+            throw CoreDataAnimalRepositoryError.missingAnimalTagNumber(tagID: tag.id)
+        }
+        return number
+    }
+
     static func tagState(_ tag: CDAnimalTag) throws -> AnimalTagState {
         AnimalTagState(
             id: tag.id,
-            number: tag.number,
+            number: try tagNumber(tag),
             colorID: tag.color?.id,
             isPrimary: tag.isPrimary,
             isActive: tag.isActive,
@@ -816,6 +823,7 @@ enum CoreDataAnimalReadGraphValidator {
     ) throws {
         let tags = CoreDataAnimalProjection.managedTags(animal)
         for tag in tags {
+            _ = try CoreDataAnimalProjection.tagNumber(tag)
             guard tag.herd.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDAnimalTag.coreDataEntityName,

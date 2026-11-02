@@ -6,6 +6,76 @@ import XCTest
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
 
+    func testImportedAnimalTagWithoutNumberRejectsReadsAndEditsUntilRestored() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let repository = environment.makeAnimalRepository()
+        let originalInput = readGraphAnimalInput(name: "Imported Tag", tag: "TAG-123")
+        let animal = try repository.create(input: originalInput)
+        let context = try assembly.contextFactory.makeWriteContext()
+        let tagID = try context.performAndWait { () throws -> UUID in
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            let tag = try XCTUnwrap(CoreDataAnimalProjection.managedTags(stored).first)
+            tag.number = nil
+            try context.save()
+            return tag.id
+        }
+
+        let expected = CoreDataAnimalRepositoryError.missingAnimalTagNumber(tagID: tagID)
+        try context.performAndWait {
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            let revision = stored.editorRevision
+            XCTAssertThrowsError(try CoreDataAnimalMutation.rotateRevision(stored)) {
+                XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+            }
+            XCTAssertEqual(stored.editorRevision, revision)
+        }
+        XCTAssertThrowsError(try repository.fetchAnimals()) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchAnimalDetail(id: animal.id)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try repository.update(id: animal.id, input: originalInput)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try repository.archive(ids: [animal.id])) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try repository.restore(ids: [animal.id])) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try repository.delete(ids: [animal.id])) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        let dashboard = environment.makeDashboardQueryReader()
+        do {
+            _ = try await dashboard.fetchDashboardAnimalRecords(kind: .active)
+            XCTFail("A filtered dashboard must reject a missing persisted tag number.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataAnimalRepositoryError, expected)
+        }
+
+        try context.performAndWait {
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            let tag = try XCTUnwrap(CoreDataAnimalProjection.managedTags(stored).first)
+            XCTAssertNil(tag.number)
+            XCTAssertFalse(stored.isArchived)
+            tag.number = "TAG-123"
+            try context.save()
+        }
+
+        let restored = try XCTUnwrap(repository.fetchAnimalDetail(id: animal.id))
+        XCTAssertEqual(restored.activeTags.first?.number, "TAG-123")
+        XCTAssertEqual(restored.activeTags.first?.id, tagID)
+    }
+
     func testImportedAnimalWithoutStatusRejectsReadsEditsAndPastureCountsUntilRestored() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)

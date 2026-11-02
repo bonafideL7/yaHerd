@@ -136,7 +136,7 @@
 </entity>
     <entity name="AnimalTag" representedClassName="CDAnimalTag" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
-        <attribute name="number" optional="NO" attributeType="String"/>
+        <attribute name="number" optional="YES" attributeType="String"/>
         <attribute name="isPrimary" optional="NO" attributeType="Boolean" usesScalarValueType="YES" defaultValueString="NO"/>
         <attribute name="isActive" optional="NO" attributeType="Boolean" usesScalarValueType="YES" defaultValueString="NO"/>
         <attribute name="assignedAt" optional="YES" attributeType="Date"/>

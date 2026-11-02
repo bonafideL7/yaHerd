@@ -481,6 +481,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                   try CoreDataAnimalProjection.status(animal) == .active else {
                 throw FieldCheckRepositoryError.animalNotActive
             }
+            _ = try CoreDataAnimalMutation.aggregateTagStates(animal)
 
             guard let destinationPasture = try Self.sessionPasture(
                 for: session,

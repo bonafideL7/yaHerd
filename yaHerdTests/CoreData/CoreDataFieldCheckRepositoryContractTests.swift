@@ -5,6 +5,84 @@ import XCTest
 
 @MainActor
 final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
+    func testTrackedFieldCheckRejectsExistingRosterAnimalWithMissingTagNumber() async throws {
+        let environment = try await makeEnvironment()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Incomplete tag roster pasture", acreage: 15,
+                usableAcreage: 14, targetAcresPerHead: 1
+            )
+        )
+        let animal = try environment.makeAnimalRepository().create(
+            input: AnimalInput(
+                name: "Incomplete tag roster cow",
+                tagNumber: "TRACKED-TAG",
+                tagColorID: nil,
+                sex: .female,
+                birthDate: Date(timeIntervalSinceReferenceDate: 10_000),
+                status: .active,
+                pastureID: pasture.id,
+                sireID: nil,
+                damID: nil,
+                distinguishingFeatures: [],
+                saleDate: nil,
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        )
+        let repository = environment.makeFieldCheckRepository()
+        let sessionID = try await repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.id,
+                startedAt: Date(timeIntervalSinceReferenceDate: 20_000),
+                notes: "Existing roster"
+            )
+        )
+        let existing = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID)?.animalChecks.first)
+        XCTAssertFalse(existing.wasCounted)
+
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        let tagID = try context.performAndWait { () throws -> UUID in
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            let tag = try XCTUnwrap(CoreDataAnimalProjection.managedTags(stored).first)
+            tag.number = nil
+            try context.save()
+            return tag.id
+        }
+
+        do {
+            try await repository.addTrackedAnimalToSession(
+                sessionID: sessionID,
+                animalID: animal.id,
+                checkedAt: Date(timeIntervalSinceReferenceDate: 21_000)
+            )
+            XCTFail("An incomplete imported tag must not update the existing Field Check roster.")
+        } catch {
+            XCTAssertEqual(
+                error as? CoreDataAnimalRepositoryError,
+                .missingAnimalTagNumber(tagID: tagID)
+            )
+        }
+        try context.performAndWait {
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDFieldCheckSession.self, id: sessionID, herdID: environment.herdID, in: context
+            ))
+            let checks = try XCTUnwrap(stored.animalChecks as? Set<CDFieldCheckAnimalCheck>)
+            let check = try XCTUnwrap(checks.first { $0.id == existing.id })
+            XCTAssertNil(check.countedAt)
+            let savedAnimal = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            XCTAssertEqual(savedAnimal.currentPasture?.id, pasture.id)
+            XCTAssertNil(CoreDataAnimalProjection.managedTags(savedAnimal).first?.number)
+        }
+    }
+
     func testFieldCheckSessionRejectsAnImportedAnimalWithoutStatusBeforeSavingRoster() async throws {
         let environment = try await makeEnvironment()
         let pasture = try environment.makePastureRepository().create(

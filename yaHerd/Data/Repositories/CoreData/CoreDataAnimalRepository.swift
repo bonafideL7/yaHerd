@@ -367,7 +367,7 @@ final class CoreDataAnimalRepository:
             }
 
             let beforeAttributes = try CoreDataAnimalMutation.aggregateAttributes(animal)
-            let beforeTags = CoreDataAnimalMutation.aggregateTagStates(animal)
+            let beforeTags = try CoreDataAnimalMutation.aggregateTagStates(animal)
             let oldStatus = try CoreDataAnimalProjection.status(animal)
             let oldPasture = animal.currentPasture
 
@@ -478,8 +478,9 @@ final class CoreDataAnimalRepository:
                 at: mutationDate
             )
 
-            if beforeAttributes != (try CoreDataAnimalMutation.aggregateAttributes(animal))
-                || beforeTags != CoreDataAnimalMutation.aggregateTagStates(animal) {
+            let afterAttributes = try CoreDataAnimalMutation.aggregateAttributes(animal)
+            let afterTags = try CoreDataAnimalMutation.aggregateTagStates(animal)
+            if beforeAttributes != afterAttributes || beforeTags != afterTags {
                 try CoreDataAnimalMutation.rotateRevision(animal)
             }
 
@@ -505,6 +506,7 @@ final class CoreDataAnimalRepository:
             }
             for animal in targets {
                 _ = try CoreDataAnimalProjection.status(animal)
+                _ = try CoreDataAnimalMutation.aggregateTagStates(animal)
             }
 
             var affectedSurvivors: [UUID: CDAnimal] = [:]
@@ -525,6 +527,7 @@ final class CoreDataAnimalRepository:
             }
 
             for survivor in affectedSurvivors.values {
+                _ = try CoreDataAnimalMutation.aggregateTagStates(survivor)
                 try CoreDataAnimalMutation.rotateRevision(survivor)
             }
             for target in targets {
@@ -542,6 +545,7 @@ final class CoreDataAnimalRepository:
         try performWrite { context, herd in
             for animal in try CoreDataAnimalMutation.fetchAnimals(ids: ids, herd: herd, in: context) {
                 _ = try CoreDataAnimalProjection.status(animal)
+                _ = try CoreDataAnimalMutation.aggregateTagStates(animal)
                 _ = CoreDataAnimalMutation.applyArchiveState(
                     AnimalArchiveService.archived(reason: nil, at: date),
                     to: animal
@@ -558,6 +562,7 @@ final class CoreDataAnimalRepository:
         try performWrite { context, herd in
             for animal in try CoreDataAnimalMutation.fetchAnimals(ids: ids, herd: herd, in: context) {
                 _ = try CoreDataAnimalProjection.status(animal)
+                _ = try CoreDataAnimalMutation.aggregateTagStates(animal)
                 _ = CoreDataAnimalMutation.applyArchiveState(
                     AnimalArchiveService.restored(),
                     to: animal
@@ -583,6 +588,7 @@ final class CoreDataAnimalRepository:
                 in: context
             )
             for animal in try CoreDataAnimalMutation.fetchAnimals(ids: ids, herd: herd, in: context) {
+                _ = try CoreDataAnimalMutation.aggregateTagStates(animal)
                 guard animal.currentPasture?.id != pasture?.id else {
                     continue
                 }
@@ -662,7 +668,7 @@ final class CoreDataAnimalRepository:
                 throw AnimalValidationError.animalTagNotFound
             }
 
-            let before = CoreDataAnimalMutation.aggregateTagStates(animal)
+            let before = try CoreDataAnimalMutation.aggregateTagStates(animal)
             tag.number = input.number.trimmingCharacters(in: .whitespacesAndNewlines)
             tag.color = try CoreDataAnimalMutation.resolveTagColor(
                 id: input.colorID,
@@ -690,7 +696,7 @@ final class CoreDataAnimalRepository:
                 try CoreDataAnimalMutation.enforceActivePrimary(in: tags)
             }
 
-            if before != CoreDataAnimalMutation.aggregateTagStates(animal) {
+            if before != (try CoreDataAnimalMutation.aggregateTagStates(animal)) {
                 try CoreDataAnimalMutation.rotateRevision(animal)
             }
             return try CoreDataAnimalProjection.detail(animal)
@@ -712,7 +718,7 @@ final class CoreDataAnimalRepository:
                 throw AnimalValidationError.animalTagNotFound
             }
 
-            let before = CoreDataAnimalMutation.aggregateTagStates(animal)
+            let before = try CoreDataAnimalMutation.aggregateTagStates(animal)
             tag.isActive = true
             tag.removedAt = nil
             try CoreDataAnimalMutation.enforceActivePrimary(
@@ -720,7 +726,7 @@ final class CoreDataAnimalRepository:
                 preferredPrimaryID: tag.id
             )
 
-            if before != CoreDataAnimalMutation.aggregateTagStates(animal) {
+            if before != (try CoreDataAnimalMutation.aggregateTagStates(animal)) {
                 try CoreDataAnimalMutation.rotateRevision(animal)
             }
             return try CoreDataAnimalProjection.detail(animal)
@@ -742,7 +748,7 @@ final class CoreDataAnimalRepository:
                 throw AnimalValidationError.animalTagNotFound
             }
 
-            let before = CoreDataAnimalMutation.aggregateTagStates(animal)
+            let before = try CoreDataAnimalMutation.aggregateTagStates(animal)
             let replacementID = AnimalTagService.replacementPrimaryTagID(
                 afterRetiring: tag.id,
                 from: try tags.map(CoreDataAnimalProjection.tagState)
@@ -763,7 +769,7 @@ final class CoreDataAnimalRepository:
                 preferredPrimaryID: replacementID
             )
 
-            if before != CoreDataAnimalMutation.aggregateTagStates(animal) {
+            if before != (try CoreDataAnimalMutation.aggregateTagStates(animal)) {
                 try CoreDataAnimalMutation.rotateRevision(animal)
             }
             return try CoreDataAnimalProjection.detail(animal)
@@ -1125,6 +1131,7 @@ final class CoreDataAnimalRepository:
             throw AnimalValidationError.animalNotFound
         }
         for tag in CoreDataAnimalProjection.managedTags(animal) {
+            _ = try CoreDataAnimalProjection.tagNumber(tag)
             _ = try CoreDataAnimalProjection.tagAssignmentDate(tag)
         }
         return animal

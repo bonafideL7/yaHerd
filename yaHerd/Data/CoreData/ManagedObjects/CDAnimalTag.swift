@@ -4,7 +4,7 @@ import Foundation
 @objc(CDAnimalTag)
 final class CDAnimalTag: NSManagedObject {
     @NSManaged var id: UUID
-    @NSManaged var number: String
+    @NSManaged var number: String?
     @NSManaged var isPrimary: Bool
     @NSManaged var isActive: Bool
     @NSManaged var assignedAt: Date?
