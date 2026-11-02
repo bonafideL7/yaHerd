@@ -103,6 +103,14 @@ final class CoreDataAnimalRepository:
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
+            guard let animal = try lookup.herdOwned(
+                CDAnimal.self,
+                id: id,
+                herdID: herdID,
+                in: context
+            ) else {
+                return []
+            }
             // Until its animal relationship imports, a movement cannot be attributed to
             // a timeline. Report an incomplete Herd history instead of omitting it.
             let unlinkedMovements = NSFetchRequest<CDMovementRecord>(
@@ -117,14 +125,6 @@ final class CoreDataAnimalRepository:
                 throw CoreDataAnimalRepositoryError.missingMovementAnimalRelationship(
                     recordID: record.id
                 )
-            }
-            guard let animal = try lookup.herdOwned(
-                CDAnimal.self,
-                id: id,
-                herdID: herdID,
-                in: context
-            ) else {
-                return []
             }
             try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
                 animal, herdID: herdID, validateOffspringSummaries: true
