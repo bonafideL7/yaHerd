@@ -1479,7 +1479,7 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
 
         XCTAssertTrue(try attribute(named: "editorRevision", in: animal).type == .uuid)
-        XCTAssertFalse(try attribute(named: "editorRevision", in: animal).isOptional)
+        XCTAssertTrue(try attribute(named: "editorRevision", in: animal).isOptional)
 
         for rejected in ["tagNumber", "tagColorID", "locationRawValue", "statusReferenceID"] {
             XCTAssertNil(animal.propertiesByName[rejected], "Rejected duplicate field \(rejected) must not exist.")
