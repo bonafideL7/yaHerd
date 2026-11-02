@@ -187,7 +187,7 @@
         <attribute name="treatment" optional="YES" attributeType="String"/>
         <attribute name="notes" optional="YES" attributeType="String"/>
         <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="healthRecords" inverseEntity="Herd"/>
-        <relationship name="animal" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="healthRecords" inverseEntity="Animal"/>
+        <relationship name="animal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="healthRecords" inverseEntity="Animal"/>
         <relationship name="workingSession" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="WorkingSession" inverseName="healthRecords" inverseEntity="WorkingSession"/>
             <fetchIndex name="by_id">
             <fetchIndexElement property="id" type="Binary" order="ascending"/>

@@ -8,6 +8,6 @@ final class CDHealthRecord: NSManagedObject {
     @NSManaged var treatment: String?
     @NSManaged var notes: String?
     @NSManaged var herd: CDHerd
-    @NSManaged var animal: CDAnimal
+    @NSManaged var animal: CDAnimal?
     @NSManaged var workingSession: CDWorkingSession?
 }

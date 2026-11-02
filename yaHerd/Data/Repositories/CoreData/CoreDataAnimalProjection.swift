@@ -718,12 +718,12 @@ enum CoreDataAnimalReadGraphValidator {
                     actualHerdID: record.herd.id
                 )
             }
-            guard record.animal.objectID == animal.objectID else {
+            guard record.animal?.objectID == animal.objectID else {
                 throw CoreDataReadModelError.invalidAnimalRelationship(
                     entity: CDHealthRecord.coreDataEntityName,
                     id: record.id,
                     expectedAnimalID: animal.id,
-                    actualAnimalID: record.animal.id
+                    actualAnimalID: record.animal?.id
                 )
             }
             if let session = record.workingSession {
