@@ -249,6 +249,7 @@ enum CoreDataWorkingLifecycleMutation {
         _ session: CDWorkingSession,
         herd: CDHerd
     ) throws {
+        _ = try WorkingMapper.sessionDate(session)
         guard session.herd.id == herd.id else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingSession.herd",

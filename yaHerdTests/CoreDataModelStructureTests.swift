@@ -3,6 +3,31 @@ import XCTest
 @testable import yaHerd
 
 final class CoreDataModelStructureTests: XCTestCase {
+    func testCloudKitWorkingSessionDateRejectsMissingImportedValueAndRestoresHistory() async throws {
+        let model = try loadModel()
+        let entity = try entity(named: "WorkingSession", in: model)
+        XCTAssertTrue(try attribute(named: "date", in: entity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let session = CDWorkingSession(context: context)
+            session.id = UUID()
+            session.date = nil
+            XCTAssertThrowsError(try WorkingMapper.sessionDate(session)) {
+                XCTAssertEqual(
+                    $0 as? CoreDataWorkingMappingError,
+                    .missingSessionDate(sessionID: session.id)
+                )
+            }
+            XCTAssertNil(session.date)
+            let historicalDate = Date(timeIntervalSinceReferenceDate: 205_000)
+            session.date = historicalDate
+            XCTAssertEqual(try WorkingMapper.sessionDate(session), historicalDate)
+            context.rollback()
+        }
+    }
+
     func testCloudKitWorkingQueueAnimalIDRequiresARealImportedIdentity() async throws {
         let model = try loadModel()
         let entity = try entity(named: "WorkingQueueItem", in: model)
