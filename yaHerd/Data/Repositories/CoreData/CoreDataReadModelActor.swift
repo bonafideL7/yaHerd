@@ -688,10 +688,10 @@ actor CoreDataReadModelActor:
             }
 
             candidates.append(
-                contentsOf: batch.map {
+                contentsOf: try batch.map {
                     AnimalReferenceCandidate(
                         animal: $0,
-                        displayTagNumber: CoreDataAnimalProjection
+                        displayTagNumber: try CoreDataAnimalProjection
                             .primaryTagFields(
                                 CoreDataAnimalProjection.managedTags($0)
                             )
