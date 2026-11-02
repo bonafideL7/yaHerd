@@ -10,6 +10,7 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
     case corruptDistinguishingFeatures(animalID: UUID)
     case corruptHealthTreatment(recordID: UUID)
     case missingHealthDate(recordID: UUID)
+    case missingTagAssignmentDate(tagID: UUID)
     case missingPregnancyDate(recordID: UUID)
     case missingMovementDate(recordID: UUID)
     case missingStatusHistoryDate(recordID: UUID)
@@ -36,6 +37,8 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
             return "A health record has no treatment name."
         case .missingHealthDate:
             return "A health history record has no date."
+        case .missingTagAssignmentDate:
+            return "An animal tag has no assignment date."
         case .missingPregnancyDate:
             return "A pregnancy check has no date."
         case .missingMovementDate:
@@ -97,10 +100,11 @@ enum CoreDataAnimalMutation {
 
     static func validateOwnedGraphIdentity(_ animal: CDAnimal) throws {
         let herdID = animal.herd.id
-        try validateUniqueApplicationIDs(
-            CoreDataAnimalProjection.managedTags(animal),
-            herdID: herdID
-        )
+        let tags = CoreDataAnimalProjection.managedTags(animal)
+        try validateUniqueApplicationIDs(tags, herdID: herdID)
+        for tag in tags {
+            _ = try CoreDataAnimalProjection.tagAssignmentDate(tag)
+        }
         try validateUniqueApplicationIDs(
             CoreDataAnimalProjection.managedMovementRecords(animal),
             herdID: herdID
@@ -584,7 +588,7 @@ enum CoreDataAnimalMutation {
         in tags: [CDAnimalTag],
         preferredPrimaryID: UUID? = nil,
         excludedFallbackID: UUID? = nil
-    ) {
+    ) throws {
         let active = tags.filter(\.isActive)
         guard !active.isEmpty else {
             for tag in tags {
@@ -614,7 +618,7 @@ enum CoreDataAnimalMutation {
         fallbackPool = excludingRequested.isEmpty ? active : excludingRequested
 
         let orderedIDs = AnimalTagService.activeTags(
-            fallbackPool.map(CoreDataAnimalProjection.tagState)
+            try fallbackPool.map(CoreDataAnimalProjection.tagState)
         ).map(\.id)
         let selectedID = orderedIDs.first
 
