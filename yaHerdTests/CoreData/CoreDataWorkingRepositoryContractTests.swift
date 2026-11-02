@@ -2339,7 +2339,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                                 return $0.workingSession?.id == second.sessionID
                             case .standaloneAnimalHistory:
                                 return $0.workingSession == nil
-                                    && $0.animal.id == controlAnimal.id
+                                    && $0.animal?.id == controlAnimal.id
                             }
                         })
                         let foreignRecord = try XCTUnwrap(records.first {
@@ -2387,7 +2387,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                             )).map {
                                 [
                                     $0.herd.id.uuidString,
-                                    $0.animal.id.uuidString,
+                                    try XCTUnwrap($0.animal).id.uuidString,
                                     $0.workingSession?.id.uuidString ?? "standalone",
                                     $0.id.uuidString,
                                     try XCTUnwrap($0.treatment),
