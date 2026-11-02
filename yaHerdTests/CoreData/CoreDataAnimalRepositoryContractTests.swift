@@ -6,6 +6,56 @@ import XCTest
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
 
+    func testMissingImportedTagAssignmentDateBlocksReadsAndTagEditsWithoutChangingHistory() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let repository = environment.makeAnimalRepository()
+        let animal = try repository.create(
+            input: readGraphAnimalInput(name: "Imported Tag Date", tag: "TAG-DATE")
+        )
+
+        let context = try assembly.contextFactory.makeWriteContext()
+        let historicalDate = Date(timeIntervalSinceReferenceDate: 123_456)
+        let tagID = try context.performAndWait { () throws -> UUID in
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            let tag = try XCTUnwrap(CoreDataAnimalProjection.managedTags(stored).first)
+            let id = tag.id
+            tag.assignedAt = nil
+            try context.save()
+            return id
+        }
+
+        let expected = CoreDataAnimalRepositoryError.missingTagAssignmentDate(tagID: tagID)
+        XCTAssertThrowsError(try repository.fetchAnimals()) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchAnimalDetail(id: animal.id)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try repository.promoteTag(animalID: animal.id, tagID: tagID)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+
+        try context.performAndWait {
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            let tag = try XCTUnwrap(CoreDataAnimalProjection.managedTags(stored).first)
+            XCTAssertNil(tag.assignedAt)
+            XCTAssertEqual(tag.number, "TAG-DATE")
+            tag.assignedAt = historicalDate
+            try context.save()
+        }
+        let restored = try XCTUnwrap(repository.fetchAnimalDetail(id: animal.id))
+        XCTAssertEqual(restored.activeTags.first?.assignedAt, historicalDate)
+        XCTAssertEqual(restored.activeTags.first?.id, tagID)
+        XCTAssertEqual(try repository.fetchTimeline(id: animal.id).first {
+            $0.id == "tag:assigned:\(tagID.uuidString)"
+        }?.date, historicalDate)
+    }
+
     func testMissingImportedStatusReferenceBaseIsRejectedWithoutInventingAStatus() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
