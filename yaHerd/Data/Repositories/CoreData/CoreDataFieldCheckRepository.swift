@@ -502,7 +502,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                         in: context,
                         at: checkedAt
                     )
-                    CoreDataAnimalMutation.rotateRevision(animal)
+                    try CoreDataAnimalMutation.rotateRevision(animal)
                 }
                 try Self.normalizeQuickAnimalTypeCounts(for: session)
                 return
@@ -516,7 +516,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                     in: context,
                     at: checkedAt
                 )
-                CoreDataAnimalMutation.rotateRevision(animal)
+                try CoreDataAnimalMutation.rotateRevision(animal)
             }
 
             _ = try Self.insertAnimalCheck(
