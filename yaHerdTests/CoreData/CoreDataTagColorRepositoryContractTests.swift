@@ -725,7 +725,7 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
                         color.herd.id.uuidString, color.id.uuidString, color.name,
                         color.prefix, String(color.sortOrder), String(color.isHidden),
                         String(color.isDefault),
-                        String(color.updatedAt.timeIntervalSinceReferenceDate)
+                        color.updatedAt.map { String($0.timeIntervalSinceReferenceDate) } ?? "<missing>"
                     ].joined(separator: "|")
                 }.sorted()
             }
