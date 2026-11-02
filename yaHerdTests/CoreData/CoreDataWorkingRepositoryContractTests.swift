@@ -1959,7 +1959,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                                     $0.id.uuidString,
                                     try XCTUnwrap($0.treatment),
                                     $0.notes ?? "",
-                                    String($0.date.timeIntervalSinceReferenceDate)
+                                    String(try XCTUnwrap($0.date).timeIntervalSinceReferenceDate)
                                 ].joined(separator: "|")
                             }.sorted()
                         case .pregnancy:
