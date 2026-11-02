@@ -81,10 +81,11 @@ final class CoreDataPastureRepository:
         guard let herdID = selection.currentHerdID else { throw HerdRepositoryError.missingHerd }
         let context = contextFactory.makeReadContext()
         return try context.performAndWait {
-            guard try lookup.herd(id: herdID, in: context) != nil else { throw HerdRepositoryError.missingHerd }
+            guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
             guard let pasture = try lookup.herdOwned(CDPasture.self, id: pastureID, herdID: herdID, in: context) else {
                 return []
             }
+            try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
             let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
             request.predicate = NSPredicate(
                 format: "herd.id == %@ AND currentPasture == %@",

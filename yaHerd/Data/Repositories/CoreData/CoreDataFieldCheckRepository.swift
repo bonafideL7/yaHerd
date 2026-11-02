@@ -1195,6 +1195,8 @@ private extension CoreDataFieldCheckRepository {
         lookup: CoreDataLookup,
         in context: NSManagedObjectContext
     ) throws -> CDFieldCheckAnimalCheck {
+        // Type is stored in the roster; do not snapshot partial health history.
+        try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
         let primary = try primaryTagFields(animal)
         let damPrimary = try animal.dam.map { try primaryTagFields($0) }
 
