@@ -1972,7 +1972,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                                     $0.workingSession?.id.uuidString ?? "standalone",
                                     $0.id.uuidString,
                                     try XCTUnwrap($0.resultRawValue),
-                                    String($0.date.timeIntervalSinceReferenceDate)
+                                    String(try XCTUnwrap($0.date).timeIntervalSinceReferenceDate)
                                 ].joined(separator: "|")
                             }.sorted()
                         }

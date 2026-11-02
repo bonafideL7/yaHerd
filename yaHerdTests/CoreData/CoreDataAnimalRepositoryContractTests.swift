@@ -5645,7 +5645,7 @@ private final class CoreDataAnimalHealthContractControl: HealthRepositoryContrac
                 PregnancyCheckContractSnapshot(
                     id: $0.id,
                     animalID: $0.animal.id,
-                    date: $0.date,
+                    date: try XCTUnwrap($0.date),
                     resultRawValue: try XCTUnwrap($0.resultRawValue),
                     technician: $0.technician,
                     estimatedDaysPregnant: $0.estimatedDaysPregnant?.intValue,
