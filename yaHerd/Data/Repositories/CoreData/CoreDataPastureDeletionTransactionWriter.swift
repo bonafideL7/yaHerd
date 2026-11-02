@@ -209,17 +209,20 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
 
             let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
             request.predicate = NSPredicate(
-                format: "herd == %@ AND currentPasture == %@ AND isArchived == NO AND statusRawValue == %@",
+                format: "herd == %@ AND currentPasture == %@",
                 herd,
-                pasture,
-                AnimalStatus.active.rawValue
+                pasture
             )
             let residents = try context.fetch(request)
             try CoreDataAnimalMutation.validateUniqueApplicationIDs(
                 residents,
                 herdID: herd.id
             )
-            guard Set(residents.map(\.id)) == expected.residentAnimalIDs else {
+            let activeResidents = try residents.filter { animal in
+                let status = try CoreDataAnimalProjection.status(animal)
+                return !animal.isArchived && status == .active
+            }
+            guard Set(activeResidents.map(\.id)) == expected.residentAnimalIDs else {
                 throw PastureDeletionTransactionError.residentSetChanged(
                     pastureID: expected.pastureID
                 )
@@ -337,8 +340,8 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
                   targetIDs.contains(currentID) else {
                 continue
             }
-            if !animal.isArchived,
-               AnimalStatus(rawValue: animal.statusRawValue) == .active {
+            let status = try CoreDataAnimalProjection.status(animal)
+            if !animal.isArchived && status == .active {
                 throw PastureDeletionTransactionError.residentSetChanged(
                     pastureID: currentID
                 )

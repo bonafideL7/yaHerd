@@ -5,6 +5,76 @@ import XCTest
 
 @MainActor
 final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
+    func testFieldCheckSessionRejectsAnImportedAnimalWithoutStatusBeforeSavingRoster() async throws {
+        let environment = try await makeEnvironment()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Imported status pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1
+            )
+        )
+        let animal = try environment.makeAnimalRepository().create(
+            input: AnimalInput(
+                name: "Imported status cow",
+                tagNumber: "STATUS-ROSTER",
+                tagColorID: nil,
+                sex: .female,
+                birthDate: Date(timeIntervalSinceReferenceDate: 10_000),
+                status: .active,
+                pastureID: pasture.id,
+                sireID: nil,
+                damID: nil,
+                distinguishingFeatures: [],
+                saleDate: nil,
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        )
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            stored.statusRawValue = nil
+            try context.save()
+        }
+
+        let repository = environment.makeFieldCheckRepository()
+        let input = FieldCheckSessionStartInput(
+            pastureID: pasture.id,
+            startedAt: Date(timeIntervalSinceReferenceDate: 95_000),
+            notes: "Must preserve roster"
+        )
+        do {
+            _ = try await repository.createSession(input: input)
+            XCTFail("Incomplete imported status must not produce an understated Field Check roster.")
+        } catch {
+            XCTAssertEqual(
+                error as? CoreDataAnimalRepositoryError,
+                .invalidAnimalStatusRawValue(animalID: animal.id, value: nil)
+            )
+        }
+        XCTAssertTrue(try repository.fetchSessions().isEmpty)
+
+        try context.performAndWait {
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            XCTAssertNil(stored.statusRawValue)
+            stored.statusRawValue = AnimalStatus.active.rawValue
+            try context.save()
+        }
+        let sessionID = try await repository.createSession(input: input)
+        let detail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        XCTAssertEqual(detail.expectedHeadCountSnapshot, 1)
+        XCTAssertEqual(detail.animalChecks.first?.animalID, animal.id)
+    }
+
     func testMissingImportedFieldCheckSessionStartDateBlocksReadsAndMutationsUntilRestored() async throws {
         let environment = try await makeEnvironment()
         let pasture = try environment.makePastureRepository().create(

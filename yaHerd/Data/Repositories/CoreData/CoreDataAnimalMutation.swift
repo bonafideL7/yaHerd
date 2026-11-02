@@ -16,7 +16,7 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
     case missingMovementDate(recordID: UUID)
     case missingStatusHistoryDate(recordID: UUID)
     case invalidAnimalSexRawValue(animalID: UUID, value: String)
-    case invalidAnimalStatusRawValue(animalID: UUID, value: String)
+    case invalidAnimalStatusRawValue(animalID: UUID, value: String?)
     case invalidPregnancyResultRawValue(checkID: UUID, value: String)
     case invalidStatusHistoryRawValue(recordID: UUID, value: String?)
 
@@ -110,6 +110,7 @@ enum CoreDataAnimalMutation {
 
     static func validateOwnedGraphIdentity(_ animal: CDAnimal) throws {
         _ = try requiredEditorRevision(animal)
+        _ = try CoreDataAnimalProjection.status(animal)
         let herdID = animal.herd.id
         let tags = CoreDataAnimalProjection.managedTags(animal)
         try validateUniqueApplicationIDs(tags, herdID: herdID)
@@ -640,6 +641,7 @@ enum CoreDataAnimalMutation {
 
     static func rotateRevision(_ animal: CDAnimal) throws {
         _ = try requiredEditorRevision(animal)
+        _ = try CoreDataAnimalProjection.status(animal)
         animal.editorRevision = UUID()
     }
 

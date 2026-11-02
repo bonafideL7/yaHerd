@@ -475,7 +475,8 @@ enum CoreDataAnimalProjection {
     }
 
     static func status(_ animal: CDAnimal) throws -> AnimalStatus {
-        guard let value = AnimalStatus(rawValue: animal.statusRawValue) else {
+        guard let rawValue = animal.statusRawValue,
+              let value = AnimalStatus(rawValue: rawValue) else {
             throw CoreDataAnimalRepositoryError.invalidAnimalStatusRawValue(
                 animalID: animal.id,
                 value: animal.statusRawValue
