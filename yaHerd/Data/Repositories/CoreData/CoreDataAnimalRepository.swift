@@ -503,6 +503,9 @@ final class CoreDataAnimalRepository:
             guard !targetIDs.isEmpty else {
                 return
             }
+            for animal in targets {
+                _ = try CoreDataAnimalProjection.status(animal)
+            }
 
             var affectedSurvivors: [UUID: CDAnimal] = [:]
             for animal in try CoreDataAnimalMutation.fetchAnimals(herd: herd, in: context)
@@ -538,6 +541,7 @@ final class CoreDataAnimalRepository:
         let date = Date()
         try performWrite { context, herd in
             for animal in try CoreDataAnimalMutation.fetchAnimals(ids: ids, herd: herd, in: context) {
+                _ = try CoreDataAnimalProjection.status(animal)
                 _ = CoreDataAnimalMutation.applyArchiveState(
                     AnimalArchiveService.archived(reason: nil, at: date),
                     to: animal
@@ -553,6 +557,7 @@ final class CoreDataAnimalRepository:
         }
         try performWrite { context, herd in
             for animal in try CoreDataAnimalMutation.fetchAnimals(ids: ids, herd: herd, in: context) {
+                _ = try CoreDataAnimalProjection.status(animal)
                 _ = CoreDataAnimalMutation.applyArchiveState(
                     AnimalArchiveService.restored(),
                     to: animal
