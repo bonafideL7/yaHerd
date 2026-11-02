@@ -5570,7 +5570,7 @@ private final class CoreDataAnimalWorkingSessionReader: WorkingSessionDetailRead
 
             return WorkingSessionDetailSnapshot(
                 id: session.id,
-                date: session.date,
+                date: try WorkingMapper.sessionDate(session),
                 status: status,
                 sourcePastureID: session.sourcePastureIDSnapshot,
                 sourcePastureName: session.sourcePastureNameSnapshot,
