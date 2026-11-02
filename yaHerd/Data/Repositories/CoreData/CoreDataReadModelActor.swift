@@ -652,6 +652,7 @@ actor CoreDataReadModelActor:
         let animalType: AnimalType?
         let sex: Sex
         let status: AnimalStatus
+        let birthDate: Date
         let displayTagNumber: String
         let pastureSortKey: String
     }
@@ -842,6 +843,7 @@ actor CoreDataReadModelActor:
                         animalType: type,
                         sex: try CoreDataAnimalProjection.sex(animal),
                         status: try CoreDataAnimalProjection.status(animal),
+                        birthDate: try CoreDataAnimalProjection.birthDate(animal),
                         displayTagNumber: try animalListDisplayTagNumber(animal),
                         pastureSortKey: sortOrder == .pasture
                             ? try animalListPastureSortKey(animal)
@@ -889,13 +891,13 @@ actor CoreDataReadModelActor:
             }
             return animalListCandidateStableTieBreak(lhs, rhs)
         case .birthDateNewest:
-            if lhs.animal.birthDate != rhs.animal.birthDate {
-                return lhs.animal.birthDate > rhs.animal.birthDate
+            if lhs.birthDate != rhs.birthDate {
+                return lhs.birthDate > rhs.birthDate
             }
             return animalListCandidateStableTieBreak(lhs, rhs)
         case .birthDateOldest:
-            if lhs.animal.birthDate != rhs.animal.birthDate {
-                return lhs.animal.birthDate < rhs.animal.birthDate
+            if lhs.birthDate != rhs.birthDate {
+                return lhs.birthDate < rhs.birthDate
             }
             return animalListCandidateStableTieBreak(lhs, rhs)
         case .sex:
@@ -1412,6 +1414,7 @@ actor CoreDataReadModelActor:
             herd == %@ AND (
                 NOT (sexRawValue IN %@) OR
                 statusRawValue == nil OR
+                birthDate == nil OR
                 NOT (statusRawValue IN %@)
             )
             """,
@@ -1424,6 +1427,7 @@ actor CoreDataReadModelActor:
         if let animal = try context.fetch(invalidEnumRequest).first {
             _ = try CoreDataAnimalProjection.sex(animal)
             _ = try CoreDataAnimalProjection.status(animal)
+            _ = try CoreDataAnimalProjection.birthDate(animal)
         }
 
         let invalidPastureRequest = NSFetchRequest<CDAnimal>(
@@ -1740,6 +1744,7 @@ actor CoreDataReadModelActor:
         // contains corrupt duplicate application UUIDs. They stay in Data.
         var activeCountsByPasture: [NSManagedObjectID: Int] = [:]
         for animal in residentCandidates {
+            _ = try CoreDataAnimalProjection.birthDate(animal)
             let status = try CoreDataAnimalProjection.status(animal)
             guard !animal.isArchived,
                   status == .active,

@@ -477,6 +477,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             ) else {
                 throw FieldCheckRepositoryError.animalNotFound
             }
+            _ = try CoreDataAnimalProjection.birthDate(animal)
             guard !animal.isArchived,
                   try CoreDataAnimalProjection.status(animal) == .active else {
                 throw FieldCheckRepositoryError.animalNotActive
@@ -977,6 +978,7 @@ private extension CoreDataFieldCheckRepository {
             herdID: herd.id
         )
         return try candidates.filter { animal in
+            _ = try CoreDataAnimalProjection.birthDate(animal)
             let status = try CoreDataAnimalProjection.status(animal)
             return !animal.isArchived && status == .active
         }
