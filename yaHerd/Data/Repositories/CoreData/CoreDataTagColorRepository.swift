@@ -785,9 +785,11 @@ final class CoreDataTagColorRepository: TagColorRepository {
         let preservedID = defaultID.flatMap { id in
             visible.contains(where: { $0.id == id }) ? id : nil
         }
+        let visibleSnapshots = try visible.map(snapshot)
+        let defaultSnapshots = try defaults.map(snapshot)
         let selectedID = preservedID
-            ?? preferredDefaultID(in: try visible.map(snapshot))
-            ?? preferredDefaultID(in: try defaults.map(snapshot))
+            ?? preferredDefaultID(in: visibleSnapshots)
+            ?? preferredDefaultID(in: defaultSnapshots)
         for color in defaults where color.id != selectedID {
             color.isDefault = false
             color.updatedAt = .now
