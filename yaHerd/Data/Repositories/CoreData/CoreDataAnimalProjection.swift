@@ -41,8 +41,8 @@ enum CoreDataAnimalProjection {
     ) throws -> AnimalSummary {
         try CoreDataAnimalMutation.validateOwnedGraphIdentity(animal)
         let tags = managedTags(animal)
-        let primary = primaryTagFields(tags)
-        let damPrimary = animal.dam.map { primaryTagFields(managedTags($0)) }
+        let primary = try primaryTagFields(tags)
+        let damPrimary = try animal.dam.map { try primaryTagFields(managedTags($0)) }
 
         // Validate every imported date before selecting the newest pregnancy check.
         // A missing date cannot be treated as older than a valid historical event.
@@ -113,27 +113,28 @@ enum CoreDataAnimalProjection {
 
     static func detail(_ animal: CDAnimal) throws -> AnimalDetailSnapshot {
         try CoreDataAnimalMutation.validateOwnedGraphIdentity(animal)
-        let activeTags = orderedTags(
+        let activeTags = try orderedTags(
             managedTags(animal),
             matching: AnimalTagService.activeTags
         )
-        let inactiveTags = orderedTags(
+        let inactiveTags = try orderedTags(
             managedTags(animal),
             matching: AnimalTagService.inactiveTags
         )
-        let primary = primaryTagFields(managedTags(animal))
-        let maternalOffspring = managedMaternalOffspring(animal)
+        let primary = try primaryTagFields(managedTags(animal))
+        let maternalOffspring = try managedMaternalOffspring(animal)
+            .map { offspring in
+                (animal: offspring, tagNumber: try primaryTagFields(managedTags(offspring)).number)
+            }
             .sorted { lhs, rhs in
-                if lhs.birthDate != rhs.birthDate {
-                    return lhs.birthDate > rhs.birthDate
+                if lhs.animal.birthDate != rhs.animal.birthDate {
+                    return lhs.animal.birthDate > rhs.animal.birthDate
                 }
-                let tagOrder = primaryTagFields(managedTags(lhs)).number.localizedStandardCompare(
-                    primaryTagFields(managedTags(rhs)).number
-                )
+                let tagOrder = lhs.tagNumber.localizedStandardCompare(rhs.tagNumber)
                 if tagOrder != .orderedSame {
                     return tagOrder == .orderedAscending
                 }
-                return lhs.id.uuidString < rhs.id.uuidString
+                return lhs.animal.id.uuidString < rhs.animal.id.uuidString
             }
 
         return AnimalDetailSnapshot(
@@ -163,12 +164,12 @@ enum CoreDataAnimalProjection {
             isArchived: animal.isArchived,
             archivedAt: animal.archivedAt,
             archiveReason: animal.archiveReason,
-            activeTags: activeTags.map(tagSnapshot),
-            inactiveTags: inactiveTags.map(tagSnapshot),
+            activeTags: try activeTags.map(tagSnapshot),
+            inactiveTags: try inactiveTags.map(tagSnapshot),
             location: animal.activeWorkingSession == nil ? .pasture : .workingPen,
             maternalOffspringCountIncludingArchived: managedMaternalOffspring(animal).count,
             maternalOffspring: try maternalOffspring.map { offspring in
-                try summary(offspring)
+                try summary(offspring.animal)
             }
         )
     }
@@ -182,7 +183,7 @@ enum CoreDataAnimalProjection {
 
     static func parentOption(_ animal: CDAnimal) throws -> AnimalParentOption {
         try CoreDataAnimalMutation.validateOwnedGraphIdentity(animal)
-        let primary = primaryTagFields(managedTags(animal))
+        let primary = try primaryTagFields(managedTags(animal))
         return AnimalParentOption(
             id: animal.id,
             name: animal.name,
@@ -193,14 +194,14 @@ enum CoreDataAnimalProjection {
         )
     }
 
-    static func tagSnapshot(_ tag: CDAnimalTag) -> AnimalTagSnapshot {
+    static func tagSnapshot(_ tag: CDAnimalTag) throws -> AnimalTagSnapshot {
         AnimalTagSnapshot(
             id: tag.id,
             number: tag.number,
             colorID: tag.color?.id,
             isPrimary: tag.isPrimary,
             isActive: tag.isActive,
-            assignedAt: tag.assignedAt,
+            assignedAt: try tagAssignmentDate(tag),
             removedAt: tag.removedAt
         )
     }
@@ -214,7 +215,7 @@ enum CoreDataAnimalProjection {
                     date: animal.birthDate,
                     type: .birth,
                     title: "Birth",
-                    details: birthEventDetails(animal)
+                    details: try birthEventDetails(animal)
                 ),
                 sourceID: animal.id,
                 kindOrder: 0
@@ -229,7 +230,7 @@ enum CoreDataAnimalProjection {
                         date: offspring.birthDate,
                         type: .birth,
                         title: "Offspring Recorded",
-                        details: offspringBirthEventDetails(offspring)
+                        details: try offspringBirthEventDetails(offspring)
                     ),
                     sourceID: offspring.id,
                     kindOrder: 1
@@ -316,7 +317,7 @@ enum CoreDataAnimalProjection {
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
                         id: "tag:assigned:\(tag.id.uuidString)",
-                        date: tag.assignedAt,
+                        date: try tagAssignmentDate(tag),
                         type: .tag,
                         title: "Tag Assigned",
                         details: normalizedNumber
@@ -345,24 +346,31 @@ enum CoreDataAnimalProjection {
         return events.sorted(by: timelineSort).map(\.event)
     }
 
-    static func primaryTagFields(_ tags: [CDAnimalTag]) -> AnimalPrimaryTagFields {
+    static func primaryTagFields(_ tags: [CDAnimalTag]) throws -> AnimalPrimaryTagFields {
         AnimalTagService.primaryTagFields(
-            in: tags.map(tagState),
+            in: try tags.map(tagState),
             fallbackNumber: "",
             fallbackColorID: nil
         )
     }
 
-    static func tagState(_ tag: CDAnimalTag) -> AnimalTagState {
+    static func tagState(_ tag: CDAnimalTag) throws -> AnimalTagState {
         AnimalTagState(
             id: tag.id,
             number: tag.number,
             colorID: tag.color?.id,
             isPrimary: tag.isPrimary,
             isActive: tag.isActive,
-            assignedAt: tag.assignedAt,
+            assignedAt: try tagAssignmentDate(tag),
             removedAt: tag.removedAt
         )
+    }
+
+    static func tagAssignmentDate(_ tag: CDAnimalTag) throws -> Date {
+        guard let assignedAt = tag.assignedAt else {
+            throw CoreDataAnimalRepositoryError.missingTagAssignmentDate(tagID: tag.id)
+        }
+        return assignedAt
     }
 
     static func managedTags(_ animal: CDAnimal) -> [CDAnimalTag] {
@@ -435,7 +443,7 @@ enum CoreDataAnimalProjection {
     }
 
     static func parentDisplayName(_ animal: CDAnimal) throws -> String {
-        let tag = primaryTagFields(managedTags(animal)).number
+        let tag = try primaryTagFields(managedTags(animal)).number
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !tag.isEmpty {
             return tag
@@ -503,8 +511,8 @@ enum CoreDataAnimalProjection {
     private static func orderedTags(
         _ tags: [CDAnimalTag],
         matching ordering: ([AnimalTagState]) -> [AnimalTagState]
-    ) -> [CDAnimalTag] {
-        let orderedIDs = ordering(tags.map(tagState)).map(\.id)
+    ) throws -> [CDAnimalTag] {
+        let orderedIDs = ordering(try tags.map(tagState)).map(\.id)
         return orderedIDs.compactMap { id in
             tags.first { $0.id == id }
         }
@@ -580,17 +588,17 @@ enum CoreDataAnimalProjection {
         }
     }
 
-    private static func birthEventDetails(_ animal: CDAnimal) -> String? {
+    private static func birthEventDetails(_ animal: CDAnimal) throws -> String? {
         var details: [String] = []
         if let dam = animal.dam {
-            let display = primaryTagFields(managedTags(dam)).number
+            let display = try primaryTagFields(managedTags(dam)).number
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if !display.isEmpty {
                 details.append("Dam: \(display)")
             }
         }
         if let sire = animal.sire {
-            let display = primaryTagFields(managedTags(sire)).number
+            let display = try primaryTagFields(managedTags(sire)).number
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if !display.isEmpty {
                 details.append("Sire: \(display)")
@@ -599,16 +607,16 @@ enum CoreDataAnimalProjection {
         return details.isEmpty ? nil : details.joined(separator: " • ")
     }
 
-    private static func offspringBirthEventDetails(_ offspring: CDAnimal) -> String {
+    private static func offspringBirthEventDetails(_ offspring: CDAnimal) throws -> String {
         var components = [
-            "Offspring: \(primaryTagFields(managedTags(offspring)).number)"
+            "Offspring: \(try primaryTagFields(managedTags(offspring)).number)"
         ]
         let name = offspring.name.trimmingCharacters(in: .whitespacesAndNewlines)
         if !name.isEmpty {
             components.append("Name: \(offspring.name)")
         }
         if let sire = offspring.sire {
-            let display = primaryTagFields(managedTags(sire)).number
+            let display = try primaryTagFields(managedTags(sire)).number
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if !display.isEmpty {
                 components.append("Sire: \(display)")
