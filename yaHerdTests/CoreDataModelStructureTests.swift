@@ -360,6 +360,7 @@ final class CoreDataModelStructureTests: XCTestCase {
         try context.performAndWait {
             let record = CDWorkingTreatmentRecord(context: context)
             record.id = UUID()
+            record.date = Date(timeIntervalSinceReferenceDate: 205_000)
             record.itemNameSnapshot = nil
             XCTAssertThrowsError(try WorkingMapper.makeTreatmentRecordSnapshot(from: record)) { error in
                 XCTAssertEqual(error as? CoreDataWorkingMappingError, .corruptTreatmentRecord(recordID: record.id))
