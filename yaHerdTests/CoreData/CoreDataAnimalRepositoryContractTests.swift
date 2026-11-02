@@ -6169,7 +6169,7 @@ private final class CoreDataAnimalHealthContractControl: HealthRepositoryContrac
             return try context.fetch(request).map {
                 HealthRecordContractSnapshot(
                     id: $0.id,
-                    animalID: $0.animal.id,
+                    animalID: try XCTUnwrap($0.animal).id,
                     date: try XCTUnwrap($0.date),
                     treatment: try XCTUnwrap($0.treatment),
                     notes: $0.notes,
