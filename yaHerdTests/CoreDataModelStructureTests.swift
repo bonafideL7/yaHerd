@@ -70,6 +70,49 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testCloudKitStatusHistoryRejectsMissingImportedDate() async throws {
+        let model = try loadModel()
+        let entity = try entity(named: "StatusRecord", in: model)
+        XCTAssertTrue(try attribute(named: "date", in: entity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let herd = CDHerd(context: context)
+            herd.id = UUID()
+            herd.name = "Sample Herd"
+
+            let animal = CDAnimal(context: context)
+            animal.id = UUID()
+            animal.herd = herd
+            animal.name = "Sample Animal"
+            animal.birthDate = Date(timeIntervalSinceReferenceDate: 100)
+
+            let status = CDStatusRecord(context: context)
+            status.id = UUID()
+            status.herd = herd
+            status.animal = animal
+            status.oldStatusRawValue = AnimalStatus.active.rawValue
+            status.newStatusRawValue = AnimalStatus.sold.rawValue
+            status.date = nil
+
+            XCTAssertThrowsError(try CoreDataAnimalProjection.timeline(animal)) { error in
+                XCTAssertEqual(
+                    error as? CoreDataAnimalRepositoryError,
+                    .missingStatusHistoryDate(recordID: status.id)
+                )
+            }
+
+            let historicalDate = Date(timeIntervalSinceReferenceDate: 200)
+            status.date = historicalDate
+            let timeline = try CoreDataAnimalProjection.timeline(animal)
+            XCTAssertTrue(timeline.contains {
+                $0.id == "status:\(status.id.uuidString)" && $0.date == historicalDate
+            })
+            context.rollback()
+        }
+    }
+
     private static let expectedEntities: Set<String> = [
         "Herd",
         "TagColorDefinition",
