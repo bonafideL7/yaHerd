@@ -2913,7 +2913,7 @@ private final class CoreDataWorkingContractEnvironment {
             )
             return Set(
                 try context.fetch(request)
-                    .filter { animalIDs.contains($0.animal.id) }
+                    .filter { try animalIDs.contains(XCTUnwrap($0.animal?.id)) }
                     .map(\.id)
             )
         }
