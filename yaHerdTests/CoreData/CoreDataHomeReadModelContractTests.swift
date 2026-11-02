@@ -241,6 +241,68 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         )
     }
 
+    func testHomeFieldCheckRejectsUndatedImportedFindingWhenMultipleFindingsOpen() async throws {
+        let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+        let herdID = try XCTUnwrap(environment.selection.currentHerdID)
+        let missingFindingID = UUID()
+        let restoredDate = Date(timeIntervalSinceReferenceDate: 55_000)
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let herd = try XCTUnwrap(CoreDataLookup().herd(id: herdID, in: context))
+            let pasture = CDPasture(context: context)
+            pasture.id = UUID()
+            pasture.herd = herd
+            pasture.name = "Home Finding Dates"
+
+            let session = CDFieldCheckSession(context: context)
+            session.id = UUID()
+            session.herd = herd
+            session.pasture = pasture
+            session.startedAt = Date(timeIntervalSinceReferenceDate: 50_000)
+            session.pastureIDSnapshot = pasture.id
+            session.pastureNameSnapshot = pasture.name ?? ""
+            session.notes = ""
+
+            for index in 0..<2 {
+                let finding = CDFieldCheckFinding(context: context)
+                finding.id = index == 0 ? missingFindingID : UUID()
+                finding.herd = herd
+                finding.session = session
+                finding.recordedAt = index == 0 ? nil : Date(timeIntervalSinceReferenceDate: 50_100)
+                finding.typeRawValue = FieldCheckFindingType.fenceIssue.rawValue
+                finding.severityRawValue = FieldCheckFindingSeverity.warning.rawValue
+                finding.statusRawValue = FieldCheckFindingStatus.open.rawValue
+                finding.note = "Imported finding"
+            }
+            try context.save()
+        }
+        let reader = CoreDataReadModelActor(
+            contextFactory: environment.assembly.contextFactory,
+            lookup: CoreDataLookup(),
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await reader.fetchHomeFieldCheckRecords()
+        ) { error in
+            XCTAssertEqual(
+                error as? CoreDataFieldCheckMappingError,
+                .missingFindingDate(findingID: missingFindingID)
+            )
+        }
+
+        try context.performAndWait {
+            let finding = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDFieldCheckFinding.self, id: missingFindingID,
+                herdID: herdID, in: context
+            ))
+            XCTAssertNil(finding.recordedAt)
+            finding.recordedAt = restoredDate
+            try context.save()
+        }
+        let restored = try await reader.fetchHomeFieldCheckRecords()
+        XCTAssertEqual(restored.openFindingCount, 2)
+    }
+
     func testHomeFieldCheckReadRejectsDuplicateFindingIDsAcrossSessions() async throws {
         // An unresolved collision is rejected by the global count query; a
         // resolved collision still belongs to the fetched warning-session
