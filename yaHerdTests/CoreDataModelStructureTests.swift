@@ -3,6 +3,47 @@ import XCTest
 @testable import yaHerd
 
 final class CoreDataModelStructureTests: XCTestCase {
+    func testCloudKitHerdTimestampsAreNullableInCompiledModelAndRequiredForProjection() async throws {
+        let model = try loadModel()
+        let herdEntity = try entity(named: "Herd", in: model)
+        XCTAssertTrue(try attribute(named: "createdAt", in: herdEntity).isOptional)
+        XCTAssertTrue(try attribute(named: "updatedAt", in: herdEntity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let herd = CDHerd(context: context)
+            herd.id = UUID()
+            herd.name = "Imported Herd"
+            herd.createdAt = nil
+            herd.updatedAt = nil
+
+            XCTAssertThrowsError(try herd.toSummary()) {
+                XCTAssertEqual(
+                    $0 as? CoreDataHerdMappingError,
+                    .missingCreatedAt(herdID: herd.id)
+                )
+            }
+
+            let originalCreation = Date(timeIntervalSince1970: 1_700_000_000)
+            herd.createdAt = originalCreation
+            XCTAssertThrowsError(try herd.toSummary()) {
+                XCTAssertEqual(
+                    $0 as? CoreDataHerdMappingError,
+                    .missingUpdatedAt(herdID: herd.id)
+                )
+            }
+
+            let originalUpdate = Date(timeIntervalSince1970: 1_700_000_500)
+            herd.updatedAt = originalUpdate
+            let summary = try herd.toSummary()
+            XCTAssertEqual(summary.publicID, herd.id)
+            XCTAssertEqual(summary.createdAt, originalCreation)
+            XCTAssertEqual(summary.updatedAt, originalUpdate)
+            context.rollback()
+        }
+    }
+
     func testCloudKitFieldCheckSessionStartDateRejectsMissingImportedValueAndRestoresHistory() async throws {
         let model = try loadModel()
         let entity = try entity(named: "FieldCheckSession", in: model)

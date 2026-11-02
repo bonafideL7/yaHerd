@@ -42,7 +42,7 @@ final class CoreDataHerdRepository: HerdRepository {
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
-            return herd.toSummary()
+            return try herd.toSummary()
         }
     }
 
@@ -69,13 +69,15 @@ final class CoreDataHerdRepository: HerdRepository {
                 throw HerdRepositoryError.missingHerd
             }
 
+            // Refuse mutations of incomplete imported Herd roots.
+            let previousUpdatedAt = try herd.toSummary().updatedAt
             herd.name = trimmedName
             herd.updatedAt = max(
                 mutationDate,
-                herd.updatedAt.addingTimeInterval(0.001)
+                previousUpdatedAt.addingTimeInterval(0.001)
             )
 
-            return herd.toSummary()
+            return try herd.toSummary()
         }
     }
 }
