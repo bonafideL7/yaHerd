@@ -966,17 +966,19 @@ private extension CoreDataFieldCheckRepository {
             entityName: CDAnimal.coreDataEntityName
         )
         request.predicate = NSPredicate(
-            format: "herd == %@ AND currentPasture == %@ AND isArchived == NO AND statusRawValue == %@",
+            format: "herd == %@ AND currentPasture == %@",
             herd,
-            pasture,
-            AnimalStatus.active.rawValue
+            pasture
         )
-        let animals = try context.fetch(request)
+        let candidates = try context.fetch(request)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
-            animals,
+            candidates,
             herdID: herd.id
         )
-        return animals
+        return try candidates.filter { animal in
+            let status = try CoreDataAnimalProjection.status(animal)
+            return !animal.isArchived && status == .active
+        }
     }
 
     nonisolated static func validateFieldCheckIdentity(

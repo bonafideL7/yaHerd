@@ -198,6 +198,9 @@ actor CoreDataReadModelActor:
             try Self.validateAnimalApplicationIDs(
                 herd: herd, herdID: herdID, in: context
             )
+            try Self.validateAnimalListQueryIntegrity(
+                query: nil, herd: herd, herdID: herdID, in: context
+            )
 
             let request = NSFetchRequest<CDAnimal>(
                 entityName: CDAnimal.coreDataEntityName
@@ -1391,6 +1394,7 @@ actor CoreDataReadModelActor:
             format: """
             herd == %@ AND (
                 NOT (sexRawValue IN %@) OR
+                statusRawValue == nil OR
                 NOT (statusRawValue IN %@)
             )
             """,
@@ -1706,13 +1710,9 @@ actor CoreDataReadModelActor:
             )
             residentRequest.predicate = NSPredicate(
                 format: """
-                herd == %@ AND
-                currentPasture != nil AND
-                isArchived == NO AND
-                statusRawValue == %@
+                herd == %@ AND currentPasture != nil
                 """,
-                herd,
-                AnimalStatus.active.rawValue
+                herd
             )
             residentRequest.fetchBatchSize = 250
             residentRequest.relationshipKeyPathsForPrefetching = ["currentPasture"]
@@ -1723,8 +1723,9 @@ actor CoreDataReadModelActor:
         // contains corrupt duplicate application UUIDs. They stay in Data.
         var activeCountsByPasture: [NSManagedObjectID: Int] = [:]
         for animal in residentCandidates {
+            let status = try CoreDataAnimalProjection.status(animal)
             guard !animal.isArchived,
-                  animal.statusRawValue == AnimalStatus.active.rawValue,
+                  status == .active,
                   let currentPasture = animal.currentPasture else {
                 continue
             }

@@ -6,6 +6,73 @@ import XCTest
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
 
+    func testImportedAnimalWithoutStatusRejectsReadsEditsAndPastureCountsUntilRestored() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let animals = environment.makeAnimalRepository()
+        let pastures = environment.makePastureRepository()
+        let pasture = try pastures.create(
+            input: PastureInput(name: "Imported Status Pasture", acreage: 8, usableAcreage: 7, targetAcresPerHead: 1)
+        )
+        let originalInput = readGraphAnimalInput(
+            name: "Imported Status Animal", tag: "STATUS-01", pastureID: pasture.id
+        )
+        let animal = try animals.create(input: originalInput)
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            stored.statusRawValue = nil
+            try context.save()
+        }
+
+        let missingStatus = CoreDataAnimalRepositoryError.invalidAnimalStatusRawValue(
+            animalID: animal.id, value: nil
+        )
+        XCTAssertThrowsError(try animals.fetchAnimals()) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, missingStatus)
+        }
+        XCTAssertThrowsError(try animals.fetchAnimalDetail(id: animal.id)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, missingStatus)
+        }
+        XCTAssertThrowsError(try animals.update(id: animal.id, input: originalInput)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, missingStatus)
+        }
+        XCTAssertThrowsError(try pastures.fetchPastures()) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, missingStatus)
+        }
+        let dashboard = environment.makeDashboardQueryReader()
+        do {
+            _ = try await dashboard.fetchDashboardAnimalRecords(kind: .active)
+            XCTFail("The filtered Dashboard must not silently omit an imported missing status.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataAnimalRepositoryError, missingStatus)
+        }
+        do {
+            _ = try await dashboard.fetchDashboardPastureRecords()
+            XCTFail("Dashboard pasture counts must not hide an imported missing status.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataAnimalRepositoryError, missingStatus)
+        }
+        XCTAssertThrowsError(try pastures.fetchResidentAnimals(pastureID: pasture.id)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, missingStatus)
+        }
+
+        try context.performAndWait {
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            XCTAssertNil(stored.statusRawValue)
+            XCTAssertEqual(stored.name, "Imported Status Animal")
+            stored.statusRawValue = AnimalStatus.active.rawValue
+            try context.save()
+        }
+        XCTAssertEqual(try animals.fetchAnimalDetail(id: animal.id)?.status, .active)
+        XCTAssertEqual(try pastures.fetchPastureDetail(id: pasture.id)?.activeAnimalCount, 1)
+        XCTAssertEqual(try pastures.fetchResidentAnimals(pastureID: pasture.id).map(\.id), [animal.id])
+    }
+
     func testMissingImportedAnimalEditorRevisionRejectsReadsAndAggregateWritesWithoutChangingHistory() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)

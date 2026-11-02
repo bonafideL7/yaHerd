@@ -87,16 +87,19 @@ final class CoreDataPastureRepository:
             }
             let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
             request.predicate = NSPredicate(
-                format: "herd.id == %@ AND currentPasture == %@ AND isArchived == NO AND statusRawValue == %@",
+                format: "herd.id == %@ AND currentPasture == %@",
                 herdID as NSUUID,
-                pasture,
-                AnimalStatus.active.rawValue
+                pasture
             )
-            let residents = try context.fetch(request)
+            let candidates = try context.fetch(request)
             try CoreDataAnimalMutation.validateUniqueApplicationIDs(
-                residents,
+                candidates,
                 herdID: herdID
             )
+            let residents = try candidates.filter { animal in
+                let status = try CoreDataAnimalProjection.status(animal)
+                return !animal.isArchived && status == .active
+            }
             return try residents
                 .map { animal in
                     try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
@@ -499,9 +502,10 @@ final class CoreDataPastureRepository:
         }
     }
 
-    private nonisolated static func activeAnimalCount(_ pasture: CDPasture) -> Int {
-        (pasture.animals as? Set<CDAnimal> ?? []).filter {
-            !$0.isArchived && AnimalStatus(rawValue: $0.statusRawValue) == .active
+    private nonisolated static func activeAnimalCount(_ pasture: CDPasture) throws -> Int {
+        try (pasture.animals as? Set<CDAnimal> ?? []).filter { animal in
+            let status = try CoreDataAnimalProjection.status(animal)
+            return !animal.isArchived && status == .active
         }.count
     }
 
@@ -511,7 +515,7 @@ final class CoreDataPastureRepository:
             id: pasture.id, name: try pasture.validatedName(),
             acreage: pasture.acreage?.doubleValue, usableAcreage: pasture.usableAcreage?.doubleValue,
             targetAcresPerHead: pasture.targetAcresPerHead?.doubleValue,
-            activeAnimalCount: activeAnimalCount(pasture), sortOrder: Int(pasture.sortOrder),
+            activeAnimalCount: try activeAnimalCount(pasture), sortOrder: Int(pasture.sortOrder),
             lastGrazedDate: pasture.lastGrazedDate, groupID: pasture.group?.id,
             groupName: try pasture.group.map { try validatedGroupName($0) }, restDays: pasture.group.map { Int($0.restDays) }
         )
@@ -523,7 +527,7 @@ final class CoreDataPastureRepository:
             id: pasture.id, name: try pasture.validatedName(),
             acreage: pasture.acreage?.doubleValue, usableAcreage: pasture.usableAcreage?.doubleValue,
             targetAcresPerHead: pasture.targetAcresPerHead?.doubleValue,
-            activeAnimalCount: activeAnimalCount(pasture), lastGrazedDate: pasture.lastGrazedDate,
+            activeAnimalCount: try activeAnimalCount(pasture), lastGrazedDate: pasture.lastGrazedDate,
             groupID: pasture.group?.id, groupName: try pasture.group.map { try validatedGroupName($0) }
         )
     }
