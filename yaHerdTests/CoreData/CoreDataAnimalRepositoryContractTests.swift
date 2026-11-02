@@ -69,6 +69,9 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         XCTAssertThrowsError(try pastureRepository.fetchResidentAnimals(pastureID: pasture.id)) {
             XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
         }
+        XCTAssertThrowsError(try repository.delete(ids: [animal.id])) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
         try context.performAndWait {
             let herd = try XCTUnwrap(lookup.herd(id: environment.herdID, in: context))
             XCTAssertThrowsError(try CoreDataAnimalMutation.inferSingleSire(
