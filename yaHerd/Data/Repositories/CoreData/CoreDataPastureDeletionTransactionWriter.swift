@@ -276,7 +276,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
                 in: context,
                 at: date
             )
-            CoreDataAnimalMutation.rotateRevision(animal)
+            try CoreDataAnimalMutation.rotateRevision(animal)
         }
     }
 
@@ -344,7 +344,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
                 )
             }
             animal.currentPasture = nil
-            CoreDataAnimalMutation.rotateRevision(animal)
+            try CoreDataAnimalMutation.rotateRevision(animal)
         }
 
         for id in ids {
