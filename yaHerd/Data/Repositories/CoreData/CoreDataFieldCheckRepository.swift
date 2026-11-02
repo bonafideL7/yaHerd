@@ -246,6 +246,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             ) else {
                 throw FieldCheckRepositoryError.sessionNotFound
             }
+            _ = try FieldCheckMapper.startedAt(from: session)
             guard FieldCheckSessionLockRules.canEditSessionData(
                 completedAt: session.completedAt
             ) else {
@@ -275,6 +276,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             ) else {
                 throw FieldCheckRepositoryError.sessionNotFound
             }
+            _ = try FieldCheckMapper.startedAt(from: session)
             session.completedAt = nil
         }
     }
@@ -904,12 +906,17 @@ private extension CoreDataFieldCheckRepository {
             sessions,
             herdID: herd.id
         )
-        return sessions.sorted {
-            if $0.startedAt != $1.startedAt {
-                return $0.startedAt > $1.startedAt
-            }
-            return $0.id.uuidString < $1.id.uuidString
+        // Validate all imported dates before chronological ordering. An undated
+        // session cannot be treated as the oldest (or newest) historical record.
+        let dated = try sessions.map { session in
+            (session: session, date: try FieldCheckMapper.startedAt(from: session))
         }
+        return dated.sorted {
+            if $0.date != $1.date {
+                return $0.date > $1.date
+            }
+            return $0.session.id.uuidString < $1.session.id.uuidString
+        }.map(\.session)
     }
 
     nonisolated static func fetchFindings(
@@ -1209,6 +1216,7 @@ private extension CoreDataFieldCheckRepository {
         guard let session else {
             throw FieldCheckRepositoryError.sessionNotFound
         }
+        _ = try FieldCheckMapper.startedAt(from: session)
         guard FieldCheckSessionLockRules.canEditSessionData(
             completedAt: session.completedAt
         ) else {
@@ -1222,6 +1230,7 @@ private extension CoreDataFieldCheckRepository {
         guard let session else {
             throw FieldCheckRepositoryError.sessionNotFound
         }
+        _ = try FieldCheckMapper.startedAt(from: session)
         guard FieldCheckSessionLockRules.canUpdateFindingStatus(
             completedAt: session.completedAt
         ) else {

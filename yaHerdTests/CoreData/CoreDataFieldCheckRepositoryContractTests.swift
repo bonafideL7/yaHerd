@@ -5,6 +5,89 @@ import XCTest
 
 @MainActor
 final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
+    func testMissingImportedFieldCheckSessionStartDateBlocksReadsAndMutationsUntilRestored() async throws {
+        let environment = try await makeEnvironment()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Session date restoration",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let repository = environment.makeFieldCheckRepository()
+        let originalDate = Date(timeIntervalSinceReferenceDate: 99_000)
+        let sessionID = try await repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.id,
+                startedAt: originalDate,
+                notes: "Preserved session history"
+            )
+        )
+        XCTAssertEqual(try repository.fetchSessionDetail(id: sessionID)?.startedAt, originalDate)
+
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let session = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDFieldCheckSession.self,
+                id: sessionID,
+                herdID: environment.herdID,
+                in: context
+            ))
+            session.startedAt = nil
+            try context.save()
+        }
+
+        let expected = CoreDataFieldCheckMappingError.missingSessionStartDate(
+            sessionID: sessionID
+        )
+        XCTAssertThrowsError(try repository.fetchSessions()) {
+            XCTAssertEqual($0 as? CoreDataFieldCheckMappingError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchSessionDetail(id: sessionID)) {
+            XCTAssertEqual($0 as? CoreDataFieldCheckMappingError, expected)
+        }
+        do {
+            try await repository.updateNotes(sessionID: sessionID, notes: "Incorrect overwrite")
+            XCTFail("An undated session must not be edited.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataFieldCheckMappingError, expected)
+        }
+        do {
+            try await repository.completeSession(id: sessionID)
+            XCTFail("An undated session must not be completed.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataFieldCheckMappingError, expected)
+        }
+        do {
+            try await repository.reopenSession(id: sessionID)
+            XCTFail("An undated session must not be reopened.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataFieldCheckMappingError, expected)
+        }
+
+        let restoration = try environment.assembly.contextFactory.makeWriteContext()
+        try restoration.performAndWait {
+            let session = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDFieldCheckSession.self,
+                id: sessionID,
+                herdID: environment.herdID,
+                in: restoration
+            ))
+            XCTAssertNil(session.startedAt)
+            XCTAssertEqual(session.notes, "Preserved session history")
+            XCTAssertNil(session.completedAt)
+            session.startedAt = originalDate
+            try restoration.save()
+        }
+
+        let restored = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        XCTAssertEqual(restored.id, sessionID)
+        XCTAssertEqual(restored.startedAt, originalDate)
+        XCTAssertEqual(restored.notes, "Preserved session history")
+        XCTAssertEqual(try repository.fetchSessions().map(\.id), [sessionID])
+    }
+
     func testFieldCheckReadsAndMutationsStayWithinSelectedHerd() async throws {
         let environment = try await makeEnvironment()
         let primaryPasture = try environment.makePastureRepository().create(
