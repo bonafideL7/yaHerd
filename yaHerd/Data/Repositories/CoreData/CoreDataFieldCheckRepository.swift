@@ -192,11 +192,9 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 throw FieldCheckRepositoryError.pastureNotFound
             }
 
-            let rosterAnimals = try Self.fetchActiveAnimals(
-                pasture: pasture,
-                herd: herd,
-                in: context
-            ).sorted(by: Self.rosterSort)
+            let rosterAnimals = try Self.sortedRoster(
+                Self.fetchActiveAnimals(pasture: pasture, herd: herd, in: context)
+            )
 
             let session = CDFieldCheckSession(context: context)
             session.id = try CoreDataAnimalMutation.uniqueID(
@@ -1174,8 +1172,8 @@ private extension CoreDataFieldCheckRepository {
         lookup: CoreDataLookup,
         in context: NSManagedObjectContext
     ) throws -> CDFieldCheckAnimalCheck {
-        let primary = primaryTagFields(animal)
-        let damPrimary = animal.dam.map(primaryTagFields)
+        let primary = try primaryTagFields(animal)
+        let damPrimary = try animal.dam.map { try primaryTagFields($0) }
 
         let check = CDFieldCheckAnimalCheck(context: context)
         check.id = try CoreDataAnimalMutation.uniqueID(
@@ -1397,27 +1395,26 @@ private extension CoreDataFieldCheckRepository {
 
     nonisolated static func primaryTagFields(
         _ animal: CDAnimal
-    ) -> AnimalPrimaryTagFields {
-        CoreDataAnimalProjection.primaryTagFields(
+    ) throws -> AnimalPrimaryTagFields {
+        try CoreDataAnimalProjection.primaryTagFields(
             CoreDataAnimalProjection.managedTags(animal)
         )
     }
 
-    nonisolated static func rosterSort(
-        _ left: CDAnimal,
-        _ right: CDAnimal
-    ) -> Bool {
-        let leftPrimary = primaryTagFields(left).number
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let rightPrimary = primaryTagFields(right).number
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let lhs = leftPrimary.isEmpty ? left.name : leftPrimary
-        let rhs = rightPrimary.isEmpty ? right.name : rightPrimary
-        let comparison = lhs.localizedStandardCompare(rhs)
-        if comparison != .orderedSame {
-            return comparison == .orderedAscending
+    nonisolated static func sortedRoster(_ animals: [CDAnimal]) throws -> [CDAnimal] {
+        let keyed = try animals.map { animal in
+            (animal: animal, primary: try primaryTagFields(animal).number
+                .trimmingCharacters(in: .whitespacesAndNewlines))
         }
-        return left.id.uuidString < right.id.uuidString
+        return keyed.sorted { left, right in
+            let lhs = left.primary.isEmpty ? left.animal.name : left.primary
+            let rhs = right.primary.isEmpty ? right.animal.name : right.primary
+            let comparison = lhs.localizedStandardCompare(rhs)
+            if comparison != .orderedSame {
+                return comparison == .orderedAscending
+            }
+            return left.animal.id.uuidString < right.animal.id.uuidString
+        }.map(\.animal)
     }
 
     nonisolated static func managedChecks(
