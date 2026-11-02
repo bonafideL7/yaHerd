@@ -6,6 +6,7 @@ enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
     case invalidFindingStatus(findingID: UUID, value: String?)
     case missingFindingSession(findingID: UUID)
     case missingFindingDate(findingID: UUID)
+    case missingSessionStartDate(sessionID: UUID)
     case missingAnimalCheckSession(checkID: UUID)
     case missingAnimalIDSnapshot(checkID: UUID)
     case invalidAnimalSex(checkID: UUID, value: String)
@@ -23,6 +24,8 @@ enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
             return "The Field Check finding is missing its session relationship."
         case .missingFindingDate:
             return "The Field Check finding is missing its recorded date."
+        case .missingSessionStartDate:
+            return "The Field Check session is missing its start date."
         case .missingAnimalCheckSession:
             return "The Field Check roster check is missing its session relationship."
         case .missingAnimalIDSnapshot:
@@ -36,6 +39,13 @@ enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
 }
 
 enum FieldCheckMapper {
+    static func startedAt(from session: CDFieldCheckSession) throws -> Date {
+        guard let startedAt = session.startedAt else {
+            throw CoreDataFieldCheckMappingError.missingSessionStartDate(sessionID: session.id)
+        }
+        return startedAt
+    }
+
     static func recordedAt(from finding: CDFieldCheckFinding) throws -> Date {
         guard let recordedAt = finding.recordedAt else {
             throw CoreDataFieldCheckMappingError.missingFindingDate(findingID: finding.id)
@@ -144,6 +154,7 @@ enum FieldCheckMapper {
     static func makeSessionSummary(
         from session: CDFieldCheckSession
     ) throws -> FieldCheckSessionSummary {
+        let startedAt = try startedAt(from: session)
         let findings = try coreDataFindings(session).map {
             try makeFindingSnapshot(from: $0)
         }
@@ -154,7 +165,7 @@ enum FieldCheckMapper {
 
         return FieldCheckSessionSummary(
             id: session.id,
-            startedAt: session.startedAt,
+            startedAt: startedAt,
             completedAt: session.completedAt,
             pastureID: session.pastureIDSnapshot,
             pastureName: coreDataTrimmed(session.pastureNameSnapshot),
@@ -174,6 +185,7 @@ enum FieldCheckMapper {
     static func makeSessionDetail(
         from session: CDFieldCheckSession
     ) throws -> FieldCheckSessionDetailSnapshot {
+        let startedAt = try startedAt(from: session)
         let findings = try coreDataFindings(session).map {
             try makeFindingSnapshot(from: $0)
         }
@@ -184,7 +196,7 @@ enum FieldCheckMapper {
 
         return FieldCheckSessionDetailSnapshot(
             id: session.id,
-            startedAt: session.startedAt,
+            startedAt: startedAt,
             completedAt: session.completedAt,
             notes: session.notes,
             pastureID: session.pastureIDSnapshot,

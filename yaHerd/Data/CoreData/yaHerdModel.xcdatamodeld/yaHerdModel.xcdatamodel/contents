@@ -210,7 +210,7 @@
 </entity>
     <entity name="FieldCheckSession" representedClassName="CDFieldCheckSession" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
-        <attribute name="startedAt" optional="NO" attributeType="Date"/>
+        <attribute name="startedAt" optional="YES" attributeType="Date"/>
         <attribute name="completedAt" optional="YES" attributeType="Date"/>
         <attribute name="notes" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="expectedHeadCountSnapshot" optional="NO" attributeType="Integer 64" usesScalarValueType="YES" defaultValueString="0"/>

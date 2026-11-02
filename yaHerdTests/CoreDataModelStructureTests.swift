@@ -3,6 +3,33 @@ import XCTest
 @testable import yaHerd
 
 final class CoreDataModelStructureTests: XCTestCase {
+    func testCloudKitFieldCheckSessionStartDateRejectsMissingImportedValueAndRestoresHistory() async throws {
+        let model = try loadModel()
+        let entity = try entity(named: "FieldCheckSession", in: model)
+        XCTAssertTrue(try attribute(named: "startedAt", in: entity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let session = CDFieldCheckSession(context: context)
+            session.id = UUID()
+            session.startedAt = nil
+
+            XCTAssertThrowsError(try FieldCheckMapper.startedAt(from: session)) {
+                XCTAssertEqual(
+                    $0 as? CoreDataFieldCheckMappingError,
+                    .missingSessionStartDate(sessionID: session.id)
+                )
+            }
+            XCTAssertNil(session.startedAt)
+
+            let historicalDate = Date(timeIntervalSinceReferenceDate: 204_000)
+            session.startedAt = historicalDate
+            XCTAssertEqual(try FieldCheckMapper.startedAt(from: session), historicalDate)
+            context.rollback()
+        }
+    }
+
     func testCloudKitWorkingSessionDateRejectsMissingImportedValueAndRestoresHistory() async throws {
         let model = try loadModel()
         let entity = try entity(named: "WorkingSession", in: model)
