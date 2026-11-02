@@ -423,11 +423,11 @@ enum CoreDataSampleHerdFactory {
             session.herd = herd
 
             for (position, animal) in roster.enumerated() {
-                let primary = CoreDataAnimalProjection.primaryTagFields(
+                let primary = try CoreDataAnimalProjection.primaryTagFields(
                     CoreDataAnimalProjection.managedTags(animal)
                 )
-                let dam = animal.dam.map {
-                    CoreDataAnimalProjection.primaryTagFields(
+                let dam = try animal.dam.map {
+                    try CoreDataAnimalProjection.primaryTagFields(
                         CoreDataAnimalProjection.managedTags($0)
                     )
                 }
@@ -451,8 +451,8 @@ enum CoreDataSampleHerdFactory {
             }
 
             let matching = roster.first
-            let primary = matching.map {
-                CoreDataAnimalProjection.primaryTagFields(
+            let primary = try matching.map {
+                try CoreDataAnimalProjection.primaryTagFields(
                     CoreDataAnimalProjection.managedTags($0)
                 )
             }
@@ -510,11 +510,11 @@ enum CoreDataSampleHerdFactory {
                 !$0.isArchived
             }
             for (position, animal) in candidates.prefix(8).enumerated() {
-                let primary = CoreDataAnimalProjection.primaryTagFields(
+                let primary = try CoreDataAnimalProjection.primaryTagFields(
                     CoreDataAnimalProjection.managedTags(animal)
                 )
-                let dam = animal.dam.map {
-                    CoreDataAnimalProjection.primaryTagFields(
+                let dam = try animal.dam.map {
+                    try CoreDataAnimalProjection.primaryTagFields(
                         CoreDataAnimalProjection.managedTags($0)
                     )
                 }
