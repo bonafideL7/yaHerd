@@ -538,6 +538,9 @@ final class CoreDataAnimalRepository:
             guard !targetIDs.isEmpty else {
                 return
             }
+            // An imported HealthRecord without its Animal link may belong to
+            // one of these targets. Deleting now would make recovery impossible.
+            try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
             for animal in targets {
                 _ = try CoreDataAnimalProjection.birthDate(animal)
                 _ = try CoreDataAnimalProjection.status(animal)
