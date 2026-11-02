@@ -150,9 +150,10 @@ final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
 
         let context = try environment.assembly.contextFactory.makeWriteContext()
         try context.performAndWait {
-            let finding = try Self.requiredFinding(
-                id: findingID, sessionID: sessionID, in: context
-            )
+            let finding = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDFieldCheckFinding.self, id: findingID,
+                herdID: environment.herdID, in: context
+            ))
             finding.recordedAt = nil
             try context.save()
         }
@@ -184,9 +185,10 @@ final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
 
         let restoration = try environment.assembly.contextFactory.makeWriteContext()
         try restoration.performAndWait {
-            let finding = try Self.requiredFinding(
-                id: findingID, sessionID: sessionID, in: restoration
-            )
+            let finding = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDFieldCheckFinding.self, id: findingID,
+                herdID: environment.herdID, in: restoration
+            ))
             XCTAssertNil(finding.recordedAt)
             XCTAssertEqual(finding.statusRawValue, FieldCheckFindingStatus.open.rawValue)
             finding.recordedAt = originalDate
