@@ -8,6 +8,11 @@ enum CoreDataHerdMappingError: Error, Equatable {
 
 extension CDHerd {
     func toSummary() throws -> HerdSummary {
+        // A partially imported Herd must retain its original identity and name.
+        // Do not fabricate a display name or permit rename before restoration.
+        guard let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw CoreDataHerdMappingError.missingName(herdID: id)
+        }
         guard let createdAt else {
             throw CoreDataHerdMappingError.missingCreatedAt(herdID: id)
         }
