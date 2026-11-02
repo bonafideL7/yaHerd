@@ -144,7 +144,7 @@ enum CoreDataWorkingLifecycleMutation {
 
             animal.currentPasture = destination
             animal.activeWorkingSession = nil
-            CoreDataAnimalMutation.rotateRevision(animal)
+            try CoreDataAnimalMutation.rotateRevision(animal)
         }
 
         session.statusRawValue = WorkingSessionStatus.finished.rawValue
@@ -213,7 +213,7 @@ enum CoreDataWorkingLifecycleMutation {
             )
             animal.currentPasture = destination
             animal.activeWorkingSession = nil
-            CoreDataAnimalMutation.rotateRevision(animal)
+            try CoreDataAnimalMutation.rotateRevision(animal)
         }
     }
 
