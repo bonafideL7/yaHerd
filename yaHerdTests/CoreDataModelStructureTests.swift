@@ -3,6 +3,12 @@ import XCTest
 @testable import yaHerd
 
 final class CoreDataModelStructureTests: XCTestCase {
+    func testCloudKitHerdNameIsNullableInCompiledModel() throws {
+        let model = try loadModel()
+        let entity = try entity(named: "Herd", in: model)
+        XCTAssertTrue(try attribute(named: "name", in: entity).isOptional)
+    }
+
     func testCloudKitTagColorTimestampsAreNullableInCompiledModel() throws {
         let model = try loadModel()
         let entity = try entity(named: "TagColorDefinition", in: model)
