@@ -202,7 +202,7 @@ final class CoreDataTagColorReferenceProbe {
                 herdID: herdID,
                 in: context
             )
-            return animal.editorRevision
+            return try CoreDataAnimalMutation.requiredEditorRevision(animal)
         }
     }
 
