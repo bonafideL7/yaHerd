@@ -551,7 +551,7 @@ final class CoreDataWorkingRepository:
 
             resolved.queueItem.animalTagNumberSnapshot = normalizedNumber
             resolved.queueItem.animalTagColorIDSnapshot = replacementColor?.id
-            CoreDataAnimalMutation.rotateRevision(animal)
+            try CoreDataAnimalMutation.rotateRevision(animal)
 
             try Self.validateSessionGraph(
                 resolved.session,
@@ -1489,7 +1489,7 @@ private extension CoreDataWorkingRepository {
 
         animal.currentPasture = nil
         animal.activeWorkingSession = session
-        CoreDataAnimalMutation.rotateRevision(animal)
+        try CoreDataAnimalMutation.rotateRevision(animal)
     }
 
     nonisolated static func sortedAnimalsByTag(
