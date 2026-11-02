@@ -139,7 +139,7 @@
         <attribute name="number" optional="NO" attributeType="String"/>
         <attribute name="isPrimary" optional="NO" attributeType="Boolean" usesScalarValueType="YES" defaultValueString="NO"/>
         <attribute name="isActive" optional="NO" attributeType="Boolean" usesScalarValueType="YES" defaultValueString="NO"/>
-        <attribute name="assignedAt" optional="NO" attributeType="Date"/>
+        <attribute name="assignedAt" optional="YES" attributeType="Date"/>
         <attribute name="removedAt" optional="YES" attributeType="Date"/>
         <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="animalTags" inverseEntity="Herd"/>
         <relationship name="color" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="TagColorDefinition" inverseName="tags" inverseEntity="TagColorDefinition"/>
