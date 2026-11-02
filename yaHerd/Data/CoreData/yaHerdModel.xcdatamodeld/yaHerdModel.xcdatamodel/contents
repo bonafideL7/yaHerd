@@ -3,8 +3,8 @@
     <entity name="Herd" representedClassName="CDHerd" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="name" optional="NO" attributeType="String"/>
-        <attribute name="createdAt" optional="NO" attributeType="Date"/>
-        <attribute name="updatedAt" optional="NO" attributeType="Date"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date"/>
         <relationship name="tagColors" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="TagColorDefinition" inverseName="herd" inverseEntity="TagColorDefinition"/>
         <relationship name="statusReferences" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AnimalStatusReference" inverseName="herd" inverseEntity="AnimalStatusReference"/>
         <relationship name="pastureGroups" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="PastureGroup" inverseName="herd" inverseEntity="PastureGroup"/>

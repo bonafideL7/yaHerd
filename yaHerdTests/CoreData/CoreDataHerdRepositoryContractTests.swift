@@ -5,6 +5,82 @@ import XCTest
 
 @MainActor
 final class CoreDataHerdRepositoryContractTests: XCTestCase {
+    func testIncompleteImportedHerdTimestampsBlockReadAndRenameWithoutDataLoss() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let selection = TestCurrentHerdSelection()
+        let herdID = UUID()
+        let originalCreation = Date(timeIntervalSince1970: 1_700_000_000)
+        let originalUpdate = Date(timeIntervalSince1970: 1_700_000_500)
+
+        let initialContext = try assembly.contextFactory.makeWriteContext()
+        try initialContext.performAndWait {
+            let herd = CDHerd(context: initialContext)
+            herd.id = herdID
+            herd.name = "Imported Herd"
+            herd.createdAt = nil
+            herd.updatedAt = nil
+            try initialContext.save()
+        }
+
+        selection.currentHerdID = herdID
+        let repository = CoreDataHerdRepository(selection: selection, assembly: assembly)
+        XCTAssertThrowsError(try repository.fetchCurrentHerd()) {
+            XCTAssertEqual(
+                $0 as? CoreDataHerdMappingError,
+                .missingCreatedAt(herdID: herdID)
+            )
+        }
+        do {
+            _ = try await repository.renameCurrentHerd(to: "Unexpected Rename")
+            XCTFail("An imported Herd missing its original metadata must not be renamed.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataHerdMappingError, .missingCreatedAt(herdID: herdID))
+        }
+
+        let creationContext = try assembly.contextFactory.makeWriteContext()
+        try creationContext.performAndWait {
+            let herd = try XCTUnwrap(CoreDataLookup().herd(id: herdID, in: creationContext))
+            XCTAssertEqual(herd.name, "Imported Herd")
+            XCTAssertNil(herd.createdAt)
+            XCTAssertNil(herd.updatedAt)
+            herd.createdAt = originalCreation
+            try creationContext.save()
+        }
+
+        XCTAssertThrowsError(try repository.fetchCurrentHerd()) {
+            XCTAssertEqual($0 as? CoreDataHerdMappingError, .missingUpdatedAt(herdID: herdID))
+        }
+        do {
+            _ = try await repository.renameCurrentHerd(to: "Still Invalid")
+            XCTFail("An imported Herd missing its original update date must not be renamed.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataHerdMappingError, .missingUpdatedAt(herdID: herdID))
+        }
+
+        let updateContext = try assembly.contextFactory.makeWriteContext()
+        try updateContext.performAndWait {
+            let herd = try XCTUnwrap(CoreDataLookup().herd(id: herdID, in: updateContext))
+            XCTAssertEqual(herd.name, "Imported Herd")
+            XCTAssertEqual(herd.createdAt, originalCreation)
+            XCTAssertNil(herd.updatedAt)
+            herd.updatedAt = originalUpdate
+            try updateContext.save()
+        }
+
+        let restored = try repository.fetchCurrentHerd()
+        XCTAssertEqual(restored.publicID, herdID)
+        XCTAssertEqual(restored.name, "Imported Herd")
+        XCTAssertEqual(restored.createdAt, originalCreation)
+        XCTAssertEqual(restored.updatedAt, originalUpdate)
+
+        let renamed = try await repository.renameCurrentHerd(to: "Restored Herd")
+        XCTAssertEqual(renamed.publicID, herdID)
+        XCTAssertEqual(renamed.name, "Restored Herd")
+        XCTAssertEqual(renamed.createdAt, originalCreation)
+        XCTAssertGreaterThan(renamed.updatedAt, originalUpdate)
+        XCTAssertEqual(try repository.fetchCurrentHerd(), renamed)
+    }
+
     func testMissingReadAndRenameDoNotBootstrapHerd() async throws {
         let harness = try await makeHarness()
         try await HerdRepositoryContract.assertMissingReadAndRenameDoNotBootstrapHerd(

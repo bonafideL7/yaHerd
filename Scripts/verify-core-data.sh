@@ -38,7 +38,7 @@ CLASSES = {
 
 # name:type:required. Only absence or incompatible mutation fails; additive fields pass.
 ATTRIBUTE_CONTRACT = {
-    "Herd": "id:UUID:R,name:String:R,createdAt:Date:R,updatedAt:Date:R",
+    "Herd": "id:UUID:R,name:String:R,createdAt:Date:O,updatedAt:Date:O",
     "TagColorDefinition": "id:UUID:R,name:String:R,prefix:String:R,red:Double:R,green:Double:R,blue:Double:R,alpha:Double:R,sortOrder:Integer 64:R,isHidden:Boolean:R,isDefault:Boolean:R,createdAt:Date:R,updatedAt:Date:R",
     "AnimalStatusReference": "id:UUID:R,name:String:O,baseStatusRawValue:String:O",
     "PastureGroup": "id:UUID:R,name:String:O,grazeDays:Integer 64:R,restDays:Integer 64:R",
