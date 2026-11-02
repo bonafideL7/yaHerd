@@ -164,6 +164,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             animal.herd = herd
             animal.name = "Sample Animal"
             animal.birthDate = Date(timeIntervalSinceReferenceDate: 100)
+            animal.editorRevision = UUID()
 
             let movement = CDMovementRecord(context: context)
             movement.id = UUID()
@@ -339,6 +340,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             animal.herd = herd
             animal.name = "Sample Animal"
             animal.birthDate = Date(timeIntervalSinceReferenceDate: 100)
+            animal.editorRevision = UUID()
 
             let status = CDStatusRecord(context: context)
             status.id = UUID()
