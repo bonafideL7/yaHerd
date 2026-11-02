@@ -623,6 +623,33 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testCloudKitFieldCheckFindingDateRejectsIncompleteImportedHistory() async throws {
+        let model = try loadModel()
+        let entity = try entity(named: "FieldCheckFinding", in: model)
+        XCTAssertTrue(try attribute(named: "recordedAt", in: entity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let finding = CDFieldCheckFinding(context: context)
+            finding.id = UUID()
+            finding.recordedAt = nil
+
+            XCTAssertThrowsError(try FieldCheckMapper.recordedAt(from: finding)) { error in
+                XCTAssertEqual(
+                    error as? CoreDataFieldCheckMappingError,
+                    .missingFindingDate(findingID: finding.id)
+                )
+            }
+            XCTAssertNil(finding.recordedAt)
+
+            let historicalDate = Date(timeIntervalSinceReferenceDate: 180_000)
+            finding.recordedAt = historicalDate
+            XCTAssertEqual(try FieldCheckMapper.recordedAt(from: finding), historicalDate)
+            context.rollback()
+        }
+    }
+
     func testRequiredScalarAttributesHaveCloudKitDefaults() throws {
         let model = try loadModel()
 

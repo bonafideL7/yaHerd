@@ -5,6 +5,7 @@ enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
     case invalidFindingSeverity(findingID: UUID, value: String)
     case invalidFindingStatus(findingID: UUID, value: String?)
     case missingFindingSession(findingID: UUID)
+    case missingFindingDate(findingID: UUID)
     case missingAnimalCheckSession(checkID: UUID)
     case missingAnimalIDSnapshot(checkID: UUID)
     case invalidAnimalSex(checkID: UUID, value: String)
@@ -20,6 +21,8 @@ enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
             return "The Field Check finding contains an invalid persisted status."
         case .missingFindingSession:
             return "The Field Check finding is missing its session relationship."
+        case .missingFindingDate:
+            return "The Field Check finding is missing its recorded date."
         case .missingAnimalCheckSession:
             return "The Field Check roster check is missing its session relationship."
         case .missingAnimalIDSnapshot:
@@ -33,6 +36,13 @@ enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
 }
 
 enum FieldCheckMapper {
+    static func recordedAt(from finding: CDFieldCheckFinding) throws -> Date {
+        guard let recordedAt = finding.recordedAt else {
+            throw CoreDataFieldCheckMappingError.missingFindingDate(findingID: finding.id)
+        }
+        return recordedAt
+    }
+
     static func animalID(from check: CDFieldCheckAnimalCheck) throws -> UUID {
         guard let animalID = check.animalIDSnapshot else {
             throw CoreDataFieldCheckMappingError.missingAnimalIDSnapshot(checkID: check.id)
@@ -114,9 +124,10 @@ enum FieldCheckMapper {
             )
         }
 
+        let recordedAt = try recordedAt(from: finding)
         return FieldCheckFindingSnapshot(
             id: finding.id,
-            recordedAt: finding.recordedAt,
+            recordedAt: recordedAt,
             type: type,
             severity: severity,
             status: status,
@@ -223,14 +234,17 @@ private extension FieldCheckMapper {
         (session.animalChecks?.allObjects as? [CDFieldCheckAnimalCheck]) ?? []
     }
 
-    static func coreDataFindings(_ session: CDFieldCheckSession) -> [CDFieldCheckFinding] {
-        ((session.findings?.allObjects as? [CDFieldCheckFinding]) ?? [])
-            .sorted {
-                if $0.recordedAt != $1.recordedAt {
-                    return $0.recordedAt > $1.recordedAt
-                }
-                return $0.id.uuidString < $1.id.uuidString
+    static func coreDataFindings(_ session: CDFieldCheckSession) throws -> [CDFieldCheckFinding] {
+        let findings = (session.findings?.allObjects as? [CDFieldCheckFinding]) ?? []
+        let dated = try findings.map { finding in
+            (finding: finding, date: try recordedAt(from: finding))
+        }
+        return dated.sorted {
+            if $0.date != $1.date {
+                return $0.date > $1.date
             }
+            return $0.finding.id.uuidString < $1.finding.id.uuidString
+        }.map(\.finding)
     }
 
     static func coreDataIsPastureArchived(_ session: CDFieldCheckSession) -> Bool {

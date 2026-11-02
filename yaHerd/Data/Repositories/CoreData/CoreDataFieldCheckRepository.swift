@@ -145,17 +145,20 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                     selectedHerd: herd
                 )
             }
-            let open = try findings
-                .filter { try Self.findingStatus($0) != .resolved }
+            let dated = try findings.map { finding in
+                (finding: finding, date: try FieldCheckMapper.recordedAt(from: finding))
+            }
+            let open = try dated
+                .filter { try Self.findingStatus($0.finding) != .resolved }
                 .sorted {
-                    if $0.recordedAt != $1.recordedAt {
-                        return $0.recordedAt > $1.recordedAt
+                    if $0.date != $1.date {
+                        return $0.date > $1.date
                     }
-                    return $0.id.uuidString < $1.id.uuidString
+                    return $0.finding.id.uuidString < $1.finding.id.uuidString
                 }
             let selected = limit > 0 ? Array(open.prefix(limit)) : open
             return try selected.map {
-                try FieldCheckMapper.makeFindingSnapshot(from: $0)
+                try FieldCheckMapper.makeFindingSnapshot(from: $0.finding)
             }
         }
     }
@@ -1036,6 +1039,7 @@ private extension CoreDataFieldCheckRepository {
         guard let session = finding.session else {
             throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: finding.id)
         }
+        _ = try FieldCheckMapper.recordedAt(from: finding)
         try validateReadChildRelationship(
             entity: CDFieldCheckFinding.coreDataEntityName,
             id: finding.id,
@@ -1115,6 +1119,7 @@ private extension CoreDataFieldCheckRepository {
         ), finding.session?.id == sessionID else {
             throw FieldCheckRepositoryError.findingNotFound
         }
+        _ = try FieldCheckMapper.recordedAt(from: finding)
         return finding
     }
 
@@ -1277,9 +1282,10 @@ private extension CoreDataFieldCheckRepository {
             }
             return try findingStatus(finding) != .resolved
         }
-        return candidates.max { left, right in
-            left.recordedAt < right.recordedAt
+        let dated = try candidates.map { finding in
+            (finding: finding, date: try FieldCheckMapper.recordedAt(from: finding))
         }
+        return dated.max { $0.date < $1.date }?.finding
     }
 
     nonisolated static func animalCheck(
