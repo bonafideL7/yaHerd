@@ -8,6 +8,119 @@ import XCTest
 /// mutations. UI edit/picker behavior and failed-save rollback have separate owners.
 @MainActor
 final class CoreDataTagColorRepositoryContractTests: XCTestCase {
+    func testIncompleteImportedColorLabelsBlockReadsAndWritesUntilRestored() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = CoreDataTagColorContractEnvironment(assembly: assembly)
+        try environment.seedInitialHerd()
+        let repository = environment.fixture.makeTagColorRepository()
+        let colorID = UUID()
+        let originalCreatedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let originalUpdatedAt = Date(timeIntervalSince1970: 1_700_000_500)
+
+        let insertContext = try assembly.contextFactory.makeWriteContext()
+        try insertContext.performAndWait {
+            let herd = try XCTUnwrap(
+                CoreDataLookup().herd(id: environment.initialHerdID, in: insertContext)
+            )
+            let color = CDTagColorDefinition(context: insertContext)
+            color.id = colorID
+            color.herd = herd
+            color.name = nil
+            color.prefix = "IT"
+            color.red = 0.1
+            color.green = 0.6
+            color.blue = 0.5
+            color.alpha = 1
+            color.sortOrder = 9
+            color.isHidden = true
+            color.isDefault = false
+            color.createdAt = originalCreatedAt
+            color.updatedAt = originalUpdatedAt
+            try insertContext.save()
+        }
+
+        XCTAssertThrowsError(try repository.fetchColor(id: colorID)) {
+            XCTAssertEqual($0 as? CoreDataTagColorRepositoryError, .missingName(colorID: colorID))
+        }
+        XCTAssertThrowsError(try repository.fetchColors()) {
+            XCTAssertEqual($0 as? CoreDataTagColorRepositoryError, .missingName(colorID: colorID))
+        }
+
+        let edit = TagColorSnapshot(
+            id: colorID,
+            name: "Changed Teal",
+            prefix: "CT",
+            rgba: RGBAColor(r: 0.2, g: 0.7, b: 0.4)
+        )
+        XCTAssertThrowsError(try repository.upsert(edit)) {
+            XCTAssertEqual($0 as? CoreDataTagColorRepositoryError, .missingName(colorID: colorID))
+        }
+        XCTAssertThrowsError(try repository.restoreDefaultColors()) {
+            XCTAssertEqual($0 as? CoreDataTagColorRepositoryError, .missingName(colorID: colorID))
+        }
+
+        let restoreNameContext = try assembly.contextFactory.makeWriteContext()
+        try restoreNameContext.performAndWait {
+            let color = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDTagColorDefinition.self,
+                id: colorID,
+                herdID: environment.initialHerdID,
+                in: restoreNameContext
+            ))
+            XCTAssertNil(color.name)
+            XCTAssertEqual(color.prefix, "IT")
+            XCTAssertEqual(color.createdAt, originalCreatedAt)
+            XCTAssertEqual(color.updatedAt, originalUpdatedAt)
+            XCTAssertTrue(color.isHidden)
+            color.name = "Imported Teal"
+            color.prefix = nil
+            try restoreNameContext.save()
+        }
+
+        XCTAssertThrowsError(try repository.fetchColor(id: colorID)) {
+            XCTAssertEqual($0 as? CoreDataTagColorRepositoryError, .missingPrefix(colorID: colorID))
+        }
+        XCTAssertThrowsError(try repository.fetchColors()) {
+            XCTAssertEqual($0 as? CoreDataTagColorRepositoryError, .missingPrefix(colorID: colorID))
+        }
+        XCTAssertThrowsError(try repository.deleteColors(ids: [colorID])) {
+            XCTAssertEqual($0 as? CoreDataTagColorRepositoryError, .missingPrefix(colorID: colorID))
+        }
+
+        let restorePrefixContext = try assembly.contextFactory.makeWriteContext()
+        try restorePrefixContext.performAndWait {
+            let color = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDTagColorDefinition.self,
+                id: colorID,
+                herdID: environment.initialHerdID,
+                in: restorePrefixContext
+            ))
+            XCTAssertEqual(color.name, "Imported Teal")
+            XCTAssertNil(color.prefix)
+            XCTAssertTrue(color.isHidden)
+            XCTAssertEqual(color.updatedAt, originalUpdatedAt)
+            color.prefix = "IT"
+            try restorePrefixContext.save()
+        }
+
+        let restored = try XCTUnwrap(repository.fetchColor(id: colorID))
+        XCTAssertEqual(restored.id, colorID)
+        XCTAssertEqual(restored.name, "Imported Teal")
+        XCTAssertEqual(restored.prefix, "IT")
+        XCTAssertEqual(restored.createdAt, originalCreatedAt)
+        XCTAssertEqual(restored.updatedAt, originalUpdatedAt)
+        XCTAssertFalse(try repository.fetchColors().contains { $0.id == colorID })
+
+        try repository.upsert(edit)
+        let updated = try XCTUnwrap(repository.fetchColor(id: colorID))
+        XCTAssertEqual(updated.id, colorID)
+        XCTAssertEqual(updated.name, "Changed Teal")
+        XCTAssertEqual(updated.prefix, "CT")
+        XCTAssertEqual(updated.createdAt, originalCreatedAt)
+        XCTAssertGreaterThan(updated.updatedAt, originalUpdatedAt)
+        XCTAssertTrue(try repository.fetchColors().contains { $0.id == colorID })
+    }
+
     func testIncompleteImportedColorTimestampsBlockReadAndMutationUntilRestored() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let environment = CoreDataTagColorContractEnvironment(assembly: assembly)
