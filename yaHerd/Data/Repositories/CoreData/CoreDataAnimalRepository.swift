@@ -480,7 +480,7 @@ final class CoreDataAnimalRepository:
 
             if beforeAttributes != (try CoreDataAnimalMutation.aggregateAttributes(animal))
                 || beforeTags != CoreDataAnimalMutation.aggregateTagStates(animal) {
-                CoreDataAnimalMutation.rotateRevision(animal)
+                try CoreDataAnimalMutation.rotateRevision(animal)
             }
 
             return try CoreDataAnimalProjection.detail(animal)
@@ -522,7 +522,7 @@ final class CoreDataAnimalRepository:
             }
 
             for survivor in affectedSurvivors.values {
-                CoreDataAnimalMutation.rotateRevision(survivor)
+                try CoreDataAnimalMutation.rotateRevision(survivor)
             }
             for target in targets {
                 context.delete(target)
@@ -588,7 +588,7 @@ final class CoreDataAnimalRepository:
                     in: context,
                     at: date
                 )
-                CoreDataAnimalMutation.rotateRevision(animal)
+                try CoreDataAnimalMutation.rotateRevision(animal)
             }
         }
     }
@@ -634,7 +634,7 @@ final class CoreDataAnimalRepository:
                 in: CoreDataAnimalProjection.managedTags(animal),
                 preferredPrimaryID: shouldBePrimary ? tag.id : nil
             )
-            CoreDataAnimalMutation.rotateRevision(animal)
+            try CoreDataAnimalMutation.rotateRevision(animal)
             return try CoreDataAnimalProjection.detail(animal)
         }
     }
@@ -686,7 +686,7 @@ final class CoreDataAnimalRepository:
             }
 
             if before != CoreDataAnimalMutation.aggregateTagStates(animal) {
-                CoreDataAnimalMutation.rotateRevision(animal)
+                try CoreDataAnimalMutation.rotateRevision(animal)
             }
             return try CoreDataAnimalProjection.detail(animal)
         }
@@ -716,7 +716,7 @@ final class CoreDataAnimalRepository:
             )
 
             if before != CoreDataAnimalMutation.aggregateTagStates(animal) {
-                CoreDataAnimalMutation.rotateRevision(animal)
+                try CoreDataAnimalMutation.rotateRevision(animal)
             }
             return try CoreDataAnimalProjection.detail(animal)
         }
@@ -759,7 +759,7 @@ final class CoreDataAnimalRepository:
             )
 
             if before != CoreDataAnimalMutation.aggregateTagStates(animal) {
-                CoreDataAnimalMutation.rotateRevision(animal)
+                try CoreDataAnimalMutation.rotateRevision(animal)
             }
             return try CoreDataAnimalProjection.detail(animal)
         }
@@ -1027,7 +1027,7 @@ final class CoreDataAnimalRepository:
             )
             let didStageChanges = attributesChanged || tagsChanged
             if didStageChanges {
-                CoreDataAnimalMutation.rotateRevision(animal)
+                try CoreDataAnimalMutation.rotateRevision(animal)
             }
 
             return AggregateUpdateWriteResult(
