@@ -268,6 +268,40 @@ final class CoreDataModelStructureTests: XCTestCase {
         "WorkingTreatmentRecord"
     ]
 
+    func testCloudKitWorkingTreatmentDateRejectsMissingImportedValueAndRestoresHistory() async throws {
+        let model = try loadModel()
+        let entity = try entity(named: "WorkingTreatmentRecord", in: model)
+        XCTAssertTrue(try attribute(named: "date", in: entity).isOptional)
+
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let record = CDWorkingTreatmentRecord(context: context)
+            record.id = UUID()
+            record.treatmentItemID = UUID()
+            record.animalIDSnapshot = UUID()
+            record.itemNameSnapshot = "Vaccination"
+            record.given = true
+            record.date = nil
+
+            XCTAssertThrowsError(try WorkingMapper.makeTreatmentRecordSnapshot(from: record)) { error in
+                XCTAssertEqual(
+                    error as? CoreDataWorkingMappingError,
+                    .missingTreatmentDate(recordID: record.id)
+                )
+            }
+            XCTAssertNil(record.date)
+
+            let historicalDate = Date(timeIntervalSinceReferenceDate: 205_000)
+            record.date = historicalDate
+            XCTAssertEqual(
+                try WorkingMapper.makeTreatmentRecordSnapshot(from: record).date,
+                historicalDate
+            )
+            context.rollback()
+        }
+    }
+
     func testCloudKitWorkingTreatmentRecordIdentifiersRejectMissingValues() async throws {
         let model = try loadModel()
         let entity = try entity(named: "WorkingTreatmentRecord", in: model)
