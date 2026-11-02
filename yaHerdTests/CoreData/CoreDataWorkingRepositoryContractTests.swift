@@ -2702,7 +2702,7 @@ private final class CoreDataWorkingContractEnvironment {
                         }
                         throw WorkingRollbackInjectedError.afterSessionCompletionStaged(
                             sessionID: sessionID,
-                            movedAnimalID: movement.animal.id,
+                            movedAnimalID: try XCTUnwrap(movement.animal?.id),
                             destinationQueueItemIDs: queueIDs
                         )
                     }

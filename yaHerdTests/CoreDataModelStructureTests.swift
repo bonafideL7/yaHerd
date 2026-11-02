@@ -3,6 +3,12 @@ import XCTest
 @testable import yaHerd
 
 final class CoreDataModelStructureTests: XCTestCase {
+    func testCloudKitImportedMovementAnimalRelationshipIsOptional() throws {
+        let model = try loadModel()
+        let movement = try entity(named: "MovementRecord", in: model)
+        XCTAssertTrue(try relationship(named: "animal", in: movement).isOptional)
+    }
+
     func testCloudKitImportedAnimalBirthDateStorageIsOptional() throws {
         let model = try loadModel()
         let animal = try entity(named: "Animal", in: model)
