@@ -710,6 +710,9 @@ enum CoreDataAnimalMutation {
         guard let pastureID else {
             return nil
         }
+        // Inferred sires are persisted. A missing castration relationship must
+        // not turn an imported steer into a presumed bull.
+        try validateLinkedHealthHistory(herd: herd, in: context)
 
         let animals = try fetchAnimals(herd: herd, in: context)
         let candidates = try animals.map {

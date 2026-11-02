@@ -9,8 +9,17 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
         let repository = environment.makeAnimalRepository()
+        let pastureRepository = environment.makePastureRepository()
+        let pasture = try pastureRepository.create(
+            input: PastureInput(
+                name: "Imported Health Pasture", acreage: 10,
+                usableAcreage: 9, targetAcresPerHead: 1
+            )
+        )
         let animal = try repository.create(
-            input: readGraphAnimalInput(name: "Imported Health", tag: "HEALTH-IMPORTED")
+            input: readGraphAnimalInput(
+                name: "Imported Health", tag: "HEALTH-IMPORTED", pastureID: pasture.id
+            )
         )
         let context = try assembly.contextFactory.makeWriteContext()
         let lookup = CoreDataLookup()
@@ -35,6 +44,11 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             historicalDate
         )
         XCTAssertTrue(try repository.fetchTimeline(id: animal.id).contains { $0.id == timelineID })
+        XCTAssertEqual(
+            try pastureRepository.fetchResidentAnimals(pastureID: pasture.id)
+                .first(where: { $0.id == animal.id })?.lastTreatmentDate,
+            historicalDate
+        )
         try context.performAndWait {
             let record = try XCTUnwrap(lookup.herdOwned(
                 CDHealthRecord.self, id: recordID, herdID: environment.herdID, in: context
@@ -51,6 +65,15 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         }
         XCTAssertThrowsError(try repository.fetchTimeline(id: animal.id)) {
             XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try pastureRepository.fetchResidentAnimals(pastureID: pasture.id)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        try context.performAndWait {
+            let herd = try XCTUnwrap(lookup.herd(id: environment.herdID, in: context))
+            XCTAssertThrowsError(try CoreDataAnimalMutation.inferSingleSire(
+                pastureID: pasture.id, excluding: animal.id, herd: herd, in: context
+            )) { XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected) }
         }
         try context.performAndWait {
             let record = try XCTUnwrap(lookup.herdOwned(
@@ -71,6 +94,11 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             historicalDate
         )
         XCTAssertTrue(try repository.fetchTimeline(id: animal.id).contains { $0.id == timelineID })
+        XCTAssertEqual(
+            try pastureRepository.fetchResidentAnimals(pastureID: pasture.id)
+                .first(where: { $0.id == animal.id })?.lastTreatmentDate,
+            historicalDate
+        )
     }
 
     func testImportedStatusWithoutAnimalRelationshipPreservesTransitionsUntilRestored() async throws {

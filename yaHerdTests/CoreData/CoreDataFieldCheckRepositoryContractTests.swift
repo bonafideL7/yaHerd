@@ -5,6 +5,69 @@ import XCTest
 
 @MainActor
 final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
+    func testImportedUnlinkedHealthCannotPersistFieldCheckAnimalTypeSnapshot() async throws {
+        let environment = try await makeEnvironment()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Partial Health Pasture", acreage: 10,
+                usableAcreage: 9, targetAcresPerHead: 1
+            )
+        )
+        let animal = try environment.makeAnimalRepository().create(
+            input: AnimalInput(
+                name: "Health History Bull", tagNumber: "HEALTH-ROSTER",
+                tagColorID: nil, sex: .male,
+                birthDate: Date(timeIntervalSinceReferenceDate: 10_000),
+                status: .active, pastureID: pasture.id, sireID: nil,
+                damID: nil, distinguishingFeatures: [],
+                saleDate: nil, salePrice: nil, reasonSold: nil,
+                deathDate: nil, causeOfDeath: nil, statusReferenceID: nil
+            )
+        )
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        let id = UUID()
+        let lookup = CoreDataLookup()
+        try context.performAndWait {
+            let stored = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            let record = CDHealthRecord(context: context)
+            record.id = id
+            record.herd = stored.herd
+            record.animal = nil
+            record.date = Date(timeIntervalSinceReferenceDate: 11_000)
+            record.treatment = WorkingGeneratedHealthRecord.castration.treatmentName
+            try context.save()
+        }
+        let repository = environment.makeFieldCheckRepository()
+        let start = FieldCheckSessionStartInput(
+            pastureID: pasture.id,
+            startedAt: Date(timeIntervalSinceReferenceDate: 20_000),
+            notes: "Partial import"
+        )
+        await XCTAssertThrowsErrorAsync(try await repository.createSession(input: start)) {
+            XCTAssertEqual(
+                $0 as? CoreDataAnimalRepositoryError,
+                .missingHealthAnimalRelationship(recordID: id)
+            )
+        }
+        try context.performAndWait {
+            let record = try XCTUnwrap(lookup.herdOwned(
+                CDHealthRecord.self, id: id, herdID: environment.herdID, in: context
+            ))
+            XCTAssertNil(record.animal)
+            let stored = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            record.animal = stored
+            try context.save()
+        }
+        let sessionID = try await repository.createSession(input: start)
+        XCTAssertEqual(
+            try repository.fetchSessionDetail(id: sessionID)?.animalChecks.count, 1
+        )
+    }
+
     func testTrackedFieldCheckRejectsExistingRosterAnimalWithMissingTagNumber() async throws {
         let environment = try await makeEnvironment()
         let pasture = try environment.makePastureRepository().create(
