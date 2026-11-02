@@ -672,7 +672,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
 
         for animal in affectedAnimals.values {
-            animal.editorRevision = UUID()
+            try CoreDataAnimalMutation.rotateRevision(animal)
         }
 
         let checkRequest = NSFetchRequest<CDFieldCheckAnimalCheck>(
