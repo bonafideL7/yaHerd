@@ -44,7 +44,7 @@ ATTRIBUTE_CONTRACT = {
     "PastureGroup": "id:UUID:R,name:String:O,grazeDays:Integer 64:R,restDays:Integer 64:R",
     "Pasture": "id:UUID:R,name:String:O,sortOrder:Integer 64:R,acreage:Double:O,usableAcreage:Double:O,targetAcresPerHead:Double:O,lastGrazedDate:Date:O",
     "Animal": "id:UUID:R,editorRevision:UUID:R,name:String:R,sexRawValue:String:R,birthDate:Date:R,statusRawValue:String:R,saleDate:Date:O,salePrice:Double:O,reasonSold:String:O,deathDate:Date:O,causeOfDeath:String:O,isArchived:Boolean:R,archivedAt:Date:O,archiveReason:String:O,distinguishingFeaturesData:Binary:O",
-    "AnimalTag": "id:UUID:R,number:String:R,isPrimary:Boolean:R,isActive:Boolean:R,assignedAt:Date:R,removedAt:Date:O",
+    "AnimalTag": "id:UUID:R,number:String:R,isPrimary:Boolean:R,isActive:Boolean:R,assignedAt:Date:O,removedAt:Date:O",
     "MovementRecord": "id:UUID:R,date:Date:O,fromPastureIDSnapshot:UUID:O,fromPastureNameSnapshot:String:O,toPastureIDSnapshot:UUID:O,toPastureNameSnapshot:String:O",
     "StatusRecord": "id:UUID:R,date:Date:O,oldStatusRawValue:String:O,newStatusRawValue:String:O",
     "HealthRecord": "id:UUID:R,date:Date:O,treatment:String:O,notes:String:O",
