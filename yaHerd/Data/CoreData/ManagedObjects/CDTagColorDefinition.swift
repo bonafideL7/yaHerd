@@ -13,8 +13,8 @@ final class CDTagColorDefinition: NSManagedObject {
     @NSManaged var sortOrder: Int64
     @NSManaged var isHidden: Bool
     @NSManaged var isDefault: Bool
-    @NSManaged var createdAt: Date
-    @NSManaged var updatedAt: Date
+    @NSManaged var createdAt: Date?
+    @NSManaged var updatedAt: Date?
     @NSManaged var herd: CDHerd
     @NSManaged var tags: NSSet?
 }

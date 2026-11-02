@@ -3,6 +3,13 @@ import XCTest
 @testable import yaHerd
 
 final class CoreDataModelStructureTests: XCTestCase {
+    func testCloudKitTagColorTimestampsAreNullableInCompiledModel() throws {
+        let model = try loadModel()
+        let entity = try entity(named: "TagColorDefinition", in: model)
+        XCTAssertTrue(try attribute(named: "createdAt", in: entity).isOptional)
+        XCTAssertTrue(try attribute(named: "updatedAt", in: entity).isOptional)
+    }
+
     func testCloudKitHerdTimestampsAreNullableInCompiledModelAndRequiredForProjection() async throws {
         let model = try loadModel()
         let herdEntity = try entity(named: "Herd", in: model)
