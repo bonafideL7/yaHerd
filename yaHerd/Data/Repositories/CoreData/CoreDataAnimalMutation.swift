@@ -11,6 +11,7 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
     case corruptHealthTreatment(recordID: UUID)
     case missingHealthDate(recordID: UUID)
     case missingTagAssignmentDate(tagID: UUID)
+    case missingAnimalEditorRevision(animalID: UUID)
     case missingPregnancyDate(recordID: UUID)
     case missingMovementDate(recordID: UUID)
     case missingStatusHistoryDate(recordID: UUID)
@@ -39,6 +40,8 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
             return "A health history record has no date."
         case .missingTagAssignmentDate:
             return "An animal tag has no assignment date."
+        case .missingAnimalEditorRevision:
+            return "An animal has no editor revision."
         case .missingPregnancyDate:
             return "A pregnancy check has no date."
         case .missingMovementDate:
@@ -98,7 +101,15 @@ enum CoreDataAnimalMutation {
         }
     }
 
+    static func requiredEditorRevision(_ animal: CDAnimal) throws -> UUID {
+        guard let revision = animal.editorRevision else {
+            throw CoreDataAnimalRepositoryError.missingAnimalEditorRevision(animalID: animal.id)
+        }
+        return revision
+    }
+
     static func validateOwnedGraphIdentity(_ animal: CDAnimal) throws {
+        _ = try requiredEditorRevision(animal)
         let herdID = animal.herd.id
         let tags = CoreDataAnimalProjection.managedTags(animal)
         try validateUniqueApplicationIDs(tags, herdID: herdID)
