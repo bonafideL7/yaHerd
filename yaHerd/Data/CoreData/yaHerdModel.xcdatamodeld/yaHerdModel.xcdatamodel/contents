@@ -341,7 +341,7 @@
 </entity>
     <entity name="WorkingTreatmentRecord" representedClassName="CDWorkingTreatmentRecord" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
-        <attribute name="date" optional="NO" attributeType="Date"/>
+        <attribute name="date" optional="YES" attributeType="Date"/>
         <attribute name="treatmentItemID" optional="YES" attributeType="UUID"/>
         <attribute name="itemNameSnapshot" optional="YES" attributeType="String"/>
         <attribute name="given" optional="NO" attributeType="Boolean" usesScalarValueType="YES" defaultValueString="NO"/>
