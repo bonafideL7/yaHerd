@@ -285,13 +285,16 @@ enum CoreDataAnimalProjection {
         }
 
         for record in managedStatusRecords(animal) {
+            guard let statusDate = record.date else {
+                throw CoreDataAnimalRepositoryError.missingStatusHistoryDate(recordID: record.id)
+            }
             let oldStatus = try statusHistoryValue(record.oldStatusRawValue, record: record)
             let newStatus = try statusHistoryValue(record.newStatusRawValue, record: record)
             events.append(
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
                         id: "status:\(record.id.uuidString)",
-                        date: record.date,
+                        date: statusDate,
                         type: .status,
                         title: "Status Change",
                         details: "\(oldStatus.label) → \(newStatus.label)"
