@@ -4,7 +4,7 @@ import Foundation
 @objc(CDFieldCheckFinding)
 final class CDFieldCheckFinding: NSManagedObject {
     @NSManaged var id: UUID
-    @NSManaged var recordedAt: Date
+    @NSManaged var recordedAt: Date?
     @NSManaged var typeRawValue: String?
     @NSManaged var severityRawValue: String?
     @NSManaged var statusRawValue: String?

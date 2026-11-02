@@ -258,7 +258,7 @@
 </entity>
     <entity name="FieldCheckFinding" representedClassName="CDFieldCheckFinding" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
-        <attribute name="recordedAt" optional="NO" attributeType="Date"/>
+        <attribute name="recordedAt" optional="YES" attributeType="Date"/>
         <attribute name="typeRawValue" optional="YES" attributeType="String"/>
         <attribute name="severityRawValue" optional="YES" attributeType="String"/>
         <attribute name="statusRawValue" optional="YES" attributeType="String"/>

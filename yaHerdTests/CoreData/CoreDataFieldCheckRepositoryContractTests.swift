@@ -114,6 +114,92 @@ final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
         )
     }
 
+    func testMissingImportedFindingDatePreservesHistoryAndBlocksChronologyAndMutation() async throws {
+        let environment = try await makeEnvironment()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Finding date restoration",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let repository = environment.makeFieldCheckRepository()
+        let sessionID = try await repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.id,
+                startedAt: Date(timeIntervalSinceReferenceDate: 100_000),
+                notes: "Historical finding"
+            )
+        )
+        let originalDate = Date(timeIntervalSinceReferenceDate: 100_200)
+        try await repository.addFinding(
+            sessionID: sessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: originalDate,
+                type: .fenceIssue,
+                severity: .warning,
+                status: .open,
+                note: "Original finding",
+                animalID: nil
+            )
+        )
+        let initial = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID)?.findings.first)
+        let findingID = initial.id
+        XCTAssertEqual(initial.recordedAt, originalDate)
+
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let finding = try Self.requiredFinding(
+                id: findingID, sessionID: sessionID, in: context
+            )
+            finding.recordedAt = nil
+            try context.save()
+        }
+
+        let expected = CoreDataFieldCheckMappingError.missingFindingDate(findingID: findingID)
+        XCTAssertThrowsError(try repository.fetchSessions()) {
+            XCTAssertEqual($0 as? CoreDataFieldCheckMappingError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchSessionDetail(id: sessionID)) {
+            XCTAssertEqual($0 as? CoreDataFieldCheckMappingError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchOpenFindings(limit: 1)) {
+            XCTAssertEqual($0 as? CoreDataFieldCheckMappingError, expected)
+        }
+        do {
+            try await repository.updateFindingStatus(
+                sessionID: sessionID, findingID: findingID, status: .resolved
+            )
+            XCTFail("An undated finding must not be updated before its history is restored.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataFieldCheckMappingError, expected)
+        }
+        do {
+            try await repository.deleteFinding(sessionID: sessionID, findingID: findingID)
+            XCTFail("An undated finding must not be deleted.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataFieldCheckMappingError, expected)
+        }
+
+        let restoration = try environment.assembly.contextFactory.makeWriteContext()
+        try restoration.performAndWait {
+            let finding = try Self.requiredFinding(
+                id: findingID, sessionID: sessionID, in: restoration
+            )
+            XCTAssertNil(finding.recordedAt)
+            XCTAssertEqual(finding.statusRawValue, FieldCheckFindingStatus.open.rawValue)
+            finding.recordedAt = originalDate
+            try restoration.save()
+        }
+
+        let restored = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID)?.findings.first)
+        XCTAssertEqual(restored.id, findingID)
+        XCTAssertEqual(restored.recordedAt, originalDate)
+        XCTAssertEqual(restored.status, .open)
+        XCTAssertEqual(try repository.fetchOpenFindings(limit: 1).map(\.id), [findingID])
+    }
+
     func testMissingImportedFieldCheckRosterAnimalIDBlocksUnsafeMutationsAndRestores() async throws {
         let environment = try await makeEnvironment()
         let pasture = try environment.makePastureRepository().create(
