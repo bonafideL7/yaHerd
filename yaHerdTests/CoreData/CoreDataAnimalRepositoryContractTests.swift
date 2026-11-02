@@ -6,6 +6,61 @@ import XCTest
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
 
+    func testMissingImportedAnimalEditorRevisionRejectsReadsAndAggregateWritesWithoutChangingHistory() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let repository = environment.makeAnimalRepository()
+        let created = try repository.create(
+            input: readGraphAnimalInput(name: "Imported Revision", tag: "REV-01")
+        )
+        let original = try XCTUnwrap(repository.fetchAnimalAggregateForEditing(id: created.id))
+        let context = try assembly.contextFactory.makeWriteContext()
+
+        try context.performAndWait {
+            let animal = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: created.id, herdID: environment.herdID, in: context
+            ))
+            animal.editorRevision = nil
+            try context.save()
+        }
+
+        let expected = CoreDataAnimalRepositoryError.missingAnimalEditorRevision(animalID: created.id)
+        XCTAssertThrowsError(try repository.fetchAnimals()) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchAnimalAggregateForEditing(id: created.id)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+
+        let attempted = UpdateAnimalAggregateTransaction(
+            animalID: created.id,
+            expectedRevision: original.revision,
+            attributes: environment.attributes(from: original.animal, name: "Should Not Save"),
+            tags: environment.tags(from: original.animal)
+        )
+        do {
+            _ = try await repository.updateAnimal(attempted)
+            XCTFail("An imported Animal without an editor revision must not be edited.")
+        } catch let error as CoreDataAnimalRepositoryError {
+            XCTAssertEqual(error, expected)
+        }
+
+        try context.performAndWait {
+            let animal = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: created.id, herdID: environment.herdID, in: context
+            ))
+            XCTAssertNil(animal.editorRevision)
+            XCTAssertEqual(animal.name, "Imported Revision")
+            animal.editorRevision = original.revision.value
+            try context.save()
+        }
+
+        let restored = try XCTUnwrap(repository.fetchAnimalAggregateForEditing(id: created.id))
+        XCTAssertEqual(restored.revision, original.revision)
+        XCTAssertEqual(restored.animal.id, created.id)
+        XCTAssertEqual(restored.animal.name, "Imported Revision")
+    }
+
     func testMissingImportedTagAssignmentDateBlocksReadsAndTagEditsWithoutChangingHistory() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
