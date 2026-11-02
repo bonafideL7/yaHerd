@@ -512,7 +512,7 @@ final class CoreDataWorkingRepository:
                 animal: animal,
                 herd: herd
             )
-            let states = tags.map(CoreDataAnimalProjection.tagState)
+            let states = try tags.map(CoreDataAnimalProjection.tagState)
             if let primaryState = AnimalTagService.primaryTag(in: states),
                let primaryTag = tags.first(where: { $0.id == primaryState.id }) {
                 primaryTag.isActive = false
@@ -544,7 +544,7 @@ final class CoreDataWorkingRepository:
             replacement.herd = herd
             replacement.animal = animal
 
-            CoreDataAnimalMutation.enforceActivePrimary(
+            try CoreDataAnimalMutation.enforceActivePrimary(
                 in: CoreDataAnimalProjection.managedTags(animal),
                 preferredPrimaryID: replacement.id
             )
@@ -629,7 +629,7 @@ final class CoreDataWorkingRepository:
             session.herd = herd
             session.sourcePasture = sourcePasture
 
-            for animal in animals.sorted(by: Self.animalTagOrder) {
+            for animal in try Self.sortedAnimalsByTag(animals) {
                 try Self.collect(
                     animal,
                     into: session,
@@ -718,7 +718,7 @@ final class CoreDataWorkingRepository:
                 throw WorkingRepositoryError.animalNotEligibleForCollection
             }
 
-            for animal in animals.sorted(by: Self.animalTagOrder) {
+            for animal in try Self.sortedAnimalsByTag(animals) {
                 try Self.collect(
                     animal,
                     into: session,
@@ -1440,11 +1440,11 @@ private extension CoreDataWorkingRepository {
             )
         }
 
-        let primary = CoreDataAnimalProjection.primaryTagFields(
+        let primary = try CoreDataAnimalProjection.primaryTagFields(
             CoreDataAnimalProjection.managedTags(animal)
         )
-        let damPrimary = animal.dam.map {
-            CoreDataAnimalProjection.primaryTagFields(
+        let damPrimary = try animal.dam.map {
+            try CoreDataAnimalProjection.primaryTagFields(
                 CoreDataAnimalProjection.managedTags($0)
             )
         }
@@ -1492,21 +1492,24 @@ private extension CoreDataWorkingRepository {
         CoreDataAnimalMutation.rotateRevision(animal)
     }
 
-    nonisolated static func animalTagOrder(
-        _ lhs: CDAnimal,
-        _ rhs: CDAnimal
-    ) -> Bool {
-        let lhsTag = CoreDataAnimalProjection.primaryTagFields(
-            CoreDataAnimalProjection.managedTags(lhs)
-        ).number
-        let rhsTag = CoreDataAnimalProjection.primaryTagFields(
-            CoreDataAnimalProjection.managedTags(rhs)
-        ).number
-        let comparison = lhsTag.localizedStandardCompare(rhsTag)
-        if comparison != .orderedSame {
-            return comparison == .orderedAscending
+    nonisolated static func sortedAnimalsByTag(
+        _ animals: [CDAnimal]
+    ) throws -> [CDAnimal] {
+        let keyed = try animals.map { animal in
+            (
+                animal: animal,
+                tag: try CoreDataAnimalProjection.primaryTagFields(
+                    CoreDataAnimalProjection.managedTags(animal)
+                ).number
+            )
         }
-        return lhs.id.uuidString < rhs.id.uuidString
+        return keyed.sorted { lhs, rhs in
+            let comparison = lhs.tag.localizedStandardCompare(rhs.tag)
+            if comparison != .orderedSame {
+                return comparison == .orderedAscending
+            }
+            return lhs.animal.id.uuidString < rhs.animal.id.uuidString
+        }.map(\.animal)
     }
 }
 
