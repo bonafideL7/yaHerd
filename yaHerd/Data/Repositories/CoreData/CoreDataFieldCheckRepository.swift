@@ -192,6 +192,8 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 throw FieldCheckRepositoryError.pastureNotFound
             }
 
+            // Validate once per roster, before persisting any Animal type snapshots.
+            try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
             let rosterAnimals = try Self.sortedRoster(
                 Self.fetchActiveAnimals(pasture: pasture, herd: herd, in: context)
             )
@@ -510,6 +512,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 return
             }
 
+            try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
             if animal.currentPasture?.id != destinationPasture.id {
                 try CoreDataAnimalMutation.move(
                     animal,
@@ -1195,8 +1198,6 @@ private extension CoreDataFieldCheckRepository {
         lookup: CoreDataLookup,
         in context: NSManagedObjectContext
     ) throws -> CDFieldCheckAnimalCheck {
-        // Type is stored in the roster; do not snapshot partial health history.
-        try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
         let primary = try primaryTagFields(animal)
         let damPrimary = try animal.dam.map { try primaryTagFields($0) }
 
