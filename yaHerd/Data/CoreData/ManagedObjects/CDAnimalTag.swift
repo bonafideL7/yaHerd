@@ -7,7 +7,7 @@ final class CDAnimalTag: NSManagedObject {
     @NSManaged var number: String
     @NSManaged var isPrimary: Bool
     @NSManaged var isActive: Bool
-    @NSManaged var assignedAt: Date
+    @NSManaged var assignedAt: Date?
     @NSManaged var removedAt: Date?
     @NSManaged var herd: CDHerd
     @NSManaged var animal: CDAnimal?
