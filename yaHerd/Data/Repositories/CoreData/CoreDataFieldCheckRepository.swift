@@ -571,6 +571,15 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 try Self.animalCheck(for: $0, in: session)
             }
 
+            // Preserve the recorded roster snapshot. Consult the live tag only
+            // when no roster check exists, and reject incomplete imported dates.
+            let livePrimary: AnimalPrimaryTagFields?
+            if check == nil {
+                livePrimary = try animal.map(Self.primaryTagFields)
+            } else {
+                livePrimary = nil
+            }
+
             let finding = CDFieldCheckFinding(context: context)
             finding.id = try CoreDataAnimalMutation.uniqueID(
                 for: CDFieldCheckFinding.self,
@@ -585,13 +594,13 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             finding.note = input.note.trimmingCharacters(in: .whitespacesAndNewlines)
             finding.animalIDSnapshot = linkedAnimalID
             finding.animalDisplayTagNumberSnapshot = check?.rosterTagNumberSnapshot
-                ?? animal.map(Self.primaryTagFields)?.number
+                ?? livePrimary?.number
             // A roster check captures the original color, including a nil
             // color for animals that were untagged when the check began.
             // Only findings without a roster check use the live animal.
             finding.animalDisplayTagColorIDSnapshot = check != nil
                 ? check?.rosterTagColorIDSnapshot
-                : animal.map(Self.primaryTagFields)?.colorID
+                : livePrimary?.colorID
             finding.animalNameSnapshot = check?.animalNameSnapshot ?? animal?.name
             finding.pastureNameSnapshot = session.pastureNameSnapshot
             finding.herd = herd
@@ -665,6 +674,15 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 try Self.animalCheck(for: $0, in: session)
             }
 
+            // Preserve the recorded roster snapshot. Consult the live tag only
+            // when no roster check exists, and reject incomplete imported dates.
+            let livePrimary: AnimalPrimaryTagFields?
+            if check == nil {
+                livePrimary = try animal.map(Self.primaryTagFields)
+            } else {
+                livePrimary = nil
+            }
+
             finding.recordedAt = input.recordedAt
             finding.typeRawValue = input.type.rawValue
             finding.severityRawValue = input.severity.rawValue
@@ -672,13 +690,13 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             finding.note = input.note.trimmingCharacters(in: .whitespacesAndNewlines)
             finding.animalIDSnapshot = linkedAnimalID
             finding.animalDisplayTagNumberSnapshot = check?.rosterTagNumberSnapshot
-                ?? animal.map(Self.primaryTagFields)?.number
+                ?? livePrimary?.number
             // A roster check captures the original color, including a nil
             // color for animals that were untagged when the check began.
             // Only findings without a roster check use the live animal.
             finding.animalDisplayTagColorIDSnapshot = check != nil
                 ? check?.rosterTagColorIDSnapshot
-                : animal.map(Self.primaryTagFields)?.colorID
+                : livePrimary?.colorID
             finding.animalNameSnapshot = check?.animalNameSnapshot ?? animal?.name
             finding.pastureNameSnapshot = session.pastureNameSnapshot
             finding.animal = animal
