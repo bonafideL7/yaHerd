@@ -177,6 +177,7 @@ enum CoreDataWorkingWorkDataMutation {
                   record.animalIDSnapshot != nil else {
                 throw CoreDataWorkingMappingError.corruptTreatmentRecord(recordID: record.id)
             }
+            try WorkingMapper.treatmentDate(record)
         }
         for record in records where record.animalIDSnapshot == animal.id {
             context.delete(record)
