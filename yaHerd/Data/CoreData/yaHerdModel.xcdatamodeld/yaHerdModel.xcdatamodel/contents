@@ -89,7 +89,7 @@
 </entity>
     <entity name="Animal" representedClassName="CDAnimal" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
-        <attribute name="editorRevision" optional="NO" attributeType="UUID"/>
+        <attribute name="editorRevision" optional="YES" attributeType="UUID"/>
         <attribute name="name" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="sexRawValue" optional="NO" attributeType="String" defaultValueString="unknown"/>
         <attribute name="birthDate" optional="NO" attributeType="Date"/>
