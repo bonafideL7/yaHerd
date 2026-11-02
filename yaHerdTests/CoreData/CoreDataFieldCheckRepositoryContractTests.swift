@@ -25,6 +25,14 @@ final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
             )
         )
         XCTAssertEqual(try repository.fetchSessionDetail(id: sessionID)?.startedAt, originalDate)
+        let controlDate = Date(timeIntervalSinceReferenceDate: 99_500)
+        let controlID = try await repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.id,
+                startedAt: controlDate,
+                notes: "Unrelated valid session"
+            )
+        )
 
         let context = try environment.assembly.contextFactory.makeWriteContext()
         try context.performAndWait {
@@ -47,6 +55,8 @@ final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
         XCTAssertThrowsError(try repository.fetchSessionDetail(id: sessionID)) {
             XCTAssertEqual($0 as? CoreDataFieldCheckMappingError, expected)
         }
+        // An incomplete imported session must not block an unrelated valid detail.
+        XCTAssertEqual(try repository.fetchSessionDetail(id: controlID)?.startedAt, controlDate)
         do {
             try await repository.updateNotes(sessionID: sessionID, notes: "Incorrect overwrite")
             XCTFail("An undated session must not be edited.")
@@ -85,7 +95,7 @@ final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
         XCTAssertEqual(restored.id, sessionID)
         XCTAssertEqual(restored.startedAt, originalDate)
         XCTAssertEqual(restored.notes, "Preserved session history")
-        XCTAssertEqual(try repository.fetchSessions().map(\.id), [sessionID])
+        XCTAssertEqual(try repository.fetchSessions().map(\.id), [controlID, sessionID])
     }
 
     func testFieldCheckReadsAndMutationsStayWithinSelectedHerd() async throws {

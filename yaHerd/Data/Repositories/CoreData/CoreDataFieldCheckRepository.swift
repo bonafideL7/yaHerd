@@ -103,8 +103,16 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             }
             let sessions = try Self.fetchSessions(herd: herd, in: context)
             try Self.validateFieldCheckIdentity(herd: herd, in: context)
-            return try sessions.map {
+            // Validate dates for the requested chronological list, not for
+            // unrelated sessions used only by identity/relationship checks.
+            let summaries = try sessions.map {
                 try FieldCheckMapper.makeSessionSummary(from: $0)
+            }
+            return summaries.sorted {
+                if $0.startedAt != $1.startedAt {
+                    return $0.startedAt > $1.startedAt
+                }
+                return $0.id.uuidString < $1.id.uuidString
             }
         }
     }
@@ -906,17 +914,9 @@ private extension CoreDataFieldCheckRepository {
             sessions,
             herdID: herd.id
         )
-        // Validate all imported dates before chronological ordering. An undated
-        // session cannot be treated as the oldest (or newest) historical record.
-        let dated = try sessions.map { session in
-            (session: session, date: try FieldCheckMapper.startedAt(from: session))
-        }
-        return dated.sorted {
-            if $0.date != $1.date {
-                return $0.date > $1.date
-            }
-            return $0.session.id.uuidString < $1.session.id.uuidString
-        }.map(\.session)
+        // This is also used by herd-wide identity scans and pasture archiving.
+        // Neither operation should require unrelated sessions to have dates.
+        return sessions
     }
 
     nonisolated static func fetchFindings(
