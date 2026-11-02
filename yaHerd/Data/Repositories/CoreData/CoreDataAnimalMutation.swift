@@ -11,6 +11,7 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
     case corruptHealthTreatment(recordID: UUID)
     case missingHealthDate(recordID: UUID)
     case missingTagAssignmentDate(tagID: UUID)
+    case missingAnimalTagNumber(tagID: UUID)
     case missingAnimalEditorRevision(animalID: UUID)
     case missingPregnancyDate(recordID: UUID)
     case missingMovementDate(recordID: UUID)
@@ -40,6 +41,8 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
             return "A health history record has no date."
         case .missingTagAssignmentDate:
             return "An animal tag has no assignment date."
+        case .missingAnimalTagNumber:
+            return "An imported animal tag has no number."
         case .missingAnimalEditorRevision:
             return "An animal has no editor revision."
         case .missingPregnancyDate:
@@ -115,6 +118,7 @@ enum CoreDataAnimalMutation {
         let tags = CoreDataAnimalProjection.managedTags(animal)
         try validateUniqueApplicationIDs(tags, herdID: herdID)
         for tag in tags {
+            _ = try CoreDataAnimalProjection.tagNumber(tag)
             _ = try CoreDataAnimalProjection.tagAssignmentDate(tag)
         }
         try validateUniqueApplicationIDs(
@@ -318,15 +322,15 @@ enum CoreDataAnimalMutation {
         )
     }
 
-    static func aggregateTagStates(_ animal: CDAnimal) -> [AnimalTagTransactionState] {
-        CoreDataAnimalProjection.managedTags(animal)
-            .map {
+    static func aggregateTagStates(_ animal: CDAnimal) throws -> [AnimalTagTransactionState] {
+        try CoreDataAnimalProjection.managedTags(animal)
+            .map { tag in
                 AnimalTagTransactionState(
-                    id: $0.id,
-                    number: $0.number,
-                    colorID: $0.color?.id,
-                    isPrimary: $0.isPrimary,
-                    isActive: $0.isActive
+                    id: tag.id,
+                    number: try CoreDataAnimalProjection.tagNumber(tag),
+                    colorID: tag.color?.id,
+                    isPrimary: tag.isPrimary,
+                    isActive: tag.isActive
                 )
             }
             .sorted { $0.id.uuidString < $1.id.uuidString }
@@ -446,7 +450,7 @@ enum CoreDataAnimalMutation {
             throw CoreDataAnimalRepositoryError.existingTagOmitted(tag.id)
         }
 
-        let before = aggregateTagStates(animal)
+        let before = try aggregateTagStates(animal)
         let existingGroups = Dictionary(grouping: existing, by: \.id)
         if let duplicate = existingGroups.first(where: { $0.value.count > 1 }) {
             throw CoreDataPersistenceError.duplicateApplicationID(
@@ -506,7 +510,7 @@ enum CoreDataAnimalMutation {
             }
         }
 
-        return before != aggregateTagStates(animal)
+        return before != (try aggregateTagStates(animal))
     }
 
     static func move(
@@ -642,6 +646,7 @@ enum CoreDataAnimalMutation {
     static func rotateRevision(_ animal: CDAnimal) throws {
         _ = try requiredEditorRevision(animal)
         _ = try CoreDataAnimalProjection.status(animal)
+        _ = try aggregateTagStates(animal)
         animal.editorRevision = UUID()
     }
 

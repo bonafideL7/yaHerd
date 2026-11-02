@@ -201,6 +201,9 @@ actor CoreDataReadModelActor:
             try Self.validateAnimalListQueryIntegrity(
                 query: nil, herd: herd, herdID: herdID, in: context
             )
+            try Self.validateAnimalListTagIntegrity(
+                herd: herd, herdID: herdID, in: context
+            )
 
             let request = NSFetchRequest<CDAnimal>(
                 entityName: CDAnimal.coreDataEntityName
@@ -839,7 +842,7 @@ actor CoreDataReadModelActor:
                         animalType: type,
                         sex: try CoreDataAnimalProjection.sex(animal),
                         status: try CoreDataAnimalProjection.status(animal),
-                        displayTagNumber: animalListDisplayTagNumber(animal),
+                        displayTagNumber: try animalListDisplayTagNumber(animal),
                         pastureSortKey: sortOrder == .pasture
                             ? try animalListPastureSortKey(animal)
                             : ""
@@ -959,11 +962,13 @@ actor CoreDataReadModelActor:
 
     private static func animalListDisplayTagNumber(
         _ animal: CDAnimal
-    ) -> String {
+    ) throws -> String {
         let primary = CoreDataAnimalProjection.managedTags(animal)
             .first { $0.isActive && $0.isPrimary }
-        return primary?.number
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return try primary.map {
+            try CoreDataAnimalProjection.tagNumber($0)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        } ?? ""
     }
 
     private static func animalListPastureSortKey(
@@ -1353,6 +1358,18 @@ actor CoreDataReadModelActor:
                 expectedHerdID: herdID,
                 actualHerdID: tag.herd.id
             )
+        }
+
+        let missingNumberRequest = NSFetchRequest<CDAnimalTag>(
+            entityName: CDAnimalTag.coreDataEntityName
+        )
+        missingNumberRequest.predicate = NSPredicate(
+            format: "herd == %@ AND number == nil",
+            herd
+        )
+        missingNumberRequest.fetchLimit = 1
+        if let tag = try context.fetch(missingNumberRequest).first {
+            _ = try CoreDataAnimalProjection.tagNumber(tag)
         }
 
         let cardinalityRequest = NSFetchRequest<CDAnimal>(
