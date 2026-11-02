@@ -3,6 +3,8 @@ import Foundation
 
 enum CoreDataTagColorRepositoryError: Error, Equatable {
     case missingTagAnimal(tagID: UUID)
+    case missingCreatedAt(colorID: UUID)
+    case missingUpdatedAt(colorID: UUID)
 }
 
 @MainActor
@@ -96,7 +98,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 herdID: herdID,
                 in: context
             ) {
-                return Self.snapshot(from: persisted)
+                return try Self.snapshot(from: persisted)
             }
             return Self.seedBuiltIns().first { $0.id == id }
         }
@@ -116,7 +118,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         ) { context, herd in
             let colors = try Self.fetchManagedColors(herd: herd, in: context)
             let originalDefaultID = Self.preferredDefaultID(
-                in: colors.filter { !$0.isDeleted && !$0.isHidden }.map(Self.snapshot)
+                in: try colors.filter { !$0.isDeleted && !$0.isHidden }.map(Self.snapshot)
             )
             let existingByID = colors.first { $0.id == color.id }
             let nameKey = TagColorLibraryRules.normalizedNameKey(cleanedName)
@@ -293,7 +295,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         try performWrite(requiresDefaultSlot: true) { context, herd in
             let colors = try Self.fetchManagedColors(herd: herd, in: context)
             let originalDefaultID = Self.preferredDefaultID(
-                in: colors.filter { !$0.isDeleted && !$0.isHidden }.map(Self.snapshot)
+                in: try colors.filter { !$0.isDeleted && !$0.isHidden }.map(Self.snapshot)
             )
             for color in colors where ids.contains(color.id) {
                 if TagColorDefaults.defaultColorIDs.contains(color.id) {
@@ -333,7 +335,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
             var colors = try Self.fetchManagedColors(herd: herd, in: context)
             let persistedIDs = Set(colors.map(\.id))
             let existingDefaultID = Self.preferredDefaultID(
-                in: colors.filter { !$0.isDeleted && !$0.isHidden }.map(Self.snapshot)
+                in: try colors.filter { !$0.isDeleted && !$0.isHidden }.map(Self.snapshot)
             )
             for builtIn in Self.seedBuiltIns()
                 where order[builtIn.id] != nil && !persistedIDs.contains(builtIn.id) {
@@ -376,7 +378,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
             }
 
             let existingDefaultID = Self.preferredDefaultID(
-                in: colors.filter { !$0.isDeleted && !$0.isHidden }.map(Self.snapshot)
+                in: try colors.filter { !$0.isDeleted && !$0.isHidden }.map(Self.snapshot)
             )
             let currentBuiltInIDs = Set(Self.seedBuiltIns().map(\.id))
             for defaultColor in Self.seedBuiltIns() {
@@ -575,6 +577,11 @@ final class CoreDataTagColorRepository: TagColorRepository {
             colors,
             herdID: herd.id
         )
+        // A partial CloudKit import must not be normalized, deleted or
+        // rewritten by an unrelated Tag Color mutation.
+        for color in colors {
+            _ = try Self.requireTimestamps(from: color)
+        }
         return colors
     }
 
@@ -600,16 +607,29 @@ final class CoreDataTagColorRepository: TagColorRepository {
         return color
     }
 
-    private nonisolated static func snapshot(from color: CDTagColorDefinition) -> TagColorSnapshot {
-        TagColorSnapshot(
+    private nonisolated static func requireTimestamps(
+        from color: CDTagColorDefinition
+    ) throws -> (createdAt: Date, updatedAt: Date) {
+        guard let createdAt = color.createdAt else {
+            throw CoreDataTagColorRepositoryError.missingCreatedAt(colorID: color.id)
+        }
+        guard let updatedAt = color.updatedAt else {
+            throw CoreDataTagColorRepositoryError.missingUpdatedAt(colorID: color.id)
+        }
+        return (createdAt, updatedAt)
+    }
+
+    private nonisolated static func snapshot(from color: CDTagColorDefinition) throws -> TagColorSnapshot {
+        let timestamps = try requireTimestamps(from: color)
+        return TagColorSnapshot(
             id: color.id,
             name: color.name,
             prefix: color.prefix,
             rgba: RGBAColor(r: color.red, g: color.green, b: color.blue, a: color.alpha),
             sortOrder: Int(color.sortOrder),
             isDefault: color.isDefault,
-            createdAt: color.createdAt,
-            updatedAt: color.updatedAt
+            createdAt: timestamps.createdAt,
+            updatedAt: timestamps.updatedAt
         )
     }
 
@@ -766,8 +786,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
             visible.contains(where: { $0.id == id }) ? id : nil
         }
         let selectedID = preservedID
-            ?? preferredDefaultID(in: visible.map(snapshot))
-            ?? preferredDefaultID(in: defaults.map(snapshot))
+            ?? preferredDefaultID(in: try visible.map(snapshot))
+            ?? preferredDefaultID(in: try defaults.map(snapshot))
         for color in defaults where color.id != selectedID {
             color.isDefault = false
             color.updatedAt = .now
