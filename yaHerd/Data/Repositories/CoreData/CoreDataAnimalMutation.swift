@@ -155,6 +155,51 @@ enum CoreDataAnimalMutation {
         herd: CDHerd,
         in context: NSManagedObjectContext
     ) throws {
+        // CloudKit can import a Working session through a Pasture, Animal or
+        // historical child before its direct Herd relationship. Never hide it
+        // behind Herd-qualified queries or permit destructive edits.
+        let sessionRequest = NSFetchRequest<CDWorkingSession>(
+            entityName: CDWorkingSession.coreDataEntityName
+        )
+        sessionRequest.predicate = NSPredicate(
+            format: """
+            herd == nil AND (
+                sourcePasture.herd == %@ OR
+                SUBQUERY(activeAnimals, $animal, $animal.herd == %@).@count > 0 OR
+                SUBQUERY(queueItems, $item, $item.herd == %@).@count > 0 OR
+                SUBQUERY(treatmentRecords, $record, $record.herd == %@).@count > 0 OR
+                SUBQUERY(healthRecords, $record, $record.herd == %@).@count > 0 OR
+                SUBQUERY(pregnancyChecks, $check, $check.herd == %@).@count > 0
+            )
+            """,
+            herd, herd, herd, herd, herd, herd
+        )
+        sessionRequest.fetchLimit = 1
+        if let session = try context.fetch(sessionRequest).first {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDWorkingSession.coreDataEntityName,
+                id: session.id, expectedHerdID: herd.id, actualHerdID: nil
+            )
+        }
+
+        // A completely unattached session has no known Herd. Protect it until
+        // some ownership link arrives, as with imported queue/treatment rows.
+        sessionRequest.predicate = NSPredicate(format: "herd == nil AND sourcePasture == nil")
+        sessionRequest.fetchLimit = 0
+        for session in try context.fetch(sessionRequest)
+        where (session.activeAnimals?.count ?? 0) == 0 {
+            let linkedChildren =
+                (session.queueItems?.count ?? 0) +
+                (session.treatmentRecords?.count ?? 0) +
+                (session.healthRecords?.count ?? 0) +
+                (session.pregnancyChecks?.count ?? 0)
+            if linkedChildren == 0 {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDWorkingSession.coreDataEntityName,
+                    id: session.id, expectedHerdID: herd.id, actualHerdID: nil
+                )
+            }
+        }
         let statusRequest = NSFetchRequest<CDStatusRecord>(
             entityName: CDStatusRecord.coreDataEntityName
         )
