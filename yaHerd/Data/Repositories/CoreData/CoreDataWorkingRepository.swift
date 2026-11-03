@@ -147,6 +147,9 @@ final class CoreDataWorkingRepository:
             ) else {
                 return nil
             }
+            // Validate before Herd-qualified queue lookup can return nil for a
+            // record whose direct ownership link has not imported yet.
+            try Self.validateSelectedHerdWorkingRecordIdentity(herd: herd, in: context)
             guard let queueItem = try lookup.herdOwned(
                 CDWorkingQueueItem.self,
                 id: queueItemID,
@@ -155,7 +158,6 @@ final class CoreDataWorkingRepository:
             ) else {
                 return nil
             }
-            try Self.validateSelectedHerdWorkingRecordIdentity(herd: herd, in: context)
             try Self.validateQueueSessionRelationship(
                 queueItem,
                 session: session,
@@ -1013,7 +1015,7 @@ final class CoreDataWorkingRepository:
             try validateHerdOwnership(
                 relationship: "WorkingSession.queueItems",
                 expectedHerdID: herdID,
-                actualHerdID: item.herd.id
+                actualHerdID: item.herd?.id
             )
             try Self.validateQueueSessionRelationship(
                 item,

@@ -123,7 +123,7 @@ enum CoreDataSampleHerdFactory {
         )
         // A group can exist without a Pasture. Do not overwrite or create
         // duplicate logical group names in a user-configured Herd.
-        for name in ["Animal", "Pasture", "PastureGroup", "FieldCheckSession", "WorkingSession", "WorkingTreatmentRecord"] {
+        for name in ["Animal", "Pasture", "PastureGroup", "FieldCheckSession", "WorkingSession", "WorkingQueueItem", "WorkingTreatmentRecord"] {
             let request = NSFetchRequest<NSManagedObject>(entityName: name)
             request.predicate = NSPredicate(format: "herd == %@", herd)
             request.fetchLimit = 1

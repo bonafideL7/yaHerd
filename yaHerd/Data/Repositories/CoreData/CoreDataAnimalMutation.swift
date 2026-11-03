@@ -229,6 +229,44 @@ enum CoreDataAnimalMutation {
             )
         }
 
+        // A Working queue item may import via its session, animal or pasture
+        // before its direct Herd relationship. Do not silently omit it from
+        // Herd-qualified reads or permit session deletion while it is unlinked.
+        let queueRequest = NSFetchRequest<CDWorkingQueueItem>(
+            entityName: CDWorkingQueueItem.coreDataEntityName
+        )
+        queueRequest.predicate = NSPredicate(
+            format: """
+            herd == nil AND (
+                session.herd == %@ OR animal.herd == %@ OR
+                collectedFromPasture.herd == %@ OR destinationPasture.herd == %@
+            )
+            """,
+            herd, herd, herd, herd
+        )
+        queueRequest.fetchLimit = 1
+        if let item = try context.fetch(queueRequest).first {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDWorkingQueueItem.coreDataEntityName,
+                id: item.id, expectedHerdID: herd.id, actualHerdID: nil
+            )
+        }
+
+        // With none of its links imported, ownership is unknowable. Block
+        // dependent reads/writes rather than mistake a pending import for
+        // empty Working data or allow sample data to overwrite its place.
+        queueRequest.predicate = NSPredicate(
+            format: """
+            herd == nil AND session == nil AND animal == nil AND
+            collectedFromPasture == nil AND destinationPasture == nil
+            """
+        )
+        if let item = try context.fetch(queueRequest).first {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDWorkingQueueItem.coreDataEntityName,
+                id: item.id, expectedHerdID: herd.id, actualHerdID: nil
+            )
+        }
     }
 
     // An imported reference can be linked to a Herd's animal before its Herd link arrives.
