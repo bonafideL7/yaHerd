@@ -123,6 +123,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
+            try Self.validateLinkedImportedSessionHerdOwnership(herd: herd, in: context)
             guard let session = try lookup.herdOwned(
                 CDFieldCheckSession.self,
                 id: id,
@@ -142,6 +143,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
+            try Self.validateLinkedImportedSessionHerdOwnership(herd: herd, in: context)
             let findings = try Self.fetchFindings(herd: herd, in: context)
             try CoreDataAnimalMutation.validateUniqueApplicationIDs(
                 findings,
@@ -906,6 +908,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 guard let herd = try lookup.herd(id: herdID, in: context) else {
                     throw HerdRepositoryError.missingHerd
                 }
+                try Self.validateLinkedImportedSessionHerdOwnership(herd: herd, in: context)
                 return try operation(context, herd)
             }
             pastureResidentWriteCoordinator.endFieldCheckWrite()
@@ -915,6 +918,38 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             pastureResidentWriteCoordinator.endFieldCheckWrite()
             await gate.release()
             throw error
+        }
+    }
+}
+
+// An imported session can arrive through a Pasture or a child before its Herd.
+// Guard selected-Herd projections and mutations instead of hiding this history.
+extension CoreDataFieldCheckRepository {
+    nonisolated static func validateLinkedImportedSessionHerdOwnership(
+        herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) throws {
+        let request = NSFetchRequest<CDFieldCheckSession>(
+            entityName: CDFieldCheckSession.coreDataEntityName
+        )
+        request.predicate = NSPredicate(
+            format: """
+            herd == nil AND (
+                pasture.herd == %@ OR
+                SUBQUERY(animalChecks, $check, $check.herd == %@).@count > 0 OR
+                SUBQUERY(findings, $finding, $finding.herd == %@).@count > 0
+            )
+            """,
+            herd, herd, herd
+        )
+        request.fetchLimit = 1
+        if let session = try context.fetch(request).first {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDFieldCheckSession.coreDataEntityName,
+                id: session.id,
+                expectedHerdID: herd.id,
+                actualHerdID: nil
+            )
         }
     }
 }
@@ -991,6 +1026,7 @@ private extension CoreDataFieldCheckRepository {
         herd: CDHerd,
         in context: NSManagedObjectContext
     ) throws {
+        try validateLinkedImportedSessionHerdOwnership(herd: herd, in: context)
         let sessions = try fetchSessions(herd: herd, in: context)
         let checks = try fetchAnimalChecks(herd: herd, in: context)
         let findings = try fetchFindings(herd: herd, in: context)
@@ -1097,12 +1133,12 @@ private extension CoreDataFieldCheckRepository {
                 actualHerdID: childHerd.id
             )
         }
-        guard session.herd.objectID == selectedHerd.objectID else {
+        guard session.herd?.objectID == selectedHerd.objectID else {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDFieldCheckSession.coreDataEntityName,
                 id: session.id,
                 expectedHerdID: selectedHerd.id,
-                actualHerdID: session.herd.id
+                actualHerdID: session.herd?.id
             )
         }
         if let expectedSession,

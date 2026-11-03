@@ -16,7 +16,7 @@ final class CDFieldCheckSession: NSManagedObject {
     @NSManaged var pastureIDSnapshot: UUID?
     @NSManaged var pastureNameSnapshot: String
     @NSManaged var pastureArchivedAt: Date?
-    @NSManaged var herd: CDHerd
+    @NSManaged var herd: CDHerd?
     @NSManaged var pasture: CDPasture?
     @NSManaged var animalChecks: NSSet?
     @NSManaged var findings: NSSet?

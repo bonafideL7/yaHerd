@@ -1107,6 +1107,12 @@ actor CoreDataReadModelActor:
                 throw HerdRepositoryError.missingHerd
             }
 
+            // A partially imported session may already be attached to this
+            // Herd's Pasture or children but be missing from Herd-filtered reads.
+            try CoreDataFieldCheckRepository.validateLinkedImportedSessionHerdOwnership(
+                herd: herd, in: context
+            )
+
             // All selected-Herd session IDs matter, including completed
             // sessions excluded from the warning projection.
             try Self.validateHerdApplicationIDs(
@@ -1479,7 +1485,7 @@ actor CoreDataReadModelActor:
                 entity: CDWorkingSession.coreDataEntityName,
                 id: session.id,
                 expectedHerdID: herdID,
-                actualHerdID: session.herd.id
+                actualHerdID: session.herd?.id
             )
         }
 
@@ -2271,7 +2277,7 @@ actor CoreDataReadModelActor:
         corruptRequest.predicate = NSPredicate(
             format: """
             (herd == %@ AND (
-                session.herd != %@ OR
+                session == nil OR session.herd == nil OR session.herd != %@ OR
                 NOT (statusRawValue IN %@)
             )) OR (session.herd == %@ AND herd != %@)
             """,
@@ -2301,7 +2307,7 @@ actor CoreDataReadModelActor:
         corruptCheckRequest.predicate = NSPredicate(
             format: """
             (herd == %@ AND session == nil) OR
-            (herd == %@ AND session.herd != %@) OR
+            (herd == %@ AND (session.herd == nil OR session.herd != %@)) OR
             (session.herd == %@ AND herd != %@)
             """,
             herd,
@@ -2329,7 +2335,7 @@ actor CoreDataReadModelActor:
                 entity: CDFieldCheckSession.coreDataEntityName,
                 id: session.id,
                 expectedHerdID: herdID,
-                actualHerdID: session.herd.id
+                actualHerdID: session.herd?.id
             )
         }
 
@@ -2372,12 +2378,12 @@ actor CoreDataReadModelActor:
         )
 
         for session in sessions {
-            guard session.herd.id == herdID else {
+            guard session.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDFieldCheckSession.coreDataEntityName,
                     id: session.id,
                     expectedHerdID: herdID,
-                    actualHerdID: session.herd.id
+                    actualHerdID: session.herd?.id
                 )
             }
 
@@ -2456,12 +2462,12 @@ actor CoreDataReadModelActor:
                 actualHerdID: finding.herd.id
             )
         }
-        guard session.herd.id == herdID else {
+        guard session.herd?.id == herdID else {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDFieldCheckSession.coreDataEntityName,
                 id: session.id,
                 expectedHerdID: herdID,
-                actualHerdID: session.herd.id
+                actualHerdID: session.herd?.id
             )
         }
         if let expectedSession,
