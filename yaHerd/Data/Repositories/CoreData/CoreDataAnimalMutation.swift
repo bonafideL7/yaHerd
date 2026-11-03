@@ -188,8 +188,8 @@ enum CoreDataAnimalMutation {
             entityName: CDPregnancyCheck.coreDataEntityName
         )
         pregnancyRequest.predicate = NSPredicate(
-            format: "herd == nil AND (animal.herd == %@ OR workingSession.herd == %@)",
-            herd, herd
+            format: "herd == nil AND (animal.herd == %@ OR workingSession.herd == %@ OR sire.herd == %@)",
+            herd, herd, herd
         )
         pregnancyRequest.fetchLimit = 1
         if let check = try context.fetch(pregnancyRequest).first {
