@@ -249,7 +249,7 @@
         <attribute name="wasExpectedAtStart" optional="NO" attributeType="Boolean" usesScalarValueType="YES" defaultValueString="NO"/>
         <attribute name="countedAt" optional="YES" attributeType="Date"/>
         <attribute name="missingConfirmedAt" optional="YES" attributeType="Date"/>
-        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="fieldCheckAnimalChecks" inverseEntity="Herd"/>
+        <relationship name="herd" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="fieldCheckAnimalChecks" inverseEntity="Herd"/>
         <relationship name="animal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="fieldCheckAnimalChecks" inverseEntity="Animal"/>
         <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="FieldCheckSession" inverseName="animalChecks" inverseEntity="FieldCheckSession"/>
             <fetchIndex name="by_id">
@@ -268,7 +268,7 @@
         <attribute name="animalDisplayTagColorIDSnapshot" optional="YES" attributeType="UUID"/>
         <attribute name="animalNameSnapshot" optional="YES" attributeType="String"/>
         <attribute name="pastureNameSnapshot" optional="YES" attributeType="String"/>
-        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="fieldCheckFindings" inverseEntity="Herd"/>
+        <relationship name="herd" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="fieldCheckFindings" inverseEntity="Herd"/>
         <relationship name="animal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="fieldCheckFindings" inverseEntity="Animal"/>
         <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="FieldCheckSession" inverseName="findings" inverseEntity="FieldCheckSession"/>
             <fetchIndex name="by_id">
