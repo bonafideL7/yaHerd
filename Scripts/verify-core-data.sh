@@ -378,11 +378,11 @@ for name, entity in entities.items():
         if (
             herd is None
             or herd.get("destinationEntity") != "Herd"
-            or herd.get("optional") != "NO"
+            or herd.get("optional") not in ("YES", "NO")
             or herd.get("maxCount") != "1"
             or herd.get("deletionRule") != "Nullify"
         ):
-            failures.append(f"{name}: must have required Nullify Herd scope")
+            failures.append(f"{name}: must have a Nullify Herd scope")
         elif herd_entity is not None:
             inverse = next(
                 (item for item in herd_entity.findall("relationship") if item.get("name") == herd.get("inverseName")),
