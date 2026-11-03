@@ -668,12 +668,12 @@ enum CoreDataAnimalReadGraphValidator {
             )
         }
         if let session = animal.activeWorkingSession,
-           session.herd.id != herdID {
+           session.herd?.id != herdID {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDWorkingSession.coreDataEntityName,
                 id: session.id,
                 expectedHerdID: herdID,
-                actualHerdID: session.herd.id
+                actualHerdID: session.herd?.id
             )
         }
         if let dam = animal.dam {
@@ -728,7 +728,7 @@ enum CoreDataAnimalReadGraphValidator {
             }
             if let session = record.workingSession {
                 try validateHerd(
-                    session.herd.id, herdID: herdID,
+                    session.herd?.id, herdID: herdID,
                     entity: CDWorkingSession.coreDataEntityName, id: session.id
                 )
             }
@@ -758,7 +758,7 @@ enum CoreDataAnimalReadGraphValidator {
             }
             if let session = check.workingSession {
                 try validateHerd(
-                    session.herd.id, herdID: herdID,
+                    session.herd?.id, herdID: herdID,
                     entity: CDWorkingSession.coreDataEntityName, id: session.id
                 )
             }
