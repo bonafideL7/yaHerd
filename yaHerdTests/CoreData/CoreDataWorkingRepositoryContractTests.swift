@@ -2463,7 +2463,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                                 entityName: CDHealthRecord.coreDataEntityName
                             )).map {
                                 [
-                                    $0.herd.id.uuidString,
+                                    try XCTUnwrap($0.herd).id.uuidString,
                                     try XCTUnwrap($0.animal).id.uuidString,
                                     $0.workingSession?.id.uuidString ?? "standalone",
                                     $0.id.uuidString,
@@ -2477,7 +2477,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                                 entityName: CDPregnancyCheck.coreDataEntityName
                             )).map {
                                 [
-                                    $0.herd.id.uuidString,
+                                    try XCTUnwrap($0.herd).id.uuidString,
                                     try XCTUnwrap($0.animal).id.uuidString,
                                     $0.workingSession?.id.uuidString ?? "standalone",
                                     $0.id.uuidString,
