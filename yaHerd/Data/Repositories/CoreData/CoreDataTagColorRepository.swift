@@ -537,6 +537,11 @@ final class CoreDataTagColorRepository: TagColorRepository {
                     throw HerdRepositoryError.missingHerd
                 }
                 try CoreDataAnimalMutation.validateLinkedAnimalTags(herd: herd, in: context)
+                // Pending Working queues can reference tag-color snapshots before
+                // their Herd links import. Protect their history from color remaps/deletion.
+                try CoreDataAnimalMutation.validateLinkedImportedHistoryHerdOwnership(
+                    herd: herd, in: context
+                )
                 // The child Herd link may not have imported yet. Do not
                 // delete or remap colors while historical references are hidden
                 // from Herd-filtered reference scans.
