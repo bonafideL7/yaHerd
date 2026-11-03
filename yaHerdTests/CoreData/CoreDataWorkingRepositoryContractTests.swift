@@ -79,8 +79,8 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         }
 
         XCTAssertEqual(try repository.fetchTemplateDetail(id: templateID)?.id, templateID)
-        XCTAssertEqual(try repository.fetchTemplates().map(\\.id), [templateID])
-        XCTAssertEqual(try await readModel.fetchHomeTreatmentTemplates(limit: 5).map(\\.id), [templateID])
+        XCTAssertEqual(try repository.fetchTemplates().map(\.id), [templateID])
+        XCTAssertEqual(try await readModel.fetchHomeTreatmentTemplates(limit: 5).map(\.id), [templateID])
         try repository.updateTemplate(id: templateID, name: "Restored Treatment", items: [])
         XCTAssertEqual(try repository.fetchTemplateDetail(id: templateID)?.name, "Restored Treatment")
     }
