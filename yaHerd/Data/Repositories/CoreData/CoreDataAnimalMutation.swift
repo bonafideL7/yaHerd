@@ -148,6 +148,29 @@ enum CoreDataAnimalMutation {
         }
     }
 
+    // An imported reference can be linked to a Herd's animal before its Herd link arrives.
+    // Do not allow a write to erase that relationship or silently omit the reference.
+    static func validateLinkedStatusReferences(
+        herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) throws {
+        let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
+        request.predicate = NSPredicate(
+            format: "herd == %@ AND statusReference != nil AND statusReference.herd == nil",
+            herd
+        )
+        request.fetchLimit = 1
+        if let animal = try context.fetch(request).first,
+           let reference = animal.statusReference {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDAnimalStatusReference.coreDataEntityName,
+                id: reference.id,
+                expectedHerdID: herd.id,
+                actualHerdID: nil
+            )
+        }
+    }
+
     static func requiredEditorRevision(_ animal: CDAnimal) throws -> UUID {
         guard let revision = animal.editorRevision else {
             throw CoreDataAnimalRepositoryError.missingAnimalEditorRevision(animalID: animal.id)
