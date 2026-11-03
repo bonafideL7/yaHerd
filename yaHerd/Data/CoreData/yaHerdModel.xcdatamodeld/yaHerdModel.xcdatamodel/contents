@@ -201,7 +201,7 @@
         <attribute name="estimatedDaysPregnant" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
         <attribute name="dueDate" optional="YES" attributeType="Date"/>
         <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="pregnancyChecks" inverseEntity="Herd"/>
-        <relationship name="animal" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="pregnancyChecks" inverseEntity="Animal"/>
+        <relationship name="animal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="pregnancyChecks" inverseEntity="Animal"/>
         <relationship name="sire" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="pregnancyChecksAsSire" inverseEntity="Animal"/>
         <relationship name="workingSession" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="WorkingSession" inverseName="pregnancyChecks" inverseEntity="WorkingSession"/>
             <fetchIndex name="by_id">

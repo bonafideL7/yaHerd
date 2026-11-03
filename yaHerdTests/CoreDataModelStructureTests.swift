@@ -1522,7 +1522,7 @@ final class CoreDataModelStructureTests: XCTestCase {
         let pregnancy = try entity(named: "PregnancyCheck", in: model)
 
         let owner = try relationship(named: "animal", in: pregnancy)
-        XCTAssertFalse(owner.isOptional)
+        XCTAssertTrue(owner.isOptional)
         XCTAssertEqual(owner.inverseRelationship?.deleteRule, .cascadeDeleteRule)
 
         let sire = try relationship(named: "sire", in: pregnancy)

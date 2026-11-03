@@ -10,7 +10,7 @@ final class CDPregnancyCheck: NSManagedObject {
     @NSManaged var estimatedDaysPregnant: NSNumber?
     @NSManaged var dueDate: Date?
     @NSManaged var herd: CDHerd
-    @NSManaged var animal: CDAnimal
+    @NSManaged var animal: CDAnimal?
     @NSManaged var sire: CDAnimal?
     @NSManaged var workingSession: CDWorkingSession?
 }

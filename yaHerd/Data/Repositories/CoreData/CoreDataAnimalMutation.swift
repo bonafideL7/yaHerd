@@ -11,6 +11,7 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
     case corruptHealthTreatment(recordID: UUID)
     case missingHealthDate(recordID: UUID)
     case missingHealthAnimalRelationship(recordID: UUID)
+    case missingPregnancyAnimalRelationship(recordID: UUID)
     case missingTagAssignmentDate(tagID: UUID)
     case missingAnimalTagNumber(tagID: UUID)
     case missingAnimalEditorRevision(animalID: UUID)
@@ -45,6 +46,8 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
             return "A health history record has no date."
         case .missingHealthAnimalRelationship:
             return "An imported health record has no animal relationship."
+        case .missingPregnancyAnimalRelationship:
+            return "An imported pregnancy check has no animal relationship."
         case .missingTagAssignmentDate:
             return "An animal tag has no assignment date."
         case .missingAnimalTagNumber:
@@ -116,19 +119,31 @@ enum CoreDataAnimalMutation {
         }
     }
 
-    // A remote HealthRecord may arrive before its related Animal.
-    static func validateLinkedHealthHistory(
+    // CloudKit may import clinical history before its Animal link.
+    // Reject incomplete inverses rather than displaying or mutating partial history.
+    static func validateLinkedClinicalHistory(
         herd: CDHerd,
         in context: NSManagedObjectContext
     ) throws {
-        let request = NSFetchRequest<CDHealthRecord>(
+        let healthRequest = NSFetchRequest<CDHealthRecord>(
             entityName: CDHealthRecord.coreDataEntityName
         )
-        request.predicate = NSPredicate(format: "herd == %@ AND animal == nil", herd)
-        request.fetchLimit = 1
-        if let record = try context.fetch(request).first {
+        healthRequest.predicate = NSPredicate(format: "herd == %@ AND animal == nil", herd)
+        healthRequest.fetchLimit = 1
+        if let record = try context.fetch(healthRequest).first {
             throw CoreDataAnimalRepositoryError.missingHealthAnimalRelationship(
                 recordID: record.id
+            )
+        }
+
+        let pregnancyRequest = NSFetchRequest<CDPregnancyCheck>(
+            entityName: CDPregnancyCheck.coreDataEntityName
+        )
+        pregnancyRequest.predicate = NSPredicate(format: "herd == %@ AND animal == nil", herd)
+        pregnancyRequest.fetchLimit = 1
+        if let check = try context.fetch(pregnancyRequest).first {
+            throw CoreDataAnimalRepositoryError.missingPregnancyAnimalRelationship(
+                recordID: check.id
             )
         }
     }
@@ -712,7 +727,7 @@ enum CoreDataAnimalMutation {
         }
         // Inferred sires are persisted. A missing castration relationship must
         // not turn an imported steer into a presumed bull.
-        try validateLinkedHealthHistory(herd: herd, in: context)
+        try validateLinkedClinicalHistory(herd: herd, in: context)
 
         let animals = try fetchAnimals(herd: herd, in: context)
         let candidates = try animals.map {
