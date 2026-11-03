@@ -222,7 +222,7 @@
         <attribute name="pastureIDSnapshot" optional="YES" attributeType="UUID"/>
         <attribute name="pastureNameSnapshot" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="pastureArchivedAt" optional="YES" attributeType="Date"/>
-        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="fieldCheckSessions" inverseEntity="Herd"/>
+        <relationship name="herd" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="fieldCheckSessions" inverseEntity="Herd"/>
         <relationship name="pasture" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Pasture" inverseName="fieldCheckSessions" inverseEntity="Pasture"/>
         <relationship name="animalChecks" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="FieldCheckAnimalCheck" inverseName="session" inverseEntity="FieldCheckAnimalCheck"/>
         <relationship name="findings" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="FieldCheckFinding" inverseName="session" inverseEntity="FieldCheckFinding"/>

@@ -5,6 +5,78 @@ import XCTest
 
 @MainActor
 final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
+    func testImportedFieldCheckSessionWithoutHerdBlocksScopedReadsAndWritesUntilRestored() async throws {
+        let environment = try await makeEnvironment()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Partial Field Check Ownership", acreage: 16,
+                usableAcreage: 15, targetAcresPerHead: 1
+            )
+        )
+        let repository = environment.makeFieldCheckRepository()
+        let recordedAt = Date(timeIntervalSinceReferenceDate: 84_000)
+        let sessionID = try await repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.id,
+                startedAt: recordedAt,
+                notes: "Original field check"
+            )
+        )
+        let lookup = CoreDataLookup()
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let session = try XCTUnwrap(lookup.herdOwned(
+                CDFieldCheckSession.self, id: sessionID,
+                herdID: environment.herdID, in: context
+            ))
+            XCTAssertEqual(session.pasture?.id, pasture.id)
+            session.herd = nil
+            try context.save()
+        }
+
+        let expected = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDFieldCheckSession.coreDataEntityName,
+            id: sessionID,
+            expectedHerdID: environment.herdID,
+            actualHerdID: nil
+        )
+        XCTAssertThrowsError(try repository.fetchSessions()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchSessionDetail(id: sessionID)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchOpenFindings(limit: 0)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await repository.updateNotes(sessionID: sessionID, notes: "Do not overwrite")
+        ) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+
+        let restore = try environment.assembly.contextFactory.makeWriteContext()
+        try restore.performAndWait {
+            let request = NSFetchRequest<CDFieldCheckSession>(
+                entityName: CDFieldCheckSession.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "id == %@", sessionID as NSUUID)
+            let session = try XCTUnwrap(restore.fetch(request).first)
+            XCTAssertNil(session.herd)
+            XCTAssertEqual(session.id, sessionID)
+            XCTAssertEqual(session.startedAt, recordedAt)
+            XCTAssertEqual(session.notes, "Original field check")
+            XCTAssertEqual(session.pasture?.id, pasture.id)
+            session.herd = try XCTUnwrap(lookup.herd(id: environment.herdID, in: restore))
+            try restore.save()
+        }
+        let restored = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        XCTAssertEqual(restored.id, sessionID)
+        XCTAssertEqual(restored.startedAt, recordedAt)
+        XCTAssertEqual(restored.notes, "Original field check")
+        XCTAssertEqual(try repository.fetchSessions().map(\.id), [sessionID])
+    }
+
     func testImportedUnlinkedHealthCannotPersistFieldCheckAnimalTypeSnapshot() async throws {
         let environment = try await makeEnvironment()
         let pasture = try environment.makePastureRepository().create(
