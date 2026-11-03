@@ -49,7 +49,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                     sourcePastureID: pasture.id,
                     treatmentTemplateName: "Must Not Duplicate",
                     plannedTreatments: [],
-                    animalIDs: []
+                    animalIDs: nil
                 )
             )
             XCTFail("A pending import must block unrelated new Working sessions.")
