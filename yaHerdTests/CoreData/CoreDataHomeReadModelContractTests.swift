@@ -658,6 +658,110 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         }
     }
 
+    func testImportedFieldCheckChildrenWithoutHerdBlockReadsAndWritesUntilRestored() async throws {
+        // A completed session's children are outside Home's warning-session
+        // projection. Importing their Herd relationships later must not make
+        // their history silently disappear from Herd-scoped reads.
+        for kind in FieldCheckChildIdentityKind.allCases {
+            let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+            let fixture = try environment.seedOffWarningChildIdentityFixture(kind: kind)
+            let direct = CoreDataFieldCheckRepository(
+                selection: environment.selection,
+                assembly: environment.assembly
+            )
+            let home = environment.fixture.makeHomeFieldCheckQueryReader()
+            XCTAssertEqual(try direct.fetchSessions().count, 3)
+            XCTAssertTrue((try await home.fetchHomeFieldCheckRecords()).hasHistory)
+
+            let childID = fixture.completedChildID
+            let context = try environment.assembly.contextFactory.makeWriteContext()
+            try context.performAndWait {
+                switch kind {
+                case .finding:
+                    let request = NSFetchRequest<CDFieldCheckFinding>(
+                        entityName: CDFieldCheckFinding.coreDataEntityName
+                    )
+                    request.predicate = NSPredicate(format: "id == %@", childID as NSUUID)
+                    let finding = try XCTUnwrap(context.fetch(request).first)
+                    XCTAssertEqual(finding.session?.id, fixture.completedSessionID)
+                    finding.herd = nil
+                case .animalCheck:
+                    let request = NSFetchRequest<CDFieldCheckAnimalCheck>(
+                        entityName: CDFieldCheckAnimalCheck.coreDataEntityName
+                    )
+                    request.predicate = NSPredicate(format: "id == %@", childID as NSUUID)
+                    let check = try XCTUnwrap(context.fetch(request).first)
+                    XCTAssertEqual(check.session?.id, fixture.completedSessionID)
+                    check.herd = nil
+                }
+                try context.save()
+            }
+
+            let expected = CoreDataReadModelError.invalidHerdOwnership(
+                entity: kind.entityName,
+                id: childID,
+                expectedHerdID: environment.herdID,
+                actualHerdID: nil
+            )
+            XCTAssertThrowsError(try direct.fetchSessions()) {
+                XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+            }
+            XCTAssertThrowsError(try direct.fetchSessionDetail(id: fixture.completedSessionID)) {
+                XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+            }
+            XCTAssertThrowsError(try direct.fetchOpenFindings(limit: 0)) {
+                XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+            }
+            await XCTAssertThrowsErrorAsync(
+                try await direct.updateNotes(
+                    sessionID: fixture.completedSessionID,
+                    notes: "Should not overwrite partial history"
+                )
+            ) {
+                XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+            }
+            await XCTAssertThrowsErrorAsync(
+                try await home.fetchHomeFieldCheckRecords()
+            ) {
+                XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+            }
+
+            let restore = try environment.assembly.contextFactory.makeWriteContext()
+            try restore.performAndWait {
+                let herd = try XCTUnwrap(
+                    CoreDataLookup().herd(id: environment.herdID, in: restore)
+                )
+                switch kind {
+                case .finding:
+                    let request = NSFetchRequest<CDFieldCheckFinding>(
+                        entityName: CDFieldCheckFinding.coreDataEntityName
+                    )
+                    request.predicate = NSPredicate(format: "id == %@", childID as NSUUID)
+                    let finding = try XCTUnwrap(restore.fetch(request).first)
+                    XCTAssertNil(finding.herd)
+                    XCTAssertEqual(finding.session?.id, fixture.completedSessionID)
+                    XCTAssertEqual(finding.note, "Resolved historical finding")
+                    finding.herd = herd
+                case .animalCheck:
+                    let request = NSFetchRequest<CDFieldCheckAnimalCheck>(
+                        entityName: CDFieldCheckAnimalCheck.coreDataEntityName
+                    )
+                    request.predicate = NSPredicate(format: "id == %@", childID as NSUUID)
+                    let check = try XCTUnwrap(restore.fetch(request).first)
+                    XCTAssertNil(check.herd)
+                    XCTAssertEqual(check.session?.id, fixture.completedSessionID)
+                    XCTAssertEqual(check.animalNameSnapshot, "Historical animal")
+                    check.herd = herd
+                }
+                try restore.save()
+            }
+
+            XCTAssertEqual(try direct.fetchSessions().count, 3)
+            XCTAssertNotNil(try direct.fetchSessionDetail(id: fixture.completedSessionID))
+            XCTAssertTrue((try await home.fetchHomeFieldCheckRecords()).hasHistory)
+        }
+    }
+
     func testHomeFieldCheckRejectsCrossHerdHistoricalChildSessionLinks() async throws {
         // Both relationship directions are material. Finding ownership from
         // selected child to foreign session is an existing Home safeguard;
