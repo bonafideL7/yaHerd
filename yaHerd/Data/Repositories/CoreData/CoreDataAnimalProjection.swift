@@ -700,7 +700,7 @@ enum CoreDataAnimalReadGraphValidator {
         }
         if let reference = animal.statusReference {
             try validateHerd(
-                reference.herd.id, herdID: herdID,
+                reference.herd?.id, herdID: herdID,
                 entity: CDAnimalStatusReference.coreDataEntityName, id: reference.id
             )
         }
@@ -869,7 +869,7 @@ enum CoreDataAnimalReadGraphValidator {
     }
 
     private static func validateHerd(
-        _ actualHerdID: UUID,
+        _ actualHerdID: UUID?,
         herdID: UUID,
         entity: String,
         id: UUID
