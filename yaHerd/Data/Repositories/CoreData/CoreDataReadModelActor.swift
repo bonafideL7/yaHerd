@@ -6,7 +6,7 @@ enum CoreDataReadModelError: LocalizedError, Equatable, Sendable {
         entity: String,
         id: UUID,
         expectedHerdID: UUID,
-        actualHerdID: UUID
+        actualHerdID: UUID?
     )
     case invalidSessionRelationship(
         entity: String,
