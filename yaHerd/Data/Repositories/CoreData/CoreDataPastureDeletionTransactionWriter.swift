@@ -61,6 +61,11 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
             try CoreDataFieldCheckRepository.validateLinkedImportedFieldCheckHerdOwnership(
                 herd: herd, in: context
             )
+            // Deleting a Pasture can nullify references on Working queue items
+            // imported before their direct Herd ownership relationship arrives.
+            try CoreDataAnimalMutation.validateLinkedImportedHistoryHerdOwnership(
+                herd: herd, in: context
+            )
             try Self.revalidateExpectedStates(
                 normalized.expectedStates,
                 herd: herd,

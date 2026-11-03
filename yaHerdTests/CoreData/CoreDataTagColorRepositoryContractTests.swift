@@ -8,6 +8,71 @@ import XCTest
 /// mutations. UI edit/picker behavior and failed-save rollback have separate owners.
 @MainActor
 final class CoreDataTagColorRepositoryContractTests: XCTestCase {
+    func testImportedQueueWithoutHerdProtectsHistoricalTagColorReferences() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = CoreDataTagColorContractEnvironment(assembly: assembly)
+        try environment.seedInitialHerd()
+        let repository = environment.fixture.makeTagColorRepository()
+        let original = TagColorSnapshot(
+            id: UUID(),
+            name: "Queue Import Copper",
+            prefix: "QIC",
+            rgba: RGBAColor(r: 0.75, g: 0.4, b: 0.3)
+        )
+        try repository.upsert(original)
+        let queueID = UUID()
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let item = CDWorkingQueueItem(context: context)
+            item.id = queueID
+            item.animalTagNumberSnapshot = "HISTORY"
+            item.animalNameSnapshot = "Imported Queue History"
+            item.animalSexRawValueSnapshot = Sex.female.rawValue
+            item.animalTagColorIDSnapshot = original.id
+            item.herd = nil
+            item.session = nil
+            item.animal = nil
+            try context.save()
+        }
+        let expected = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDWorkingQueueItem.coreDataEntityName,
+            id: queueID,
+            expectedHerdID: environment.initialHerdID,
+            actualHerdID: nil
+        )
+        XCTAssertThrowsError(try repository.deleteColors(ids: [original.id])) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        let colliding = TagColorSnapshot(
+            id: UUID(), name: original.name, prefix: "NEW",
+            rgba: RGBAColor(r: 0.3, g: 0.5, b: 0.7)
+        )
+        XCTAssertThrowsError(try repository.upsert(colliding)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+
+        XCTAssertEqual(try repository.fetchColor(id: original.id)?.prefix, original.prefix)
+        try context.performAndWait {
+            let request = NSFetchRequest<CDWorkingQueueItem>(
+                entityName: CDWorkingQueueItem.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "id == %@", queueID as NSUUID)
+            let item = try XCTUnwrap(context.fetch(request).first)
+            XCTAssertEqual(item.id, queueID)
+            XCTAssertNil(item.herd)
+            XCTAssertEqual(item.animalTagColorIDSnapshot, original.id)
+            item.herd = try XCTUnwrap(CoreDataLookup().herd(
+                id: environment.initialHerdID, in: context
+            ))
+            try context.save()
+        }
+        // Historical snapshot references must keep their color definition
+        // even when the user subsequently hides that color.
+        try repository.deleteColors(ids: [original.id])
+        XCTAssertEqual(try repository.fetchColor(id: original.id)?.prefix, original.prefix)
+        XCTAssertFalse(try repository.fetchColors().contains { $0.id == original.id })
+    }
+
     func testTagColorMutationsPreservePartiallyImportedFieldCheckHistory() async throws {
         // Neither child has an AnimalTag or Working reference. The snapshot is
         // the only use of this custom color, and its Herd link arrives later.

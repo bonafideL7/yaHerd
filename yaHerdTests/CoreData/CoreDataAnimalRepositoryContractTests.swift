@@ -5,6 +5,85 @@ import XCTest
 
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
+    func testPastureDeletionRejectsUnlinkedImportedWorkingQueueWithoutDataLoss() async throws {
+        let environment = try await makeEnvironment()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Pending Queue Pasture",
+                acreage: 10,
+                usableAcreage: 9,
+                targetAcresPerHead: 1
+            )
+        )
+        let queueID = UUID()
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let storedPasture = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDPasture.self,
+                id: pasture.id,
+                herdID: environment.herdID,
+                in: context
+            ))
+            let item = CDWorkingQueueItem(context: context)
+            item.id = queueID
+            item.animalTagNumberSnapshot = "Pending"
+            item.animalNameSnapshot = "Imported Queue"
+            item.animalSexRawValueSnapshot = Sex.female.rawValue
+            item.collectedFromPasture = storedPasture
+            item.collectedFromPastureIDSnapshot = pasture.id
+            item.collectedFromPastureNameSnapshot = "Pending Queue Pasture"
+            item.herd = nil
+            try context.save()
+        }
+
+        let plan = DeletePasturesTransactionPlan(
+            expectedStates: [
+                PastureDeletionExpectedState(
+                    pastureID: pasture.id,
+                    residentAnimalIDs: []
+                )
+            ],
+            operations: [
+                .archiveFieldChecks(
+                    pastureIDs: [pasture.id],
+                    archivedAt: Date(timeIntervalSinceReferenceDate: 209_000)
+                ),
+                .deletePastures(ids: [pasture.id])
+            ]
+        )
+        let expected = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDWorkingQueueItem.coreDataEntityName,
+            id: queueID,
+            expectedHerdID: environment.herdID,
+            actualHerdID: nil
+        )
+        do {
+            try await CoreDataPastureDeletionTransactionWriter(
+                selection: environment.selection,
+                assembly: environment.assembly
+            ).deletePastures(plan)
+            XCTFail("Deletion must not disconnect a partially imported queue item.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataReadModelError, expected)
+        }
+
+        try context.performAndWait {
+            let pastureAfter = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDPasture.self, id: pasture.id,
+                herdID: environment.herdID, in: context
+            ))
+            let request = NSFetchRequest<CDWorkingQueueItem>(
+                entityName: CDWorkingQueueItem.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "id == %@", queueID as NSUUID)
+            let item = try XCTUnwrap(context.fetch(request).first)
+            XCTAssertEqual(item.id, queueID)
+            XCTAssertNil(item.herd)
+            XCTAssertEqual(item.collectedFromPasture?.objectID, pastureAfter.objectID)
+            XCTAssertEqual(item.collectedFromPastureIDSnapshot, pasture.id)
+        }
+    }
+
     func testImportedPregnancyWithOnlySireLinkProtectsSireUntilOwnershipArrives() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
