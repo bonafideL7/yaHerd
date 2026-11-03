@@ -171,6 +171,30 @@ enum CoreDataAnimalMutation {
         }
     }
 
+    // A movement can arrive through its Animal before the Herd relationship imports.
+    // Prevent writes that would mutate or delete history while ownership is incomplete.
+    static func validateLinkedMovementRecords(
+        herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) throws {
+        let request = NSFetchRequest<CDMovementRecord>(
+            entityName: CDMovementRecord.coreDataEntityName
+        )
+        request.predicate = NSPredicate(
+            format: "herd == nil AND animal.herd == %@",
+            herd
+        )
+        request.fetchLimit = 1
+        if let record = try context.fetch(request).first {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDMovementRecord.coreDataEntityName,
+                id: record.id,
+                expectedHerdID: herd.id,
+                actualHerdID: nil
+            )
+        }
+    }
+
     // A tag can arrive with a linked Animal or Color before its Herd link.
     // Refuse writes that would omit, remap, or delete this incomplete record.
     static func validateLinkedAnimalTags(

@@ -787,12 +787,12 @@ enum CoreDataAnimalReadGraphValidator {
             }
         }
         for movement in CoreDataAnimalProjection.managedMovementRecords(animal) {
-            guard movement.herd.id == herdID else {
+            guard movement.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDMovementRecord.coreDataEntityName,
                     id: movement.id,
                     expectedHerdID: herdID,
-                    actualHerdID: movement.herd.id
+                    actualHerdID: movement.herd?.id
                 )
             }
             guard movement.animal?.objectID == animal.objectID else {
