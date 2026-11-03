@@ -571,6 +571,12 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testCloudKitStatusReferenceHerdRelationshipIsOptional() throws {
+        let model = try loadModel()
+        let entity = try entity(named: "AnimalStatusReference", in: model)
+        XCTAssertTrue(try relationship(named: "herd", in: entity).isOptional)
+    }
+
     func testCloudKitStatusReferenceBaseStatusIsOptional() throws {
         let model = try loadModel()
         let entity = try entity(named: "AnimalStatusReference", in: model)
