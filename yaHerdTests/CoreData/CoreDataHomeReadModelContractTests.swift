@@ -583,7 +583,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
                 entityName: CDFieldCheckSession.coreDataEntityName
             )
             return try readContext.fetch(request).map {
-                (herdID: $0.herd.id, id: $0.id, note: $0.notes, completed: $0.completedAt != nil)
+                (herdID: try XCTUnwrap($0.herd?.id), id: $0.id, note: $0.notes, completed: $0.completedAt != nil)
             }
         }
         XCTAssertEqual(physicalRows.count, 4)
