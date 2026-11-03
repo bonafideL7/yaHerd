@@ -198,6 +198,37 @@ enum CoreDataAnimalMutation {
                 id: check.id, expectedHerdID: herd.id, actualHerdID: nil
             )
         }
+        // CloudKit can import a treatment before its direct Herd relationship.
+        // Follow its session or animal link so scoped history and edits cannot
+        // silently omit the linked treatment while ownership is incomplete.
+        let treatmentRequest = NSFetchRequest<CDWorkingTreatmentRecord>(
+            entityName: CDWorkingTreatmentRecord.coreDataEntityName
+        )
+        treatmentRequest.predicate = NSPredicate(
+            format: "herd == nil AND (animal.herd == %@ OR session.herd == %@)",
+            herd, herd
+        )
+        treatmentRequest.fetchLimit = 1
+        if let record = try context.fetch(treatmentRequest).first {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDWorkingTreatmentRecord.coreDataEntityName,
+                id: record.id, expectedHerdID: herd.id, actualHerdID: nil
+            )
+        }
+
+        // A treatment with none of its three ownership links cannot be scoped
+        // to any Herd. Conservatively reject reads and writes until one arrives
+        // instead of permitting unrelated data mutations to conceal it.
+        treatmentRequest.predicate = NSPredicate(
+            format: "herd == nil AND animal == nil AND session == nil"
+        )
+        if let record = try context.fetch(treatmentRequest).first {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDWorkingTreatmentRecord.coreDataEntityName,
+                id: record.id, expectedHerdID: herd.id, actualHerdID: nil
+            )
+        }
+
     }
 
     // An imported reference can be linked to a Herd's animal before its Herd link arrives.

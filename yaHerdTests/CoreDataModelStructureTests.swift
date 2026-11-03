@@ -3,6 +3,15 @@ import XCTest
 @testable import yaHerd
 
 final class CoreDataModelStructureTests: XCTestCase {
+    func testCloudKitWorkingTreatmentRecordHerdRelationshipIsOptional() throws {
+        let model = try loadModel()
+        let entity = try entity(named: "WorkingTreatmentRecord", in: model)
+        let herd = try relationship(named: "herd", in: entity)
+        XCTAssertTrue(herd.isOptional)
+        XCTAssertEqual(herd.deleteRule, .nullifyDeleteRule)
+        XCTAssertEqual(herd.inverseRelationship?.name, "workingTreatmentRecords")
+    }
+
     func testCloudKitWorkingTreatmentTemplateHerdRelationshipIsOptional() throws {
         let model = try loadModel()
         let entity = try entity(named: "WorkingTreatmentTemplate", in: model)
@@ -1476,7 +1485,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertEqual(herdRelationship.destinationEntity?.name, "Herd")
             XCTAssertEqual(
                 herdRelationship.isOptional,
-                ["AnimalStatusReference", "AnimalTag", "FieldCheckAnimalCheck", "FieldCheckFinding", "FieldCheckSession", "HealthRecord", "MovementRecord", "PastureGroup", "PregnancyCheck", "StatusRecord", "TagColorDefinition", "WorkingTreatmentTemplate"].contains(entityName),
+                ["AnimalStatusReference", "AnimalTag", "FieldCheckAnimalCheck", "FieldCheckFinding", "FieldCheckSession", "HealthRecord", "MovementRecord", "PastureGroup", "PregnancyCheck", "StatusRecord", "TagColorDefinition", "WorkingTreatmentTemplate", "WorkingTreatmentRecord"].contains(entityName),
                 "\(entityName).herd must preserve its current modeled optionality."
             )
             XCTAssertEqual(herdRelationship.maxCount, 1)

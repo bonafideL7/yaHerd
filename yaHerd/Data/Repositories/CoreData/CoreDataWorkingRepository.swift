@@ -1068,7 +1068,7 @@ final class CoreDataWorkingRepository:
             try validateHerdOwnership(
                 relationship: "WorkingSession.treatmentRecords",
                 expectedHerdID: herdID,
-                actualHerdID: record.herd.id
+                actualHerdID: record.herd?.id
             )
             guard let owningSession = record.session else {
                 throw CoreDataWorkingRepositoryError.missingTreatmentSession(recordID: record.id)

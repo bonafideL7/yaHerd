@@ -12,7 +12,7 @@ final class CDWorkingTreatmentRecord: NSManagedObject {
     @NSManaged var doseUnitRawValue: String?
     @NSManaged var administrationRouteRawValue: String?
     @NSManaged var animalIDSnapshot: UUID?
-    @NSManaged var herd: CDHerd
+    @NSManaged var herd: CDHerd?
     @NSManaged var animal: CDAnimal?
     @NSManaged var session: CDWorkingSession?
 }
