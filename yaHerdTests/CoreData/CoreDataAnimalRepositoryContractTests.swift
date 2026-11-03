@@ -5,6 +5,98 @@ import XCTest
 
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
+    func testImportedPregnancyWithoutAnimalPreservesOriginalCheckUntilRestored() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let repository = environment.makeAnimalRepository()
+        let pastureRepository = environment.makePastureRepository()
+        let pasture = try pastureRepository.create(
+            input: PastureInput(
+                name: "Pregnancy Import Pasture", acreage: 10,
+                usableAcreage: 9, targetAcresPerHead: 1
+            )
+        )
+        let animal = try repository.create(
+            input: readGraphAnimalInput(
+                name: "Pregnancy History Cow", tag: "PREG-IMPORTED", pastureID: pasture.id
+            )
+        )
+        let originalDate = Date(timeIntervalSinceReferenceDate: 212_000)
+        let dueDate = Date(timeIntervalSinceReferenceDate: 230_000)
+        _ = try repository.addPregnancyCheck(
+            animalID: animal.id,
+            input: PregnancyCheckInput(
+                date: originalDate, result: .pregnant, technician: "Original technician",
+                estimatedDaysPregnant: 45, dueDate: dueDate, sireAnimalID: nil
+            )
+        )
+        let context = try assembly.contextFactory.makeWriteContext()
+        let lookup = CoreDataLookup()
+        let recordID = try context.performAndWait { () throws -> UUID in
+            let stored = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            return try XCTUnwrap(
+                (stored.pregnancyChecks?.allObjects as? [CDPregnancyCheck])?.first
+            ).id
+        }
+        XCTAssertEqual(
+            try repository.fetchAnimals().first(where: { $0.id == animal.id })?.lastPregnancyCheckDate,
+            originalDate
+        )
+        XCTAssertTrue(try repository.fetchTimeline(id: animal.id).contains {
+            $0.id == "pregnancy:\(recordID.uuidString)"
+        })
+        try context.performAndWait {
+            let check = try XCTUnwrap(lookup.herdOwned(
+                CDPregnancyCheck.self, id: recordID, herdID: environment.herdID, in: context
+            ))
+            check.animal = nil
+            try context.save()
+        }
+
+        let expected = CoreDataAnimalRepositoryError.missingPregnancyAnimalRelationship(recordID: recordID)
+        XCTAssertThrowsError(try repository.fetchAnimals()) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchAnimalDetail(id: animal.id)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchTimeline(id: animal.id)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try pastureRepository.fetchResidentAnimals(pastureID: pasture.id)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try repository.delete(ids: [animal.id])) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+
+        try context.performAndWait {
+            let check = try XCTUnwrap(lookup.herdOwned(
+                CDPregnancyCheck.self, id: recordID, herdID: environment.herdID, in: context
+            ))
+            XCTAssertNil(check.animal)
+            XCTAssertEqual(check.date, originalDate)
+            XCTAssertEqual(check.resultRawValue, PregnancyResult.pregnant.rawValue)
+            XCTAssertEqual(check.technician, "Original technician")
+            XCTAssertEqual(check.dueDate, dueDate)
+            let stored = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            check.animal = stored
+            try context.save()
+        }
+        XCTAssertEqual(
+            try repository.fetchAnimals().first(where: { $0.id == animal.id })?.lastPregnancyCheckDate,
+            originalDate
+        )
+        XCTAssertTrue(try repository.fetchTimeline(id: animal.id).contains {
+            $0.id == "pregnancy:\(recordID.uuidString)"
+        })
+    }
+
+
     func testImportedHealthWithoutAnimalPreservesOriginalTreatmentUntilRestored() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
