@@ -5,6 +5,68 @@ import XCTest
 
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
+    func testImportedPregnancyWithOnlySireLinkProtectsSireUntilOwnershipArrives() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let repository = environment.makeAnimalRepository()
+        let sire = try repository.create(
+            input: readGraphAnimalInput(name: "Import Sire", tag: "SIRE-HERD")
+        )
+        let context = try assembly.contextFactory.makeWriteContext()
+        let lookup = CoreDataLookup()
+        let checkID = UUID()
+        let recordedAt = Date(timeIntervalSinceReferenceDate: 240_000)
+
+        try context.performAndWait {
+            let storedSire = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: sire.id, herdID: environment.herdID, in: context
+            ))
+            let check = CDPregnancyCheck(context: context)
+            check.id = checkID
+            check.date = recordedAt
+            check.resultRawValue = PregnancyResult.pregnant.rawValue
+            check.sire = storedSire
+            // An imported record has only its sire link so far.
+            check.herd = nil
+            check.animal = nil
+            try context.save()
+        }
+
+        let expected = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDPregnancyCheck.coreDataEntityName, id: checkID,
+            expectedHerdID: environment.herdID, actualHerdID: nil
+        )
+        XCTAssertThrowsError(try repository.fetchAnimals()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.delete(ids: [sire.id])) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+
+        try context.performAndWait {
+            let request = NSFetchRequest<CDPregnancyCheck>(
+                entityName: CDPregnancyCheck.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "id == %@", checkID as NSUUID)
+            let check = try XCTUnwrap(context.fetch(request).first)
+            XCTAssertEqual(check.id, checkID)
+            XCTAssertNil(check.herd)
+            XCTAssertNil(check.animal)
+            XCTAssertEqual(check.sire?.id, sire.id)
+            XCTAssertEqual(check.date, recordedAt)
+            let storedSire = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: sire.id, herdID: environment.herdID, in: context
+            ))
+            check.herd = storedSire.herd
+            check.animal = storedSire
+            try context.save()
+        }
+        XCTAssertEqual(try repository.fetchAnimalDetail(id: sire.id)?.id, sire.id)
+        XCTAssertTrue(try repository.fetchTimeline(id: sire.id).contains {
+            $0.id == "pregnancy:\(checkID.uuidString)"
+        })
+    }
+
     func testImportedHistoryWithoutHerdPreservesStatusHealthAndPregnancyRecords() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
