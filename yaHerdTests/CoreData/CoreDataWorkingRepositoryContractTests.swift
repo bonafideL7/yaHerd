@@ -5,6 +5,86 @@ import XCTest
 
 @MainActor
 final class CoreDataWorkingRepositoryContractTests: XCTestCase {
+    func testImportedTemplateWithoutHerdBlocksTemplateReadsAndWritesUntilOwnershipRestored() async throws {
+        let environment = try await CoreDataWorkingContractEnvironment.make()
+        let repository = environment.makeTemplateRepository()
+        let templateID = try repository.createTemplate(
+            name: "Imported Treatment",
+            items: []
+        )
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        let originalItems = try context.performAndWait { () throws -> Data in
+            let template = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDWorkingTreatmentTemplate.self,
+                id: templateID,
+                herdID: environment.herdID,
+                in: context
+            ))
+            let items = try XCTUnwrap(template.itemsData)
+            template.herd = nil
+            try context.save()
+            return items
+        }
+
+        let expected = CoreDataWorkingRepositoryError.invalidHerdOwnership(
+            relationship: "template.herd",
+            expectedHerdID: environment.herdID,
+            actualHerdID: nil
+        )
+        XCTAssertThrowsError(try repository.fetchTemplates()) {
+            XCTAssertEqual($0 as? CoreDataWorkingRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchTemplateDetail(id: templateID)) {
+            XCTAssertEqual($0 as? CoreDataWorkingRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try repository.createTemplate(name: "Duplicate Import", items: [])) {
+            XCTAssertEqual($0 as? CoreDataWorkingRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try repository.updateTemplate(
+            id: templateID, name: "Changed Import", items: []
+        )) {
+            XCTAssertEqual($0 as? CoreDataWorkingRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try repository.deleteTemplates(ids: [templateID])) {
+            XCTAssertEqual($0 as? CoreDataWorkingRepositoryError, expected)
+        }
+
+        let readModel = CoreDataReadModelActor(
+            contextFactory: environment.assembly.contextFactory,
+            lookup: CoreDataLookup(),
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        do {
+            _ = try await readModel.fetchHomeTreatmentTemplates(limit: 5)
+            XCTFail("Home must not silently omit an imported treatment template.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataWorkingRepositoryError, expected)
+        }
+
+        try context.performAndWait {
+            let request = NSFetchRequest<CDWorkingTreatmentTemplate>(
+                entityName: CDWorkingTreatmentTemplate.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "id == %@", templateID as NSUUID)
+            let template = try XCTUnwrap(context.fetch(request).first)
+            XCTAssertNil(template.herd)
+            XCTAssertEqual(template.id, templateID)
+            XCTAssertEqual(template.name, "Imported Treatment")
+            XCTAssertEqual(template.itemsData, originalItems)
+
+            template.herd = try XCTUnwrap(CoreDataLookup().herd(
+                id: environment.herdID, in: context
+            ))
+            try context.save()
+        }
+
+        XCTAssertEqual(try repository.fetchTemplateDetail(id: templateID)?.id, templateID)
+        XCTAssertEqual(try repository.fetchTemplates().map(\\.id), [templateID])
+        XCTAssertEqual(try await readModel.fetchHomeTreatmentTemplates(limit: 5).map(\\.id), [templateID])
+        try repository.updateTemplate(id: templateID, name: "Restored Treatment", items: [])
+        XCTAssertEqual(try repository.fetchTemplateDetail(id: templateID)?.name, "Restored Treatment")
+    }
+
     func testImportedWorkingPregnancyWithoutAnimalBlocksHistoryDeletionUntilRestored() async throws {
         let environment = try await CoreDataWorkingContractEnvironment.make()
         let pasture = try environment.makePastureRepository().create(
