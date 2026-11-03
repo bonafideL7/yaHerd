@@ -8,6 +8,121 @@ import XCTest
 /// mutations. UI edit/picker behavior and failed-save rollback have separate owners.
 @MainActor
 final class CoreDataTagColorRepositoryContractTests: XCTestCase {
+    func testTagColorMutationsPreservePartiallyImportedFieldCheckHistory() async throws {
+        // Neither child has an AnimalTag or Working reference. The snapshot is
+        // the only use of this custom color, and its Herd link arrives later.
+        for isFinding in [false, true] {
+            let assembly = try await CoreDataPersistenceAssembly.inMemory()
+            let environment = CoreDataTagColorContractEnvironment(assembly: assembly)
+            try environment.seedInitialHerd()
+            let repository = environment.fixture.makeTagColorRepository()
+            let original = TagColorSnapshot(
+                id: UUID(),
+                name: "Import History Violet",
+                prefix: "IHV",
+                rgba: RGBAColor(r: 0.45, g: 0.2, b: 0.65)
+            )
+            try repository.upsert(original)
+            let childID = UUID()
+
+            let seed = try assembly.contextFactory.makeWriteContext()
+            try seed.performAndWait {
+                let herd = try XCTUnwrap(CoreDataLookup().herd(
+                    id: environment.initialHerdID, in: seed
+                ))
+                let session = CDFieldCheckSession(context: seed)
+                session.id = UUID()
+                session.herd = herd
+                session.startedAt = Date(timeIntervalSinceReferenceDate: 12_300)
+                session.notes = "Imported historical child"
+                session.pastureNameSnapshot = "Historical pasture"
+
+                if isFinding {
+                    let finding = CDFieldCheckFinding(context: seed)
+                    finding.id = childID
+                    finding.recordedAt = Date(timeIntervalSinceReferenceDate: 12_400)
+                    finding.typeRawValue = FieldCheckFindingType.generalObservation.rawValue
+                    finding.severityRawValue = FieldCheckFindingSeverity.info.rawValue
+                    finding.statusRawValue = FieldCheckFindingStatus.resolved.rawValue
+                    finding.note = "Historical color"
+                    finding.animalDisplayTagColorIDSnapshot = original.id
+                    finding.session = session
+                    finding.herd = nil
+                } else {
+                    let check = CDFieldCheckAnimalCheck(context: seed)
+                    check.id = childID
+                    check.animalIDSnapshot = UUID()
+                    check.rosterTagNumberSnapshot = "HISTORY"
+                    check.rosterTagColorIDSnapshot = original.id
+                    check.damRosterTagColorIDSnapshot = original.id
+                    check.animalNameSnapshot = "Historical animal"
+                    check.animalSexRawValueSnapshot = Sex.female.rawValue
+                    check.animalTypeRawValueSnapshot = AnimalType.cow.rawValue
+                    check.wasExpectedAtStart = true
+                    check.session = session
+                    check.herd = nil
+                }
+                try seed.save()
+            }
+
+            let expected = CoreDataReadModelError.invalidHerdOwnership(
+                entity: isFinding
+                    ? CDFieldCheckFinding.coreDataEntityName
+                    : CDFieldCheckAnimalCheck.coreDataEntityName,
+                id: childID,
+                expectedHerdID: environment.initialHerdID,
+                actualHerdID: nil
+            )
+            XCTAssertThrowsError(try repository.deleteColors(ids: [original.id])) {
+                XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+            }
+            let collision = TagColorSnapshot(
+                id: UUID(), name: original.name, prefix: "NEW",
+                rgba: RGBAColor(r: 0.7, g: 0.3, b: 0.3)
+            )
+            XCTAssertThrowsError(try repository.upsert(collision)) {
+                XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+            }
+            XCTAssertEqual(try repository.fetchColor(id: original.id)?.name, original.name)
+            XCTAssertEqual(try repository.fetchColor(id: original.id)?.prefix, original.prefix)
+
+            let restore = try assembly.contextFactory.makeWriteContext()
+            try restore.performAndWait {
+                let herd = try XCTUnwrap(CoreDataLookup().herd(
+                    id: environment.initialHerdID, in: restore
+                ))
+                if isFinding {
+                    let request = NSFetchRequest<CDFieldCheckFinding>(
+                        entityName: CDFieldCheckFinding.coreDataEntityName
+                    )
+                    request.predicate = NSPredicate(format: "id == %@", childID as NSUUID)
+                    let finding = try XCTUnwrap(restore.fetch(request).first)
+                    XCTAssertNil(finding.herd)
+                    XCTAssertEqual(finding.animalDisplayTagColorIDSnapshot, original.id)
+                    finding.herd = herd
+                } else {
+                    let request = NSFetchRequest<CDFieldCheckAnimalCheck>(
+                        entityName: CDFieldCheckAnimalCheck.coreDataEntityName
+                    )
+                    request.predicate = NSPredicate(format: "id == %@", childID as NSUUID)
+                    let check = try XCTUnwrap(restore.fetch(request).first)
+                    XCTAssertNil(check.herd)
+                    XCTAssertEqual(check.rosterTagColorIDSnapshot, original.id)
+                    XCTAssertEqual(check.damRosterTagColorIDSnapshot, original.id)
+                    check.herd = herd
+                }
+                try restore.save()
+            }
+
+            // A restored reference must keep the original color definition
+            // available for historical formatting even after user deletion.
+            try repository.deleteColors(ids: [original.id])
+            XCTAssertEqual(try repository.fetchColor(id: original.id)?.id, original.id)
+            XCTAssertEqual(try repository.fetchColor(id: original.id)?.prefix, original.prefix)
+            XCTAssertFalse(try repository.fetchColors().contains { $0.id == original.id })
+        }
+    }
+
     func testImportedColorWithoutHerdBlocksColorAndAnimalReadsAndWritesUntilRestored() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let environment = CoreDataTagColorContractEnvironment(assembly: assembly)
