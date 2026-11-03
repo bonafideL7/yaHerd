@@ -442,7 +442,7 @@ final class CoreDataWorkingRepository:
             let healthAnimals = ((session.healthRecords?.allObjects as? [CDHealthRecord]) ?? [])
                 .compactMap(\.animal)
             let pregnancyAnimals = ((session.pregnancyChecks?.allObjects as? [CDPregnancyCheck]) ?? [])
-                .map(\.animal)
+                .compactMap(\.animal)
             let activeAnimals = (session.activeAnimals?.allObjects as? [CDAnimal]) ?? []
             for animal in queueAnimals + treatmentAnimals + healthAnimals + pregnancyAnimals + activeAnimals {
                 _ = try CoreDataAnimalMutation.aggregateTagStates(animal)
@@ -957,10 +957,16 @@ final class CoreDataWorkingRepository:
             entityName: CDPregnancyCheck.coreDataEntityName
         )
         pregnancyRequest.predicate = NSPredicate(format: "herd == %@", herd)
+        let pregnancyChecks = try context.fetch(pregnancyRequest)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
-            context.fetch(pregnancyRequest),
+            pregnancyChecks,
             herdID: herd.id
         )
+        for check in pregnancyChecks where check.workingSession != nil && check.animal == nil {
+            throw CoreDataAnimalRepositoryError.missingPregnancyAnimalRelationship(
+                recordID: check.id
+            )
+        }
     }
 
     nonisolated static func validateSessionGraph(
@@ -1157,10 +1163,15 @@ final class CoreDataWorkingRepository:
                     actualSessionID: workingSession.id
                 )
             }
+            guard let animal = check.animal else {
+                throw CoreDataAnimalRepositoryError.missingPregnancyAnimalRelationship(
+                    recordID: check.id
+                )
+            }
             try validateHerdOwnership(
                 relationship: "PregnancyCheck.animal",
                 expectedHerdID: herdID,
-                actualHerdID: check.animal.herd.id
+                actualHerdID: animal.herd.id
             )
             if let sire = check.sire {
                 try validateHerdOwnership(
