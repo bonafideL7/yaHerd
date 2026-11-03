@@ -182,8 +182,9 @@ enum CoreDataAnimalMutation {
             )
         }
 
-        // A completely unattached session has no known Herd. Protect it until
-        // some ownership link arrives, as with imported queue/treatment rows.
+        // A session without direct Herd, Pasture or Animal ownership must not
+        // become visible merely because another ownerless child imported first.
+        // Only child links to an owned Herd, Animal or Pasture establish a scope.
         sessionRequest.predicate = NSPredicate(format: "herd == nil AND sourcePasture == nil")
         sessionRequest.fetchLimit = 0
         for session in try context.fetch(sessionRequest)
@@ -193,7 +194,18 @@ enum CoreDataAnimalMutation {
                 (session.treatmentRecords?.count ?? 0) +
                 (session.healthRecords?.count ?? 0) +
                 (session.pregnancyChecks?.count ?? 0)
-            if linkedChildren == 0 {
+            let hasOwnerlessChild =
+                ((session.queueItems?.allObjects as? [CDWorkingQueueItem]) ?? []).contains {
+                    $0.herd == nil && $0.animal == nil &&
+                    $0.collectedFromPasture == nil && $0.destinationPasture == nil
+                } ||
+                ((session.treatmentRecords?.allObjects as? [CDWorkingTreatmentRecord]) ?? [])
+                    .contains { $0.herd == nil && $0.animal == nil } ||
+                ((session.healthRecords?.allObjects as? [CDHealthRecord]) ?? [])
+                    .contains { $0.herd == nil && $0.animal == nil } ||
+                ((session.pregnancyChecks?.allObjects as? [CDPregnancyCheck]) ?? [])
+                    .contains { $0.herd == nil && $0.animal == nil && $0.sire == nil }
+            if linkedChildren == 0 || hasOwnerlessChild {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDWorkingSession.coreDataEntityName,
                     id: session.id, expectedHerdID: herd.id, actualHerdID: nil
