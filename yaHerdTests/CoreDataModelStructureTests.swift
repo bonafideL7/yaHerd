@@ -1494,7 +1494,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertEqual(herdRelationship.destinationEntity?.name, "Herd")
             XCTAssertEqual(
                 herdRelationship.isOptional,
-                ["AnimalStatusReference", "AnimalTag", "FieldCheckAnimalCheck", "FieldCheckFinding", "FieldCheckSession", "HealthRecord", "MovementRecord", "PastureGroup", "PregnancyCheck", "StatusRecord", "TagColorDefinition", "WorkingTreatmentTemplate", "WorkingTreatmentRecord"].contains(entityName),
+                ["AnimalStatusReference", "AnimalTag", "FieldCheckAnimalCheck", "FieldCheckFinding", "FieldCheckSession", "HealthRecord", "MovementRecord", "PastureGroup", "PregnancyCheck", "StatusRecord", "TagColorDefinition", "WorkingQueueItem", "WorkingTreatmentTemplate", "WorkingTreatmentRecord"].contains(entityName),
                 "\(entityName).herd must preserve its current modeled optionality."
             )
             XCTAssertEqual(herdRelationship.maxCount, 1)
