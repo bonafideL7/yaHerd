@@ -3,6 +3,45 @@ import XCTest
 @testable import yaHerd
 
 final class CoreDataModelStructureTests: XCTestCase {
+
+    func testCloudKitFieldCheckFreeTextNotesUseRealEmptyDefaults() async throws {
+        let model = try loadModel()
+        for (entityName, attributeName) in [
+            ("FieldCheckSession", "notes"),
+            ("FieldCheckFinding", "note")
+        ] {
+            let entity = try entity(named: entityName, in: model)
+            let note = try attribute(named: attributeName, in: entity)
+            XCTAssertFalse(note.isOptional)
+            XCTAssertEqual(note.defaultValue as? String, "")
+        }
+
+        // A new locally persisted blank note must have the same meaning as
+        // a deliberate empty note submitted through the Field Check editor.
+        let persistence = try await CoreDataPersistentContainer.inMemory()
+        let context = persistence.makeBackgroundContext()
+        try await context.perform {
+            let session = CDFieldCheckSession(context: context)
+            session.id = UUID()
+            session.startedAt = Date(timeIntervalSinceReferenceDate: 101_000)
+            session.pastureNameSnapshot = "Original pasture"
+
+            let finding = CDFieldCheckFinding(context: context)
+            finding.id = UUID()
+            finding.recordedAt = Date(timeIntervalSinceReferenceDate: 101_100)
+            finding.typeRawValue = FieldCheckFindingType.fenceIssue.rawValue
+            finding.severityRawValue = FieldCheckFindingSeverity.warning.rawValue
+            finding.statusRawValue = FieldCheckFindingStatus.open.rawValue
+            finding.session = session
+            try context.save()
+
+            context.refresh(session, mergeChanges: false)
+            context.refresh(finding, mergeChanges: false)
+            XCTAssertEqual(session.notes, "")
+            XCTAssertEqual(finding.note, "")
+        }
+    }
+
     func testCloudKitWorkingQueueHerdRelationshipIsOptionalWithInverse() throws {
         let model = try loadModel()
         let entity = try entity(named: "WorkingQueueItem", in: model)
