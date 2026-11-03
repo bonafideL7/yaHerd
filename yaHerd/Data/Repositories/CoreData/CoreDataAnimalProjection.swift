@@ -848,12 +848,12 @@ enum CoreDataAnimalReadGraphValidator {
                 )
             }
             if let color = tag.color,
-               color.herd.id != herdID {
+               color.herd?.id != herdID {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDTagColorDefinition.coreDataEntityName,
                     id: color.id,
                     expectedHerdID: herdID,
-                    actualHerdID: color.herd.id
+                    actualHerdID: color.herd?.id
                 )
             }
         }

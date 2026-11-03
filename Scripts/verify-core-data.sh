@@ -76,7 +76,7 @@ INDEX_CONTRACT = {
 
 # name:destination:required-or-optional:one-or-many:delete-rule:inverse
 RELATIONSHIP_CONTRACT = {
-    "TagColorDefinition": "herd:Herd:R:1:Nullify:tagColors,tags:AnimalTag:O:M:Nullify:color",
+    "TagColorDefinition": "herd:Herd:O:1:Nullify:tagColors,tags:AnimalTag:O:M:Nullify:color",
     "AnimalStatusReference": "herd:Herd:O:1:Nullify:statusReferences,animals:Animal:O:M:Nullify:statusReference",
     "PastureGroup": "herd:Herd:R:1:Nullify:pastureGroups,pastures:Pasture:O:M:Nullify:group",
     "Pasture": "herd:Herd:R:1:Nullify:pastures,group:PastureGroup:O:1:Nullify:pastures,animals:Animal:O:M:Nullify:currentPasture,workingSourceSessions:WorkingSession:O:M:Nullify:sourcePasture,workingCollectedQueueItems:WorkingQueueItem:O:M:Nullify:collectedFromPasture,workingDestinationQueueItems:WorkingQueueItem:O:M:Nullify:destinationPasture,fieldCheckSessions:FieldCheckSession:O:M:Nullify:pasture",

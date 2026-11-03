@@ -8,6 +8,104 @@ import XCTest
 /// mutations. UI edit/picker behavior and failed-save rollback have separate owners.
 @MainActor
 final class CoreDataTagColorRepositoryContractTests: XCTestCase {
+    func testImportedColorWithoutHerdBlocksColorAndAnimalReadsAndWritesUntilRestored() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = CoreDataTagColorContractEnvironment(assembly: assembly)
+        try environment.seedInitialHerd()
+        let repository = environment.fixture.makeTagColorRepository()
+        let original = TagColorSnapshot(
+            id: UUID(),
+            name: "Historical Orange",
+            prefix: "HO",
+            rgba: RGBAColor(r: 0.9, g: 0.4, b: 0.1)
+        )
+        try environment.fixture.referenceControl.seedPersistedColor(original)
+        try environment.fixture.referenceControl.seedReferences(original.id)
+
+        let unlinkContext = try assembly.contextFactory.makeWriteContext()
+        try unlinkContext.performAndWait {
+            let color = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDTagColorDefinition.self,
+                id: original.id,
+                herdID: environment.initialHerdID,
+                in: unlinkContext
+            ))
+            color.herd = nil
+            try unlinkContext.save()
+        }
+
+        let expected = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDTagColorDefinition.coreDataEntityName,
+            id: original.id,
+            expectedHerdID: environment.initialHerdID,
+            actualHerdID: nil
+        )
+        XCTAssertThrowsError(try repository.fetchColors()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchColor(id: original.id)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.upsert(original)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.deleteColors(ids: [original.id])) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.restoreDefaultColors()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+
+        let inspectContext = assembly.contextFactory.makeReadContext()
+        try inspectContext.performAndWait {
+            let colorRequest = NSFetchRequest<CDTagColorDefinition>(
+                entityName: CDTagColorDefinition.coreDataEntityName
+            )
+            colorRequest.predicate = NSPredicate(format: "id == %@", original.id as NSUUID)
+            let color = try XCTUnwrap(inspectContext.fetch(colorRequest).first)
+            XCTAssertNil(color.herd)
+            XCTAssertEqual(color.name, original.name)
+            XCTAssertEqual(color.id, original.id)
+
+            let tagRequest = NSFetchRequest<CDAnimalTag>(entityName: CDAnimalTag.coreDataEntityName)
+            tagRequest.predicate = NSPredicate(
+                format: "herd.id == %@ AND color.id == %@",
+                environment.initialHerdID as NSUUID,
+                original.id as NSUUID
+            )
+            let tag = try XCTUnwrap(inspectContext.fetch(tagRequest).first)
+            let animal = try XCTUnwrap(tag.animal)
+            XCTAssertThrowsError(
+                try CoreDataAnimalReadGraphValidator.validateTagRelationships(
+                    animal, herdID: environment.initialHerdID
+                )
+            ) {
+                XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+            }
+        }
+
+        let restoreContext = try assembly.contextFactory.makeWriteContext()
+        try restoreContext.performAndWait {
+            let herd = try XCTUnwrap(
+                CoreDataLookup().herd(id: environment.initialHerdID, in: restoreContext)
+            )
+            let colorRequest = NSFetchRequest<CDTagColorDefinition>(
+                entityName: CDTagColorDefinition.coreDataEntityName
+            )
+            colorRequest.predicate = NSPredicate(format: "id == %@", original.id as NSUUID)
+            let color = try XCTUnwrap(restoreContext.fetch(colorRequest).first)
+            XCTAssertNil(color.herd)
+            color.herd = herd
+            try restoreContext.save()
+        }
+
+        XCTAssertEqual(try repository.fetchColor(id: original.id)?.name, original.name)
+        XCTAssertTrue(try repository.fetchColors().contains { $0.id == original.id })
+        let references = try environment.fixture.referenceControl.fetchReferences()
+        XCTAssertEqual(references.animalTagColorID, original.id)
+        XCTAssertEqual(references.historicalTagColorID, original.id)
+    }
+
     func testIncompleteImportedColorNameBlocksReadsAndWritesUntilRestored() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let environment = CoreDataTagColorContractEnvironment(assembly: assembly)
@@ -831,7 +929,7 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
                 )
                 return try context.fetch(request).map { color in
                     [
-                        color.herd.id.uuidString, color.id.uuidString,
+                        color.herd?.id.uuidString ?? "<missing>", color.id.uuidString,
                         color.name ?? "<missing>", color.prefix, String(color.sortOrder), String(color.isHidden),
                         String(color.isDefault),
                         color.updatedAt.map { String($0.timeIntervalSinceReferenceDate) } ?? "<missing>"

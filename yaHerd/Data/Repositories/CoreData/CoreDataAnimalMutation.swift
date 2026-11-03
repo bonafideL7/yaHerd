@@ -216,6 +216,26 @@ enum CoreDataAnimalMutation {
                 actualHerdID: nil
             )
         }
+
+        // A Color may arrive before its Herd link. A Tag already owned by this
+        // Herd is evidence of that incomplete graph even when the Color itself
+        // is absent from all Herd-scoped color queries.
+        let colorRequest = NSFetchRequest<CDAnimalTag>(entityName: CDAnimalTag.coreDataEntityName)
+        colorRequest.predicate = NSPredicate(
+            format: "color != nil AND color.herd == nil AND (herd == %@ OR animal.herd == %@)",
+            herd,
+            herd
+        )
+        colorRequest.fetchLimit = 1
+        if let tag = try context.fetch(colorRequest).first,
+           let color = tag.color {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDTagColorDefinition.coreDataEntityName,
+                id: color.id,
+                expectedHerdID: herd.id,
+                actualHerdID: nil
+            )
+        }
     }
 
     static func requiredEditorRevision(_ animal: CDAnimal) throws -> UUID {
