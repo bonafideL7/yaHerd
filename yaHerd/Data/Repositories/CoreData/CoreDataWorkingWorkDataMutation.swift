@@ -76,7 +76,7 @@ enum CoreDataWorkingWorkDataMutation {
             record.session = session
         }
 
-        deletePregnancyChecks(session: session, animal: animal, in: context)
+        try deletePregnancyChecks(session: session, animal: animal, in: context)
         if WorkingWorkDataRules.shouldRecordPregnancyCheck(input.pregnancyCheck),
            let pregnancyInput = input.pregnancyCheck {
             let check = CDPregnancyCheck(context: context)
@@ -141,7 +141,7 @@ enum CoreDataWorkingWorkDataMutation {
         _ = try CoreDataAnimalProjection.birthDate(animal)
         _ = try CoreDataAnimalMutation.aggregateTagStates(animal)
         try deleteTreatmentRecords(session: session, animal: animal, in: context)
-        deletePregnancyChecks(session: session, animal: animal, in: context)
+        try deletePregnancyChecks(session: session, animal: animal, in: context)
         try deleteHealthRecords(session: session, animal: animal, in: context)
     }
 
@@ -192,9 +192,14 @@ enum CoreDataWorkingWorkDataMutation {
         session: CDWorkingSession,
         animal: CDAnimal,
         in context: NSManagedObjectContext
-    ) {
+    ) throws {
         let checks = (session.pregnancyChecks?.allObjects as? [CDPregnancyCheck]) ?? []
-        for check in checks where check.animal.id == animal.id {
+        if let unlinked = checks.first(where: { $0.animal == nil }) {
+            throw CoreDataAnimalRepositoryError.missingPregnancyAnimalRelationship(
+                recordID: unlinked.id
+            )
+        }
+        for check in checks where check.animal?.id == animal.id {
             context.delete(check)
         }
     }
