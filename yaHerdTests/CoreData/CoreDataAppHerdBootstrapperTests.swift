@@ -834,9 +834,11 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         }
         for seedLarge in [false, true] {
             do {
-                _ = try await (seedLarge
-                    ? seeder.seedLargeSampleDataIfNeeded()
-                    : seeder.seedSampleDataIfNeeded())
+                if seedLarge {
+                    _ = try await seeder.seedLargeSampleDataIfNeeded()
+                } else {
+                    _ = try await seeder.seedSampleDataIfNeeded()
+                }
                 XCTFail("An orphaned template must abort the entire sample transaction.")
             } catch {
                 XCTAssertEqual(error as? CoreDataWorkingRepositoryError, expected)
@@ -860,7 +862,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         }
 
         XCTAssertTrue(try seeder.canSeedSampleData())
-        XCTAssertTrue(try await seeder.seedSampleDataIfNeeded())
+        let inserted = try await seeder.seedSampleDataIfNeeded()
+        XCTAssertTrue(inserted)
         try context.performAndWait {
             let stored = try context.fetch(NSFetchRequest<CDWorkingTreatmentTemplate>(
                 entityName: CDWorkingTreatmentTemplate.coreDataEntityName
