@@ -2109,7 +2109,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                 let rows: [CDWorkingQueueItem] = try context.fetch(request)
                 return try rows.map { row in
                     [
-                        row.herd.id.uuidString,
+                        try XCTUnwrap(row.herd).id.uuidString,
                         try XCTUnwrap(row.session).id.uuidString,
                         row.id.uuidString,
                         try WorkingMapper.queueAnimalID(from: row).uuidString,
