@@ -15,7 +15,7 @@ final class CDFieldCheckAnimalCheck: NSManagedObject {
     @NSManaged var wasExpectedAtStart: Bool
     @NSManaged var countedAt: Date?
     @NSManaged var missingConfirmedAt: Date?
-    @NSManaged var herd: CDHerd
+    @NSManaged var herd: CDHerd?
     @NSManaged var session: CDFieldCheckSession?
     @NSManaged var animal: CDAnimal?
 }
