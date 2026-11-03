@@ -801,6 +801,77 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
 
 
     @MainActor
+    func testSampleSeedRejectsOrphanedTemplateAndPreservesExistingData() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+            assembly: assembly
+        )
+        let graph = CoreDataAppPersistenceAssembly(
+            assembly: assembly, currentHerdID: herdID
+        ).makeDependencies(dataAccessMode: .readWrite)
+        let seeder = try XCTUnwrap(graph.animalFeatureDependencies.sampleDataSeeder)
+        let context = try assembly.contextFactory.makeWriteContext()
+        let importedID = UUID()
+        let originalItems = Data("[]".utf8)
+
+        try context.performAndWait {
+            let template = CDWorkingTreatmentTemplate(context: context)
+            template.id = importedID
+            template.name = "Spring Working"
+            template.itemsData = originalItems
+            // Simulate the template arriving before its Herd relationship.
+            template.herd = nil
+            try context.save()
+        }
+
+        let expected = CoreDataWorkingRepositoryError.invalidHerdOwnership(
+            relationship: "template.herd",
+            expectedHerdID: herdID,
+            actualHerdID: nil
+        )
+        XCTAssertThrowsError(try seeder.canSeedSampleData()) {
+            XCTAssertEqual($0 as? CoreDataWorkingRepositoryError, expected)
+        }
+        for seedLarge in [false, true] {
+            do {
+                _ = try await (seedLarge
+                    ? seeder.seedLargeSampleDataIfNeeded()
+                    : seeder.seedSampleDataIfNeeded())
+                XCTFail("An orphaned template must abort the entire sample transaction.")
+            } catch {
+                XCTAssertEqual(error as? CoreDataWorkingRepositoryError, expected)
+            }
+        }
+        XCTAssertEqual(graph.applicationMutationCenter.currentSequence, 0)
+        XCTAssertTrue(try graph.animalFeatureDependencies.listRepository.fetchAnimals().isEmpty)
+
+        try context.performAndWait {
+            let stored = try context.fetch(NSFetchRequest<CDWorkingTreatmentTemplate>(
+                entityName: CDWorkingTreatmentTemplate.coreDataEntityName
+            ))
+            XCTAssertEqual(stored.count, 1)
+            let template = try XCTUnwrap(stored.first)
+            XCTAssertEqual(template.id, importedID)
+            XCTAssertEqual(template.name, "Spring Working")
+            XCTAssertEqual(template.itemsData, originalItems)
+            XCTAssertNil(template.herd)
+            template.herd = try XCTUnwrap(CoreDataLookup().herd(id: herdID, in: context))
+            try context.save()
+        }
+
+        XCTAssertTrue(try seeder.canSeedSampleData())
+        XCTAssertTrue(try await seeder.seedSampleDataIfNeeded())
+        try context.performAndWait {
+            let stored = try context.fetch(NSFetchRequest<CDWorkingTreatmentTemplate>(
+                entityName: CDWorkingTreatmentTemplate.coreDataEntityName
+            ))
+            XCTAssertEqual(stored.count, 1)
+            XCTAssertEqual(stored.first?.id, importedID)
+            XCTAssertEqual(stored.first?.itemsData, originalItems)
+        }
+    }
+
+    @MainActor
     func testSampleSeedDoesNotRaceReservedBuiltInTagColors() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
