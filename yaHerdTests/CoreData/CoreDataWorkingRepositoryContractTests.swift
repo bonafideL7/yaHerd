@@ -2441,7 +2441,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                                 return $0.workingSession?.id == second.sessionID
                             case .standaloneAnimalHistory:
                                 return $0.workingSession == nil
-                                    && $0.animal.id == controlAnimal.id
+                                    && $0.animal?.id == controlAnimal.id
                             }
                         })
                         let foreignRecord = try XCTUnwrap(records.first {
