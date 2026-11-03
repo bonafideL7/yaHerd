@@ -48,7 +48,7 @@
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="name" optional="YES" attributeType="String"/>
         <attribute name="baseStatusRawValue" optional="YES" attributeType="String"/>
-        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="statusReferences" inverseEntity="Herd"/>
+        <relationship name="herd" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="statusReferences" inverseEntity="Herd"/>
         <relationship name="animals" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Animal" inverseName="statusReference" inverseEntity="Animal"/>
             <fetchIndex name="by_id">
             <fetchIndexElement property="id" type="Binary" order="ascending"/>
