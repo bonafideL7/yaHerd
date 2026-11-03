@@ -2478,7 +2478,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                             )).map {
                                 [
                                     $0.herd.id.uuidString,
-                                    $0.animal.id.uuidString,
+                                    try XCTUnwrap($0.animal).id.uuidString,
                                     $0.workingSession?.id.uuidString ?? "standalone",
                                     $0.id.uuidString,
                                     try XCTUnwrap($0.resultRawValue),
