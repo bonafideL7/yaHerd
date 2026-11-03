@@ -111,6 +111,11 @@ enum CoreDataSampleHerdFactory {
 
     /// Shared preflight for both the empty-state affordance and transactional gate.
     static func isEmpty(herd: CDHerd, in context: NSManagedObjectContext) throws -> Bool {
+        // Sample creation bypasses repository write transactions. Keep the same
+        // imported-history ownership preflight before it can insert treatments.
+        try CoreDataAnimalMutation.validateLinkedImportedHistoryHerdOwnership(
+            herd: herd, in: context
+        )
         // Template imports can precede their Herd link; never seed conflicting
         // definitions before the pending ownership relationship is resolved.
         try CoreDataWorkingTreatmentTemplateRepository.validateNoOrphanedTemplates(
@@ -118,7 +123,7 @@ enum CoreDataSampleHerdFactory {
         )
         // A group can exist without a Pasture. Do not overwrite or create
         // duplicate logical group names in a user-configured Herd.
-        for name in ["Animal", "Pasture", "PastureGroup", "FieldCheckSession", "WorkingSession"] {
+        for name in ["Animal", "Pasture", "PastureGroup", "FieldCheckSession", "WorkingSession", "WorkingTreatmentRecord"] {
             let request = NSFetchRequest<NSManagedObject>(entityName: name)
             request.predicate = NSPredicate(format: "herd == %@", herd)
             request.fetchLimit = 1

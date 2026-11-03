@@ -875,6 +875,93 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     }
 
     @MainActor
+    func testSampleSeedRejectsUnattachedImportedWorkingTreatmentWithoutMutatingHistory() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+            assembly: assembly
+        )
+        let graph = CoreDataAppPersistenceAssembly(
+            assembly: assembly, currentHerdID: herdID
+        ).makeDependencies(dataAccessMode: .readWrite)
+        let seeder = try XCTUnwrap(graph.animalFeatureDependencies.sampleDataSeeder)
+        let context = try assembly.contextFactory.makeWriteContext()
+        let importedID = UUID()
+        let treatmentItemID = UUID()
+        let date = Date(timeIntervalSinceReferenceDate: 207_000)
+
+        try context.performAndWait {
+            let record = CDWorkingTreatmentRecord(context: context)
+            record.id = importedID
+            record.date = date
+            record.treatmentItemID = treatmentItemID
+            record.itemNameSnapshot = "Imported Dose"
+            record.given = true
+            // Simulate a partially imported record with no ownership path yet.
+            record.herd = nil
+            record.animal = nil
+            record.session = nil
+            try context.save()
+        }
+
+        let expected = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDWorkingTreatmentRecord.coreDataEntityName,
+            id: importedID,
+            expectedHerdID: herdID,
+            actualHerdID: nil
+        )
+        XCTAssertThrowsError(try seeder.canSeedSampleData()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        for seedLarge in [false, true] {
+            do {
+                if seedLarge {
+                    _ = try await seeder.seedLargeSampleDataIfNeeded()
+                } else {
+                    _ = try await seeder.seedSampleDataIfNeeded()
+                }
+                XCTFail("Seeding must reject an unattached imported treatment.")
+            } catch {
+                XCTAssertEqual(error as? CoreDataReadModelError, expected)
+            }
+        }
+        XCTAssertEqual(graph.applicationMutationCenter.currentSequence, 0)
+        try context.performAndWait {
+            let records = try context.fetch(NSFetchRequest<CDWorkingTreatmentRecord>(
+                entityName: CDWorkingTreatmentRecord.coreDataEntityName
+            ))
+            XCTAssertEqual(records.count, 1)
+            XCTAssertEqual(records.first?.id, importedID)
+            XCTAssertEqual(records.first?.treatmentItemID, treatmentItemID)
+            XCTAssertEqual(records.first?.date, date)
+            XCTAssertNil(records.first?.herd)
+            let animals = try context.fetch(NSFetchRequest<CDAnimal>(
+                entityName: CDAnimal.coreDataEntityName
+            ))
+            XCTAssertTrue(animals.isEmpty)
+
+            // Once the Herd link arrives, the record is still real data, not
+            // an empty Herd eligible for sample-data insertion.
+            records.first?.herd = try XCTUnwrap(CoreDataLookup().herd(
+                id: herdID, in: context
+            ))
+            try context.save()
+        }
+        XCTAssertFalse(try seeder.canSeedSampleData())
+        XCTAssertFalse(try await seeder.seedSampleDataIfNeeded())
+        XCTAssertFalse(try await seeder.seedLargeSampleDataIfNeeded())
+        XCTAssertEqual(graph.applicationMutationCenter.currentSequence, 0)
+        try context.performAndWait {
+            let records = try context.fetch(NSFetchRequest<CDWorkingTreatmentRecord>(
+                entityName: CDWorkingTreatmentRecord.coreDataEntityName
+            ))
+            XCTAssertEqual(records.count, 1)
+            XCTAssertEqual(records.first?.id, importedID)
+            XCTAssertEqual(records.first?.treatmentItemID, treatmentItemID)
+            XCTAssertEqual(records.first?.date, date)
+        }
+    }
+
+    @MainActor
     func testSampleSeedDoesNotRaceReservedBuiltInTagColors() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
