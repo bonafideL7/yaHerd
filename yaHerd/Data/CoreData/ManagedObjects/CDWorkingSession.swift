@@ -10,7 +10,7 @@ final class CDWorkingSession: NSManagedObject {
     @NSManaged var plannedTreatmentsData: Data?
     @NSManaged var sourcePastureIDSnapshot: UUID?
     @NSManaged var sourcePastureNameSnapshot: String?
-    @NSManaged var herd: CDHerd
+    @NSManaged var herd: CDHerd?
     @NSManaged var sourcePasture: CDPasture?
     @NSManaged var queueItems: NSSet?
     @NSManaged var activeAnimals: NSSet?
