@@ -53,6 +53,8 @@ final class CoreDataAnimalStatusReferenceRepository: AnimalStatusReferenceReadin
                 throw HerdRepositoryError.missingHerd
             }
 
+            try CoreDataAnimalMutation.validateLinkedStatusReferences(herd: herd, in: context)
+
             let request = NSFetchRequest<CDAnimalStatusReference>(
                 entityName: CDAnimalStatusReference.coreDataEntityName
             )
