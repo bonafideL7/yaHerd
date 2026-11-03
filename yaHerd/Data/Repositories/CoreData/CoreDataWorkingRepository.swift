@@ -115,6 +115,7 @@ final class CoreDataWorkingRepository:
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
+            try Self.validateSelectedHerdWorkingRecordIdentity(herd: herd, in: context)
             guard let session = try lookup.herdOwned(
                 CDWorkingSession.self,
                 id: id,
@@ -123,8 +124,6 @@ final class CoreDataWorkingRepository:
             ) else {
                 return nil
             }
-
-            try Self.validateSelectedHerdWorkingRecordIdentity(herd: herd, in: context)
             try Self.validateSessionGraph(session, herdID: herdID)
             return try WorkingMapper.makeSessionDetail(from: session)
         }
@@ -139,6 +138,9 @@ final class CoreDataWorkingRepository:
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
+            // Validate before Herd-qualified session or queue lookups can
+            // hide records still awaiting their own Herd relationship.
+            try Self.validateSelectedHerdWorkingRecordIdentity(herd: herd, in: context)
             guard let session = try lookup.herdOwned(
                 CDWorkingSession.self,
                 id: sessionID,
@@ -147,9 +149,6 @@ final class CoreDataWorkingRepository:
             ) else {
                 return nil
             }
-            // Validate before Herd-qualified queue lookup can return nil for a
-            // record whose direct ownership link has not imported yet.
-            try Self.validateSelectedHerdWorkingRecordIdentity(herd: herd, in: context)
             guard let queueItem = try lookup.herdOwned(
                 CDWorkingQueueItem.self,
                 id: queueItemID,
@@ -983,7 +982,7 @@ final class CoreDataWorkingRepository:
         try validateHerdOwnership(
             relationship: "WorkingSession.herd",
             expectedHerdID: herdID,
-            actualHerdID: session.herd.id
+            actualHerdID: session.herd?.id
         )
 
         if let sourcePasture = session.sourcePasture {
@@ -1075,11 +1074,11 @@ final class CoreDataWorkingRepository:
             guard let owningSession = record.session else {
                 throw CoreDataWorkingRepositoryError.missingTreatmentSession(recordID: record.id)
             }
-            guard owningSession.herd.id == herdID else {
+            guard owningSession.herd?.id == herdID else {
                 throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                     relationship: "WorkingTreatmentRecord.session",
                     expectedHerdID: herdID,
-                    actualHerdID: owningSession.herd.id
+                    actualHerdID: owningSession.herd?.id
                 )
             }
             guard owningSession.objectID == session.objectID else {
@@ -1116,11 +1115,11 @@ final class CoreDataWorkingRepository:
                     actualSessionID: nil
                 )
             }
-            guard workingSession.herd.id == herdID else {
+            guard workingSession.herd?.id == herdID else {
                 throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                     relationship: "HealthRecord.workingSession",
                     expectedHerdID: herdID,
-                    actualHerdID: workingSession.herd.id
+                    actualHerdID: workingSession.herd?.id
                 )
             }
             guard workingSession.objectID == session.objectID else {
@@ -1155,11 +1154,11 @@ final class CoreDataWorkingRepository:
                     actualSessionID: nil
                 )
             }
-            guard workingSession.herd.id == herdID else {
+            guard workingSession.herd?.id == herdID else {
                 throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                     relationship: "PregnancyCheck.workingSession",
                     expectedHerdID: herdID,
-                    actualHerdID: workingSession.herd.id
+                    actualHerdID: workingSession.herd?.id
                 )
             }
             guard workingSession.objectID == session.objectID else {
@@ -1201,11 +1200,11 @@ final class CoreDataWorkingRepository:
                     actualSessionID: nil
                 )
             }
-            guard activeSession.herd.id == herdID else {
+            guard activeSession.herd?.id == herdID else {
                 throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                     relationship: "Animal.activeWorkingSession",
                     expectedHerdID: herdID,
-                    actualHerdID: activeSession.herd.id
+                    actualHerdID: activeSession.herd?.id
                 )
             }
             guard activeSession.objectID == session.objectID else {
@@ -1302,11 +1301,11 @@ private extension CoreDataWorkingRepository {
         guard let owningSession = queueItem.session else {
             throw CoreDataWorkingRepositoryError.missingQueueSession(queueItemID: queueItem.id)
         }
-        guard owningSession.herd.id == herdID else {
+        guard owningSession.herd?.id == herdID else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingQueueItem.session",
                 expectedHerdID: herdID,
-                actualHerdID: owningSession.herd.id
+                actualHerdID: owningSession.herd?.id
             )
         }
         guard owningSession.objectID == session.objectID else {
@@ -1478,11 +1477,11 @@ private extension CoreDataWorkingRepository {
                 actualHerdID: sourcePasture.herd.id
             )
         }
-        guard session.herd.id == herd.id else {
+        guard session.herd?.id == herd.id else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingQueueItem.session",
                 expectedHerdID: herd.id,
-                actualHerdID: session.herd.id
+                actualHerdID: session.herd?.id
             )
         }
 
