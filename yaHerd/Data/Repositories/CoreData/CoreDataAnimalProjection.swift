@@ -831,12 +831,12 @@ enum CoreDataAnimalReadGraphValidator {
         let tags = CoreDataAnimalProjection.managedTags(animal)
         for tag in tags {
             _ = try CoreDataAnimalProjection.tagNumber(tag)
-            guard tag.herd.id == herdID else {
+            guard tag.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDAnimalTag.coreDataEntityName,
                     id: tag.id,
                     expectedHerdID: herdID,
-                    actualHerdID: tag.herd.id
+                    actualHerdID: tag.herd?.id
                 )
             }
             guard tag.animal?.objectID == animal.objectID else {

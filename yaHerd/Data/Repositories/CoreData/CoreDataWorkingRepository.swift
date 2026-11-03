@@ -7,7 +7,7 @@ enum CoreDataWorkingRepositoryError: Error, Equatable {
     case invalidHerdOwnership(
         relationship: String,
         expectedHerdID: UUID,
-        actualHerdID: UUID
+        actualHerdID: UUID?
     )
     case invalidSessionRelationship(
         relationship: String,
@@ -809,6 +809,7 @@ final class CoreDataWorkingRepository:
                 guard let herd = try lookup.herd(id: herdID, in: context) else {
                     throw HerdRepositoryError.missingHerd
                 }
+                try CoreDataAnimalMutation.validateLinkedAnimalTags(herd: herd, in: context)
                 return try operation(context, herd)
             }
             CoreDataTagColorMaterializationCoordinator.shared.release(
@@ -1262,11 +1263,11 @@ private extension CoreDataWorkingRepository {
         herd: CDHerd
     ) throws {
         for tag in tags {
-            guard tag.herd.id == herd.id else {
+            guard tag.herd?.id == herd.id else {
                 throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                     relationship: "Animal.tags",
                     expectedHerdID: herd.id,
-                    actualHerdID: tag.herd.id
+                    actualHerdID: tag.herd?.id
                 )
             }
             guard tag.animal?.objectID == animal.objectID else {

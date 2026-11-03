@@ -90,9 +90,10 @@ final class CoreDataTagColorRepository: TagColorRepository {
 
         let context = contextFactory.makeReadContext()
         return try context.performAndWait {
-            guard try lookup.herd(id: herdID, in: context) != nil else {
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
+            try CoreDataAnimalMutation.validateLinkedAnimalTags(herd: herd, in: context)
             if let persisted = try lookup.herdOwned(
                 CDTagColorDefinition.self,
                 id: id,
@@ -505,6 +506,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
+            try CoreDataAnimalMutation.validateLinkedAnimalTags(herd: herd, in: context)
             return try Self.fetchManagedColors(herd: herd, in: context)
                 .filter { includeHidden || !$0.isHidden }
                 .map(Self.snapshot)
@@ -534,6 +536,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 guard let herd = try lookup.herd(id: herdID, in: context) else {
                     throw HerdRepositoryError.missingHerd
                 }
+                try CoreDataAnimalMutation.validateLinkedAnimalTags(herd: herd, in: context)
                 try operation(context, herd)
                 if context.hasChanges {
                     try beforeSave?(context)

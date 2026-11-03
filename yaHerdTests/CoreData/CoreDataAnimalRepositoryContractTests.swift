@@ -318,6 +318,71 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
     }
 
 
+    func testImportedAnimalTagWithoutHerdPreservesTagUntilOwnershipRestored() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let repository = environment.makeAnimalRepository()
+        let input = readGraphAnimalInput(name: "Partially Imported Tag", tag: "HERD-IMPORT")
+        let animal = try repository.create(input: input)
+        let context = try assembly.contextFactory.makeWriteContext()
+        let tagID = try context.performAndWait { () throws -> UUID in
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            let tag = try XCTUnwrap(CoreDataAnimalProjection.managedTags(stored).first)
+            tag.herd = nil
+            try context.save()
+            return tag.id
+        }
+
+        let expected = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDAnimalTag.coreDataEntityName,
+            id: tagID,
+            expectedHerdID: environment.herdID,
+            actualHerdID: nil
+        )
+        XCTAssertThrowsError(try repository.fetchAnimals()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchAnimalDetail(id: animal.id)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.update(id: animal.id, input: input)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.archive(ids: [animal.id])) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.delete(ids: [animal.id])) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try environment.makeTagColorRepository().fetchColors()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        do {
+            _ = try await environment.makeDashboardQueryReader()
+                .fetchDashboardAnimalRecords(kind: .active)
+            XCTFail("Dashboard must not omit an imported tag without its Herd link.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataReadModelError, expected)
+        }
+
+        try context.performAndWait {
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            let tag = try XCTUnwrap(CoreDataAnimalProjection.managedTags(stored).first)
+            XCTAssertNil(tag.herd)
+            XCTAssertEqual(tag.number, "HERD-IMPORT")
+            let herd = try XCTUnwrap(CoreDataLookup().herd(id: environment.herdID, in: context))
+            tag.herd = herd
+            try context.save()
+        }
+        let recovered = try XCTUnwrap(repository.fetchAnimalDetail(id: animal.id))
+        XCTAssertEqual(recovered.activeTags.first?.id, tagID)
+        XCTAssertEqual(recovered.activeTags.first?.number, "HERD-IMPORT")
+    }
+
     func testImportedAnimalTagWithoutNumberRejectsReadsAndEditsUntilRestored() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
