@@ -5,6 +5,93 @@ import XCTest
 
 @MainActor
 final class CoreDataHomeReadModelContractTests: XCTestCase {
+    func testImportedPastureGroupWithoutHerdPreservesLinkedPasturesUntilRestored() async throws {
+        let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+        let repository = CoreDataPastureRepository(
+            selection: environment.selection, assembly: environment.assembly
+        )
+        let group = try repository.createGroup(
+            input: PastureGroupInput(name: "Import Rotation", grazeDays: 7, restDays: 21)
+        )
+        let pasture = try repository.create(
+            input: PastureInput(
+                name: "Import Pasture", acreage: 12, usableAcreage: 11, targetAcresPerHead: 2
+            )
+        )
+        try repository.assignPasture(id: pasture.id, toGroupID: group.id)
+        let herdID = try XCTUnwrap(environment.selection.currentHerdID)
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let persisted = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDPastureGroup.self, id: group.id, herdID: herdID, in: context
+            ))
+            persisted.herd = nil
+            try context.save()
+        }
+
+        let expected = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDPastureGroup.coreDataEntityName,
+            id: group.id,
+            expectedHerdID: herdID,
+            actualHerdID: nil
+        )
+        XCTAssertThrowsError(try repository.fetchPastures()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchPastureGroups()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchPastureDetail(id: pasture.id)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchPastureGroupDetail(id: group.id)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchPastureOptions()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.markPastureGrazedToday(id: pasture.id, on: Date())) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.deleteGroups(ids: [group.id])) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.assignPasture(id: pasture.id, toGroupID: nil)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+
+        let readModel = CoreDataReadModelActor(
+            contextFactory: environment.assembly.contextFactory,
+            lookup: CoreDataLookup(),
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        do {
+            _ = try await readModel.fetchDashboardPastureRecords()
+            XCTFail("Dashboard must reject linked Groups missing Herd ownership")
+        } catch {
+            XCTAssertEqual(error as? CoreDataReadModelError, expected)
+        }
+
+        try context.performAndWait {
+            let request = NSFetchRequest<CDPastureGroup>(
+                entityName: CDPastureGroup.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "id == %@", group.id as NSUUID)
+            let persisted = try XCTUnwrap(context.fetch(request).first)
+            XCTAssertNil(persisted.herd)
+            XCTAssertEqual(persisted.id, group.id)
+            XCTAssertEqual((persisted.pastures as? Set<CDPasture>)?.first?.id, pasture.id)
+            let herd = try XCTUnwrap(CoreDataLookup().herd(id: herdID, in: context))
+            persisted.herd = herd
+            try context.save()
+        }
+        XCTAssertEqual(try repository.fetchPastureGroups().first?.id, group.id)
+        XCTAssertEqual(try repository.fetchPastureDetail(id: pasture.id)?.groupID, group.id)
+        XCTAssertEqual(try repository.fetchPastureGroupDetail(id: group.id)?.pastures.map(\.id), [pasture.id])
+        let restoredDashboard = try await readModel.fetchDashboardPastureRecords()
+        XCTAssertEqual(restoredDashboard.first?.id, pasture.id)
+    }
+
     func testDashboardRejectsUndatedImportedSessionBeyondTwentyFiveSessionLimit() async throws {
         let environment = try await CoreDataHomeReadModelContractEnvironment.make()
         let herdID = try XCTUnwrap(environment.selection.currentHerdID)
