@@ -671,7 +671,8 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
             )
             let home = environment.fixture.makeHomeFieldCheckQueryReader()
             XCTAssertEqual(try direct.fetchSessions().count, 3)
-            XCTAssertTrue((try await home.fetchHomeFieldCheckRecords()).hasHistory)
+            let initialHome = try await home.fetchHomeFieldCheckRecords()
+            XCTAssertTrue(initialHome.hasHistory)
 
             let childID = fixture.completedChildID
             let context = try environment.assembly.contextFactory.makeWriteContext()
@@ -758,7 +759,8 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
 
             XCTAssertEqual(try direct.fetchSessions().count, 3)
             XCTAssertNotNil(try direct.fetchSessionDetail(id: fixture.completedSessionID))
-            XCTAssertTrue((try await home.fetchHomeFieldCheckRecords()).hasHistory)
+            let restoredHome = try await home.fetchHomeFieldCheckRecords()
+            XCTAssertTrue(restoredHome.hasHistory)
         }
     }
 
