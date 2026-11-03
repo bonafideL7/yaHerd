@@ -171,6 +171,29 @@ enum CoreDataAnimalMutation {
         }
     }
 
+    // A tag can arrive with a linked Animal or Color before its Herd link.
+    // Refuse writes that would omit, remap, or delete this incomplete record.
+    static func validateLinkedAnimalTags(
+        herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) throws {
+        let request = NSFetchRequest<CDAnimalTag>(entityName: CDAnimalTag.coreDataEntityName)
+        request.predicate = NSPredicate(
+            format: "herd == nil AND (animal.herd == %@ OR color.herd == %@)",
+            herd,
+            herd
+        )
+        request.fetchLimit = 1
+        if let tag = try context.fetch(request).first {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDAnimalTag.coreDataEntityName,
+                id: tag.id,
+                expectedHerdID: herd.id,
+                actualHerdID: nil
+            )
+        }
+    }
+
     static func requiredEditorRevision(_ animal: CDAnimal) throws -> UUID {
         guard let revision = animal.editorRevision else {
             throw CoreDataAnimalRepositoryError.missingAnimalEditorRevision(animalID: animal.id)
@@ -186,6 +209,14 @@ enum CoreDataAnimalMutation {
         let tags = CoreDataAnimalProjection.managedTags(animal)
         try validateUniqueApplicationIDs(tags, herdID: herdID)
         for tag in tags {
+            guard tag.herd?.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDAnimalTag.coreDataEntityName,
+                    id: tag.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: tag.herd?.id
+                )
+            }
             _ = try CoreDataAnimalProjection.tagNumber(tag)
             _ = try CoreDataAnimalProjection.tagAssignmentDate(tag)
         }

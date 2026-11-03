@@ -1348,7 +1348,7 @@ actor CoreDataReadModelActor:
             entityName: CDAnimalTag.coreDataEntityName
         )
         crossHerdTagRequest.predicate = NSPredicate(
-            format: "animal.herd == %@ AND herd != %@",
+            format: "animal.herd == %@ AND (herd == nil OR herd != %@)",
             herd,
             herd
         )
@@ -1360,7 +1360,7 @@ actor CoreDataReadModelActor:
                 entity: CDAnimalTag.coreDataEntityName,
                 id: tag.id,
                 expectedHerdID: herdID,
-                actualHerdID: tag.herd.id
+                actualHerdID: tag.herd?.id
             )
         }
 
