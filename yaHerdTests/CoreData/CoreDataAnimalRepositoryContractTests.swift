@@ -646,6 +646,80 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         }?.date, historicalDate)
     }
 
+    func testImportedStatusReferenceWithoutHerdBlocksReadsAndMutationsUntilLinkRestored() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let repository = environment.makeAnimalRepository()
+        let animal = try repository.create(input: readGraphAnimalInput(
+            name: "Status Reference Import Cow", tag: "STATUS-IMPORT"
+        ))
+        let referenceID = UUID()
+        let context = try assembly.contextFactory.makeWriteContext()
+        let lookup = CoreDataLookup()
+        try context.performAndWait {
+            let herd = try XCTUnwrap(lookup.herd(id: environment.herdID, in: context))
+            let storedAnimal = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            let reference = CDAnimalStatusReference(context: context)
+            reference.id = referenceID
+            reference.name = "Original Imported Reference"
+            reference.baseStatusRawValue = AnimalStatus.active.rawValue
+            reference.herd = herd
+            storedAnimal.statusReference = reference
+            try context.save()
+        }
+
+        XCTAssertEqual(try repository.fetchAnimalDetail(id: animal.id)?.statusReferenceID, referenceID)
+        XCTAssertTrue(try repository.fetchStatusReferenceOptions().contains { $0.id == referenceID })
+
+        let referenceRequest = NSFetchRequest<CDAnimalStatusReference>(
+            entityName: CDAnimalStatusReference.coreDataEntityName
+        )
+        referenceRequest.predicate = NSPredicate(format: "id == %@", referenceID as NSUUID)
+        try context.performAndWait {
+            let reference = try XCTUnwrap(context.fetch(referenceRequest).first)
+            reference.herd = nil
+            try context.save()
+        }
+
+        let expected = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDAnimalStatusReference.coreDataEntityName,
+            id: referenceID,
+            expectedHerdID: environment.herdID,
+            actualHerdID: nil
+        )
+        XCTAssertThrowsError(try repository.fetchAnimals()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchAnimalDetail(id: animal.id)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchStatusReferenceOptions()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.archive(ids: [animal.id])) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.delete(ids: [animal.id])) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+
+        try context.performAndWait {
+            let reference = try XCTUnwrap(context.fetch(referenceRequest).first)
+            XCTAssertNil(reference.herd)
+            XCTAssertEqual(reference.name, "Original Imported Reference")
+            XCTAssertEqual(reference.baseStatusRawValue, AnimalStatus.active.rawValue)
+            let restoredHerd = try XCTUnwrap(lookup.herd(id: environment.herdID, in: context))
+            reference.herd = restoredHerd
+            try context.save()
+        }
+        XCTAssertEqual(try repository.fetchAnimalDetail(id: animal.id)?.statusReferenceID, referenceID)
+        XCTAssertEqual(try repository.fetchAnimalDetail(id: animal.id)?.statusReferenceName,
+                       "Original Imported Reference")
+        XCTAssertTrue(try repository.fetchStatusReferenceOptions().contains { $0.id == referenceID })
+    }
+
     func testMissingImportedStatusReferenceBaseIsRejectedWithoutInventingAStatus() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
