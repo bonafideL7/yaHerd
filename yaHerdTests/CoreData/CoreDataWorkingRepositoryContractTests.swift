@@ -5,6 +5,83 @@ import XCTest
 
 @MainActor
 final class CoreDataWorkingRepositoryContractTests: XCTestCase {
+    func testImportedWorkingPregnancyWithoutAnimalBlocksHistoryDeletionUntilRestored() async throws {
+        let environment = try await CoreDataWorkingContractEnvironment.make()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(name: "Pregnancy History Pasture", acreage: 10, usableAcreage: 9, targetAcresPerHead: 1)
+        )
+        let animal = try environment.makeAnimalRepository().create(
+            input: Self.animalInput(name: "Pregnancy History Cow", tagNumber: "WORK-PREG", pastureID: pasture.id)
+        )
+        let working = environment.makeWorkingRepository()
+        let sessionID = try await working.startSession(input: WorkingSessionStartInput(
+            date: Date(timeIntervalSinceReferenceDate: 213_000),
+            sourcePastureID: pasture.id, treatmentTemplateName: "Pregnancy History",
+            plannedTreatments: [], animalIDs: [animal.id]
+        ))
+        let queueID = try XCTUnwrap(working.fetchSessionDetail(id: sessionID)?.queueItems.first?.id)
+        let checkDate = Date(timeIntervalSinceReferenceDate: 214_000)
+        try await working.complete(
+            queueItemID: queueID, inSessionID: sessionID, treatmentEntries: [],
+            pregnancyCheck: WorkingPregnancyCheckInput(
+                date: checkDate, result: .pregnant, estimatedDaysPregnant: 35,
+                dueDate: nil, sireAnimalID: nil
+            ),
+            markCastrated: false, observationNotes: ""
+        )
+
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        let herdID = environment.herdID
+        let checkID = try context.performAndWait { () throws -> UUID in
+            let session = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDWorkingSession.self, id: sessionID, herdID: herdID, in: context
+            ))
+            let check = try XCTUnwrap(
+                (session.pregnancyChecks?.allObjects as? [CDPregnancyCheck])?.first
+            )
+            check.animal = nil
+            try context.save()
+            return check.id
+        }
+        let expected = CoreDataAnimalRepositoryError.missingPregnancyAnimalRelationship(recordID: checkID)
+        XCTAssertThrowsError(try working.fetchSessionDetail(id: sessionID)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        XCTAssertThrowsError(try working.fetchQueueItemEditor(
+            sessionID: sessionID, queueItemID: queueID
+        )) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await working.deleteWorkData(forQueueItemID: queueID, inSessionID: sessionID)
+        ) { XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected) }
+        await XCTAssertThrowsErrorAsync(try await working.deleteSession(id: sessionID)) {
+            XCTAssertEqual($0 as? CoreDataAnimalRepositoryError, expected)
+        }
+
+        try context.performAndWait {
+            let check = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDPregnancyCheck.self, id: checkID, herdID: herdID, in: context
+            ))
+            XCTAssertNil(check.animal)
+            XCTAssertEqual(check.date, checkDate)
+            XCTAssertEqual(check.resultRawValue, PregnancyResult.pregnant.rawValue)
+            let stored = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id, herdID: herdID, in: context
+            ))
+            check.animal = stored
+            try context.save()
+        }
+        XCTAssertNotNil(try working.fetchSessionDetail(id: sessionID))
+        try await working.deleteWorkData(forQueueItemID: queueID, inSessionID: sessionID)
+        try context.performAndWait {
+            XCTAssertNil(try CoreDataLookup().herdOwned(
+                CDPregnancyCheck.self, id: checkID, herdID: herdID, in: context
+            ))
+        }
+    }
+
+
     func testImportedWorkingHealthWithoutAnimalBlocksEditsAndDeletionUntilRestored() async throws {
         let environment = try await CoreDataWorkingContractEnvironment.make()
         let pasture = try environment.makePastureRepository().create(
