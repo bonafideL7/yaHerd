@@ -1061,6 +1061,155 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         )
     }
 
+    func testImportedWorkingTreatmentWithoutHerdPreservesHistoryUntilOwnershipRestored() async throws {
+        let environment = try await CoreDataWorkingContractEnvironment.make()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Imported Treatment Pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let animal = try environment.makeAnimalRepository().create(
+            input: Self.animalInput(
+                name: "Imported Treatment Cow",
+                tagNumber: "IMPORT-TREATMENT",
+                pastureID: pasture.id
+            )
+        )
+        let working = environment.makeWorkingRepository()
+        let sessionID = try await working.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSinceReferenceDate: 206_000),
+                sourcePastureID: pasture.id,
+                treatmentTemplateName: "Imported Treatment Session",
+                plannedTreatments: [],
+                animalIDs: [animal.id]
+            )
+        )
+        let queueID = try XCTUnwrap(
+            working.fetchSessionDetail(id: sessionID)?.queueItems.first?.id
+        )
+        let treatmentItemID = UUID()
+        let treatmentDate = Date(timeIntervalSinceReferenceDate: 206_010)
+        try await working.complete(
+            queueItemID: queueID,
+            inSessionID: sessionID,
+            treatmentEntries: [
+                WorkingTreatmentEntryInput(
+                    date: treatmentDate,
+                    treatmentItemID: treatmentItemID,
+                    itemName: "Preserved Dose",
+                    given: true,
+                    dose: WorkingTreatmentDose(amount: 3, unit: .milliliter)
+                )
+            ],
+            pregnancyCheck: nil,
+            markCastrated: false,
+            observationNotes: ""
+        )
+        let recordID = try XCTUnwrap(
+            working.fetchQueueItemEditor(
+                sessionID: sessionID,
+                queueItemID: queueID
+            )?.treatmentRecords.first?.id
+        )
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        let request = NSFetchRequest<CDWorkingTreatmentRecord>(
+            entityName: CDWorkingTreatmentRecord.coreDataEntityName
+        )
+        request.predicate = NSPredicate(format: "id == %@", recordID as NSUUID)
+
+        try context.performAndWait {
+            let record = try XCTUnwrap(context.fetch(request).first)
+            XCTAssertEqual(record.session?.id, sessionID)
+            XCTAssertEqual(record.animal?.id, animal.id)
+            record.herd = nil
+            try context.save()
+        }
+
+        let expected = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDWorkingTreatmentRecord.coreDataEntityName,
+            id: recordID,
+            expectedHerdID: environment.herdID,
+            actualHerdID: nil
+        )
+        XCTAssertThrowsError(try working.fetchSessions()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try working.fetchSessionDetail(id: sessionID)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(
+            try working.fetchQueueItemEditor(sessionID: sessionID, queueItemID: queueID)
+        ) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await working.deleteSession(id: sessionID)
+        ) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+
+        let readModel = CoreDataReadModelActor(
+            contextFactory: environment.assembly.contextFactory,
+            lookup: CoreDataLookup(),
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        do {
+            _ = try await readModel.fetchDashboardRecords()
+            XCTFail("Dashboard must reject partial Working treatment history.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataReadModelError, expected)
+        }
+
+        // A completely unattached import has no reliable Herd ownership path.
+        // It must not disappear from the selected Herd's safety preflight.
+        try context.performAndWait {
+            let record = try XCTUnwrap(context.fetch(request).first)
+            record.session = nil
+            record.animal = nil
+            try context.save()
+        }
+        XCTAssertThrowsError(try working.fetchSessions()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+
+        try context.performAndWait {
+            let record = try XCTUnwrap(context.fetch(request).first)
+            XCTAssertEqual(record.id, recordID)
+            XCTAssertEqual(record.treatmentItemID, treatmentItemID)
+            XCTAssertEqual(record.itemNameSnapshot, "Preserved Dose")
+            XCTAssertEqual(record.date, treatmentDate)
+            XCTAssertNil(record.herd)
+            record.herd = try XCTUnwrap(CoreDataLookup().herd(
+                id: environment.herdID, in: context
+            ))
+            record.session = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDWorkingSession.self, id: sessionID,
+                herdID: environment.herdID, in: context
+            ))
+            record.animal = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animal.id,
+                herdID: environment.herdID, in: context
+            ))
+            try context.save()
+        }
+
+        let restored = try XCTUnwrap(
+            working.fetchQueueItemEditor(
+                sessionID: sessionID,
+                queueItemID: queueID
+            )?.treatmentRecords.first
+        )
+        XCTAssertEqual(restored.id, recordID)
+        XCTAssertEqual(restored.treatmentItemID, treatmentItemID)
+        XCTAssertEqual(restored.date, treatmentDate)
+        XCTAssertEqual(try working.fetchSessions().map(\.id), [sessionID])
+        _ = try await readModel.fetchDashboardRecords()
+    }
+
     func testOrphanedWorkingTreatmentCannotDisappearFromSessionOrBeDeleted() async throws {
         let environment = try await CoreDataWorkingContractEnvironment.make()
         let pasture = try environment.makePastureRepository().create(
@@ -2218,7 +2367,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                 let records: [CDWorkingTreatmentRecord] = try context.fetch(request)
                 return try records.map { record in
                     [
-                        record.herd.id.uuidString,
+                        try XCTUnwrap(record.herd).id.uuidString,
                         try XCTUnwrap(record.session).id.uuidString,
                         try XCTUnwrap(record.animalIDSnapshot).uuidString,
                         record.id.uuidString,
