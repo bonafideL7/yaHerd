@@ -5,6 +5,103 @@ import XCTest
 
 @MainActor
 final class CoreDataWorkingRepositoryContractTests: XCTestCase {
+    func testImportedWorkingSessionWithoutHerdPreservesHistoryUntilOwnershipArrives() async throws {
+        let environment = try await CoreDataWorkingContractEnvironment.make()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Partially Imported Working Session",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let animal = try environment.makeAnimalRepository().create(
+            input: Self.animalInput(
+                name: "Imported Working Cow",
+                tagNumber: "IMPORT-WORK",
+                pastureID: pasture.id
+            )
+        )
+        let working = environment.makeWorkingRepository()
+        let originalDate = Date(timeIntervalSinceReferenceDate: 212_000)
+        let sessionID = try await working.startSession(
+            input: WorkingSessionStartInput(
+                date: originalDate,
+                sourcePastureID: pasture.id,
+                treatmentTemplateName: "Original Working Plan",
+                plannedTreatments: [],
+                animalIDs: [animal.id]
+            )
+        )
+        let originalDetail = try XCTUnwrap(working.fetchSessionDetail(id: sessionID))
+        let originalQueueIDs = originalDetail.queueItems.map(\.id)
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let session = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDWorkingSession.self, id: sessionID,
+                herdID: environment.herdID, in: context
+            ))
+            session.herd = nil
+            try context.save()
+        }
+
+        let expected = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDWorkingSession.coreDataEntityName,
+            id: sessionID,
+            expectedHerdID: environment.herdID,
+            actualHerdID: nil
+        )
+        XCTAssertThrowsError(try working.fetchSessions()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try working.fetchSessionDetail(id: sessionID)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        if let queueID = originalQueueIDs.first {
+            XCTAssertThrowsError(try working.fetchQueueItemEditor(
+                sessionID: sessionID, queueItemID: queueID
+            )) {
+                XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+            }
+        }
+        await XCTAssertThrowsErrorAsync(try await working.deleteSession(id: sessionID)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+
+        let readModel = CoreDataReadModelActor(
+            contextFactory: environment.assembly.contextFactory,
+            lookup: CoreDataLookup(),
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        do {
+            _ = try await readModel.fetchDashboardRecords()
+            XCTFail("Dashboard must reject a Working session pending Herd ownership.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataReadModelError, expected)
+        }
+
+        try context.performAndWait {
+            let request = NSFetchRequest<CDWorkingSession>(
+                entityName: CDWorkingSession.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "id == %@", sessionID as NSUUID)
+            let session = try XCTUnwrap(context.fetch(request).first)
+            XCTAssertNil(session.herd)
+            XCTAssertEqual(session.date, originalDate)
+            XCTAssertEqual(session.treatmentTemplateNameSnapshot, "Original Working Plan")
+            session.herd = try XCTUnwrap(CoreDataLookup().herd(
+                id: environment.herdID, in: context
+            ))
+            try context.save()
+        }
+
+        let recovered = try XCTUnwrap(working.fetchSessionDetail(id: sessionID))
+        XCTAssertEqual(recovered.id, sessionID)
+        XCTAssertEqual(recovered.date, originalDate)
+        XCTAssertEqual(recovered.queueItems.map(\.id), originalQueueIDs)
+        _ = try await readModel.fetchDashboardRecords()
+    }
+
     func testImportedWorkingQueueWithoutHerdBlocksReadsAndDeletionUntilRestored() async throws {
         let environment = try await CoreDataWorkingContractEnvironment.make()
         let pasture = try environment.makePastureRepository().create(
