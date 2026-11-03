@@ -5,6 +5,81 @@ import XCTest
 
 @MainActor
 final class CoreDataWorkingRepositoryContractTests: XCTestCase {
+    func testUnattachedImportedWorkingSessionPreventsMutationsUntilOwnerAndPastureArrive() async throws {
+        let environment = try await CoreDataWorkingContractEnvironment.make()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Pending Working Owner",
+                acreage: 12,
+                usableAcreage: 10,
+                targetAcresPerHead: 1
+            )
+        )
+        let working = environment.makeWorkingRepository()
+        let sessionID = UUID()
+        let originalDate = Date(timeIntervalSinceReferenceDate: 213_000)
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let session = CDWorkingSession(context: context)
+            session.id = sessionID
+            session.date = originalDate
+            session.statusRawValue = WorkingSessionStatus.active.rawValue
+            session.treatmentTemplateNameSnapshot = "Pending Working Plan"
+            session.sourcePastureIDSnapshot = pasture.id
+            session.sourcePastureNameSnapshot = pasture.name
+            // Both independent links can arrive after the session record.
+            session.herd = nil
+            session.sourcePasture = nil
+            try context.save()
+        }
+
+        let expected = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDWorkingSession.coreDataEntityName,
+            id: sessionID,
+            expectedHerdID: environment.herdID,
+            actualHerdID: nil
+        )
+        XCTAssertThrowsError(try working.fetchSessions()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        do {
+            _ = try await working.startSession(
+                input: WorkingSessionStartInput(
+                    date: originalDate.addingTimeInterval(60),
+                    sourcePastureID: pasture.id,
+                    treatmentTemplateName: "Must Not Duplicate",
+                    plannedTreatments: [],
+                    animalIDs: []
+                )
+            )
+            XCTFail("A pending import must block unrelated new Working sessions.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataReadModelError, expected)
+        }
+
+        try context.performAndWait {
+            let request = NSFetchRequest<CDWorkingSession>(
+                entityName: CDWorkingSession.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "id == %@", sessionID as NSUUID)
+            let session = try XCTUnwrap(context.fetch(request).first)
+            XCTAssertNil(session.herd)
+            XCTAssertEqual(session.date, originalDate)
+            let herd = try XCTUnwrap(CoreDataLookup().herd(
+                id: environment.herdID, in: context
+            ))
+            let source = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDPasture.self, id: pasture.id,
+                herdID: environment.herdID, in: context
+            ))
+            session.herd = herd
+            session.sourcePasture = source
+            try context.save()
+        }
+        XCTAssertEqual(try working.fetchSessions().map(\.id), [sessionID])
+        XCTAssertEqual(try working.fetchSessionDetail(id: sessionID)?.date, originalDate)
+    }
+
     func testImportedWorkingSessionWithoutHerdPreservesHistoryUntilOwnershipArrives() async throws {
         let environment = try await CoreDataWorkingContractEnvironment.make()
         let pasture = try environment.makePastureRepository().create(
