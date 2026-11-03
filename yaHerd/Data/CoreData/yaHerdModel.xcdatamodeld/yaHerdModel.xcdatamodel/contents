@@ -298,7 +298,7 @@
         <attribute name="plannedTreatmentsData" optional="YES" attributeType="Binary"/>
         <attribute name="sourcePastureIDSnapshot" optional="YES" attributeType="UUID"/>
         <attribute name="sourcePastureNameSnapshot" optional="YES" attributeType="String"/>
-        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="workingSessions" inverseEntity="Herd"/>
+        <relationship name="herd" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="workingSessions" inverseEntity="Herd"/>
         <relationship name="sourcePasture" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Pasture" inverseName="workingSourceSessions" inverseEntity="Pasture"/>
         <relationship name="activeAnimals" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Animal" inverseName="activeWorkingSession" inverseEntity="Animal"/>
         <relationship name="queueItems" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="WorkingQueueItem" inverseName="session" inverseEntity="WorkingQueueItem"/>
