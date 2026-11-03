@@ -811,6 +811,7 @@ final class CoreDataWorkingRepository:
                 }
                 try CoreDataAnimalMutation.validateLinkedAnimalTags(herd: herd, in: context)
                 try CoreDataAnimalMutation.validateLinkedMovementRecords(herd: herd, in: context)
+                try CoreDataAnimalMutation.validateLinkedImportedHistoryHerdOwnership(herd: herd, in: context)
                 return try operation(context, herd)
             }
             CoreDataTagColorMaterializationCoordinator.shared.release(
@@ -911,6 +912,7 @@ final class CoreDataWorkingRepository:
         herd: CDHerd,
         in context: NSManagedObjectContext
     ) throws {
+        try CoreDataAnimalMutation.validateLinkedImportedHistoryHerdOwnership(herd: herd, in: context)
         let queueRequest = NSFetchRequest<CDWorkingQueueItem>(
             entityName: CDWorkingQueueItem.coreDataEntityName
         )
@@ -1103,7 +1105,7 @@ final class CoreDataWorkingRepository:
             try validateHerdOwnership(
                 relationship: "WorkingSession.healthRecords",
                 expectedHerdID: herdID,
-                actualHerdID: record.herd.id
+                actualHerdID: record.herd?.id
             )
             guard let workingSession = record.workingSession else {
                 throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
@@ -1142,7 +1144,7 @@ final class CoreDataWorkingRepository:
             try validateHerdOwnership(
                 relationship: "WorkingSession.pregnancyChecks",
                 expectedHerdID: herdID,
-                actualHerdID: check.herd.id
+                actualHerdID: check.herd?.id
             )
             guard let workingSession = check.workingSession else {
                 throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
@@ -1217,7 +1219,7 @@ final class CoreDataWorkingRepository:
     private nonisolated static func validateHerdOwnership(
         relationship: String,
         expectedHerdID: UUID,
-        actualHerdID: UUID
+        actualHerdID: UUID?
     ) throws {
         guard actualHerdID == expectedHerdID else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
