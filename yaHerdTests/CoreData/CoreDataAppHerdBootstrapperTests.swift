@@ -941,8 +941,10 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             try context.save()
         }
         XCTAssertFalse(try seeder.canSeedSampleData())
-        XCTAssertFalse(try await seeder.seedSampleDataIfNeeded())
-        XCTAssertFalse(try await seeder.seedLargeSampleDataIfNeeded())
+        let compactInserted = try await seeder.seedSampleDataIfNeeded()
+        let largeInserted = try await seeder.seedLargeSampleDataIfNeeded()
+        XCTAssertFalse(compactInserted)
+        XCTAssertFalse(largeInserted)
         XCTAssertEqual(graph.applicationMutationCenter.currentSequence, 0)
     }
 
