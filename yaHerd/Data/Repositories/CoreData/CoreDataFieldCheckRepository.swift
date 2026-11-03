@@ -193,7 +193,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             }
 
             // Validate once per roster, before persisting any Animal type snapshots.
-            try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
+            try CoreDataAnimalMutation.validateLinkedClinicalHistory(herd: herd, in: context)
             let rosterAnimals = try Self.sortedRoster(
                 Self.fetchActiveAnimals(pasture: pasture, herd: herd, in: context)
             )
@@ -512,7 +512,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 return
             }
 
-            try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
+            try CoreDataAnimalMutation.validateLinkedClinicalHistory(herd: herd, in: context)
             if animal.currentPasture?.id != destinationPasture.id {
                 try CoreDataAnimalMutation.move(
                     animal,

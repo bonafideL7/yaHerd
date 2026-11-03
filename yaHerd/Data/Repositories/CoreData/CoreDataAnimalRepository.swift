@@ -66,7 +66,7 @@ final class CoreDataAnimalRepository:
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
-            try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
+            try CoreDataAnimalMutation.validateLinkedClinicalHistory(herd: herd, in: context)
             return try CoreDataAnimalMutation.fetchAnimals(herd: herd, in: context)
                 .map { animal in
                     try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
@@ -91,7 +91,7 @@ final class CoreDataAnimalRepository:
             ) else {
                 return nil
             }
-            try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
+            try CoreDataAnimalMutation.validateLinkedClinicalHistory(herd: herd, in: context)
             try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
                 animal, herdID: herdID, validateOffspringSummaries: true
             )
@@ -113,7 +113,7 @@ final class CoreDataAnimalRepository:
             ) else {
                 return []
             }
-            try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
+            try CoreDataAnimalMutation.validateLinkedClinicalHistory(herd: herd, in: context)
             // Until its animal relationship imports, a movement cannot be attributed to
             // a timeline. Report an incomplete Herd history instead of omitting it.
             let unlinkedMovements = NSFetchRequest<CDMovementRecord>(
@@ -242,7 +242,7 @@ final class CoreDataAnimalRepository:
             ) else {
                 return nil
             }
-            try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
+            try CoreDataAnimalMutation.validateLinkedClinicalHistory(herd: herd, in: context)
             try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
                 animal, herdID: herdID, validateOffspringSummaries: true
             )
@@ -540,7 +540,7 @@ final class CoreDataAnimalRepository:
             }
             // An imported HealthRecord without its Animal link may belong to
             // one of these targets. Deleting now would make recovery impossible.
-            try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
+            try CoreDataAnimalMutation.validateLinkedClinicalHistory(herd: herd, in: context)
             for animal in targets {
                 _ = try CoreDataAnimalProjection.birthDate(animal)
                 _ = try CoreDataAnimalProjection.status(animal)

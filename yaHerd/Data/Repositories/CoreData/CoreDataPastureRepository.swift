@@ -85,7 +85,7 @@ final class CoreDataPastureRepository:
             guard let pasture = try lookup.herdOwned(CDPasture.self, id: pastureID, herdID: herdID, in: context) else {
                 return []
             }
-            try CoreDataAnimalMutation.validateLinkedHealthHistory(herd: herd, in: context)
+            try CoreDataAnimalMutation.validateLinkedClinicalHistory(herd: herd, in: context)
             let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
             request.predicate = NSPredicate(
                 format: "herd.id == %@ AND currentPasture == %@",
