@@ -1358,6 +1358,7 @@ final class CoreDataAnimalRepository:
                 }
                 try CoreDataAnimalMutation.validateLinkedStatusReferences(herd: herd, in: context)
                 try CoreDataAnimalMutation.validateLinkedAnimalTags(herd: herd, in: context)
+                try CoreDataAnimalMutation.validateLinkedMovementRecords(herd: herd, in: context)
                 return try operation(context, herd)
             }
 
@@ -1457,6 +1458,7 @@ final class CoreDataAnimalRepository:
 
                 try CoreDataAnimalMutation.validateLinkedStatusReferences(herd: herd, in: context)
                 try CoreDataAnimalMutation.validateLinkedAnimalTags(herd: herd, in: context)
+                try CoreDataAnimalMutation.validateLinkedMovementRecords(herd: herd, in: context)
                 let result = try operation(context, herd)
                 guard context.hasChanges else {
                     return result

@@ -15,6 +15,12 @@ final class CoreDataModelStructureTests: XCTestCase {
         XCTAssertTrue(try relationship(named: "animal", in: status).isOptional)
     }
 
+    func testCloudKitImportedMovementHerdRelationshipIsOptional() throws {
+        let model = try loadModel()
+        let movement = try entity(named: "MovementRecord", in: model)
+        XCTAssertTrue(try relationship(named: "herd", in: movement).isOptional)
+    }
+
     func testCloudKitImportedMovementAnimalRelationshipIsOptional() throws {
         let model = try loadModel()
         let movement = try entity(named: "MovementRecord", in: model)
@@ -1428,7 +1434,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertEqual(herdRelationship.destinationEntity?.name, "Herd")
             XCTAssertEqual(
                 herdRelationship.isOptional,
-                ["AnimalStatusReference", "AnimalTag"].contains(entityName),
+                ["AnimalStatusReference", "AnimalTag", "MovementRecord"].contains(entityName),
                 "\(entityName).herd must preserve its current modeled optionality."
             )
             XCTAssertEqual(herdRelationship.maxCount, 1)

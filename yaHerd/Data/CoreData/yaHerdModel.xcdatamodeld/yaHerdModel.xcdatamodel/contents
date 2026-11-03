@@ -164,7 +164,7 @@
         <attribute name="fromPastureNameSnapshot" optional="YES" attributeType="String"/>
         <attribute name="toPastureIDSnapshot" optional="YES" attributeType="UUID"/>
         <attribute name="toPastureNameSnapshot" optional="YES" attributeType="String"/>
-        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="movementRecords" inverseEntity="Herd"/>
+        <relationship name="herd" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="movementRecords" inverseEntity="Herd"/>
         <relationship name="animal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="movementRecords" inverseEntity="Animal"/>
             <fetchIndex name="by_id">
             <fetchIndexElement property="id" type="Binary" order="ascending"/>

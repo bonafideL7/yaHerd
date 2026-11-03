@@ -810,6 +810,7 @@ final class CoreDataWorkingRepository:
                     throw HerdRepositoryError.missingHerd
                 }
                 try CoreDataAnimalMutation.validateLinkedAnimalTags(herd: herd, in: context)
+                try CoreDataAnimalMutation.validateLinkedMovementRecords(herd: herd, in: context)
                 return try operation(context, herd)
             }
             CoreDataTagColorMaterializationCoordinator.shared.release(
