@@ -1109,7 +1109,7 @@ actor CoreDataReadModelActor:
 
             // A partially imported session may already be attached to this
             // Herd's Pasture or children but be missing from Herd-filtered reads.
-            try CoreDataFieldCheckRepository.validateLinkedImportedSessionHerdOwnership(
+            try CoreDataFieldCheckRepository.validateLinkedImportedFieldCheckHerdOwnership(
                 herd: herd, in: context
             )
 
@@ -2279,7 +2279,7 @@ actor CoreDataReadModelActor:
             (herd == %@ AND (
                 session == nil OR session.herd == nil OR session.herd != %@ OR
                 NOT (statusRawValue IN %@)
-            )) OR (session.herd == %@ AND herd != %@)
+            )) OR (session.herd == %@ AND (herd == nil OR herd != %@))
             """,
             herd,
             herd,
@@ -2308,7 +2308,7 @@ actor CoreDataReadModelActor:
             format: """
             (herd == %@ AND session == nil) OR
             (herd == %@ AND (session.herd == nil OR session.herd != %@)) OR
-            (session.herd == %@ AND herd != %@)
+            (session.herd == %@ AND (herd == nil OR herd != %@))
             """,
             herd,
             herd,
@@ -2320,12 +2320,12 @@ actor CoreDataReadModelActor:
         corruptCheckRequest.relationshipKeyPathsForPrefetching = ["session", "herd"]
 
         if let check = try context.fetch(corruptCheckRequest).first {
-            guard check.herd.objectID == herd.objectID else {
+            guard check.herd?.objectID == herd.objectID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDFieldCheckAnimalCheck.coreDataEntityName,
                     id: check.id,
                     expectedHerdID: herdID,
-                    actualHerdID: check.herd.id
+                    actualHerdID: check.herd?.id
                 )
             }
             guard let session = check.session else {
@@ -2393,12 +2393,12 @@ actor CoreDataReadModelActor:
                 herdID: herdID
             )
             for check in checks {
-                guard check.herd.id == herdID else {
+                guard check.herd?.id == herdID else {
                     throw CoreDataReadModelError.invalidHerdOwnership(
                         entity: CDFieldCheckAnimalCheck.coreDataEntityName,
                         id: check.id,
                         expectedHerdID: herdID,
-                        actualHerdID: check.herd.id
+                        actualHerdID: check.herd?.id
                     )
                 }
                 guard let linkedSession = check.session else {
@@ -2454,12 +2454,12 @@ actor CoreDataReadModelActor:
         guard let session = finding.session else {
             throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: finding.id)
         }
-        guard finding.herd.id == herdID else {
+        guard finding.herd?.id == herdID else {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDFieldCheckFinding.coreDataEntityName,
                 id: finding.id,
                 expectedHerdID: herdID,
-                actualHerdID: finding.herd.id
+                actualHerdID: finding.herd?.id
             )
         }
         guard session.herd?.id == herdID else {
