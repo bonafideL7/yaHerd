@@ -58,7 +58,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
                 throw HerdRepositoryError.missingHerd
             }
 
-            try CoreDataFieldCheckRepository.validateLinkedImportedSessionHerdOwnership(
+            try CoreDataFieldCheckRepository.validateLinkedImportedFieldCheckHerdOwnership(
                 herd: herd, in: context
             )
             try Self.revalidateExpectedStates(
