@@ -537,6 +537,12 @@ final class CoreDataTagColorRepository: TagColorRepository {
                     throw HerdRepositoryError.missingHerd
                 }
                 try CoreDataAnimalMutation.validateLinkedAnimalTags(herd: herd, in: context)
+                // The child Herd link may not have imported yet. Do not
+                // delete or remap colors while historical references are hidden
+                // from Herd-filtered reference scans.
+                try CoreDataFieldCheckRepository.validateLinkedImportedFieldCheckHerdOwnership(
+                    herd: herd, in: context
+                )
                 try operation(context, herd)
                 if context.hasChanges {
                     try beforeSave?(context)
