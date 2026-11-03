@@ -1411,7 +1411,7 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
-    func testEveryHerdOwnedEntityHasRequiredHerdRelationshipAndCascadeInverse() throws {
+    func testEveryHerdOwnedEntityHasExpectedHerdRelationshipAndCascadeInverse() throws {
         let model = try loadModel()
         let herd = try entity(named: "Herd", in: model)
 
@@ -1420,7 +1420,11 @@ final class CoreDataModelStructureTests: XCTestCase {
             let herdRelationship = try relationship(named: "herd", in: entity)
 
             XCTAssertEqual(herdRelationship.destinationEntity?.name, "Herd")
-            XCTAssertFalse(herdRelationship.isOptional)
+            XCTAssertEqual(
+                herdRelationship.isOptional,
+                entityName == "AnimalStatusReference",
+                "\(entityName).herd must preserve its current modeled optionality."
+            )
             XCTAssertEqual(herdRelationship.maxCount, 1)
 
             let inverse = try XCTUnwrap(herdRelationship.inverseRelationship)
