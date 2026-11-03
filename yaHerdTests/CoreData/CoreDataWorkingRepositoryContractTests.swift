@@ -25,6 +25,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             session.date = originalDate
             session.statusRawValue = WorkingSessionStatus.active.rawValue
             session.treatmentTemplateNameSnapshot = "Pending Working Plan"
+            session.plannedTreatmentsData = Data("[]".utf8)
             session.sourcePastureIDSnapshot = pasture.id
             session.sourcePastureNameSnapshot = pasture.name
             // Both independent links can arrive after the session record.
