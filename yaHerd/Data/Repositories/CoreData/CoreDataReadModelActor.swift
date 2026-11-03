@@ -1490,7 +1490,7 @@ actor CoreDataReadModelActor:
                 entity: CDWorkingSession.coreDataEntityName,
                 id: session.id,
                 expectedHerdID: herdID,
-                actualHerdID: session.herd.id
+                actualHerdID: session.herd?.id
             )
         }
 
