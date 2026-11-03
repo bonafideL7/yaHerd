@@ -6284,7 +6284,7 @@ private final class CoreDataAnimalHealthContractControl: HealthRepositoryContrac
             return try context.fetch(request).map {
                 PregnancyCheckContractSnapshot(
                     id: $0.id,
-                    animalID: $0.animal.id,
+                    animalID: try XCTUnwrap($0.animal).id,
                     date: try XCTUnwrap($0.date),
                     resultRawValue: try XCTUnwrap($0.resultRawValue),
                     technician: $0.technician,
