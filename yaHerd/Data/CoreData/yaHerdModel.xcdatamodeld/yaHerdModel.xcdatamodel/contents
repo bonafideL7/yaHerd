@@ -59,7 +59,7 @@
         <attribute name="name" optional="YES" attributeType="String"/>
         <attribute name="grazeDays" optional="NO" attributeType="Integer 64" usesScalarValueType="YES" defaultValueString="0"/>
         <attribute name="restDays" optional="NO" attributeType="Integer 64" usesScalarValueType="YES" defaultValueString="0"/>
-        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="pastureGroups" inverseEntity="Herd"/>
+        <relationship name="herd" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="pastureGroups" inverseEntity="Herd"/>
         <relationship name="pastures" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Pasture" inverseName="group" inverseEntity="Pasture"/>
             <fetchIndex name="by_id">
             <fetchIndexElement property="id" type="Binary" order="ascending"/>

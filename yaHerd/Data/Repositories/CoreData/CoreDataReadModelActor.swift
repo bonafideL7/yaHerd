@@ -1767,12 +1767,12 @@ actor CoreDataReadModelActor:
                 )
             }
             if let group = pasture.group,
-               group.herd.id != herdID {
+               group.herd?.id != herdID {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDPastureGroup.coreDataEntityName,
                     id: group.id,
                     expectedHerdID: herdID,
-                    actualHerdID: group.herd.id
+                    actualHerdID: group.herd?.id
                 )
             }
 

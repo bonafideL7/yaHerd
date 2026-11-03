@@ -378,6 +378,7 @@ final class CoreDataPastureRepository:
         return try context.performAndWait {
             do {
                 guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
+                try Self.validateLinkedGroupOwnership(herd: herd, in: context)
                 let result = try operation(context, herd)
                 if context.hasChanges {
                     do {
@@ -405,6 +406,7 @@ final class CoreDataPastureRepository:
             NSSortDescriptor(key: "name", ascending: true),
             NSSortDescriptor(key: "id", ascending: true)
         ]
+        try validateLinkedGroupOwnership(herd: herd, in: context)
         let pastures = try context.fetch(request)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(pastures, herdID: herd.id)
         for pasture in pastures {
@@ -420,6 +422,7 @@ final class CoreDataPastureRepository:
             NSSortDescriptor(key: "name", ascending: true),
             NSSortDescriptor(key: "id", ascending: true)
         ]
+        try validateLinkedGroupOwnership(herd: herd, in: context)
         let groups = try context.fetch(request)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(groups, herdID: herd.id)
         for group in groups {
@@ -428,11 +431,34 @@ final class CoreDataPastureRepository:
         return groups
     }
 
+    // A partially imported Group can be linked to this Herd's Pasture before
+    // its own Herd relationship arrives. Herd-scoped Group queries omit it.
+    private nonisolated static func validateLinkedGroupOwnership(
+        herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) throws {
+        let request = NSFetchRequest<CDPasture>(entityName: CDPasture.coreDataEntityName)
+        request.predicate = NSPredicate(
+            format: "herd == %@ AND group != nil AND group.herd == nil",
+            herd
+        )
+        request.fetchLimit = 1
+        if let pasture = try context.fetch(request).first,
+           let group = pasture.group {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDPastureGroup.coreDataEntityName,
+                id: group.id,
+                expectedHerdID: herd.id,
+                actualHerdID: nil
+            )
+        }
+    }
+
     // Count and membership projections must not expose foreign-Herd relationships.
     private nonisolated static func validateHerdOwnership(
         entity: String,
         id: UUID,
-        actualHerdID: UUID,
+        actualHerdID: UUID?,
         selectedHerdID: UUID
     ) throws {
         guard actualHerdID == selectedHerdID else {
@@ -461,7 +487,7 @@ final class CoreDataPastureRepository:
             try validateHerdOwnership(
                 entity: CDPastureGroup.coreDataEntityName,
                 id: group.id,
-                actualHerdID: group.herd.id,
+                actualHerdID: group.herd?.id,
                 selectedHerdID: herdID
             )
         }
@@ -490,7 +516,7 @@ final class CoreDataPastureRepository:
         try validateHerdOwnership(
             entity: CDPastureGroup.coreDataEntityName,
             id: group.id,
-            actualHerdID: group.herd.id,
+            actualHerdID: group.herd?.id,
             selectedHerdID: herdID
         )
         for pasture in group.pastures as? Set<CDPasture> ?? [] {
