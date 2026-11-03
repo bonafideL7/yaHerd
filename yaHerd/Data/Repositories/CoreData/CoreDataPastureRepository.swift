@@ -242,7 +242,7 @@ final class CoreDataPastureRepository:
                 return nil
             }
             if (group.pastures?.count ?? 0) > 0 {
-                _ = try Self.fetchPastures(herd: group.herd, in: context)
+                _ = try Self.fetchPastures(herd: herd, in: context)
             }
             return try Self.groupDetail(group, herdID: herdID)
         }
