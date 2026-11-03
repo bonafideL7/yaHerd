@@ -274,11 +274,11 @@ enum CoreDataWorkingLifecycleMutation {
         herd: CDHerd
     ) throws {
         _ = try WorkingMapper.queueAnimalID(from: item)
-        guard item.herd.id == herd.id else {
+        guard item.herd?.id == herd.id else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingSession.queueItems",
                 expectedHerdID: herd.id,
-                actualHerdID: item.herd.id
+                actualHerdID: item.herd?.id
             )
         }
         guard let owningSession = item.session else {

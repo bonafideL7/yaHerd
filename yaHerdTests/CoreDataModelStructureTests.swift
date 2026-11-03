@@ -3,6 +3,15 @@ import XCTest
 @testable import yaHerd
 
 final class CoreDataModelStructureTests: XCTestCase {
+    func testCloudKitWorkingQueueHerdRelationshipIsOptionalWithInverse() throws {
+        let model = try loadModel()
+        let entity = try entity(named: "WorkingQueueItem", in: model)
+        let herd = try relationship(named: "herd", in: entity)
+        XCTAssertTrue(herd.isOptional)
+        XCTAssertEqual(herd.deleteRule, .nullifyDeleteRule)
+        XCTAssertEqual(herd.inverseRelationship?.name, "workingQueueItems")
+    }
+
     func testCloudKitWorkingTreatmentRecordHerdRelationshipIsOptional() throws {
         let model = try loadModel()
         let entity = try entity(named: "WorkingTreatmentRecord", in: model)
