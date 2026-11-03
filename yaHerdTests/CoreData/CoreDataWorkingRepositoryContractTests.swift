@@ -1116,12 +1116,11 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             )?.treatmentRecords.first?.id
         )
         let context = try environment.assembly.contextFactory.makeWriteContext()
-        let request = NSFetchRequest<CDWorkingTreatmentRecord>(
-            entityName: CDWorkingTreatmentRecord.coreDataEntityName
-        )
-        request.predicate = NSPredicate(format: "id == %@", recordID as NSUUID)
-
         try context.performAndWait {
+            let request = NSFetchRequest<CDWorkingTreatmentRecord>(
+                entityName: CDWorkingTreatmentRecord.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "id == %@", recordID as NSUUID)
             let record = try XCTUnwrap(context.fetch(request).first)
             XCTAssertEqual(record.session?.id, sessionID)
             XCTAssertEqual(record.animal?.id, animal.id)
@@ -1167,6 +1166,10 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         // A completely unattached import has no reliable Herd ownership path.
         // It must not disappear from the selected Herd's safety preflight.
         try context.performAndWait {
+            let request = NSFetchRequest<CDWorkingTreatmentRecord>(
+                entityName: CDWorkingTreatmentRecord.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "id == %@", recordID as NSUUID)
             let record = try XCTUnwrap(context.fetch(request).first)
             record.session = nil
             record.animal = nil
@@ -1177,6 +1180,10 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         }
 
         try context.performAndWait {
+            let request = NSFetchRequest<CDWorkingTreatmentRecord>(
+                entityName: CDWorkingTreatmentRecord.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "id == %@", recordID as NSUUID)
             let record = try XCTUnwrap(context.fetch(request).first)
             XCTAssertEqual(record.id, recordID)
             XCTAssertEqual(record.treatmentItemID, treatmentItemID)
