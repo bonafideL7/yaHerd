@@ -9,9 +9,9 @@ protocol CoreDataApplicationIdentifiedManagedObject: CoreDataEntityNamed where S
     var id: UUID { get }
 }
 
-protocol CoreDataHerdOwnedManagedObject: CoreDataApplicationIdentifiedManagedObject {
-    var herd: CDHerd { get }
-}
+// Herd ownership is declared in the Core Data model. Its stored relationship may be
+// temporarily nil while CloudKit imports related records.
+protocol CoreDataHerdOwnedManagedObject: CoreDataApplicationIdentifiedManagedObject {}
 
 struct CoreDataLookup: Sendable {
     func herd(
