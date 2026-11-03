@@ -1356,6 +1356,7 @@ final class CoreDataAnimalRepository:
                 guard let herd = try lookup.herd(id: herdID, in: context) else {
                     throw HerdRepositoryError.missingHerd
                 }
+                try CoreDataAnimalMutation.validateLinkedStatusReferences(herd: herd, in: context)
                 return try operation(context, herd)
             }
 
@@ -1453,6 +1454,7 @@ final class CoreDataAnimalRepository:
                     throw HerdRepositoryError.missingHerd
                 }
 
+                try CoreDataAnimalMutation.validateLinkedStatusReferences(herd: herd, in: context)
                 let result = try operation(context, herd)
                 guard context.hasChanges else {
                     return result
