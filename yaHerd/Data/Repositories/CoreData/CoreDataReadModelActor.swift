@@ -1503,7 +1503,7 @@ actor CoreDataReadModelActor:
                 entity: CDHealthRecord.coreDataEntityName,
                 id: record.id,
                 expectedHerdID: herdID,
-                actualHerdID: record.herd.id
+                actualHerdID: record.herd?.id
             )
         }
 
@@ -1836,12 +1836,12 @@ actor CoreDataReadModelActor:
         }
 
         for record in CoreDataAnimalProjection.managedHealthRecords(animal) {
-            guard record.herd.id == herdID else {
+            guard record.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDHealthRecord.coreDataEntityName,
                     id: record.id,
                     expectedHerdID: herdID,
-                    actualHerdID: record.herd.id
+                    actualHerdID: record.herd?.id
                 )
             }
         }

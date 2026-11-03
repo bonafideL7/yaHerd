@@ -5,6 +5,94 @@ import XCTest
 
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
+    func testImportedHistoryWithoutHerdPreservesStatusHealthAndPregnancyRecords() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let repository = environment.makeAnimalRepository()
+        let animal = try repository.create(
+            input: readGraphAnimalInput(name: "Import History Ownership", tag: "HISTORY-HERD")
+        )
+        let context = try assembly.contextFactory.makeWriteContext()
+        let lookup = CoreDataLookup()
+        let statusID = UUID()
+        let healthID = UUID()
+        let pregnancyID = UUID()
+        let originalDate = Date(timeIntervalSinceReferenceDate: 230_000)
+
+        try context.performAndWait {
+            let stored = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            let status = CDStatusRecord(context: context)
+            status.id = statusID
+            status.date = originalDate
+            status.oldStatusRawValue = AnimalStatus.active.rawValue
+            status.newStatusRawValue = AnimalStatus.sold.rawValue
+            status.herd = stored.herd
+            status.animal = stored
+
+            let health = CDHealthRecord(context: context)
+            health.id = healthID
+            health.date = originalDate
+            health.treatment = "Imported vaccine"
+            health.herd = stored.herd
+            health.animal = stored
+
+            let pregnancy = CDPregnancyCheck(context: context)
+            pregnancy.id = pregnancyID
+            pregnancy.date = originalDate
+            pregnancy.resultRawValue = PregnancyResult.pregnant.rawValue
+            pregnancy.herd = stored.herd
+            pregnancy.animal = stored
+            try context.save()
+        }
+
+        for (entityName, recordID, eventID) in [
+            ("StatusRecord", statusID, "status:\(statusID.uuidString)"),
+            ("HealthRecord", healthID, "health:\(healthID.uuidString)"),
+            ("PregnancyCheck", pregnancyID, "pregnancy:\(pregnancyID.uuidString)")
+        ] {
+            XCTAssertTrue(try repository.fetchTimeline(id: animal.id).contains { $0.id == eventID })
+            try context.performAndWait {
+                let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
+                request.predicate = NSPredicate(format: "id == %@", recordID as NSUUID)
+                let record = try XCTUnwrap(context.fetch(request).first)
+                record.setValue(nil, forKey: "herd")
+                try context.save()
+            }
+
+            let expected = CoreDataReadModelError.invalidHerdOwnership(
+                entity: entityName, id: recordID,
+                expectedHerdID: environment.herdID, actualHerdID: nil
+            )
+            XCTAssertThrowsError(try repository.fetchAnimals()) {
+                XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+            }
+            XCTAssertThrowsError(try repository.fetchAnimalDetail(id: animal.id)) {
+                XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+            }
+            XCTAssertThrowsError(try repository.fetchTimeline(id: animal.id)) {
+                XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+            }
+            XCTAssertThrowsError(try repository.delete(ids: [animal.id])) {
+                XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+            }
+
+            try context.performAndWait {
+                let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
+                request.predicate = NSPredicate(format: "id == %@", recordID as NSUUID)
+                let record = try XCTUnwrap(context.fetch(request).first)
+                XCTAssertNil(record.value(forKey: "herd"))
+                XCTAssertEqual(record.value(forKey: "id") as? UUID, recordID)
+                let herd = try XCTUnwrap(lookup.herd(id: environment.herdID, in: context))
+                record.setValue(herd, forKey: "herd")
+                try context.save()
+            }
+            XCTAssertTrue(try repository.fetchTimeline(id: animal.id).contains { $0.id == eventID })
+        }
+        XCTAssertEqual(try repository.fetchAnimalDetail(id: animal.id)?.id, animal.id)
+    }
+
     func testImportedPregnancyWithoutAnimalPreservesOriginalCheckUntilRestored() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)

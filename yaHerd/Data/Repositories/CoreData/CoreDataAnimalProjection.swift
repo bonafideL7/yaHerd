@@ -710,12 +710,12 @@ enum CoreDataAnimalReadGraphValidator {
             herdID: herdID
         )
         for record in CoreDataAnimalProjection.managedHealthRecords(animal) {
-            guard record.herd.id == herdID else {
+            guard record.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDHealthRecord.coreDataEntityName,
                     id: record.id,
                     expectedHerdID: herdID,
-                    actualHerdID: record.herd.id
+                    actualHerdID: record.herd?.id
                 )
             }
             guard record.animal?.objectID == animal.objectID else {
@@ -734,12 +734,12 @@ enum CoreDataAnimalReadGraphValidator {
             }
         }
         for check in CoreDataAnimalProjection.managedPregnancyChecks(animal) {
-            guard check.herd.id == herdID else {
+            guard check.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDPregnancyCheck.coreDataEntityName,
                     id: check.id,
                     expectedHerdID: herdID,
-                    actualHerdID: check.herd.id
+                    actualHerdID: check.herd?.id
                 )
             }
             guard check.animal?.objectID == animal.objectID else {
@@ -805,12 +805,12 @@ enum CoreDataAnimalReadGraphValidator {
             }
         }
         for statusRecord in CoreDataAnimalProjection.managedStatusRecords(animal) {
-            guard statusRecord.herd.id == herdID else {
+            guard statusRecord.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDStatusRecord.coreDataEntityName,
                     id: statusRecord.id,
                     expectedHerdID: herdID,
-                    actualHerdID: statusRecord.herd.id
+                    actualHerdID: statusRecord.herd?.id
                 )
             }
             guard statusRecord.animal?.objectID == animal.objectID else {

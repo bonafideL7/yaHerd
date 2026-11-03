@@ -125,6 +125,7 @@ enum CoreDataAnimalMutation {
         herd: CDHerd,
         in context: NSManagedObjectContext
     ) throws {
+        try validateLinkedImportedHistoryHerdOwnership(herd: herd, in: context)
         let healthRequest = NSFetchRequest<CDHealthRecord>(
             entityName: CDHealthRecord.coreDataEntityName
         )
@@ -144,6 +145,57 @@ enum CoreDataAnimalMutation {
         if let check = try context.fetch(pregnancyRequest).first {
             throw CoreDataAnimalRepositoryError.missingPregnancyAnimalRelationship(
                 recordID: check.id
+            )
+        }
+    }
+
+    // A record may import through its Animal or Working Session before the Herd link.
+    // Reject incomplete scoped projections and writes until ownership arrives.
+    static func validateLinkedImportedHistoryHerdOwnership(
+        herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) throws {
+        let statusRequest = NSFetchRequest<CDStatusRecord>(
+            entityName: CDStatusRecord.coreDataEntityName
+        )
+        statusRequest.predicate = NSPredicate(
+            format: "herd == nil AND animal.herd == %@", herd
+        )
+        statusRequest.fetchLimit = 1
+        if let record = try context.fetch(statusRequest).first {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDStatusRecord.coreDataEntityName,
+                id: record.id, expectedHerdID: herd.id, actualHerdID: nil
+            )
+        }
+
+        let healthRequest = NSFetchRequest<CDHealthRecord>(
+            entityName: CDHealthRecord.coreDataEntityName
+        )
+        healthRequest.predicate = NSPredicate(
+            format: "herd == nil AND (animal.herd == %@ OR workingSession.herd == %@)",
+            herd, herd
+        )
+        healthRequest.fetchLimit = 1
+        if let record = try context.fetch(healthRequest).first {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDHealthRecord.coreDataEntityName,
+                id: record.id, expectedHerdID: herd.id, actualHerdID: nil
+            )
+        }
+
+        let pregnancyRequest = NSFetchRequest<CDPregnancyCheck>(
+            entityName: CDPregnancyCheck.coreDataEntityName
+        )
+        pregnancyRequest.predicate = NSPredicate(
+            format: "herd == nil AND (animal.herd == %@ OR workingSession.herd == %@)",
+            herd, herd
+        )
+        pregnancyRequest.fetchLimit = 1
+        if let check = try context.fetch(pregnancyRequest).first {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDPregnancyCheck.coreDataEntityName,
+                id: check.id, expectedHerdID: herd.id, actualHerdID: nil
             )
         }
     }
