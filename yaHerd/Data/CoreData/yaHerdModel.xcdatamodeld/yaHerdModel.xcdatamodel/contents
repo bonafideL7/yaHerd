@@ -38,7 +38,7 @@
         <attribute name="isDefault" optional="NO" attributeType="Boolean" usesScalarValueType="YES" defaultValueString="NO"/>
         <attribute name="createdAt" optional="YES" attributeType="Date"/>
         <attribute name="updatedAt" optional="YES" attributeType="Date"/>
-        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="tagColors" inverseEntity="Herd"/>
+        <relationship name="herd" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="tagColors" inverseEntity="Herd"/>
         <relationship name="tags" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="AnimalTag" inverseName="color" inverseEntity="AnimalTag"/>
             <fetchIndex name="by_id">
             <fetchIndexElement property="id" type="Binary" order="ascending"/>

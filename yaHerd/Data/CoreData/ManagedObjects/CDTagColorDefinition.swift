@@ -15,6 +15,6 @@ final class CDTagColorDefinition: NSManagedObject {
     @NSManaged var isDefault: Bool
     @NSManaged var createdAt: Date?
     @NSManaged var updatedAt: Date?
-    @NSManaged var herd: CDHerd
+    @NSManaged var herd: CDHerd?
     @NSManaged var tags: NSSet?
 }

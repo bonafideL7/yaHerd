@@ -1279,11 +1279,11 @@ private extension CoreDataWorkingRepository {
                 )
             }
             if let color = tag.color,
-               color.herd.id != herd.id {
+               color.herd?.id != herd.id {
                 throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                     relationship: "AnimalTag.color",
                     expectedHerdID: herd.id,
-                    actualHerdID: color.herd.id
+                    actualHerdID: color.herd?.id
                 )
             }
         }

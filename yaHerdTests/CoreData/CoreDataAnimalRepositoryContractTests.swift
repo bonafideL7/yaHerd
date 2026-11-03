@@ -1946,7 +1946,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
                 (persistedAnimal.tags?.allObjects as? [CDAnimalTag])?.first
             )
             XCTAssertEqual(tag.color?.id, colorID)
-            XCTAssertEqual(tag.color?.herd.id, foreignHerdID)
+            XCTAssertEqual(tag.color?.herd?.id, foreignHerdID)
         }
     }
 
