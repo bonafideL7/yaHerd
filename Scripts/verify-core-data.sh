@@ -90,7 +90,7 @@ RELATIONSHIP_CONTRACT = {
     "FieldCheckAnimalCheck": "herd:Herd:O:1:Nullify:fieldCheckAnimalChecks,animal:Animal:O:1:Nullify:fieldCheckAnimalChecks,session:FieldCheckSession:O:1:Nullify:animalChecks",
     "FieldCheckFinding": "herd:Herd:O:1:Nullify:fieldCheckFindings,animal:Animal:O:1:Nullify:fieldCheckFindings,session:FieldCheckSession:O:1:Nullify:findings",
     "WorkingTreatmentTemplate": "herd:Herd:O:1:Nullify:workingTreatmentTemplates",
-    "WorkingSession": "herd:Herd:R:1:Nullify:workingSessions,sourcePasture:Pasture:O:1:Nullify:workingSourceSessions,activeAnimals:Animal:O:M:Nullify:activeWorkingSession,queueItems:WorkingQueueItem:O:M:Cascade:session,treatmentRecords:WorkingTreatmentRecord:O:M:Cascade:session,healthRecords:HealthRecord:O:M:Cascade:workingSession,pregnancyChecks:PregnancyCheck:O:M:Cascade:workingSession",
+    "WorkingSession": "herd:Herd:O:1:Nullify:workingSessions,sourcePasture:Pasture:O:1:Nullify:workingSourceSessions,activeAnimals:Animal:O:M:Nullify:activeWorkingSession,queueItems:WorkingQueueItem:O:M:Cascade:session,treatmentRecords:WorkingTreatmentRecord:O:M:Cascade:session,healthRecords:HealthRecord:O:M:Cascade:workingSession,pregnancyChecks:PregnancyCheck:O:M:Cascade:workingSession",
     "WorkingQueueItem": "herd:Herd:O:1:Nullify:workingQueueItems,collectedFromPasture:Pasture:O:1:Nullify:workingCollectedQueueItems,destinationPasture:Pasture:O:1:Nullify:workingDestinationQueueItems,animal:Animal:O:1:Nullify:workingQueueItems,session:WorkingSession:O:1:Nullify:queueItems",
     "WorkingTreatmentRecord": "herd:Herd:O:1:Nullify:workingTreatmentRecords,animal:Animal:O:1:Nullify:workingTreatmentRecords,session:WorkingSession:O:1:Nullify:treatmentRecords",
 }
