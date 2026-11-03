@@ -1856,7 +1856,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                 )
                 return try context.fetch(request).map {
                     [
-                        $0.herd.id.uuidString,
+                        $0.herd?.id.uuidString ?? "nil",
                         $0.id.uuidString,
                         $0.sourcePasture?.id.uuidString ?? "nil",
                         $0.sourcePastureIDSnapshot?.uuidString ?? "nil",
@@ -2061,7 +2061,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                 )
                 return try context.fetch(request).map {
                     [
-                        $0.herd.id.uuidString,
+                        $0.herd?.id.uuidString ?? "nil",
                         $0.id.uuidString,
                         $0.statusRawValue ?? "nil",
                         $0.treatmentTemplateNameSnapshot
