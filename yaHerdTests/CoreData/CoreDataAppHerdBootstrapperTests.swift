@@ -875,6 +875,85 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     }
 
     @MainActor
+    func testSampleSeedRejectsOwnerlessWorkingSessionWithLinkedOwnerlessQueue() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+            assembly: assembly
+        )
+        let graph = CoreDataAppPersistenceAssembly(
+            assembly: assembly, currentHerdID: herdID
+        ).makeDependencies(dataAccessMode: .readWrite)
+        let seeder = try XCTUnwrap(graph.animalFeatureDependencies.sampleDataSeeder)
+        let context = try assembly.contextFactory.makeWriteContext()
+        let sessionID = UUID()
+        let queueID = UUID()
+        let originalDate = Date(timeIntervalSinceReferenceDate: 214_000)
+
+        try context.performAndWait {
+            let session = CDWorkingSession(context: context)
+            session.id = sessionID
+            session.date = originalDate
+            session.statusRawValue = WorkingSessionStatus.active.rawValue
+            session.treatmentTemplateNameSnapshot = "Imported Pending Work"
+            session.plannedTreatmentsData = Data("[]".utf8)
+            session.herd = nil
+            session.sourcePasture = nil
+
+            let queue = CDWorkingQueueItem(context: context)
+            queue.id = queueID
+            queue.animalTagNumberSnapshot = "PENDING"
+            queue.animalNameSnapshot = "Import in progress"
+            queue.animalSexRawValueSnapshot = Sex.female.rawValue
+            queue.herd = nil
+            queue.session = session
+            queue.animal = nil
+            queue.collectedFromPasture = nil
+            queue.destinationPasture = nil
+            try context.save()
+        }
+
+        let expected = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDWorkingSession.coreDataEntityName,
+            id: sessionID,
+            expectedHerdID: herdID,
+            actualHerdID: nil
+        )
+        XCTAssertThrowsError(try seeder.canSeedSampleData()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        for seedLarge in [false, true] {
+            do {
+                if seedLarge {
+                    _ = try await seeder.seedLargeSampleDataIfNeeded()
+                } else {
+                    _ = try await seeder.seedSampleDataIfNeeded()
+                }
+                XCTFail("An ownerless Working graph must not be overwritten by samples.")
+            } catch {
+                XCTAssertEqual(error as? CoreDataReadModelError, expected)
+            }
+        }
+        XCTAssertEqual(graph.applicationMutationCenter.currentSequence, 0)
+        try context.performAndWait {
+            let sessions = try context.fetch(NSFetchRequest<CDWorkingSession>(
+                entityName: CDWorkingSession.coreDataEntityName
+            ))
+            let queues = try context.fetch(NSFetchRequest<CDWorkingQueueItem>(
+                entityName: CDWorkingQueueItem.coreDataEntityName
+            ))
+            XCTAssertEqual(sessions.map(\.id), [sessionID])
+            XCTAssertEqual(sessions.first?.date, originalDate)
+            XCTAssertNil(sessions.first?.herd)
+            XCTAssertEqual(queues.map(\.id), [queueID])
+            XCTAssertNil(queues.first?.herd)
+            XCTAssertEqual(queues.first?.session?.id, sessionID)
+            XCTAssertTrue(try context.fetch(NSFetchRequest<CDAnimal>(
+                entityName: CDAnimal.coreDataEntityName
+            )).isEmpty)
+        }
+    }
+
+    @MainActor
     func testSampleSeedRejectsUnattachedImportedWorkingQueueWithoutMutatingRecords() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
