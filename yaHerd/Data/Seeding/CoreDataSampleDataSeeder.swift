@@ -111,6 +111,11 @@ enum CoreDataSampleHerdFactory {
 
     /// Shared preflight for both the empty-state affordance and transactional gate.
     static func isEmpty(herd: CDHerd, in context: NSManagedObjectContext) throws -> Bool {
+        // Template imports can precede their Herd link; never seed conflicting
+        // definitions before the pending ownership relationship is resolved.
+        try CoreDataWorkingTreatmentTemplateRepository.validateNoOrphanedTemplates(
+            herdID: herd.id, in: context
+        )
         // A group can exist without a Pasture. Do not overwrite or create
         // duplicate logical group names in a user-configured Herd.
         for name in ["Animal", "Pasture", "PastureGroup", "FieldCheckSession", "WorkingSession"] {
