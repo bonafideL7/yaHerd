@@ -286,7 +286,7 @@ final class CoreDataHerdRepositoryContractTests: XCTestCase {
                             let owner = try XCTUnwrap(pasture.herd)
                             return HerdRepositoryOwnedPastureContractSnapshot(
                                 id: pasture.id,
-                                herdID: owner.id
+                                herdID: try owner.requiredID()
                             )
                         }
                     }
