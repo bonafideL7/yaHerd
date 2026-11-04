@@ -282,10 +282,11 @@ final class CoreDataHerdRepositoryContractTests: XCTestCase {
                                 herdID: nil
                             )
                         }
-                        return matches.first.map {
-                            HerdRepositoryOwnedPastureContractSnapshot(
-                                id: $0.id,
-                                herdID: $0.herd.id
+                        return try matches.first.map { pasture in
+                            let owner = try XCTUnwrap(pasture.herd)
+                            return HerdRepositoryOwnedPastureContractSnapshot(
+                                id: pasture.id,
+                                herdID: owner.id
                             )
                         }
                     }

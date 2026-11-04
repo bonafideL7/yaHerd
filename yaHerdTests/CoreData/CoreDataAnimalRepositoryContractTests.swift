@@ -2544,7 +2544,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
                 in: persistedContext
             ))
             XCTAssertEqual(storedPasture.group?.id, targetGroup.id)
-            XCTAssertEqual(storedPasture.herd.id, foreignHerdID)
+            XCTAssertEqual(storedPasture.herd?.id, foreignHerdID)
             let storedGroup = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPastureGroup.self, id: targetGroup.id,
                 herdID: expectedHerdID, in: persistedContext

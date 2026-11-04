@@ -397,7 +397,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
                 in: context
             ))
             XCTAssertEqual(control.id, sharedPastureID)
-            XCTAssertEqual(control.herd.id, controlHerdID)
+            XCTAssertEqual(control.herd?.id, controlHerdID)
             XCTAssertEqual(control.name, "Control Pasture")
         }
     }
@@ -527,12 +527,12 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
                 CDPasture.self, id: removedPastureID, herdID: herdID, in: context
             ))
             XCTAssertEqual(original.name, "Original Pasture")
-            XCTAssertEqual(original.herd.id, herdID)
+            XCTAssertEqual(original.herd?.id, herdID)
             let control = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPasture.self, id: controlPastureID, herdID: herdID, in: context
             ))
             XCTAssertEqual(control.name, "Control Pasture")
-            XCTAssertEqual(control.herd.id, herdID)
+            XCTAssertEqual(control.herd?.id, herdID)
             XCTAssertNil(try CoreDataLookup().herdOwned(
                 CDPasture.self, id: rejectedPastureID, herdID: herdID, in: context
             ))
@@ -613,7 +613,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
                 CDPasture.self, id: controlPastureID, herdID: herdID, in: failedContext
             ))
             XCTAssertEqual(control.name, "Control Pasture")
-            XCTAssertEqual(control.herd.id, herdID)
+            XCTAssertEqual(control.herd?.id, herdID)
         }
 
         try await writer.transactionExecutor.performWrite { context in
@@ -640,7 +640,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
                 CDPasture.self, id: committedPastureID, herdID: herdID, in: committedContext
             ))
             XCTAssertEqual(committed.name, "Committed Insert")
-            XCTAssertEqual(committed.herd.id, herdID)
+            XCTAssertEqual(committed.herd?.id, herdID)
             let original = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPasture.self, id: pastureID, herdID: herdID, in: committedContext
             ))
