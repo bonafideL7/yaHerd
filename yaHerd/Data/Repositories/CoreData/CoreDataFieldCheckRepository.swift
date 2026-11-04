@@ -929,6 +929,7 @@ extension CoreDataFieldCheckRepository {
         herd: CDHerd,
         in context: NSManagedObjectContext
     ) throws {
+        try CoreDataAnimalMutation.validateUnownedImportedPastures(herd: herd, in: context)
         let request = NSFetchRequest<CDFieldCheckSession>(
             entityName: CDFieldCheckSession.coreDataEntityName
         )

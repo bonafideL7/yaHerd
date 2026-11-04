@@ -697,7 +697,7 @@ final class CoreDataWorkingRepository:
             guard let sourcePasture = session.sourcePasture else {
                 throw WorkingRepositoryError.pastureNotFound
             }
-            guard sourcePasture.herd.id == herd.id,
+            guard sourcePasture.herd?.id == herd.id,
                   sourcePasture.id == session.sourcePastureIDSnapshot else {
                 throw CoreDataWorkingRepositoryError.invalidSnapshotRelationship(
                     relationship: "WorkingSession.sourcePasture",
@@ -989,7 +989,7 @@ final class CoreDataWorkingRepository:
             try validateHerdOwnership(
                 relationship: "WorkingSession.sourcePasture",
                 expectedHerdID: herdID,
-                actualHerdID: sourcePasture.herd.id
+                actualHerdID: sourcePasture.herd?.id
             )
             try validateSnapshotRelationship(
                 relationship: "WorkingSession.sourcePasture",
@@ -1038,7 +1038,7 @@ final class CoreDataWorkingRepository:
                 try validateHerdOwnership(
                     relationship: "WorkingQueueItem.collectedFromPasture",
                     expectedHerdID: herdID,
-                    actualHerdID: collectedFromPasture.herd.id
+                    actualHerdID: collectedFromPasture.herd?.id
                 )
                 try validateSnapshotRelationship(
                     relationship: "WorkingQueueItem.collectedFromPasture",
@@ -1050,7 +1050,7 @@ final class CoreDataWorkingRepository:
                 try validateHerdOwnership(
                     relationship: "WorkingQueueItem.destinationPasture",
                     expectedHerdID: herdID,
-                    actualHerdID: destinationPasture.herd.id
+                    actualHerdID: destinationPasture.herd?.id
                 )
                 try validateSnapshotRelationship(
                     relationship: "WorkingQueueItem.destinationPasture",
@@ -1441,11 +1441,18 @@ private extension CoreDataWorkingRepository {
         guard let currentPasture = animal.currentPasture else {
             return false
         }
-        guard currentPasture.herd.id == sourcePasture.herd.id else {
+        guard let sourceHerdID = sourcePasture.herd?.id else {
+            throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                relationship: "WorkingSession.sourcePasture",
+                expectedHerdID: animal.herd.id,
+                actualHerdID: nil
+            )
+        }
+        guard currentPasture.herd?.id == sourceHerdID else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "Animal.currentPasture",
-                expectedHerdID: sourcePasture.herd.id,
-                actualHerdID: currentPasture.herd.id
+                expectedHerdID: sourceHerdID,
+                actualHerdID: currentPasture.herd?.id
             )
         }
 
@@ -1470,11 +1477,11 @@ private extension CoreDataWorkingRepository {
                 actualHerdID: animal.herd.id
             )
         }
-        guard sourcePasture.herd.id == herd.id else {
+        guard sourcePasture.herd?.id == herd.id else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingQueueItem.collectedFromPasture",
                 expectedHerdID: herd.id,
-                actualHerdID: sourcePasture.herd.id
+                actualHerdID: sourcePasture.herd?.id
             )
         }
         guard session.herd?.id == herd.id else {

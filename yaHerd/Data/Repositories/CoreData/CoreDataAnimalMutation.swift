@@ -151,10 +151,30 @@ enum CoreDataAnimalMutation {
 
     // A record may import through its Animal or Working Session before the Herd link.
     // Reject incomplete scoped projections and writes until ownership arrives.
+    static func validateUnownedImportedPastures(
+        herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) throws {
+        // A Pasture may arrive before its Herd link. Block Herd-scoped reads
+        // and writes until the ownership relationship is restored.
+        let request = NSFetchRequest<CDPasture>(
+            entityName: CDPasture.coreDataEntityName
+        )
+        request.predicate = NSPredicate(format: "herd == nil")
+        request.fetchLimit = 1
+        if let pasture = try context.fetch(request).first {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDPasture.coreDataEntityName,
+                id: pasture.id, expectedHerdID: herd.id, actualHerdID: nil
+            )
+        }
+    }
+
     static func validateLinkedImportedHistoryHerdOwnership(
         herd: CDHerd,
         in context: NSManagedObjectContext
     ) throws {
+        try validateUnownedImportedPastures(herd: herd, in: context)
         // CloudKit can import a Working session through a Pasture, Animal or
         // historical child before its direct Herd relationship. Never hide it
         // behind Herd-qualified queries or permit destructive edits.

@@ -613,6 +613,16 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
+    func testCloudKitPastureHerdRelationshipIsOptionalWithExistingInverse() throws {
+        let model = try loadModel()
+        let pasture = try entity(named: "Pasture", in: model)
+        let herd = try relationship(named: "herd", in: pasture)
+        XCTAssertTrue(herd.isOptional)
+        XCTAssertEqual(herd.deleteRule, .nullifyDeleteRule)
+        XCTAssertEqual(herd.inverseRelationship?.name, "pastures")
+        XCTAssertEqual(herd.inverseRelationship?.deleteRule, .cascadeDeleteRule)
+    }
+
     func testCloudKitPastureGroupHerdRelationshipIsOptional() throws {
         let model = try loadModel()
         let group = try entity(named: "PastureGroup", in: model)
@@ -1503,7 +1513,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertEqual(herdRelationship.destinationEntity?.name, "Herd")
             XCTAssertEqual(
                 herdRelationship.isOptional,
-                ["AnimalStatusReference", "AnimalTag", "FieldCheckAnimalCheck", "FieldCheckFinding", "FieldCheckSession", "HealthRecord", "MovementRecord", "PastureGroup", "PregnancyCheck", "StatusRecord", "TagColorDefinition", "WorkingQueueItem", "WorkingSession", "WorkingTreatmentTemplate", "WorkingTreatmentRecord"].contains(entityName),
+                ["AnimalStatusReference", "AnimalTag", "FieldCheckAnimalCheck", "FieldCheckFinding", "FieldCheckSession", "HealthRecord", "MovementRecord", "Pasture", "PastureGroup", "PregnancyCheck", "StatusRecord", "TagColorDefinition", "WorkingQueueItem", "WorkingSession", "WorkingTreatmentTemplate", "WorkingTreatmentRecord"].contains(entityName),
                 "\(entityName).herd must preserve its current modeled optionality."
             )
             XCTAssertEqual(herdRelationship.maxCount, 1)

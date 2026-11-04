@@ -73,7 +73,7 @@
         <attribute name="usableAcreage" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
         <attribute name="targetAcresPerHead" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
         <attribute name="lastGrazedDate" optional="YES" attributeType="Date"/>
-        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="pastures" inverseEntity="Herd"/>
+        <relationship name="herd" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="pastures" inverseEntity="Herd"/>
         <relationship name="group" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="PastureGroup" inverseName="pastures" inverseEntity="PastureGroup"/>
         <relationship name="animals" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Animal" inverseName="currentPasture" inverseEntity="Animal"/>
         <relationship name="workingSourceSessions" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="WorkingSession" inverseName="sourcePasture" inverseEntity="WorkingSession"/>

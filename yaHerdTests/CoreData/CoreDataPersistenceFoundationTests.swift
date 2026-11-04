@@ -44,7 +44,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
                 )
             )
             XCTAssertEqual(pasture.id, pastureID)
-            XCTAssertEqual(pasture.herd.id, herdID)
+            XCTAssertEqual(pasture.herd?.id, herdID)
             XCTAssertEqual(pasture.name, "Foundation Pasture")
         }
     }
@@ -136,9 +136,9 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             )
 
             XCTAssertEqual(pastureA.name, "A Pasture")
-            XCTAssertEqual(pastureA.herd.id, herdAID)
+            XCTAssertEqual(pastureA.herd?.id, herdAID)
             XCTAssertEqual(pastureB.name, "B Pasture")
-            XCTAssertEqual(pastureB.herd.id, herdBID)
+            XCTAssertEqual(pastureB.herd?.id, herdBID)
         }
     }
 
@@ -321,10 +321,10 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             ))
 
             XCTAssertEqual(pastureA.id, sharedPastureID)
-            XCTAssertEqual(pastureA.herd.id, herdAID)
+            XCTAssertEqual(pastureA.herd?.id, herdAID)
             XCTAssertEqual(pastureA.name, "A Pasture")
             XCTAssertEqual(pastureB.id, sharedPastureID)
-            XCTAssertEqual(pastureB.herd.id, herdBID)
+            XCTAssertEqual(pastureB.herd?.id, herdBID)
             XCTAssertEqual(pastureB.name, "B Pasture")
             XCTAssertNil(try CoreDataLookup().herdOwned(
                 CDPasture.self,
@@ -604,7 +604,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
                 CDPasture.self, id: pastureID, herdID: herdID, in: failedContext
             ))
             XCTAssertEqual(pasture.name, "Stable Pasture")
-            XCTAssertEqual(pasture.herd.id, herdID)
+            XCTAssertEqual(pasture.herd?.id, herdID)
             XCTAssertNil(try CoreDataLookup().herdOwned(
                 CDPasture.self, id: rejectedPastureID, herdID: herdID, in: failedContext
             ))
