@@ -1941,7 +1941,8 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             request.predicate = NSPredicate(format: "herd == %@", herd)
             let persisted = try context.fetch(request)
             XCTAssertEqual(Set(persisted.map(\.id)), Set(expectedIDs))
-            XCTAssertTrue(try persisted.allSatisfy { !$0.isArchived && $0.herd?.id == (try herd.requiredID()) })
+            let validatedHerdID = try herd.requiredID()
+            XCTAssertTrue(persisted.allSatisfy { !$0.isArchived && $0.herd?.id == validatedHerdID })
         }
     }
 
