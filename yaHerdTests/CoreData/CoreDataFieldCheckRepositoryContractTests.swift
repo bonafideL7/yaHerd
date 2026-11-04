@@ -5,6 +5,30 @@ import XCTest
 
 @MainActor
 final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
+    func testFieldCheckChildValidationRejectsImportedHerdWithoutIdentity() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let herd = CDHerd(context: context)
+            herd.id = nil
+            let session = CDFieldCheckSession(context: context)
+            session.id = UUID()
+            session.herd = herd
+
+            XCTAssertThrowsError(
+                try CoreDataFieldCheckRepository.validateReadChildRelationship(
+                    entity: CDFieldCheckFinding.coreDataEntityName,
+                    id: UUID(),
+                    childHerd: herd,
+                    session: session,
+                    selectedHerd: herd
+                )
+            ) { error in
+                XCTAssertEqual(error as? CoreDataHerdMappingError, .missingID)
+            }
+            context.rollback()
+        }
+    }
     func testImportedFieldCheckSessionWithoutHerdBlocksScopedReadsAndWritesUntilRestored() async throws {
         let environment = try await makeEnvironment()
         let pasture = try environment.makePastureRepository().create(
