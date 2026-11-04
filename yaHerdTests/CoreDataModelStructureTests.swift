@@ -3,12 +3,6 @@ import XCTest
 @testable import yaHerd
 
 final class CoreDataModelStructureTests: XCTestCase {
-    func testCloudKitHerdIdentityStorageIsOptional() throws {
-        let model = try loadModel()
-        let herd = try entity(named: "Herd", in: model)
-        XCTAssertTrue(try attribute(named: "id", in: herd).isOptional)
-    }
-
     func testCloudKitAnimalHerdRelationshipIsOptionalWithInverse() throws {
         let model = try loadModel()
         let entity = try entity(named: "Animal", in: model)
@@ -1484,7 +1478,7 @@ final class CoreDataModelStructureTests: XCTestCase {
         XCTAssertEqual(Set(model.entities.compactMap(\.name)), Self.expectedEntities)
     }
 
-    func testEveryDurableEntityHasRequiredApplicationUUID() throws {
+    func testDurableEntityApplicationUUIDStorageMatchesCloudKitContract() throws {
         let model = try loadModel()
 
         for entityName in Self.expectedEntities {
@@ -1492,7 +1486,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             let id = try attribute(named: "id", in: entity)
 
             XCTAssertEqual(id.type, .uuid, "\(entityName).id must be UUID.")
-            XCTAssertFalse(id.isOptional, "\(entityName).id must be required.")
+            XCTAssertEqual(id.isOptional, entityName == "Herd", "\(entityName).id has incorrect optionality.")
         }
     }
 
