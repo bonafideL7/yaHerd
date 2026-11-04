@@ -337,8 +337,16 @@ for name, entity in entities.items():
 
     attributes = {item.get("name"): item for item in entity.findall("attribute")}
     identifier = attributes.get("id")
-    if identifier is None or identifier.get("attributeType") != "UUID" or identifier.get("optional") != "NO":
-        failures.append(f"{name}: id must be a required UUID")
+    # Herd identity may be absent while CloudKit imports its original UUID.
+    # Other entities retain their current required-ID contract until updated.
+    expected_optional = name == "Herd"
+    if (
+        identifier is None
+        or identifier.get("attributeType") != "UUID"
+        or (identifier.get("optional") == "YES") != expected_optional
+    ):
+        requirement = "optional" if expected_optional else "required"
+        failures.append(f"{name}: id must be an {requirement} UUID")
 
     indexes = {index.get("name"): index for index in entity.findall("fetchIndex")}
     id_index = indexes.get("by_id")
