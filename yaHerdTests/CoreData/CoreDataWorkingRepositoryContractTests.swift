@@ -1858,7 +1858,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                 )
                 return try context.fetch(request).map {
                     [
-                        $0.herd?.id.uuidString ?? "nil",
+                        $0.herd?.id?.uuidString ?? "nil",
                         $0.id.uuidString,
                         $0.sourcePasture?.id.uuidString ?? "nil",
                         $0.sourcePastureIDSnapshot?.uuidString ?? "nil",
@@ -2063,7 +2063,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                 )
                 return try context.fetch(request).map {
                     [
-                        $0.herd?.id.uuidString ?? "nil",
+                        $0.herd?.id?.uuidString ?? "nil",
                         $0.id.uuidString,
                         $0.statusRawValue ?? "nil",
                         $0.treatmentTemplateNameSnapshot
@@ -2284,7 +2284,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                 let rows: [CDWorkingQueueItem] = try context.fetch(request)
                 return try rows.map { row in
                     [
-                        try XCTUnwrap(row.herd).id.uuidString,
+                        try XCTUnwrap(row.herd?.id).uuidString,
                         try XCTUnwrap(row.session).id.uuidString,
                         row.id.uuidString,
                         try WorkingMapper.queueAnimalID(from: row).uuidString,
@@ -2649,7 +2649,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                 let records: [CDWorkingTreatmentRecord] = try context.fetch(request)
                 return try records.map { record in
                     [
-                        try XCTUnwrap(record.herd).id.uuidString,
+                        try XCTUnwrap(record.herd?.id).uuidString,
                         try XCTUnwrap(record.session).id.uuidString,
                         try XCTUnwrap(record.animalIDSnapshot).uuidString,
                         record.id.uuidString,
@@ -2975,7 +2975,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                                 entityName: CDHealthRecord.coreDataEntityName
                             )).map {
                                 [
-                                    try XCTUnwrap($0.herd).id.uuidString,
+                                    try XCTUnwrap($0.herd?.id).uuidString,
                                     try XCTUnwrap($0.animal).id.uuidString,
                                     $0.workingSession?.id.uuidString ?? "standalone",
                                     $0.id.uuidString,
@@ -2989,7 +2989,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                                 entityName: CDPregnancyCheck.coreDataEntityName
                             )).map {
                                 [
-                                    try XCTUnwrap($0.herd).id.uuidString,
+                                    try XCTUnwrap($0.herd?.id).uuidString,
                                     try XCTUnwrap($0.animal).id.uuidString,
                                     $0.workingSession?.id.uuidString ?? "standalone",
                                     $0.id.uuidString,
