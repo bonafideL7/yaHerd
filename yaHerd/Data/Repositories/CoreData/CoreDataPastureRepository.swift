@@ -169,13 +169,14 @@ final class CoreDataPastureRepository:
             throw PastureValidationError.duplicateName(input.name)
         }
         return try performWrite { context, herd in
+            let nextSortOrder = (try Self.fetchPastures(herd: herd, in: context).map(\.sortOrder).max() ?? -1) + 1
             let pasture = CDPasture(context: context)
             pasture.id = try self.uniqueID(for: CDPasture.self, herdID: herd.id, in: context)
             pasture.name = input.name
             pasture.acreage = input.acreage.map(NSNumber.init(value:))
             pasture.usableAcreage = input.usableAcreage.map(NSNumber.init(value:))
             pasture.targetAcresPerHead = input.targetAcresPerHead.map(NSNumber.init(value:))
-            pasture.sortOrder = (try Self.fetchPastures(herd: herd, in: context).map(\.sortOrder).max() ?? -1) + 1
+            pasture.sortOrder = nextSortOrder
             pasture.herd = herd
             return try Self.detail(pasture, herdID: herd.id)
         }
