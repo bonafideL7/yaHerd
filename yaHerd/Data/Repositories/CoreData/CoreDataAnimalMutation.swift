@@ -90,7 +90,7 @@ enum CoreDataAnimalMutation {
         request.predicate = NSPredicate(format: "herd == %@", herd)
         try validateUnownedImportedAnimals(herd: herd, in: context)
         let animals = try context.fetch(request)
-        try validateUniqueApplicationIDs(animals, herdID: herd.id)
+        try validateUniqueApplicationIDs(animals, herdID: (try herd.requiredID()))
         return animals
     }
 
@@ -166,7 +166,7 @@ enum CoreDataAnimalMutation {
         if let animal = try context.fetch(request).first {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDAnimal.coreDataEntityName,
-                id: animal.id, expectedHerdID: herd.id, actualHerdID: nil
+                id: animal.id, expectedHerdID: (try herd.requiredID()), actualHerdID: nil
             )
         }
     }
@@ -185,7 +185,7 @@ enum CoreDataAnimalMutation {
         if let pasture = try context.fetch(request).first {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDPasture.coreDataEntityName,
-                id: pasture.id, expectedHerdID: herd.id, actualHerdID: nil
+                id: pasture.id, expectedHerdID: (try herd.requiredID()), actualHerdID: nil
             )
         }
     }
@@ -219,7 +219,7 @@ enum CoreDataAnimalMutation {
         if let session = try context.fetch(sessionRequest).first {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDWorkingSession.coreDataEntityName,
-                id: session.id, expectedHerdID: herd.id, actualHerdID: nil
+                id: session.id, expectedHerdID: (try herd.requiredID()), actualHerdID: nil
             )
         }
 
@@ -249,7 +249,7 @@ enum CoreDataAnimalMutation {
             if linkedChildren == 0 || hasOwnerlessChild {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDWorkingSession.coreDataEntityName,
-                    id: session.id, expectedHerdID: herd.id, actualHerdID: nil
+                    id: session.id, expectedHerdID: (try herd.requiredID()), actualHerdID: nil
                 )
             }
         }
@@ -263,7 +263,7 @@ enum CoreDataAnimalMutation {
         if let record = try context.fetch(statusRequest).first {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDStatusRecord.coreDataEntityName,
-                id: record.id, expectedHerdID: herd.id, actualHerdID: nil
+                id: record.id, expectedHerdID: (try herd.requiredID()), actualHerdID: nil
             )
         }
 
@@ -278,7 +278,7 @@ enum CoreDataAnimalMutation {
         if let record = try context.fetch(healthRequest).first {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDHealthRecord.coreDataEntityName,
-                id: record.id, expectedHerdID: herd.id, actualHerdID: nil
+                id: record.id, expectedHerdID: (try herd.requiredID()), actualHerdID: nil
             )
         }
 
@@ -293,7 +293,7 @@ enum CoreDataAnimalMutation {
         if let check = try context.fetch(pregnancyRequest).first {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDPregnancyCheck.coreDataEntityName,
-                id: check.id, expectedHerdID: herd.id, actualHerdID: nil
+                id: check.id, expectedHerdID: (try herd.requiredID()), actualHerdID: nil
             )
         }
         // CloudKit can import a treatment before its direct Herd relationship.
@@ -310,7 +310,7 @@ enum CoreDataAnimalMutation {
         if let record = try context.fetch(treatmentRequest).first {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDWorkingTreatmentRecord.coreDataEntityName,
-                id: record.id, expectedHerdID: herd.id, actualHerdID: nil
+                id: record.id, expectedHerdID: (try herd.requiredID()), actualHerdID: nil
             )
         }
 
@@ -323,7 +323,7 @@ enum CoreDataAnimalMutation {
         if let record = try context.fetch(treatmentRequest).first {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDWorkingTreatmentRecord.coreDataEntityName,
-                id: record.id, expectedHerdID: herd.id, actualHerdID: nil
+                id: record.id, expectedHerdID: (try herd.requiredID()), actualHerdID: nil
             )
         }
 
@@ -346,7 +346,7 @@ enum CoreDataAnimalMutation {
         if let item = try context.fetch(queueRequest).first {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDWorkingQueueItem.coreDataEntityName,
-                id: item.id, expectedHerdID: herd.id, actualHerdID: nil
+                id: item.id, expectedHerdID: (try herd.requiredID()), actualHerdID: nil
             )
         }
 
@@ -362,7 +362,7 @@ enum CoreDataAnimalMutation {
         if let item = try context.fetch(queueRequest).first {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDWorkingQueueItem.coreDataEntityName,
-                id: item.id, expectedHerdID: herd.id, actualHerdID: nil
+                id: item.id, expectedHerdID: (try herd.requiredID()), actualHerdID: nil
             )
         }
     }
@@ -384,7 +384,7 @@ enum CoreDataAnimalMutation {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDAnimalStatusReference.coreDataEntityName,
                 id: reference.id,
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: nil
             )
         }
@@ -408,7 +408,7 @@ enum CoreDataAnimalMutation {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDMovementRecord.coreDataEntityName,
                 id: record.id,
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: nil
             )
         }
@@ -431,7 +431,7 @@ enum CoreDataAnimalMutation {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDAnimalTag.coreDataEntityName,
                 id: tag.id,
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: nil
             )
         }
@@ -451,7 +451,7 @@ enum CoreDataAnimalMutation {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDTagColorDefinition.coreDataEntityName,
                 id: color.id,
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: nil
             )
         }
@@ -587,7 +587,7 @@ enum CoreDataAnimalMutation {
         if let persisted = try lookup.herdOwned(
             CDTagColorDefinition.self,
             id: id,
-            herdID: herd.id,
+            herdID: (try herd.requiredID()),
             in: context
         ) {
             return persisted
@@ -714,25 +714,25 @@ enum CoreDataAnimalMutation {
 
         let pasture = try resolvePasture(
             id: attributes.pastureID,
-            herdID: herd.id,
+            herdID: (try herd.requiredID()),
             lookup: lookup,
             in: context
         )
         let sire = try resolveAnimal(
             id: attributes.sireID,
-            herdID: herd.id,
+            herdID: (try herd.requiredID()),
             lookup: lookup,
             in: context
         )
         let dam = try resolveAnimal(
             id: attributes.damID,
-            herdID: herd.id,
+            herdID: (try herd.requiredID()),
             lookup: lookup,
             in: context
         )
         let statusReference = try resolveStatusReference(
             id: attributes.statusReferenceID,
-            herdID: herd.id,
+            herdID: (try herd.requiredID()),
             lookup: lookup,
             in: context
         )
@@ -820,7 +820,7 @@ enum CoreDataAnimalMutation {
             throw CoreDataPersistenceError.duplicateApplicationID(
                 entity: CDAnimalTag.coreDataEntityName,
                 id: duplicate.key,
-                herdID: herd.id
+                herdID: (try herd.requiredID())
             )
         }
         let existingByID = existingGroups.compactMapValues(\.first)
@@ -851,13 +851,13 @@ enum CoreDataAnimalMutation {
                 if try lookup.herdOwned(
                     CDAnimalTag.self,
                     id: state.id,
-                    herdID: herd.id,
+                    herdID: (try herd.requiredID()),
                     in: context
                 ) != nil {
                     throw CoreDataPersistenceError.duplicateApplicationID(
                         entity: CDAnimalTag.coreDataEntityName,
                         id: state.id,
-                        herdID: herd.id
+                        herdID: (try herd.requiredID())
                     )
                 }
 
@@ -894,7 +894,7 @@ enum CoreDataAnimalMutation {
         let movement = CDMovementRecord(context: context)
         movement.id = try uniqueID(
             for: CDMovementRecord.self,
-            herdID: herd.id,
+            herdID: (try herd.requiredID()),
             lookup: CoreDataLookup(),
             in: context
         )
@@ -925,7 +925,7 @@ enum CoreDataAnimalMutation {
         let record = CDStatusRecord(context: context)
         record.id = try uniqueID(
             for: CDStatusRecord.self,
-            herdID: herd.id,
+            herdID: (try herd.requiredID()),
             lookup: CoreDataLookup(),
             in: context
         )

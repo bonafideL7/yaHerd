@@ -1,13 +1,22 @@
 import Foundation
 
 enum CoreDataHerdMappingError: Error, Equatable {
+    case missingID
     case missingName(herdID: UUID)
     case missingCreatedAt(herdID: UUID)
     case missingUpdatedAt(herdID: UUID)
 }
 
 extension CDHerd {
+    func requiredID() throws -> UUID {
+        guard let id else {
+            throw CoreDataHerdMappingError.missingID
+        }
+        return id
+    }
+
     func toSummary() throws -> HerdSummary {
+        let id = try requiredID()
         // A partially imported Herd must retain its original identity and name.
         // Do not fabricate a display name or permit rename before restoration.
         guard let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {

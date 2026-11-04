@@ -594,7 +594,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         let colors = try context.fetch(request)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
             colors,
-            herdID: herd.id
+            herdID: (try herd.requiredID())
         )
         // A partial CloudKit import must not be normalized, deleted or
         // rewritten by an unrelated Tag Color mutation.

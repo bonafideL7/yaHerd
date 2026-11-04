@@ -268,19 +268,19 @@ final class CoreDataAnimalRepository:
         ) { context, herd in
             let pasture = try CoreDataAnimalMutation.resolvePasture(
                 id: input.pastureID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: self.lookup,
                 in: context
             )
             let dam = try CoreDataAnimalMutation.resolveAnimal(
                 id: input.damID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: self.lookup,
                 in: context
             )
             let explicitSire = try CoreDataAnimalMutation.resolveAnimal(
                 id: input.sireID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: self.lookup,
                 in: context
             )
@@ -299,7 +299,7 @@ final class CoreDataAnimalRepository:
             }
             let statusReference = try CoreDataAnimalMutation.resolveStatusReference(
                 id: input.statusReferenceID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: self.lookup,
                 in: context
             )
@@ -317,7 +317,7 @@ final class CoreDataAnimalRepository:
             let animal = CDAnimal(context: context)
             animal.id = try CoreDataAnimalMutation.uniqueID(
                 for: CDAnimal.self,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: self.lookup,
                 in: context
             )
@@ -362,7 +362,7 @@ final class CoreDataAnimalRepository:
                 let tag = CDAnimalTag(context: context)
                 tag.id = try CoreDataAnimalMutation.uniqueID(
                     for: CDAnimalTag.self,
-                    herdID: herd.id,
+                    herdID: (try herd.requiredID()),
                     lookup: self.lookup,
                     in: context
                 )
@@ -398,7 +398,7 @@ final class CoreDataAnimalRepository:
             guard let animal = try self.lookup.herdOwned(
                 CDAnimal.self,
                 id: id,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw AnimalValidationError.animalNotFound
@@ -411,19 +411,19 @@ final class CoreDataAnimalRepository:
 
             let pasture = try CoreDataAnimalMutation.resolvePasture(
                 id: input.pastureID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: self.lookup,
                 in: context
             )
             let dam = try CoreDataAnimalMutation.resolveAnimal(
                 id: input.damID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: self.lookup,
                 in: context
             )
             let explicitSire = try CoreDataAnimalMutation.resolveAnimal(
                 id: input.sireID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: self.lookup,
                 in: context
             )
@@ -442,7 +442,7 @@ final class CoreDataAnimalRepository:
             }
             let statusReference = try CoreDataAnimalMutation.resolveStatusReference(
                 id: input.statusReferenceID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: self.lookup,
                 in: context
             )
@@ -627,7 +627,7 @@ final class CoreDataAnimalRepository:
         try performWrite { context, herd in
             let pasture = try CoreDataAnimalMutation.resolvePasture(
                 id: toPastureID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: self.lookup,
                 in: context
             )
@@ -658,7 +658,7 @@ final class CoreDataAnimalRepository:
         ) { context, herd in
             let animal = try self.requiredAnimal(
                 id: animalID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 context: context
             )
             let tags = CoreDataAnimalProjection.managedTags(animal)
@@ -669,7 +669,7 @@ final class CoreDataAnimalRepository:
             let tag = CDAnimalTag(context: context)
             tag.id = try CoreDataAnimalMutation.uniqueID(
                 for: CDAnimalTag.self,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: self.lookup,
                 in: context
             )
@@ -705,7 +705,7 @@ final class CoreDataAnimalRepository:
         ) { context, herd in
             let animal = try self.requiredAnimal(
                 id: animalID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 context: context
             )
             guard let tag = CoreDataAnimalProjection.managedTags(animal)
@@ -755,7 +755,7 @@ final class CoreDataAnimalRepository:
         try performWrite { context, herd in
             let animal = try self.requiredAnimal(
                 id: animalID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 context: context
             )
             guard let tag = CoreDataAnimalProjection.managedTags(animal)
@@ -785,7 +785,7 @@ final class CoreDataAnimalRepository:
         try performWrite { context, herd in
             let animal = try self.requiredAnimal(
                 id: animalID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 context: context
             )
             let tags = CoreDataAnimalProjection.managedTags(animal)
@@ -829,13 +829,13 @@ final class CoreDataAnimalRepository:
         return try performWrite { context, herd in
             let animal = try self.requiredAnimal(
                 id: animalID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 context: context
             )
             let record = CDHealthRecord(context: context)
             record.id = try CoreDataAnimalMutation.uniqueID(
                 for: CDHealthRecord.self,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: self.lookup,
                 in: context
             )
@@ -857,19 +857,19 @@ final class CoreDataAnimalRepository:
         return try performWrite { context, herd in
             let animal = try self.requiredAnimal(
                 id: animalID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 context: context
             )
             let sire = try CoreDataAnimalMutation.resolveAnimal(
                 id: input.sireAnimalID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: self.lookup,
                 in: context
             )
             let check = CDPregnancyCheck(context: context)
             check.id = try CoreDataAnimalMutation.uniqueID(
                 for: CDPregnancyCheck.self,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: self.lookup,
                 in: context
             )
@@ -911,38 +911,38 @@ final class CoreDataAnimalRepository:
             if try lookup.herdOwned(
                 CDAnimal.self,
                 id: transaction.animalID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) != nil {
                 throw CoreDataPersistenceError.duplicateApplicationID(
                     entity: CDAnimal.coreDataEntityName,
                     id: transaction.animalID,
-                    herdID: herd.id
+                    herdID: (try herd.requiredID())
                 )
             }
 
             let attributes = transaction.attributes
             let pasture = try CoreDataAnimalMutation.resolvePasture(
                 id: attributes.pastureID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
             let sire = try CoreDataAnimalMutation.resolveAnimal(
                 id: attributes.sireID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
             let dam = try CoreDataAnimalMutation.resolveAnimal(
                 id: attributes.damID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
             let statusReference = try CoreDataAnimalMutation.resolveStatusReference(
                 id: attributes.statusReferenceID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
@@ -1052,7 +1052,7 @@ final class CoreDataAnimalRepository:
             guard let animal = try lookup.herdOwned(
                 CDAnimal.self,
                 id: transaction.animalID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw AnimalAggregateTransactionError.aggregateNotFound(
@@ -1136,7 +1136,7 @@ final class CoreDataAnimalRepository:
             target = CDAnimalTag(context: context)
             target.id = try CoreDataAnimalMutation.uniqueID(
                 for: CDAnimalTag.self,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )

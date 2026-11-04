@@ -84,7 +84,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
         try WorkingTreatmentPlanRules.validate(items)
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         return try performWrite { context, herd in
-            let newID = try self.uniqueTemplateID(herdID: herd.id, in: context)
+            let newID = try self.uniqueTemplateID(herdID: (try herd.requiredID()), in: context)
             if try Self.templateNameExists(normalizedName, excluding: nil, herd: herd, in: context) {
                 throw WorkingRepositoryError.duplicateTemplateName(normalizedName)
             }
@@ -110,7 +110,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
             guard let template = try self.lookup.herdOwned(
                 CDWorkingTreatmentTemplate.self,
                 id: id,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw WorkingRepositoryError.templateNotFound
@@ -237,7 +237,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
         herd: CDHerd,
         in context: NSManagedObjectContext
     ) throws -> [CDWorkingTreatmentTemplate] {
-        try validateNoOrphanedTemplates(herdID: herd.id, in: context)
+        try validateNoOrphanedTemplates(herdID: (try herd.requiredID()), in: context)
         let request = NSFetchRequest<CDWorkingTreatmentTemplate>(
             entityName: CDWorkingTreatmentTemplate.coreDataEntityName
         )
@@ -249,7 +249,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
         let templates = try context.fetch(request)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
             templates,
-            herdID: herd.id
+            herdID: (try herd.requiredID())
         )
         return templates
     }

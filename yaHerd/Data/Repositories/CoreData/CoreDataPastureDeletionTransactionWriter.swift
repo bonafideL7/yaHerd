@@ -207,7 +207,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
             guard let pasture = try lookup.herdOwned(
                 CDPasture.self,
                 id: expected.pastureID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw PastureDeletionTransactionError.pastureMissing(
@@ -224,7 +224,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
             let residents = try context.fetch(request)
             try CoreDataAnimalMutation.validateUniqueApplicationIDs(
                 residents,
-                herdID: herd.id
+                herdID: (try herd.requiredID())
             )
             let activeResidents = try residents.filter { animal in
                 _ = try CoreDataAnimalProjection.birthDate(animal)
@@ -253,7 +253,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
             guard let resolved = try lookup.herdOwned(
                 CDPasture.self,
                 id: toPastureID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw PastureDeletionTransactionError.destinationPastureMissing(
@@ -269,7 +269,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
             guard let animal = try lookup.herdOwned(
                 CDAnimal.self,
                 id: animalID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw PastureDeletionTransactionError.animalMissing(animalID: animalID)
@@ -325,7 +325,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
             guard let pasture = try lookup.herdOwned(
                 CDPasture.self,
                 id: id,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw PastureDeletionTransactionError.pastureMissing(pastureID: id)
@@ -342,7 +342,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
         let survivors = try context.fetch(survivorRequest)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
             survivors,
-            herdID: herd.id
+            herdID: (try herd.requiredID())
         )
         for animal in survivors {
             guard let currentID = animal.currentPasture?.id,

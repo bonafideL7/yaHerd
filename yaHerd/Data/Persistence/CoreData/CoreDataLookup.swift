@@ -64,7 +64,7 @@ struct CoreDataLookup: Sendable {
     }
 }
 
-extension CDHerd: CoreDataApplicationIdentifiedManagedObject {
+extension CDHerd: CoreDataEntityNamed {
     static let coreDataEntityName = "Herd"
 }
 

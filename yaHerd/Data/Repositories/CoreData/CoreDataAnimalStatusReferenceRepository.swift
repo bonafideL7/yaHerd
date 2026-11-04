@@ -70,7 +70,7 @@ final class CoreDataAnimalStatusReferenceRepository: AnimalStatusReferenceReadin
                 throw CoreDataPersistenceError.duplicateApplicationID(
                     entity: CDAnimalStatusReference.coreDataEntityName,
                     id: duplicate.key,
-                    herdID: herd.id
+                    herdID: (try herd.requiredID())
                 )
             }
             return try references.map { reference in
