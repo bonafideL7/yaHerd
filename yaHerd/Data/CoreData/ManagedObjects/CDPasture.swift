@@ -10,7 +10,7 @@ final class CDPasture: NSManagedObject {
     @NSManaged var usableAcreage: NSNumber?
     @NSManaged var targetAcresPerHead: NSNumber?
     @NSManaged var lastGrazedDate: Date?
-    @NSManaged var herd: CDHerd
+    @NSManaged var herd: CDHerd?
     @NSManaged var group: CDPastureGroup?
     @NSManaged var animals: NSSet?
     @NSManaged var workingSourceSessions: NSSet?

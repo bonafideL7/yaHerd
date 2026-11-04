@@ -66,12 +66,13 @@ final class CoreDataPastureRepository:
         guard let herdID = selection.currentHerdID else { throw HerdRepositoryError.missingHerd }
         let context = contextFactory.makeReadContext()
         return try context.performAndWait {
-            guard try lookup.herd(id: herdID, in: context) != nil else { throw HerdRepositoryError.missingHerd }
+            guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
+            try CoreDataAnimalMutation.validateUnownedImportedPastures(herd: herd, in: context)
             guard let pasture = try lookup.herdOwned(CDPasture.self, id: id, herdID: herdID, in: context) else {
                 return nil
             }
             if pasture.group != nil {
-                _ = try Self.fetchGroups(herd: pasture.herd, in: context)
+                _ = try Self.fetchGroups(herd: herd, in: context)
             }
             return try Self.detail(pasture, herdID: herdID)
         }
@@ -437,6 +438,7 @@ final class CoreDataPastureRepository:
         herd: CDHerd,
         in context: NSManagedObjectContext
     ) throws {
+        try CoreDataAnimalMutation.validateUnownedImportedPastures(herd: herd, in: context)
         let request = NSFetchRequest<CDPasture>(entityName: CDPasture.coreDataEntityName)
         request.predicate = NSPredicate(
             format: "herd == %@ AND group != nil AND group.herd == nil",
@@ -479,7 +481,7 @@ final class CoreDataPastureRepository:
         try validateHerdOwnership(
             entity: CDPasture.coreDataEntityName,
             id: pasture.id,
-            actualHerdID: pasture.herd.id,
+            actualHerdID: pasture.herd?.id,
             selectedHerdID: herdID
         )
         if let group = pasture.group {
@@ -524,7 +526,7 @@ final class CoreDataPastureRepository:
             try validateHerdOwnership(
                 entity: CDPasture.coreDataEntityName,
                 id: pasture.id,
-                actualHerdID: pasture.herd.id,
+                actualHerdID: pasture.herd?.id,
                 selectedHerdID: herdID
             )
         }

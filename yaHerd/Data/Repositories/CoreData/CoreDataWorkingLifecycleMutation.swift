@@ -184,11 +184,11 @@ enum CoreDataWorkingLifecycleMutation {
             }
 
             if let currentPasture = animal.currentPasture,
-               currentPasture.herd.id != herd.id {
+               currentPasture.herd?.id != herd.id {
                 throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                     relationship: "Animal.currentPasture",
                     expectedHerdID: herd.id,
-                    actualHerdID: currentPasture.herd.id
+                    actualHerdID: currentPasture.herd?.id
                 )
             }
 
@@ -339,11 +339,11 @@ enum CoreDataWorkingLifecycleMutation {
         }
 
         if let currentPasture = animal.currentPasture,
-           currentPasture.herd.id != herd.id {
+           currentPasture.herd?.id != herd.id {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "Animal.currentPasture",
                 expectedHerdID: herd.id,
-                actualHerdID: currentPasture.herd.id
+                actualHerdID: currentPasture.herd?.id
             )
         }
 
@@ -367,11 +367,11 @@ enum CoreDataWorkingLifecycleMutation {
         relationship: String,
         herd: CDHerd
     ) throws {
-        guard pasture.herd.id == herd.id else {
+        guard pasture.herd?.id == herd.id else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: relationship,
                 expectedHerdID: herd.id,
-                actualHerdID: pasture.herd.id
+                actualHerdID: pasture.herd?.id
             )
         }
         guard pasture.id == expectedID else {

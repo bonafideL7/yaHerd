@@ -1042,6 +1042,7 @@ actor CoreDataReadModelActor:
                 throw HerdRepositoryError.missingHerd
             }
 
+            try CoreDataAnimalMutation.validateUnownedImportedPastures(herd: herd, in: context)
             var offset = 0
             var options: [PastureOption] = []
             var seenIDs = Set<UUID>()
@@ -1063,12 +1064,12 @@ actor CoreDataReadModelActor:
 
                 let pastures = try context.fetch(request)
                 for pasture in pastures {
-                    guard pasture.herd.id == herdID else {
+                    guard pasture.herd?.id == herdID else {
                         throw CoreDataReadModelError.invalidHerdOwnership(
                             entity: CDPasture.coreDataEntityName,
                             id: pasture.id,
                             expectedHerdID: herdID,
-                            actualHerdID: pasture.herd.id
+                            actualHerdID: pasture.herd?.id
                         )
                     }
                     guard seenIDs.insert(pasture.id).inserted else {
@@ -1451,7 +1452,7 @@ actor CoreDataReadModelActor:
             format: """
             herd == %@ AND
             currentPasture != nil AND
-            currentPasture.herd != %@
+            (currentPasture.herd == nil OR currentPasture.herd != %@)
             """,
             herd,
             herd
@@ -1465,7 +1466,7 @@ actor CoreDataReadModelActor:
                 entity: CDPasture.coreDataEntityName,
                 id: pasture.id,
                 expectedHerdID: herdID,
-                actualHerdID: pasture.herd.id
+                actualHerdID: pasture.herd?.id
             )
         }
 
@@ -1676,6 +1677,7 @@ actor CoreDataReadModelActor:
         context: NSManagedObjectContext,
         herdAnimals: [CDAnimal]? = nil
     ) throws -> [DashboardPastureRecord] {
+        try CoreDataAnimalMutation.validateUnownedImportedPastures(herd: herd, in: context)
         let request = NSFetchRequest<CDPasture>(
             entityName: CDPasture.coreDataEntityName
         )
@@ -1769,12 +1771,12 @@ actor CoreDataReadModelActor:
         }
 
         return try pastures.map { pasture in
-            guard pasture.herd.id == herdID else {
+            guard pasture.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDPasture.coreDataEntityName,
                     id: pasture.id,
                     expectedHerdID: herdID,
-                    actualHerdID: pasture.herd.id
+                    actualHerdID: pasture.herd?.id
                 )
             }
             if let group = pasture.group,

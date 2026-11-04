@@ -659,12 +659,12 @@ enum CoreDataAnimalReadGraphValidator {
             )
         }
         if let pasture = animal.currentPasture,
-           pasture.herd.id != herdID {
+           pasture.herd?.id != herdID {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDPasture.coreDataEntityName,
                 id: pasture.id,
                 expectedHerdID: herdID,
-                actualHerdID: pasture.herd.id
+                actualHerdID: pasture.herd?.id
             )
         }
         if let session = animal.activeWorkingSession,

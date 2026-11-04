@@ -1028,6 +1028,82 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     }
 
     @MainActor
+    func testUnownedImportedPastureBlocksScopedReadsWritesAndSeedingUntilRelinked() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+            assembly: assembly
+        )
+        let graph = CoreDataAppPersistenceAssembly(
+            assembly: assembly, currentHerdID: herdID
+        ).makeDependencies(dataAccessMode: .readWrite)
+        let seeder = try XCTUnwrap(graph.animalFeatureDependencies.sampleDataSeeder)
+        let pastures = graph.pastureFeatureDependencies.listRepository
+        let creator = graph.pastureFeatureDependencies.createRepository
+        let context = try assembly.contextFactory.makeWriteContext()
+        let importedID = UUID()
+
+        try context.performAndWait {
+            let imported = CDPasture(context: context)
+            imported.id = importedID
+            imported.name = "Imported North"
+            imported.sortOrder = 5
+            // A CloudKit record can arrive before its direct Herd relationship.
+            imported.herd = nil
+            try context.save()
+        }
+
+        let expected = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDPasture.coreDataEntityName,
+            id: importedID, expectedHerdID: herdID, actualHerdID: nil
+        )
+        XCTAssertThrowsError(try pastures.fetchPastures()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try creator.create(input: PastureInput(
+            name: "Should Not Be Added", acreage: 20,
+            usableAcreage: 18, targetAcresPerHead: 2
+        ))) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        do {
+            _ = try await graph.homeFeatureDependencies.dashboardQueryReader
+                .fetchDashboardPastureRecords()
+            XCTFail("Dashboard must not mistake a pending Pasture import for empty data.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try seeder.canSeedSampleData()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        do {
+            _ = try await seeder.seedSampleDataIfNeeded()
+            XCTFail("Sample seeding must reject an ownerless imported Pasture.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataReadModelError, expected)
+        }
+        XCTAssertEqual(graph.applicationMutationCenter.currentSequence, 0)
+
+        try context.performAndWait {
+            let request = NSFetchRequest<CDPasture>(
+                entityName: CDPasture.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "id == %@", importedID as NSUUID)
+            let stored = try XCTUnwrap(context.fetch(request).first)
+            XCTAssertNil(stored.herd)
+            XCTAssertEqual(stored.name, "Imported North")
+            XCTAssertEqual(stored.sortOrder, 5)
+            stored.herd = try XCTUnwrap(CoreDataLookup().herd(id: herdID, in: context))
+            try context.save()
+        }
+        let recovered = try XCTUnwrap(pastures.fetchPastures().first)
+        XCTAssertEqual(recovered.id, importedID)
+        XCTAssertEqual(recovered.name, "Imported North")
+        XCTAssertEqual(recovered.sortOrder, 5)
+        XCTAssertFalse(try seeder.canSeedSampleData())
+        XCTAssertEqual(graph.applicationMutationCenter.currentSequence, 0)
+    }
+
+    @MainActor
     func testSampleSeedRejectsUnattachedImportedWorkingTreatmentWithoutMutatingHistory() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
