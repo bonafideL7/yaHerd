@@ -49,12 +49,10 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             herd.id = originalID
             try restoreContext.save()
         }
-        XCTAssertEqual(
-            try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
-                assembly: assembly
-            ),
-            originalID
+        let restoredID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+            assembly: assembly
         )
+        XCTAssertEqual(restoredID, originalID)
     }
 
     func testBootstrapCreatesOneLocalHerdAndReusesItsApplicationID() async throws {
