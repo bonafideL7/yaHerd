@@ -114,6 +114,7 @@ final class CoreDataModelStructureTests: XCTestCase {
         try context.performAndWait {
             let herd = CDHerd(context: context)
             herd.id = UUID()
+            let herdID = try herd.requiredID()
             herd.name = "Imported Herd"
             herd.createdAt = nil
             herd.updatedAt = nil
@@ -121,7 +122,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try herd.toSummary()) {
                 XCTAssertEqual(
                     $0 as? CoreDataHerdMappingError,
-                    .missingCreatedAt(herdID: herd.id)
+                    .missingCreatedAt(herdID: herdID)
                 )
             }
 
@@ -130,14 +131,14 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try herd.toSummary()) {
                 XCTAssertEqual(
                     $0 as? CoreDataHerdMappingError,
-                    .missingUpdatedAt(herdID: herd.id)
+                    .missingUpdatedAt(herdID: herdID)
                 )
             }
 
             let originalUpdate = Date(timeIntervalSince1970: 1_700_000_500)
             herd.updatedAt = originalUpdate
             let summary = try herd.toSummary()
-            XCTAssertEqual(summary.publicID, herd.id)
+            XCTAssertEqual(summary.publicID, herdID)
             XCTAssertEqual(summary.createdAt, originalCreation)
             XCTAssertEqual(summary.updatedAt, originalUpdate)
             context.rollback()
@@ -721,6 +722,7 @@ final class CoreDataModelStructureTests: XCTestCase {
         try context.performAndWait {
             let herd = CDHerd(context: context)
             herd.id = UUID()
+            let herdID = try herd.requiredID()
             herd.name = "My Herd"
             herd.createdAt = Date(timeIntervalSince1970: 100)
             herd.updatedAt = herd.createdAt
@@ -735,7 +737,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             session.sourcePastureIDSnapshot = nil
             session.sourcePastureNameSnapshot = nil
 
-            try CoreDataWorkingRepository.validateSessionGraph(session, herdID: herd.id)
+            try CoreDataWorkingRepository.validateSessionGraph(session, herdID: herdID)
             let missingSummary = try WorkingMapper.makeSessionSummary(from: session)
             let missingDetail = try WorkingMapper.makeSessionDetail(from: session)
             XCTAssertNil(missingSummary.sourcePastureName)
@@ -750,7 +752,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             session.sourcePasture = pasture
 
             XCTAssertThrowsError(
-                try CoreDataWorkingRepository.validateSessionGraph(session, herdID: herd.id)
+                try CoreDataWorkingRepository.validateSessionGraph(session, herdID: herdID)
             ) { error in
                 XCTAssertEqual(
                     error as? CoreDataWorkingRepositoryError,
@@ -764,7 +766,7 @@ final class CoreDataModelStructureTests: XCTestCase {
 
             session.sourcePastureIDSnapshot = pasture.id
             session.sourcePastureNameSnapshot = pasture.name
-            try CoreDataWorkingRepository.validateSessionGraph(session, herdID: herd.id)
+            try CoreDataWorkingRepository.validateSessionGraph(session, herdID: herdID)
 
             let historicalSummary = try WorkingMapper.makeSessionSummary(from: session)
             let historicalDetail = try WorkingMapper.makeSessionDetail(from: session)
