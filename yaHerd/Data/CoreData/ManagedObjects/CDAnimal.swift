@@ -18,7 +18,7 @@ final class CDAnimal: NSManagedObject {
     @NSManaged var archivedAt: Date?
     @NSManaged var archiveReason: String?
     @NSManaged var distinguishingFeaturesData: Data?
-    @NSManaged var herd: CDHerd
+    @NSManaged var herd: CDHerd?
     @NSManaged var statusReference: CDAnimalStatusReference?
     @NSManaged var currentPasture: CDPasture?
     @NSManaged var sire: CDAnimal?

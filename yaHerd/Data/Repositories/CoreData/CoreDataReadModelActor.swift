@@ -1043,6 +1043,7 @@ actor CoreDataReadModelActor:
             }
 
             try CoreDataAnimalMutation.validateUnownedImportedPastures(herd: herd, in: context)
+            try CoreDataAnimalMutation.validateUnownedImportedAnimals(herd: herd, in: context)
             var offset = 0
             var options: [PastureOption] = []
             var seenIDs = Set<UUID>()
@@ -1288,6 +1289,7 @@ actor CoreDataReadModelActor:
         herdID: UUID,
         in context: NSManagedObjectContext
     ) throws {
+        try CoreDataAnimalMutation.validateUnownedImportedAnimals(herd: herd, in: context)
         try validateHerdApplicationIDs(
             entityName: CDAnimal.coreDataEntityName,
             herd: herd,
@@ -1535,7 +1537,7 @@ actor CoreDataReadModelActor:
                 entity: CDAnimal.coreDataEntityName,
                 id: offspring.id,
                 expectedHerdID: herdID,
-                actualHerdID: offspring.herd.id
+                actualHerdID: offspring.herd?.id
             )
         }
     }
@@ -1678,6 +1680,7 @@ actor CoreDataReadModelActor:
         herdAnimals: [CDAnimal]? = nil
     ) throws -> [DashboardPastureRecord] {
         try CoreDataAnimalMutation.validateUnownedImportedPastures(herd: herd, in: context)
+        try CoreDataAnimalMutation.validateUnownedImportedAnimals(herd: herd, in: context)
         let request = NSFetchRequest<CDPasture>(
             entityName: CDPasture.coreDataEntityName
         )
@@ -1728,7 +1731,7 @@ actor CoreDataReadModelActor:
                     entity: CDAnimal.coreDataEntityName,
                     id: resident.id,
                     expectedHerdID: herdID,
-                    actualHerdID: resident.herd.id
+                    actualHerdID: resident.herd?.id
                 )
             }
         }
@@ -1839,12 +1842,12 @@ actor CoreDataReadModelActor:
         _ animal: CDAnimal,
         herdID: UUID
     ) throws {
-        guard animal.herd.id == herdID else {
+        guard animal.herd?.id == herdID else {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDAnimal.coreDataEntityName,
                 id: animal.id,
                 expectedHerdID: herdID,
-                actualHerdID: animal.herd.id
+                actualHerdID: animal.herd?.id
             )
         }
 
@@ -1860,12 +1863,12 @@ actor CoreDataReadModelActor:
         }
 
         for offspring in CoreDataAnimalProjection.managedMaternalOffspring(animal) {
-            guard offspring.herd.id == herdID else {
+            guard offspring.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDAnimal.coreDataEntityName,
                     id: offspring.id,
                     expectedHerdID: herdID,
-                    actualHerdID: offspring.herd.id
+                    actualHerdID: offspring.herd?.id
                 )
             }
         }

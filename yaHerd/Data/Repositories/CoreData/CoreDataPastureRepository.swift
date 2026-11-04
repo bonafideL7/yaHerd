@@ -68,6 +68,7 @@ final class CoreDataPastureRepository:
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
             try CoreDataAnimalMutation.validateUnownedImportedPastures(herd: herd, in: context)
+            try CoreDataAnimalMutation.validateUnownedImportedAnimals(herd: herd, in: context)
             guard let pasture = try lookup.herdOwned(CDPasture.self, id: id, herdID: herdID, in: context) else {
                 return nil
             }
@@ -84,6 +85,7 @@ final class CoreDataPastureRepository:
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
             try CoreDataAnimalMutation.validateUnownedImportedPastures(herd: herd, in: context)
+            try CoreDataAnimalMutation.validateUnownedImportedAnimals(herd: herd, in: context)
             guard let pasture = try lookup.herdOwned(CDPasture.self, id: pastureID, herdID: herdID, in: context) else {
                 return []
             }
@@ -441,6 +443,7 @@ final class CoreDataPastureRepository:
         in context: NSManagedObjectContext
     ) throws {
         try CoreDataAnimalMutation.validateUnownedImportedPastures(herd: herd, in: context)
+        try CoreDataAnimalMutation.validateUnownedImportedAnimals(herd: herd, in: context)
         let request = NSFetchRequest<CDPasture>(entityName: CDPasture.coreDataEntityName)
         request.predicate = NSPredicate(
             format: "herd == %@ AND group != nil AND group.herd == nil",
@@ -499,7 +502,7 @@ final class CoreDataPastureRepository:
             try validateHerdOwnership(
                 entity: CDAnimal.coreDataEntityName,
                 id: resident.id,
-                actualHerdID: resident.herd.id,
+                actualHerdID: resident.herd?.id,
                 selectedHerdID: herdID
             )
         }
