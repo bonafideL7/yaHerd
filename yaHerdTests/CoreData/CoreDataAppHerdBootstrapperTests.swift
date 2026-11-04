@@ -1059,6 +1059,10 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertThrowsError(try pastures.fetchPastures()) {
             XCTAssertEqual($0 as? CoreDataReadModelError, expected)
         }
+        let residentReader = try XCTUnwrap(pastures as? any PastureResidentAnimalReader)
+        XCTAssertThrowsError(try residentReader.fetchResidentAnimals(pastureID: importedID)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
         XCTAssertThrowsError(try creator.create(input: PastureInput(
             name: "Should Not Be Added", acreage: 20,
             usableAcreage: 18, targetAcresPerHead: 2
