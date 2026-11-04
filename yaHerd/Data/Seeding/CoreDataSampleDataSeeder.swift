@@ -119,7 +119,7 @@ enum CoreDataSampleHerdFactory {
         // Template imports can precede their Herd link; never seed conflicting
         // definitions before the pending ownership relationship is resolved.
         try CoreDataWorkingTreatmentTemplateRepository.validateNoOrphanedTemplates(
-            herdID: herd.id, in: context
+            herdID: (try herd.requiredID()), in: context
         )
         // A group can exist without a Pasture. Do not overwrite or create
         // duplicate logical group names in a user-configured Herd.
@@ -154,7 +154,7 @@ enum CoreDataSampleHerdFactory {
         existingColorsRequest.predicate = NSPredicate(format: "herd == %@", herd)
         let existingColors = try context.fetch(existingColorsRequest)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
-            existingColors, herdID: herd.id
+            existingColors, herdID: (try herd.requiredID())
         )
         var colors = Dictionary(uniqueKeysWithValues: existingColors.map { ($0.id, $0) })
         let hasDefault = existingColors.contains { $0.isDefault && !$0.isHidden }

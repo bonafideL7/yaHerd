@@ -3,6 +3,60 @@ import XCTest
 @testable import yaHerd
 
 final class CoreDataAppHerdBootstrapperTests: XCTestCase {
+    func testImportedHerdMissingIdentityBlocksBootstrapWithoutCreatingReplacement() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let originalCreation = Date(timeIntervalSince1970: 1_700_000_000)
+        let initialContext = try assembly.contextFactory.makeWriteContext()
+        try initialContext.performAndWait {
+            let herd = CDHerd(context: initialContext)
+            herd.id = nil
+            herd.name = "Imported Herd"
+            herd.createdAt = originalCreation
+            herd.updatedAt = originalCreation
+            try initialContext.save()
+            XCTAssertThrowsError(try herd.toSummary()) {
+                XCTAssertEqual($0 as? CoreDataHerdMappingError, .missingID)
+            }
+        }
+
+        do {
+            _ = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+                assembly: assembly
+            )
+            XCTFail("An imported Herd without its original UUID must block startup.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataHerdMappingError, .missingID)
+        }
+
+        let preservedContext = assembly.contextFactory.makeReadContext()
+        try preservedContext.performAndWait {
+            let herds = try preservedContext.fetch(
+                NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            )
+            XCTAssertEqual(herds.count, 1)
+            XCTAssertNil(herds[0].id)
+            XCTAssertEqual(herds[0].name, "Imported Herd")
+            XCTAssertEqual(herds[0].createdAt, originalCreation)
+        }
+
+        let originalID = UUID()
+        let restoreContext = try assembly.contextFactory.makeWriteContext()
+        try restoreContext.performAndWait {
+            let herds = try restoreContext.fetch(
+                NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            )
+            let herd = try XCTUnwrap(herds.first)
+            herd.id = originalID
+            try restoreContext.save()
+        }
+        XCTAssertEqual(
+            try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+                assembly: assembly
+            ),
+            originalID
+        )
+    }
+
     func testBootstrapCreatesOneLocalHerdAndReusesItsApplicationID() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let timestamp = Date(timeIntervalSince1970: 1_800_000_000)

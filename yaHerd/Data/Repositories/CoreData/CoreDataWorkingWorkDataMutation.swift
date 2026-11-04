@@ -45,7 +45,7 @@ enum CoreDataWorkingWorkDataMutation {
         )
         let sire = try validateReferences(
             input: input,
-            herdID: herd.id,
+            herdID: (try herd.requiredID()),
             lookup: lookup,
             in: context
         )
@@ -55,7 +55,7 @@ enum CoreDataWorkingWorkDataMutation {
             let record = CDWorkingTreatmentRecord(context: context)
             record.id = try CoreDataAnimalMutation.uniqueID(
                 for: CDWorkingTreatmentRecord.self,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
@@ -82,7 +82,7 @@ enum CoreDataWorkingWorkDataMutation {
             let check = CDPregnancyCheck(context: context)
             check.id = try CoreDataAnimalMutation.uniqueID(
                 for: CDPregnancyCheck.self,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
@@ -158,7 +158,7 @@ enum CoreDataWorkingWorkDataMutation {
         let record = CDHealthRecord(context: context)
         record.id = try CoreDataAnimalMutation.uniqueID(
             for: CDHealthRecord.self,
-            herdID: herd.id,
+            herdID: (try herd.requiredID()),
             lookup: lookup,
             in: context
         )

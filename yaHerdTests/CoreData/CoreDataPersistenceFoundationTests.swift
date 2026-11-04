@@ -33,7 +33,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             let herd = try XCTUnwrap(
                 CoreDataLookup().herd(id: herdID, in: readContext)
             )
-            XCTAssertEqual(herd.id, herdID)
+            XCTAssertEqual((try herd.requiredID()), herdID)
 
             let pasture = try XCTUnwrap(
                 CoreDataLookup().herdOwned(
@@ -631,7 +631,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             let herd = try XCTUnwrap(CoreDataLookup().herd(
                 id: herdID, in: committedContext
             ))
-            XCTAssertEqual(herd.id, herdID)
+            XCTAssertEqual((try herd.requiredID()), herdID)
             XCTAssertEqual(herd.name, "Committed Herd Rename")
             XCTAssertEqual(herd.createdAt, originalUpdatedAt)
             XCTAssertEqual(herd.updatedAt, committedUpdatedAt)

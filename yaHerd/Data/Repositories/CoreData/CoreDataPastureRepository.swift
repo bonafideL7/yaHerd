@@ -127,7 +127,7 @@ final class CoreDataPastureRepository:
             guard let pasture = try self.lookup.herdOwned(
                 CDPasture.self,
                 id: id,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw PastureValidationError.pastureNotFound
@@ -173,14 +173,14 @@ final class CoreDataPastureRepository:
         return try performWrite { context, herd in
             let nextSortOrder = (try Self.fetchPastures(herd: herd, in: context).map(\.sortOrder).max() ?? -1) + 1
             let pasture = CDPasture(context: context)
-            pasture.id = try self.uniqueID(for: CDPasture.self, herdID: herd.id, in: context)
+            pasture.id = try self.uniqueID(for: CDPasture.self, herdID: (try herd.requiredID()), in: context)
             pasture.name = input.name
             pasture.acreage = input.acreage.map(NSNumber.init(value:))
             pasture.usableAcreage = input.usableAcreage.map(NSNumber.init(value:))
             pasture.targetAcresPerHead = input.targetAcresPerHead.map(NSNumber.init(value:))
             pasture.sortOrder = nextSortOrder
             pasture.herd = herd
-            return try Self.detail(pasture, herdID: herd.id)
+            return try Self.detail(pasture, herdID: (try herd.requiredID()))
         }
     }
 
@@ -190,7 +190,7 @@ final class CoreDataPastureRepository:
             throw PastureValidationError.duplicateName(input.name)
         }
         return try performWrite { context, herd in
-            guard let pasture = try self.lookup.herdOwned(CDPasture.self, id: id, herdID: herd.id, in: context) else {
+            guard let pasture = try self.lookup.herdOwned(CDPasture.self, id: id, herdID: (try herd.requiredID()), in: context) else {
                 throw PastureValidationError.pastureNotFound
             }
             if pasture.group != nil {
@@ -200,7 +200,7 @@ final class CoreDataPastureRepository:
             pasture.acreage = input.acreage.map(NSNumber.init(value:))
             pasture.usableAcreage = input.usableAcreage.map(NSNumber.init(value:))
             pasture.targetAcresPerHead = input.targetAcresPerHead.map(NSNumber.init(value:))
-            return try Self.detail(pasture, herdID: herd.id)
+            return try Self.detail(pasture, herdID: (try herd.requiredID()))
         }
     }
 
@@ -275,12 +275,12 @@ final class CoreDataPastureRepository:
         }
         return try performWrite { context, herd in
             let group = CDPastureGroup(context: context)
-            group.id = try self.uniqueID(for: CDPastureGroup.self, herdID: herd.id, in: context)
+            group.id = try self.uniqueID(for: CDPastureGroup.self, herdID: (try herd.requiredID()), in: context)
             group.name = input.name
             group.grazeDays = Int64(input.grazeDays)
             group.restDays = Int64(input.restDays)
             group.herd = herd
-            return try Self.groupDetail(group, herdID: herd.id)
+            return try Self.groupDetail(group, herdID: (try herd.requiredID()))
         }
     }
 
@@ -290,7 +290,7 @@ final class CoreDataPastureRepository:
             throw PastureValidationError.duplicateName(input.name)
         }
         return try performWrite { context, herd in
-            guard let group = try self.lookup.herdOwned(CDPastureGroup.self, id: id, herdID: herd.id, in: context) else {
+            guard let group = try self.lookup.herdOwned(CDPastureGroup.self, id: id, herdID: (try herd.requiredID()), in: context) else {
                 throw PastureValidationError.pastureGroupNotFound
             }
             if (group.pastures?.count ?? 0) > 0 {
@@ -299,7 +299,7 @@ final class CoreDataPastureRepository:
             group.name = input.name
             group.grazeDays = Int64(input.grazeDays)
             group.restDays = Int64(input.restDays)
-            return try Self.groupDetail(group, herdID: herd.id)
+            return try Self.groupDetail(group, herdID: (try herd.requiredID()))
         }
     }
 
@@ -316,11 +316,11 @@ final class CoreDataPastureRepository:
 
     func assignPasture(id pastureID: UUID, toGroupID groupID: UUID?) throws {
         try performWrite { context, herd in
-            guard let pasture = try self.lookup.herdOwned(CDPasture.self, id: pastureID, herdID: herd.id, in: context) else {
+            guard let pasture = try self.lookup.herdOwned(CDPasture.self, id: pastureID, herdID: (try herd.requiredID()), in: context) else {
                 throw PastureValidationError.pastureNotFound
             }
             if let groupID {
-                guard let group = try self.lookup.herdOwned(CDPastureGroup.self, id: groupID, herdID: herd.id, in: context) else {
+                guard let group = try self.lookup.herdOwned(CDPastureGroup.self, id: groupID, herdID: (try herd.requiredID()), in: context) else {
                     throw PastureValidationError.pastureGroupNotFound
                 }
                 pasture.group = group
@@ -413,7 +413,7 @@ final class CoreDataPastureRepository:
         ]
         try validateLinkedGroupOwnership(herd: herd, in: context)
         let pastures = try context.fetch(request)
-        try CoreDataAnimalMutation.validateUniqueApplicationIDs(pastures, herdID: herd.id)
+        try CoreDataAnimalMutation.validateUniqueApplicationIDs(pastures, herdID: (try herd.requiredID()))
         for pasture in pastures {
             _ = try pasture.validatedName()
         }
@@ -429,7 +429,7 @@ final class CoreDataPastureRepository:
         ]
         try validateLinkedGroupOwnership(herd: herd, in: context)
         let groups = try context.fetch(request)
-        try CoreDataAnimalMutation.validateUniqueApplicationIDs(groups, herdID: herd.id)
+        try CoreDataAnimalMutation.validateUniqueApplicationIDs(groups, herdID: (try herd.requiredID()))
         for group in groups {
             _ = try validatedGroupName(group)
         }
@@ -455,7 +455,7 @@ final class CoreDataPastureRepository:
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDPastureGroup.coreDataEntityName,
                 id: group.id,
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: nil
             )
         }

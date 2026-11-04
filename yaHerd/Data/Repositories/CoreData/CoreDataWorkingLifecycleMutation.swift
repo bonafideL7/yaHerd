@@ -19,7 +19,7 @@ enum CoreDataWorkingLifecycleMutation {
         let queueItems = managedQueueItems(session)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
             queueItems,
-            herdID: herd.id
+            herdID: (try herd.requiredID())
         )
 
         var destinationsByQueueItemID: [UUID: UUID?] = [:]
@@ -50,7 +50,7 @@ enum CoreDataWorkingLifecycleMutation {
                 guard let persisted = try lookup.herdOwned(
                     CDPasture.self,
                     id: destinationID,
-                    herdID: herd.id,
+                    herdID: (try herd.requiredID()),
                     in: context
                 ) else {
                     throw WorkingRepositoryError.pastureNotFound
@@ -130,7 +130,7 @@ enum CoreDataWorkingLifecycleMutation {
             let movement = CDMovementRecord(context: context)
             movement.id = try CoreDataAnimalMutation.uniqueID(
                 for: CDMovementRecord.self,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
@@ -159,7 +159,7 @@ enum CoreDataWorkingLifecycleMutation {
         let queueItems = managedQueueItems(session)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
             queueItems,
-            herdID: herd.id
+            herdID: (try herd.requiredID())
         )
 
         for item in queueItems {
@@ -168,10 +168,10 @@ enum CoreDataWorkingLifecycleMutation {
                 continue
             }
 
-            guard animal.herd?.id == herd.id else {
+            guard animal.herd?.id == (try herd.requiredID()) else {
                 throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                     relationship: "WorkingQueueItem.animal",
-                    expectedHerdID: herd.id,
+                    expectedHerdID: (try herd.requiredID()),
                     actualHerdID: animal.herd?.id
                 )
             }
@@ -184,10 +184,10 @@ enum CoreDataWorkingLifecycleMutation {
             }
 
             if let currentPasture = animal.currentPasture,
-               currentPasture.herd?.id != herd.id {
+               currentPasture.herd?.id != (try herd.requiredID()) {
                 throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                     relationship: "Animal.currentPasture",
-                    expectedHerdID: herd.id,
+                    expectedHerdID: (try herd.requiredID()),
                     actualHerdID: currentPasture.herd?.id
                 )
             }
@@ -195,10 +195,10 @@ enum CoreDataWorkingLifecycleMutation {
             guard let activeSession = animal.activeWorkingSession else {
                 continue
             }
-            guard activeSession.herd?.id == herd.id else {
+            guard activeSession.herd?.id == (try herd.requiredID()) else {
                 throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                     relationship: "Animal.activeWorkingSession",
-                    expectedHerdID: herd.id,
+                    expectedHerdID: (try herd.requiredID()),
                     actualHerdID: activeSession.herd?.id
                 )
             }
@@ -250,10 +250,10 @@ enum CoreDataWorkingLifecycleMutation {
         herd: CDHerd
     ) throws {
         _ = try WorkingMapper.sessionDate(session)
-        guard session.herd?.id == herd.id else {
+        guard session.herd?.id == (try herd.requiredID()) else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingSession.herd",
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: session.herd?.id
             )
         }
@@ -274,20 +274,20 @@ enum CoreDataWorkingLifecycleMutation {
         herd: CDHerd
     ) throws {
         _ = try WorkingMapper.queueAnimalID(from: item)
-        guard item.herd?.id == herd.id else {
+        guard item.herd?.id == (try herd.requiredID()) else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingSession.queueItems",
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: item.herd?.id
             )
         }
         guard let owningSession = item.session else {
             throw CoreDataWorkingRepositoryError.missingQueueSession(queueItemID: item.id)
         }
-        guard owningSession.herd?.id == herd.id else {
+        guard owningSession.herd?.id == (try herd.requiredID()) else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingQueueItem.session",
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: owningSession.herd?.id
             )
         }
@@ -323,10 +323,10 @@ enum CoreDataWorkingLifecycleMutation {
         session: CDWorkingSession,
         herd: CDHerd
     ) throws {
-        guard animal.herd?.id == herd.id else {
+        guard animal.herd?.id == (try herd.requiredID()) else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingQueueItem.animal",
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: animal.herd?.id
             )
         }
@@ -339,19 +339,19 @@ enum CoreDataWorkingLifecycleMutation {
         }
 
         if let currentPasture = animal.currentPasture,
-           currentPasture.herd?.id != herd.id {
+           currentPasture.herd?.id != (try herd.requiredID()) {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "Animal.currentPasture",
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: currentPasture.herd?.id
             )
         }
 
         if let activeSession = animal.activeWorkingSession {
-            guard activeSession.herd?.id == herd.id else {
+            guard activeSession.herd?.id == (try herd.requiredID()) else {
                 throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                     relationship: "Animal.activeWorkingSession",
-                    expectedHerdID: herd.id,
+                    expectedHerdID: (try herd.requiredID()),
                     actualHerdID: activeSession.herd?.id
                 )
             }
@@ -367,10 +367,10 @@ enum CoreDataWorkingLifecycleMutation {
         relationship: String,
         herd: CDHerd
     ) throws {
-        guard pasture.herd?.id == herd.id else {
+        guard pasture.herd?.id == (try herd.requiredID()) else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: relationship,
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: pasture.herd?.id
             )
         }

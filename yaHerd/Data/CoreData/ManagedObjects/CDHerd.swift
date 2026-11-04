@@ -3,7 +3,7 @@ import Foundation
 
 @objc(CDHerd)
 final class CDHerd: NSManagedObject {
-    @NSManaged var id: UUID
+    @NSManaged var id: UUID?
     @NSManaged var name: String?
     @NSManaged var createdAt: Date?
     @NSManaged var updatedAt: Date?

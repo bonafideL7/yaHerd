@@ -56,7 +56,7 @@ enum CoreDataAppHerdBootstrapper {
                     ascending: true
                 )
             ]
-            return try context.fetch(request).map(\.id)
+            return try context.fetch(request).map { try $0.requiredID() }
         }
     }
 
@@ -71,7 +71,7 @@ enum CoreDataAppHerdBootstrapper {
             let existing = try context.fetch(request)
 
             if existing.count == 1 {
-                return existing[0].id
+                return try existing[0].requiredID()
             }
             if existing.count > 1 {
                 throw CoreDataAppHerdBootstrapError.multipleLocalHerds(
@@ -84,7 +84,7 @@ enum CoreDataAppHerdBootstrapper {
             herd.name = defaultHerdName
             herd.createdAt = now
             herd.updatedAt = now
-            return herd.id
+            return try herd.requiredID()
         }
     }
 }

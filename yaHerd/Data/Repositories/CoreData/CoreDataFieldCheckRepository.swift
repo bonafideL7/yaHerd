@@ -147,7 +147,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             let findings = try Self.fetchFindings(herd: herd, in: context)
             try CoreDataAnimalMutation.validateUniqueApplicationIDs(
                 findings,
-                herdID: herd.id
+                herdID: (try herd.requiredID())
             )
             for finding in findings {
                 try Self.validateFindingReadRelationship(
@@ -188,7 +188,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             guard let pasture = try lookup.herdOwned(
                 CDPasture.self,
                 id: input.pastureID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw FieldCheckRepositoryError.pastureNotFound
@@ -203,7 +203,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             let session = CDFieldCheckSession(context: context)
             session.id = try CoreDataAnimalMutation.uniqueID(
                 for: CDFieldCheckSession.self,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
@@ -251,7 +251,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             guard let session = try lookup.herdOwned(
                 CDFieldCheckSession.self,
                 id: id,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw FieldCheckRepositoryError.sessionNotFound
@@ -281,7 +281,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             guard let session = try lookup.herdOwned(
                 CDFieldCheckSession.self,
                 id: id,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw FieldCheckRepositoryError.sessionNotFound
@@ -314,7 +314,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             guard let session = try lookup.herdOwned(
                 CDFieldCheckSession.self,
                 id: sessionID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw FieldCheckRepositoryError.sessionNotFound
@@ -344,7 +344,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             guard let session = try lookup.herdOwned(
                 CDFieldCheckSession.self,
                 id: sessionID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw FieldCheckRepositoryError.sessionNotFound
@@ -378,7 +378,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             let check = try Self.requiredAnimalCheck(
                 id: animalCheckID,
                 sessionID: sessionID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
@@ -421,7 +421,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             let check = try Self.requiredAnimalCheck(
                 id: animalCheckID,
                 sessionID: sessionID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
@@ -466,7 +466,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             guard let session = try lookup.herdOwned(
                 CDFieldCheckSession.self,
                 id: sessionID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw FieldCheckRepositoryError.sessionNotFound
@@ -476,7 +476,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             guard let animal = try lookup.herdOwned(
                 CDAnimal.self,
                 id: animalID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw FieldCheckRepositoryError.animalNotFound
@@ -490,7 +490,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
 
             guard let destinationPasture = try Self.sessionPasture(
                 for: session,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             ) else {
@@ -560,7 +560,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             guard let session = try lookup.herdOwned(
                 CDFieldCheckSession.self,
                 id: sessionID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw FieldCheckRepositoryError.sessionNotFound
@@ -569,7 +569,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
 
             let animal = try Self.optionalAnimal(
                 id: input.animalID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
@@ -590,7 +590,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             let finding = CDFieldCheckFinding(context: context)
             finding.id = try CoreDataAnimalMutation.uniqueID(
                 for: CDFieldCheckFinding.self,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
@@ -656,7 +656,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             let finding = try Self.requiredFinding(
                 id: findingID,
                 sessionID: sessionID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
@@ -672,7 +672,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
 
             let animal = try Self.optionalAnimal(
                 id: input.animalID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
@@ -763,7 +763,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             let finding = try Self.requiredFinding(
                 id: findingID,
                 sessionID: sessionID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
@@ -813,7 +813,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             let finding = try Self.requiredFinding(
                 id: findingID,
                 sessionID: sessionID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
@@ -949,7 +949,7 @@ extension CoreDataFieldCheckRepository {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDFieldCheckSession.coreDataEntityName,
                 id: session.id,
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: nil
             )
         }
@@ -978,7 +978,7 @@ extension CoreDataFieldCheckRepository {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: Object.coreDataEntityName,
                 id: child.id,
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: nil
             )
         }
@@ -999,7 +999,7 @@ private extension CoreDataFieldCheckRepository {
         let sessions = try context.fetch(request)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
             sessions,
-            herdID: herd.id
+            herdID: (try herd.requiredID())
         )
         // This is also used by herd-wide identity scans and pasture archiving.
         // Neither operation should require unrelated sessions to have dates.
@@ -1044,7 +1044,7 @@ private extension CoreDataFieldCheckRepository {
         let candidates = try context.fetch(request)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
             candidates,
-            herdID: herd.id
+            herdID: (try herd.requiredID())
         )
         return try candidates.filter { animal in
             _ = try CoreDataAnimalProjection.birthDate(animal)
@@ -1063,15 +1063,15 @@ private extension CoreDataFieldCheckRepository {
         let findings = try fetchFindings(herd: herd, in: context)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
             sessions,
-            herdID: herd.id
+            herdID: (try herd.requiredID())
         )
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
             checks,
-            herdID: herd.id
+            herdID: (try herd.requiredID())
         )
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
             findings,
-            herdID: herd.id
+            herdID: (try herd.requiredID())
         )
 
         // A selected session can retain an inverse child whose Herd relationship
@@ -1271,7 +1271,7 @@ private extension CoreDataFieldCheckRepository {
         let check = CDFieldCheckAnimalCheck(context: context)
         check.id = try CoreDataAnimalMutation.uniqueID(
             for: CDFieldCheckAnimalCheck.self,
-            herdID: herd.id,
+            herdID: (try herd.requiredID()),
             lookup: lookup,
             in: context
         )

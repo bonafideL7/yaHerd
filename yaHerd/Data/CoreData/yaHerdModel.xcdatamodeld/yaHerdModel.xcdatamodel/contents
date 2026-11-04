@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="26300" systemVersion="26A" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
     <entity name="Herd" representedClassName="CDHerd" syncable="NO">
-        <attribute name="id" optional="NO" attributeType="UUID"/>
+        <attribute name="id" optional="YES" attributeType="UUID"/>
         <attribute name="name" optional="YES" attributeType="String"/>
         <attribute name="createdAt" optional="YES" attributeType="Date"/>
         <attribute name="updatedAt" optional="YES" attributeType="Date"/>

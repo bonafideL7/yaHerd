@@ -210,7 +210,7 @@ final class CoreDataWorkingRepository:
 
             _ = try CoreDataWorkingWorkDataMutation.validateReferences(
                 input: input,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
@@ -261,7 +261,7 @@ final class CoreDataWorkingRepository:
                 guard let persisted = try lookup.herdOwned(
                     CDPasture.self,
                     id: destinationPastureID,
-                    herdID: herd.id,
+                    herdID: (try herd.requiredID()),
                     in: context
                 ) else {
                     throw WorkingRepositoryError.pastureNotFound
@@ -273,7 +273,7 @@ final class CoreDataWorkingRepository:
 
             _ = try CoreDataWorkingWorkDataMutation.validateReferences(
                 input: workData,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
@@ -340,7 +340,7 @@ final class CoreDataWorkingRepository:
             guard let session = try lookup.herdOwned(
                 CDWorkingSession.self,
                 id: id,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw WorkingRepositoryError.sessionNotFound
@@ -384,7 +384,7 @@ final class CoreDataWorkingRepository:
             guard let session = try lookup.herdOwned(
                 CDWorkingSession.self,
                 id: id,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw WorkingRepositoryError.sessionNotFound
@@ -418,7 +418,7 @@ final class CoreDataWorkingRepository:
             guard let session = try lookup.herdOwned(
                 CDWorkingSession.self,
                 id: id,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw WorkingRepositoryError.sessionNotFound
@@ -430,7 +430,7 @@ final class CoreDataWorkingRepository:
             try Self.validateSelectedHerdWorkingRecordIdentity(herd: herd, in: context)
             try Self.validateSessionGraph(
                 session,
-                herdID: herd.id
+                herdID: (try herd.requiredID())
             )
 
             // Finished sessions may have no animals left in their working pen.
@@ -473,7 +473,7 @@ final class CoreDataWorkingRepository:
             guard let session = try lookup.herdOwned(
                 CDWorkingSession.self,
                 id: id,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw WorkingRepositoryError.sessionNotFound
@@ -550,7 +550,7 @@ final class CoreDataWorkingRepository:
             let replacement = CDAnimalTag(context: context)
             replacement.id = try CoreDataAnimalMutation.uniqueID(
                 for: CDAnimalTag.self,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
@@ -574,7 +574,7 @@ final class CoreDataWorkingRepository:
 
             try Self.validateSessionGraph(
                 resolved.session,
-                herdID: herd.id
+                herdID: (try herd.requiredID())
             )
             return try WorkingMapper.makeQueueItemEditorSnapshot(
                 session: resolved.session,
@@ -615,7 +615,7 @@ final class CoreDataWorkingRepository:
             guard let sourcePasture = try lookup.herdOwned(
                 CDPasture.self,
                 id: sourcePastureID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw WorkingRepositoryError.pastureNotFound
@@ -635,7 +635,7 @@ final class CoreDataWorkingRepository:
             let session = CDWorkingSession(context: context)
             session.id = try CoreDataAnimalMutation.uniqueID(
                 for: CDWorkingSession.self,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 lookup: lookup,
                 in: context
             )
@@ -678,7 +678,7 @@ final class CoreDataWorkingRepository:
             guard let session = try lookup.herdOwned(
                 CDWorkingSession.self,
                 id: sessionID,
-                herdID: herd.id,
+                herdID: (try herd.requiredID()),
                 in: context
             ) else {
                 throw WorkingRepositoryError.sessionNotFound
@@ -697,7 +697,7 @@ final class CoreDataWorkingRepository:
             guard let sourcePasture = session.sourcePasture else {
                 throw WorkingRepositoryError.pastureNotFound
             }
-            guard sourcePasture.herd?.id == herd.id,
+            guard sourcePasture.herd?.id == (try herd.requiredID()),
                   sourcePasture.id == session.sourcePastureIDSnapshot else {
                 throw CoreDataWorkingRepositoryError.invalidSnapshotRelationship(
                     relationship: "WorkingSession.sourcePasture",
@@ -921,7 +921,7 @@ final class CoreDataWorkingRepository:
         let queueItems = try context.fetch(queueRequest)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
             queueItems,
-            herdID: herd.id
+            herdID: (try herd.requiredID())
         )
         for item in queueItems where item.session == nil {
             throw CoreDataWorkingRepositoryError.missingQueueSession(queueItemID: item.id)
@@ -934,7 +934,7 @@ final class CoreDataWorkingRepository:
         let treatmentRecords = try context.fetch(treatmentRequest)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
             treatmentRecords,
-            herdID: herd.id
+            herdID: (try herd.requiredID())
         )
         for record in treatmentRecords where record.session == nil {
             throw CoreDataWorkingRepositoryError.missingTreatmentSession(recordID: record.id)
@@ -950,7 +950,7 @@ final class CoreDataWorkingRepository:
         let healthRecords = try context.fetch(healthRequest)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
             healthRecords,
-            herdID: herd.id
+            herdID: (try herd.requiredID())
         )
         for record in healthRecords where record.workingSession != nil && record.animal == nil {
             throw CoreDataAnimalRepositoryError.missingHealthAnimalRelationship(
@@ -965,7 +965,7 @@ final class CoreDataWorkingRepository:
         let pregnancyChecks = try context.fetch(pregnancyRequest)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
             pregnancyChecks,
-            herdID: herd.id
+            herdID: (try herd.requiredID())
         )
         for check in pregnancyChecks where check.workingSession != nil && check.animal == nil {
             throw CoreDataAnimalRepositoryError.missingPregnancyAnimalRelationship(
@@ -1267,10 +1267,10 @@ private extension CoreDataWorkingRepository {
         herd: CDHerd
     ) throws {
         for tag in tags {
-            guard tag.herd?.id == herd.id else {
+            guard tag.herd?.id == (try herd.requiredID()) else {
                 throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                     relationship: "Animal.tags",
-                    expectedHerdID: herd.id,
+                    expectedHerdID: (try herd.requiredID()),
                     actualHerdID: tag.herd?.id
                 )
             }
@@ -1282,10 +1282,10 @@ private extension CoreDataWorkingRepository {
                 )
             }
             if let color = tag.color,
-               color.herd?.id != herd.id {
+               color.herd?.id != (try herd.requiredID()) {
                 throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                     relationship: "AnimalTag.color",
-                    expectedHerdID: herd.id,
+                    expectedHerdID: (try herd.requiredID()),
                     actualHerdID: color.herd?.id
                 )
             }
@@ -1331,7 +1331,7 @@ private extension CoreDataWorkingRepository {
         guard let session = try lookup.herdOwned(
             CDWorkingSession.self,
             id: sessionID,
-            herdID: herd.id,
+            herdID: (try herd.requiredID()),
             in: context
         ) else {
             throw WorkingRepositoryError.sessionNotFound
@@ -1351,7 +1351,7 @@ private extension CoreDataWorkingRepository {
         guard let queueItem = try lookup.herdOwned(
             CDWorkingQueueItem.self,
             id: queueItemID,
-            herdID: herd.id,
+            herdID: (try herd.requiredID()),
             in: context
         ) else {
             throw WorkingRepositoryError.queueItemNotFound
@@ -1359,7 +1359,7 @@ private extension CoreDataWorkingRepository {
         try validateQueueSessionRelationship(
             queueItem,
             session: session,
-            herdID: herd.id
+            herdID: (try herd.requiredID())
         )
 
         guard queueItem.animal?.id == queueItem.animalIDSnapshot || queueItem.animal == nil else {
@@ -1370,10 +1370,10 @@ private extension CoreDataWorkingRepository {
             )
         }
 
-        if let animal = queueItem.animal, animal.herd?.id != herd.id {
+        if let animal = queueItem.animal, animal.herd?.id != (try herd.requiredID()) {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingQueueItem.animal",
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: animal.herd?.id
             )
         }
@@ -1473,24 +1473,24 @@ private extension CoreDataWorkingRepository {
         lookup: CoreDataLookup,
         in context: NSManagedObjectContext
     ) throws {
-        guard animal.herd?.id == herd.id else {
+        guard animal.herd?.id == (try herd.requiredID()) else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingQueueItem.animal",
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: animal.herd?.id
             )
         }
-        guard sourcePasture.herd?.id == herd.id else {
+        guard sourcePasture.herd?.id == (try herd.requiredID()) else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingQueueItem.collectedFromPasture",
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: sourcePasture.herd?.id
             )
         }
-        guard session.herd?.id == herd.id else {
+        guard session.herd?.id == (try herd.requiredID()) else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingQueueItem.session",
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: session.herd?.id
             )
         }
@@ -1508,10 +1508,10 @@ private extension CoreDataWorkingRepository {
                 from: damPrimary?.number ?? ""
             )
         }
-        if let dam = animal.dam, dam.herd?.id != herd.id {
+        if let dam = animal.dam, dam.herd?.id != (try herd.requiredID()) {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingQueueItem.animal.dam",
-                expectedHerdID: herd.id,
+                expectedHerdID: (try herd.requiredID()),
                 actualHerdID: dam.herd?.id
             )
         }
@@ -1519,7 +1519,7 @@ private extension CoreDataWorkingRepository {
         let item = CDWorkingQueueItem(context: context)
         item.id = try CoreDataAnimalMutation.uniqueID(
             for: CDWorkingQueueItem.self,
-            herdID: herd.id,
+            herdID: (try herd.requiredID()),
             lookup: lookup,
             in: context
         )
