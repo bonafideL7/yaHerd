@@ -1156,11 +1156,12 @@ private extension CoreDataFieldCheckRepository {
         selectedHerd: CDHerd,
         expectedSession: CDFieldCheckSession? = nil
     ) throws {
+        let selectedHerdID = try selectedHerd.requiredID()
         guard childHerd?.objectID == selectedHerd.objectID else {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: entity,
                 id: id,
-                expectedHerdID: selectedHerd.id,
+                expectedHerdID: selectedHerdID,
                 actualHerdID: childHerd?.id
             )
         }
@@ -1168,7 +1169,7 @@ private extension CoreDataFieldCheckRepository {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDFieldCheckSession.coreDataEntityName,
                 id: session.id,
-                expectedHerdID: selectedHerd.id,
+                expectedHerdID: selectedHerdID,
                 actualHerdID: session.herd?.id
             )
         }
