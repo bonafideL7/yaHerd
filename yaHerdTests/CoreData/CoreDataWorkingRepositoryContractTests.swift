@@ -99,7 +99,9 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             )
         )
         let working = environment.makeWorkingRepository()
-        let originalDate = Date(timeIntervalSinceReferenceDate: 212_000)
+        let originalDate = Calendar.autoupdatingCurrent.startOfDay(
+            for: Date(timeIntervalSinceReferenceDate: 212_000)
+        )
         let sessionID = try await working.startSession(
             input: WorkingSessionStartInput(
                 date: originalDate,
