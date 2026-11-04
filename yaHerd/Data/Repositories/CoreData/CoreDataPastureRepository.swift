@@ -83,6 +83,7 @@ final class CoreDataPastureRepository:
         let context = contextFactory.makeReadContext()
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
+            try CoreDataAnimalMutation.validateUnownedImportedPastures(herd: herd, in: context)
             guard let pasture = try lookup.herdOwned(CDPasture.self, id: pastureID, herdID: herdID, in: context) else {
                 return []
             }
