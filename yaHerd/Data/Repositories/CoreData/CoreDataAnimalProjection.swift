@@ -650,12 +650,12 @@ enum CoreDataAnimalReadGraphValidator {
         herdID: UUID,
         validateOffspringSummaries: Bool = false
     ) throws {
-        guard animal.herd.id == herdID else {
+        guard animal.herd?.id == herdID else {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDAnimal.coreDataEntityName,
                 id: animal.id,
                 expectedHerdID: herdID,
-                actualHerdID: animal.herd.id
+                actualHerdID: animal.herd?.id
             )
         }
         if let pasture = animal.currentPasture,
@@ -677,12 +677,12 @@ enum CoreDataAnimalReadGraphValidator {
             )
         }
         if let dam = animal.dam {
-            guard dam.herd.id == herdID else {
+            guard dam.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDAnimal.coreDataEntityName,
                     id: dam.id,
                     expectedHerdID: herdID,
-                    actualHerdID: dam.herd.id
+                    actualHerdID: dam.herd?.id
                 )
             }
             try validateTagRelationships(
@@ -693,7 +693,7 @@ enum CoreDataAnimalReadGraphValidator {
 
         if let sire = animal.sire {
             try validateHerd(
-                sire.herd.id, herdID: herdID,
+                sire.herd?.id, herdID: herdID,
                 entity: CDAnimal.coreDataEntityName, id: sire.id
             )
             try validateTagRelationships(sire, herdID: herdID)
@@ -752,7 +752,7 @@ enum CoreDataAnimalReadGraphValidator {
             }
             if let sire = check.sire {
                 try validateHerd(
-                    sire.herd.id, herdID: herdID,
+                    sire.herd?.id, herdID: herdID,
                     entity: CDAnimal.coreDataEntityName, id: sire.id
                 )
             }
@@ -764,12 +764,12 @@ enum CoreDataAnimalReadGraphValidator {
             }
         }
         for offspring in CoreDataAnimalProjection.managedMaternalOffspring(animal) {
-            guard offspring.herd.id == herdID else {
+            guard offspring.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDAnimal.coreDataEntityName,
                     id: offspring.id,
                     expectedHerdID: herdID,
-                    actualHerdID: offspring.herd.id
+                    actualHerdID: offspring.herd?.id
                 )
             }
             guard offspring.dam?.objectID == animal.objectID else {

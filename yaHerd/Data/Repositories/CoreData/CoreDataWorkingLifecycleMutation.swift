@@ -168,11 +168,11 @@ enum CoreDataWorkingLifecycleMutation {
                 continue
             }
 
-            guard animal.herd.id == herd.id else {
+            guard animal.herd?.id == herd.id else {
                 throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                     relationship: "WorkingQueueItem.animal",
                     expectedHerdID: herd.id,
-                    actualHerdID: animal.herd.id
+                    actualHerdID: animal.herd?.id
                 )
             }
             guard animal.id == item.animalIDSnapshot else {
@@ -323,11 +323,11 @@ enum CoreDataWorkingLifecycleMutation {
         session: CDWorkingSession,
         herd: CDHerd
     ) throws {
-        guard animal.herd.id == herd.id else {
+        guard animal.herd?.id == herd.id else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingQueueItem.animal",
                 expectedHerdID: herd.id,
-                actualHerdID: animal.herd.id
+                actualHerdID: animal.herd?.id
             )
         }
         guard animal.id == item.animalIDSnapshot else {

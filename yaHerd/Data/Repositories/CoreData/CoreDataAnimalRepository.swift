@@ -83,6 +83,7 @@ final class CoreDataAnimalRepository:
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
+            try CoreDataAnimalMutation.validateUnownedImportedAnimals(herd: herd, in: context)
             guard let animal = try lookup.herdOwned(
                 CDAnimal.self,
                 id: id,
@@ -105,6 +106,7 @@ final class CoreDataAnimalRepository:
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
+            try CoreDataAnimalMutation.validateUnownedImportedAnimals(herd: herd, in: context)
             guard let animal = try lookup.herdOwned(
                 CDAnimal.self,
                 id: id,
@@ -189,6 +191,7 @@ final class CoreDataAnimalRepository:
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
+            try CoreDataAnimalMutation.validateUnownedImportedAnimals(herd: herd, in: context)
             guard let dam = try lookup.herdOwned(
                 CDAnimal.self,
                 id: damID,
@@ -234,6 +237,7 @@ final class CoreDataAnimalRepository:
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
+            try CoreDataAnimalMutation.validateUnownedImportedAnimals(herd: herd, in: context)
             guard let animal = try lookup.herdOwned(
                 CDAnimal.self,
                 id: id,

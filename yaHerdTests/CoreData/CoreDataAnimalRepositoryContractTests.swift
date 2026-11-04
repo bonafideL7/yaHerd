@@ -5,6 +5,55 @@ import XCTest
 
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
+    func testImportedAnimalMissingHerdPreservesOriginalAnimalAndBlocksMutation() async throws {
+        let environment = try await makeEnvironment()
+        let repository = environment.makeAnimalRepository()
+        let animal = try repository.create(
+            input: readGraphAnimalInput(name: "Unlinked Animal", tag: "UNLINKED-1")
+        )
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        let lookup = CoreDataLookup()
+
+        try context.performAndWait {
+            let stored = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animal.id,
+                herdID: environment.herdID, in: context
+            ))
+            stored.herd = nil
+            try context.save()
+        }
+
+        let expected = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDAnimal.coreDataEntityName, id: animal.id,
+            expectedHerdID: environment.herdID, actualHerdID: nil
+        )
+        XCTAssertThrowsError(try repository.fetchAnimals()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchAnimalDetail(id: animal.id)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.fetchTimeline(id: animal.id)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+        XCTAssertThrowsError(try repository.delete(ids: [animal.id])) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, expected)
+        }
+
+        try context.performAndWait {
+            let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
+            request.predicate = NSPredicate(format: "id == %@", animal.id as NSUUID)
+            let stored = try XCTUnwrap(context.fetch(request).first)
+            XCTAssertNil(stored.herd)
+            XCTAssertEqual(stored.id, animal.id)
+            XCTAssertEqual(stored.name, "Unlinked Animal")
+            stored.herd = try XCTUnwrap(lookup.herd(id: environment.herdID, in: context))
+            try context.save()
+        }
+        XCTAssertEqual(try repository.fetchAnimalDetail(id: animal.id)?.id, animal.id)
+        XCTAssertTrue(try repository.fetchAnimals().contains(where: { $0.id == animal.id }))
+    }
+
     func testPastureDeletionRejectsUnlinkedImportedWorkingQueueWithoutDataLoss() async throws {
         let environment = try await makeEnvironment()
         let pasture = try environment.makePastureRepository().create(
@@ -1892,7 +1941,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             request.predicate = NSPredicate(format: "herd == %@", herd)
             let persisted = try context.fetch(request)
             XCTAssertEqual(Set(persisted.map(\.id)), Set(expectedIDs))
-            XCTAssertTrue(persisted.allSatisfy { !$0.isArchived && $0.herd.id == herd.id })
+            XCTAssertTrue(persisted.allSatisfy { !$0.isArchived && $0.herd?.id == herd.id })
         }
     }
 
@@ -2051,7 +2100,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             let storedDam = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDAnimal.self, id: dam.id, herdID: foreignHerdID, in: readContext
             ))
-            XCTAssertEqual(storedDam.herd.id, foreignHerdID)
+            XCTAssertEqual(storedDam.herd?.id, foreignHerdID)
         }
     }
 
@@ -2292,7 +2341,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             XCTAssertEqual(persistedValid.currentPasture?.objectID, persistedTarget.objectID)
             XCTAssertEqual(persistedInvalid.currentPasture?.objectID, persistedTarget.objectID)
             XCTAssertEqual(persistedInvalid.dam?.id, dam.id)
-            XCTAssertEqual(persistedInvalid.dam?.herd.id, foreignHerdID)
+            XCTAssertEqual(persistedInvalid.dam?.herd?.id, foreignHerdID)
         }
     }
 
@@ -2432,7 +2481,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             XCTAssertEqual(storedPasture.group?.objectID, storedGroup.objectID)
             XCTAssertEqual(storedPasture.name, "Graph Target")
             XCTAssertEqual(
-                (storedPasture.animals as? Set<CDAnimal>)?.first?.herd.id, foreignHerdID
+                (storedPasture.animals as? Set<CDAnimal>)?.first?.herd?.id, foreignHerdID
             )
         }
 

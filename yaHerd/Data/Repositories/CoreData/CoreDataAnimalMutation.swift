@@ -15,6 +15,7 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
     case missingTagAssignmentDate(tagID: UUID)
     case missingAnimalTagNumber(tagID: UUID)
     case missingAnimalEditorRevision(animalID: UUID)
+    case missingAnimalHerdRelationship(animalID: UUID)
     case missingAnimalBirthDate(animalID: UUID)
     case missingPregnancyDate(recordID: UUID)
     case missingMovementDate(recordID: UUID)
@@ -54,6 +55,8 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
             return "An imported animal tag has no number."
         case .missingAnimalEditorRevision:
             return "An animal has no editor revision."
+        case .missingAnimalHerdRelationship:
+            return "An imported animal has no Herd relationship."
         case .missingAnimalBirthDate:
             return "An imported animal has no birth date."
         case .missingPregnancyDate:
@@ -85,6 +88,7 @@ enum CoreDataAnimalMutation {
     ) throws -> [CDAnimal] {
         let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
         request.predicate = NSPredicate(format: "herd == %@", herd)
+        try validateUnownedImportedAnimals(herd: herd, in: context)
         let animals = try context.fetch(request)
         try validateUniqueApplicationIDs(animals, herdID: herd.id)
         return animals
@@ -151,6 +155,22 @@ enum CoreDataAnimalMutation {
 
     // A record may import through its Animal or Working Session before the Herd link.
     // Reject incomplete scoped projections and writes until ownership arrives.
+    static func validateUnownedImportedAnimals(
+        herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) throws {
+        // An Animal may import before its Herd link; never silently hide or mutate it.
+        let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
+        request.predicate = NSPredicate(format: "herd == nil")
+        request.fetchLimit = 1
+        if let animal = try context.fetch(request).first {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDAnimal.coreDataEntityName,
+                id: animal.id, expectedHerdID: herd.id, actualHerdID: nil
+            )
+        }
+    }
+
     static func validateUnownedImportedPastures(
         herd: CDHerd,
         in context: NSManagedObjectContext
@@ -175,6 +195,7 @@ enum CoreDataAnimalMutation {
         in context: NSManagedObjectContext
     ) throws {
         try validateUnownedImportedPastures(herd: herd, in: context)
+        try validateUnownedImportedAnimals(herd: herd, in: context)
         // CloudKit can import a Working session through a Pasture, Animal or
         // historical child before its direct Herd relationship. Never hide it
         // behind Herd-qualified queries or permit destructive edits.
@@ -447,7 +468,9 @@ enum CoreDataAnimalMutation {
         _ = try requiredEditorRevision(animal)
         _ = try CoreDataAnimalProjection.birthDate(animal)
         _ = try CoreDataAnimalProjection.status(animal)
-        let herdID = animal.herd.id
+        guard let herdID = animal.herd?.id else {
+            throw CoreDataAnimalRepositoryError.missingAnimalHerdRelationship(animalID: animal.id)
+        }
         let tags = CoreDataAnimalProjection.managedTags(animal)
         try validateUniqueApplicationIDs(tags, herdID: herdID)
         for tag in tags {

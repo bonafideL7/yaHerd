@@ -1026,7 +1026,7 @@ final class CoreDataWorkingRepository:
                 try validateHerdOwnership(
                     relationship: "WorkingQueueItem.animal",
                     expectedHerdID: herdID,
-                    actualHerdID: animal.herd.id
+                    actualHerdID: animal.herd?.id
                 )
                 try validateSnapshotRelationship(
                     relationship: "WorkingQueueItem.animal",
@@ -1092,7 +1092,7 @@ final class CoreDataWorkingRepository:
                 try validateHerdOwnership(
                     relationship: "WorkingTreatmentRecord.animal",
                     expectedHerdID: herdID,
-                    actualHerdID: animal.herd.id
+                    actualHerdID: animal.herd?.id
                 )
                 try validateSnapshotRelationship(
                     relationship: "WorkingTreatmentRecord.animal",
@@ -1137,7 +1137,7 @@ final class CoreDataWorkingRepository:
             try validateHerdOwnership(
                 relationship: "HealthRecord.animal",
                 expectedHerdID: herdID,
-                actualHerdID: animal.herd.id
+                actualHerdID: animal.herd?.id
             )
         }
 
@@ -1176,13 +1176,13 @@ final class CoreDataWorkingRepository:
             try validateHerdOwnership(
                 relationship: "PregnancyCheck.animal",
                 expectedHerdID: herdID,
-                actualHerdID: animal.herd.id
+                actualHerdID: animal.herd?.id
             )
             if let sire = check.sire {
                 try validateHerdOwnership(
                     relationship: "PregnancyCheck.sire",
                     expectedHerdID: herdID,
-                    actualHerdID: sire.herd.id
+                    actualHerdID: sire.herd?.id
                 )
             }
         }
@@ -1191,7 +1191,7 @@ final class CoreDataWorkingRepository:
             try validateHerdOwnership(
                 relationship: "WorkingSession.activeAnimals",
                 expectedHerdID: herdID,
-                actualHerdID: animal.herd.id
+                actualHerdID: animal.herd?.id
             )
             guard let activeSession = animal.activeWorkingSession else {
                 throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
@@ -1370,11 +1370,11 @@ private extension CoreDataWorkingRepository {
             )
         }
 
-        if let animal = queueItem.animal, animal.herd.id != herd.id {
+        if let animal = queueItem.animal, animal.herd?.id != herd.id {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingQueueItem.animal",
                 expectedHerdID: herd.id,
-                actualHerdID: animal.herd.id
+                actualHerdID: animal.herd?.id
             )
         }
 
@@ -1441,10 +1441,13 @@ private extension CoreDataWorkingRepository {
         guard let currentPasture = animal.currentPasture else {
             return false
         }
+        guard let animalHerdID = animal.herd?.id else {
+            throw CoreDataAnimalRepositoryError.missingAnimalHerdRelationship(animalID: animal.id)
+        }
         guard let sourceHerdID = sourcePasture.herd?.id else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingSession.sourcePasture",
-                expectedHerdID: animal.herd.id,
+                expectedHerdID: animalHerdID,
                 actualHerdID: nil
             )
         }
@@ -1470,11 +1473,11 @@ private extension CoreDataWorkingRepository {
         lookup: CoreDataLookup,
         in context: NSManagedObjectContext
     ) throws {
-        guard animal.herd.id == herd.id else {
+        guard animal.herd?.id == herd.id else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingQueueItem.animal",
                 expectedHerdID: herd.id,
-                actualHerdID: animal.herd.id
+                actualHerdID: animal.herd?.id
             )
         }
         guard sourcePasture.herd?.id == herd.id else {
@@ -1505,11 +1508,11 @@ private extension CoreDataWorkingRepository {
                 from: damPrimary?.number ?? ""
             )
         }
-        if let dam = animal.dam, dam.herd.id != herd.id {
+        if let dam = animal.dam, dam.herd?.id != herd.id {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingQueueItem.animal.dam",
                 expectedHerdID: herd.id,
-                actualHerdID: dam.herd.id
+                actualHerdID: dam.herd?.id
             )
         }
 
