@@ -3,7 +3,7 @@ import Foundation
 
 @objc(CDPasture)
 final class CDPasture: NSManagedObject {
-    @NSManaged var id: UUID
+    @NSManaged var id: UUID?
     @NSManaged var name: String?
     @NSManaged var sortOrder: Int64
     @NSManaged var acreage: NSNumber?

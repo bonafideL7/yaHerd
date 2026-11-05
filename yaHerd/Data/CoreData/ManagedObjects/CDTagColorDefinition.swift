@@ -3,7 +3,7 @@ import Foundation
 
 @objc(CDTagColorDefinition)
 final class CDTagColorDefinition: NSManagedObject {
-    @NSManaged var id: UUID
+    @NSManaged var id: UUID?
     @NSManaged var name: String?
     @NSManaged var prefix: String
     @NSManaged var red: Double

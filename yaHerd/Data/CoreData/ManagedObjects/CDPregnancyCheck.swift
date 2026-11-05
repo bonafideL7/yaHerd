@@ -3,7 +3,7 @@ import Foundation
 
 @objc(CDPregnancyCheck)
 final class CDPregnancyCheck: NSManagedObject {
-    @NSManaged var id: UUID
+    @NSManaged var id: UUID?
     @NSManaged var date: Date?
     @NSManaged var resultRawValue: String?
     @NSManaged var technician: String?
