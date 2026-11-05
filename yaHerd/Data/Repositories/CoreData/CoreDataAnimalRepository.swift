@@ -128,7 +128,7 @@ final class CoreDataAnimalRepository:
             unlinkedMovements.fetchLimit = 1
             if let record = try context.fetch(unlinkedMovements).first {
                 throw CoreDataAnimalRepositoryError.missingMovementAnimalRelationship(
-                    recordID: record.id
+                    recordID: (try record.requiredID())
                 )
             }
             // An imported status transition may precede its animal relationship.
@@ -143,7 +143,7 @@ final class CoreDataAnimalRepository:
             unlinkedStatuses.fetchLimit = 1
             if let record = try context.fetch(unlinkedStatuses).first {
                 throw CoreDataAnimalRepositoryError.missingStatusHistoryAnimalRelationship(
-                    recordID: record.id
+                    recordID: (try record.requiredID())
                 )
             }
             try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
@@ -206,7 +206,7 @@ final class CoreDataAnimalRepository:
             )
             let inferredSire = try CoreDataAnimalMutation.inferSingleSire(
                 pastureID: dam.currentPasture?.id,
-                excluding: dam.id,
+                excluding: (try dam.requiredID()),
                 herd: herd,
                 in: context
             )
@@ -216,7 +216,7 @@ final class CoreDataAnimalRepository:
                 )
             }
             return OffspringDraftSeed(
-                damID: dam.id,
+                damID: (try dam.requiredID()),
                 damDisplayName: try CoreDataAnimalProjection.parentOption(dam).displayName,
                 pastureID: dam.currentPasture?.id,
                 pastureName: try dam.currentPasture.map { try $0.validatedName() },
@@ -538,7 +538,7 @@ final class CoreDataAnimalRepository:
                 herd: herd,
                 in: context
             )
-            let targetIDs = Set(targets.map(\.id))
+            let targetIDs = Set(try targets.map { try $0.requiredID() })
             guard !targetIDs.isEmpty else {
                 return
             }
@@ -553,7 +553,7 @@ final class CoreDataAnimalRepository:
 
             var affectedSurvivors: [UUID: CDAnimal] = [:]
             for animal in try CoreDataAnimalMutation.fetchAnimals(herd: herd, in: context)
-                where !targetIDs.contains(animal.id) {
+                where !targetIDs.contains(try animal.requiredID()) {
                 var changed = false
                 if let sireID = animal.sire?.id, targetIDs.contains(sireID) {
                     animal.sire = nil
@@ -564,7 +564,7 @@ final class CoreDataAnimalRepository:
                     changed = true
                 }
                 if changed {
-                    affectedSurvivors[animal.id] = animal
+                    affectedSurvivors[(try animal.requiredID())] = animal
                 }
             }
 
@@ -688,7 +688,7 @@ final class CoreDataAnimalRepository:
             tag.animal = animal
             try CoreDataAnimalMutation.enforceActivePrimary(
                 in: CoreDataAnimalProjection.managedTags(animal),
-                preferredPrimaryID: shouldBePrimary ? tag.id : nil
+                preferredPrimaryID: shouldBePrimary ? (try tag.requiredID()) : nil
             )
             try CoreDataAnimalMutation.rotateRevision(animal)
             return try CoreDataAnimalProjection.detail(animal)
@@ -727,13 +727,13 @@ final class CoreDataAnimalRepository:
                 if input.isPrimary {
                     try CoreDataAnimalMutation.enforceActivePrimary(
                         in: tags,
-                        preferredPrimaryID: tag.id
+                        preferredPrimaryID: (try tag.requiredID())
                     )
                 } else {
                     tag.isPrimary = false
                     try CoreDataAnimalMutation.enforceActivePrimary(
                         in: tags,
-                        excludedFallbackID: tag.id
+                        excludedFallbackID: (try tag.requiredID())
                     )
                 }
             } else {
@@ -768,7 +768,7 @@ final class CoreDataAnimalRepository:
             tag.removedAt = nil
             try CoreDataAnimalMutation.enforceActivePrimary(
                 in: CoreDataAnimalProjection.managedTags(animal),
-                preferredPrimaryID: tag.id
+                preferredPrimaryID: (try tag.requiredID())
             )
 
             if before != (try CoreDataAnimalMutation.aggregateTagStates(animal)) {
@@ -795,7 +795,7 @@ final class CoreDataAnimalRepository:
 
             let before = try CoreDataAnimalMutation.aggregateTagStates(animal)
             let replacementID = AnimalTagService.replacementPrimaryTagID(
-                afterRetiring: tag.id,
+                afterRetiring: (try tag.requiredID()),
                 from: try tags.map(CoreDataAnimalProjection.tagState)
             )
             tag.isActive = false
@@ -1111,7 +1111,7 @@ final class CoreDataAnimalRepository:
         let tags = CoreDataAnimalProjection.managedTags(animal)
         let states = try tags.map(CoreDataAnimalProjection.tagState)
         let primaryID = AnimalTagService.primaryTag(in: states)?.id
-        let primary = primaryID.flatMap { id in tags.first { $0.id == id } }
+        let primary = try primaryID.flatMap { id in try tags.first { try $0.requiredID() == id } }
 
         if normalizedNumber.isEmpty {
             guard let primary else {
@@ -1124,7 +1124,7 @@ final class CoreDataAnimalRepository:
             }
             try CoreDataAnimalMutation.enforceActivePrimary(
                 in: tags,
-                excludedFallbackID: primary.id
+                excludedFallbackID: (try primary.requiredID())
             )
             return
         }
@@ -1157,7 +1157,7 @@ final class CoreDataAnimalRepository:
         target.removedAt = nil
 
         for tag in CoreDataAnimalProjection.managedTags(animal)
-            where tag.id != target.id && tag.isActive {
+            where (try tag.requiredID()) != (try target.requiredID()) && tag.isActive {
             tag.isPrimary = false
         }
     }
