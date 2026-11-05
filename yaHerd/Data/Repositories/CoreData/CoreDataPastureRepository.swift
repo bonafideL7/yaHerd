@@ -117,7 +117,7 @@ final class CoreDataPastureRepository:
                 .sorted { left, right in
                     let tagOrder = left.displayTagNumber.localizedStandardCompare(right.displayTagNumber)
                     if tagOrder != .orderedSame { return tagOrder == .orderedAscending }
-                    return (try left.requiredID()).uuidString < (try right.requiredID()).uuidString
+                    return left.id.uuidString < right.id.uuidString
                 }
         }
     }
@@ -144,7 +144,7 @@ final class CoreDataPastureRepository:
                 .sorted { left, right in
                     let nameOrder = (left.name ?? "").localizedStandardCompare(right.name ?? "")
                     if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
-                    return left.id.uuidString < right.id.uuidString
+                    return (try left.requiredID()).uuidString < (try right.requiredID()).uuidString
                 }
                 .map { PastureOption(id: try $0.requiredID(), name: try $0.validatedName()) }
         }
