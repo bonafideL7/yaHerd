@@ -164,7 +164,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                     if $0.date != $1.date {
                         return $0.date > $1.date
                     }
-                    return $0.finding.id.uuidString < $1.finding.id.uuidString
+                    return (try $0.finding.requiredID()).uuidString < (try $1.finding.requiredID()).uuidString
                 }
             let selected = limit > 0 ? Array(open.prefix(limit)) : open
             return try selected.map {
@@ -216,7 +216,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             session.quickCalfCount = 0
             session.quickBullCount = 0
             session.quickSteerCount = 0
-            session.pastureIDSnapshot = pasture.id
+            session.pastureIDSnapshot = (try pasture.requiredID())
             session.pastureNameSnapshot = try pasture.validatedName().trimmingCharacters(in: .whitespacesAndNewlines)
             session.pastureArchivedAt = nil
             session.herd = herd
@@ -234,7 +234,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 )
             }
 
-            return session.id
+            return (try session.requiredID())
         }
     }
 
@@ -383,7 +383,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 in: context
             )
             guard let session = check.session else {
-                throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: check.id)
+                throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: (try check.requiredID()))
             }
             try Self.ensureSessionIsEditable(session)
 
@@ -426,7 +426,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 in: context
             )
             guard let session = check.session else {
-                throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: check.id)
+                throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: (try check.requiredID()))
             }
             try Self.ensureSessionIsEditable(session)
 
@@ -500,7 +500,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             if let existing = try Self.animalCheck(for: animalID, in: session) {
                 existing.countedAt = checkedAt
                 existing.missingConfirmedAt = nil
-                if animal.currentPasture?.id != destinationPasture.id {
+                if animal.currentPasture?.id != (try destinationPasture.requiredID()) {
                     try CoreDataAnimalMutation.move(
                         animal,
                         to: destinationPasture,
@@ -515,7 +515,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             }
 
             try CoreDataAnimalMutation.validateLinkedClinicalHistory(herd: herd, in: context)
-            if animal.currentPasture?.id != destinationPasture.id {
+            if animal.currentPasture?.id != (try destinationPasture.requiredID()) {
                 try CoreDataAnimalMutation.move(
                     animal,
                     to: destinationPasture,
@@ -573,7 +573,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 lookup: lookup,
                 in: context
             )
-            let linkedAnimalID = input.animalID ?? animal?.id
+            let linkedAnimalID = input.animalID ?? (try animal.map { try $0.requiredID() })
             let check = try linkedAnimalID.flatMap {
                 try Self.animalCheck(for: $0, in: session)
             }
@@ -618,7 +618,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 .findingMutationStaged(
                     operation: .add,
                     sessionID: sessionID,
-                    findingID: finding.id
+                    findingID: (try finding.requiredID())
                 ),
                 context
             )
@@ -661,7 +661,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 in: context
             )
             guard let session = finding.session else {
-                throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: finding.id)
+                throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: (try finding.requiredID()))
             }
             try Self.ensureSessionIsEditable(session)
 
@@ -676,7 +676,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 lookup: lookup,
                 in: context
             )
-            let linkedAnimalID = input.animalID ?? animal?.id
+            let linkedAnimalID = input.animalID ?? (try animal.map { try $0.requiredID() })
             let check = try linkedAnimalID.flatMap {
                 try Self.animalCheck(for: $0, in: session)
             }
@@ -768,7 +768,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 in: context
             )
             guard let session = finding.session else {
-                throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: finding.id)
+                throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: (try finding.requiredID()))
             }
             try Self.ensureSessionCanUpdateFindingStatus(session)
 
@@ -818,7 +818,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 in: context
             )
             guard let session = finding.session else {
-                throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: finding.id)
+                throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: (try finding.requiredID()))
             }
             try Self.ensureSessionIsEditable(session)
 
@@ -827,7 +827,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 try Self.syncMissingStatus(
                     forAnimalID: linkedAnimalID,
                     in: session,
-                    excludingFindingID: finding.id
+                    excludingFindingID: (try finding.requiredID())
                 )
             }
             try findingMutationCheckpoint?(
@@ -948,7 +948,7 @@ extension CoreDataFieldCheckRepository {
         if let session = try context.fetch(request).first {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDFieldCheckSession.coreDataEntityName,
-                id: session.id,
+                id: (try session.requiredID()),
                 expectedHerdID: (try herd.requiredID()),
                 actualHerdID: nil
             )
@@ -977,7 +977,7 @@ extension CoreDataFieldCheckRepository {
         if let child = try context.fetch(request).first {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: Object.coreDataEntityName,
-                id: child.id,
+                id: (try child.requiredID()),
                 expectedHerdID: (try herd.requiredID()),
                 actualHerdID: nil
             )
@@ -1116,12 +1116,12 @@ private extension CoreDataFieldCheckRepository {
         expectedSession: CDFieldCheckSession? = nil
     ) throws {
         guard let session = check.session else {
-            throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: check.id)
+            throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: (try check.requiredID()))
         }
         _ = try FieldCheckMapper.animalID(from: check)
         try validateReadChildRelationship(
             entity: CDFieldCheckAnimalCheck.coreDataEntityName,
-            id: check.id,
+            id: (try check.requiredID()),
             childHerd: check.herd,
             session: session,
             selectedHerd: selectedHerd,
@@ -1135,12 +1135,12 @@ private extension CoreDataFieldCheckRepository {
         expectedSession: CDFieldCheckSession? = nil
     ) throws {
         guard let session = finding.session else {
-            throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: finding.id)
+            throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: (try finding.requiredID()))
         }
         _ = try FieldCheckMapper.recordedAt(from: finding)
         try validateReadChildRelationship(
             entity: CDFieldCheckFinding.coreDataEntityName,
-            id: finding.id,
+            id: (try finding.requiredID()),
             childHerd: finding.herd,
             session: session,
             selectedHerd: selectedHerd,
@@ -1168,7 +1168,7 @@ private extension CoreDataFieldCheckRepository {
         guard session.herd?.objectID == selectedHerd.objectID else {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDFieldCheckSession.coreDataEntityName,
-                id: session.id,
+                id: (try session.requiredID()),
                 expectedHerdID: selectedHerdID,
                 actualHerdID: session.herd?.id
             )
@@ -1178,8 +1178,8 @@ private extension CoreDataFieldCheckRepository {
             throw CoreDataReadModelError.invalidSessionRelationship(
                 entity: entity,
                 id: id,
-                expectedSessionID: expectedSession.id,
-                actualSessionID: session.id
+                expectedSessionID: (try expectedSession.requiredID()),
+                actualSessionID: (try session.requiredID())
             )
         }
     }
@@ -1276,7 +1276,7 @@ private extension CoreDataFieldCheckRepository {
             lookup: lookup,
             in: context
         )
-        check.animalIDSnapshot = animal.id
+        check.animalIDSnapshot = (try animal.requiredID())
         check.rosterTagNumberSnapshot = primary.number
         check.rosterTagColorIDSnapshot = primary.colorID
         if animal.dam != nil {
@@ -1376,7 +1376,7 @@ private extension CoreDataFieldCheckRepository {
         excludingFindingID: UUID?
     ) throws -> CDFieldCheckFinding? {
         let candidates = try managedFindings(session).filter { finding in
-            guard finding.id != excludingFindingID,
+            guard (try finding.requiredID()) != excludingFindingID,
                   finding.animalIDSnapshot == animalID,
                   try findingType(finding) == .missingAnimal else {
                 return false
@@ -1468,7 +1468,7 @@ private extension CoreDataFieldCheckRepository {
     ) throws -> FieldCheckFindingType {
         guard let result = finding.typeRawValue.flatMap(FieldCheckFindingType.init(rawValue:)) else {
             throw CoreDataFieldCheckMappingError.invalidFindingType(
-                findingID: finding.id,
+                findingID: (try finding.requiredID()),
                 value: finding.typeRawValue
             )
         }
@@ -1480,7 +1480,7 @@ private extension CoreDataFieldCheckRepository {
     ) throws -> FieldCheckFindingStatus {
         guard let result = finding.statusRawValue.flatMap(FieldCheckFindingStatus.init(rawValue:)) else {
             throw CoreDataFieldCheckMappingError.invalidFindingStatus(
-                findingID: finding.id,
+                findingID: (try finding.requiredID()),
                 value: finding.statusRawValue
             )
         }
@@ -1500,14 +1500,14 @@ private extension CoreDataFieldCheckRepository {
             (animal: animal, primary: try primaryTagFields(animal).number
                 .trimmingCharacters(in: .whitespacesAndNewlines))
         }
-        return keyed.sorted { left, right in
+        return try keyed.sorted { left, right in
             let lhs = left.primary.isEmpty ? left.animal.name : left.primary
             let rhs = right.primary.isEmpty ? right.animal.name : right.primary
             let comparison = lhs.localizedStandardCompare(rhs)
             if comparison != .orderedSame {
                 return comparison == .orderedAscending
             }
-            return left.animal.id.uuidString < right.animal.id.uuidString
+            return (try left.animal.requiredID()).uuidString < (try right.animal.requiredID()).uuidString
         }.map(\.animal)
     }
 
