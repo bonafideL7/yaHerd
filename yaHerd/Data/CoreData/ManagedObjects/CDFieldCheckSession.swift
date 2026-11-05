@@ -3,7 +3,7 @@ import Foundation
 
 @objc(CDFieldCheckSession)
 final class CDFieldCheckSession: NSManagedObject {
-    @NSManaged var id: UUID
+    @NSManaged var id: UUID?
     @NSManaged var startedAt: Date?
     @NSManaged var completedAt: Date?
     @NSManaged var notes: String

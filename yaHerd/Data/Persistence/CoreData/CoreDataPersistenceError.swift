@@ -5,6 +5,7 @@ enum CoreDataPersistenceError: LocalizedError, Equatable {
     case storeLoadFailed(url: URL?, description: String)
     case saveFailed(description: String)
     case duplicateApplicationID(entity: String, id: UUID, herdID: UUID?)
+    case missingApplicationID(entity: String)
     case tagColorMaterializationInProgress(id: UUID, herdID: UUID)
     case tagColorDefaultMaterializationInProgress(herdID: UUID)
     case readOnlyStore
@@ -23,6 +24,8 @@ enum CoreDataPersistenceError: LocalizedError, Equatable {
                 return "More than one \(entity) has application UUID \(id.uuidString) in Herd \(herdID.uuidString)."
             }
             return "More than one \(entity) has application UUID \(id.uuidString)."
+        case let .missingApplicationID(entity):
+            return "An imported \(entity) has no application UUID."
         case let .tagColorMaterializationInProgress(id, herdID):
             return "Tag color \(id.uuidString) is already being materialized in Herd \(herdID.uuidString). Retry the change after the in-flight transaction completes."
         case let .tagColorDefaultMaterializationInProgress(herdID):

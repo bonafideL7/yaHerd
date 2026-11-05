@@ -6,7 +6,16 @@ protocol CoreDataEntityNamed {
 }
 
 protocol CoreDataApplicationIdentifiedManagedObject: CoreDataEntityNamed where Self: NSManagedObject {
-    var id: UUID { get }
+    var id: UUID? { get }
+}
+
+extension CoreDataApplicationIdentifiedManagedObject {
+    func requiredID() throws -> UUID {
+        guard let id else {
+            throw CoreDataPersistenceError.missingApplicationID(entity: Self.coreDataEntityName)
+        }
+        return id
+    }
 }
 
 // Herd ownership is declared in the Core Data model. Its stored relationship may be
