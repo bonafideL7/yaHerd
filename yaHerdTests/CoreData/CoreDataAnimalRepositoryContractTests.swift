@@ -316,7 +316,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             ))
             return try XCTUnwrap(
                 (stored.pregnancyChecks?.allObjects as? [CDPregnancyCheck])?.first
-            ).id
+            ).requiredID()
         }
         XCTAssertEqual(
             try repository.fetchAnimals().first(where: { $0.id == animal.id })?.lastPregnancyCheckDate,
@@ -691,7 +691,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             let tag = try XCTUnwrap(CoreDataAnimalProjection.managedTags(stored).first)
             tag.herd = nil
             try context.save()
-            return tag.id
+            return try tag.requiredID()
         }
 
         let expected = CoreDataReadModelError.invalidHerdOwnership(
@@ -756,7 +756,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             let tag = try XCTUnwrap(CoreDataAnimalProjection.managedTags(stored).first)
             tag.number = nil
             try context.save()
-            return tag.id
+            return try tag.requiredID()
         }
 
         let expected = CoreDataAnimalRepositoryError.missingAnimalTagNumber(tagID: tagID)
@@ -1035,7 +1035,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
                 CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
             ))
             let tag = try XCTUnwrap(CoreDataAnimalProjection.managedTags(stored).first)
-            let id = tag.id
+            let id = try tag.requiredID()
             tag.assignedAt = nil
             try context.save()
             return id
@@ -5953,7 +5953,7 @@ private final class CoreDataAnimalContractEnvironment {
             )
             return try context.fetch(request).map {
                 PastureDeletionMovementRecordContractSnapshot(
-                    id: $0.id,
+                    id: try $0.requiredID(),
                     date: try XCTUnwrap($0.date),
                     fromPastureIDSnapshot: $0.fromPastureIDSnapshot,
                     fromPastureNameSnapshot: $0.fromPastureNameSnapshot,
@@ -6690,7 +6690,7 @@ private final class CoreDataAnimalWorkingSessionReader: WorkingSessionDetailRead
                         throw CoreDataAnimalContractTestError.invalidWorkingAnimalSex
                     }
                     return WorkingQueueItemSnapshot(
-                        id: item.id,
+                        id: try item.requiredID(),
                         status: queueStatus,
                         completedAt: item.completedAt,
                         animalID: try WorkingMapper.queueAnimalID(from: item),
@@ -6759,8 +6759,8 @@ private final class CoreDataAnimalHealthContractControl: HealthRepositoryContrac
             )
             return try context.fetch(request).map {
                 HealthRecordContractSnapshot(
-                    id: $0.id,
-                    animalID: try XCTUnwrap($0.animal).id,
+                    id: try $0.requiredID(),
+                    animalID: try XCTUnwrap($0.animal).requiredID(),
                     date: try XCTUnwrap($0.date),
                     treatment: try XCTUnwrap($0.treatment),
                     notes: $0.notes,
@@ -6782,8 +6782,8 @@ private final class CoreDataAnimalHealthContractControl: HealthRepositoryContrac
             )
             return try context.fetch(request).map {
                 PregnancyCheckContractSnapshot(
-                    id: $0.id,
-                    animalID: try XCTUnwrap($0.animal).id,
+                    id: try $0.requiredID(),
+                    animalID: try XCTUnwrap($0.animal).requiredID(),
                     date: try XCTUnwrap($0.date),
                     resultRawValue: try XCTUnwrap($0.resultRawValue),
                     technician: $0.technician,

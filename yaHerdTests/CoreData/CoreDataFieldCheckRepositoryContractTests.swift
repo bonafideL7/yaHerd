@@ -187,7 +187,7 @@ final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
             let tag = try XCTUnwrap(CoreDataAnimalProjection.managedTags(stored).first)
             tag.number = nil
             try context.save()
-            return tag.id
+            return try tag.requiredID()
         }
 
         do {
@@ -1813,7 +1813,7 @@ private final class CoreDataFieldCheckContractEnvironment {
                         }
                     )
                     throw FieldCheckSessionCreationRollbackInjectedError.afterSessionStaged(
-                        sessionID: session.id,
+                        sessionID: try session.requiredID(),
                         stagedAnimalCheckIDs: checks
                     )
                 }
@@ -2013,7 +2013,7 @@ private final class CoreDataFieldCheckContractEnvironment {
                     throw FieldCheckMissingFindingQuickCountRollbackInjectedError
                         .afterMissingStateAndQuickCountNormalizationStaged(
                             sessionID: sessionID,
-                            findingID: finding.id,
+                            findingID: try finding.requiredID(),
                             animalCheckID: checkID
                         )
                 }
@@ -2211,7 +2211,7 @@ private final class CoreDataFieldCheckContractEnvironment {
                 format: "herd.id == %@",
                 herdID as NSUUID
             )
-            return Set(try context.fetch(request).map(\.id))
+            return Set(try context.fetch(request).map { try $0.requiredID() })
         }
     }
 
@@ -2436,7 +2436,7 @@ private final class CoreDataFieldCheckContractEnvironment {
         guard let check = try context.fetch(request).first else {
             throw CoreDataFieldCheckContractTestError.missingStagedAnimalCheck
         }
-        return check.id
+        return try check.requiredID()
     }
 
     private nonisolated static func requiredFinding(
