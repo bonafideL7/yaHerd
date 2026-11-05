@@ -6708,7 +6708,7 @@ private final class CoreDataAnimalWorkingSessionReader: WorkingSessionDetailRead
                 }
 
             return WorkingSessionDetailSnapshot(
-                id: session.id,
+                id: try session.requiredID(),
                 date: try WorkingMapper.sessionDate(session),
                 status: status,
                 sourcePastureID: session.sourcePastureIDSnapshot,
