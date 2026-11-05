@@ -239,7 +239,7 @@ final class CoreDataHerdRepositoryContractTests: XCTestCase {
                             entityName: CDHerd.coreDataEntityName
                         )
                         return try context.fetch(request).reduce(into: [UUID: Int]()) {
-                            $0[$1.id, default: 0] += 1
+                            $0[try $1.requiredID(), default: 0] += 1
                         }
                     }
                 }
