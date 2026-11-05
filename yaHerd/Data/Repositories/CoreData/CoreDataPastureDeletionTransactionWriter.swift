@@ -231,7 +231,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
                 let status = try CoreDataAnimalProjection.status(animal)
                 return !animal.isArchived && status == .active
             }
-            guard Set(activeResidents.map(\.id)) == expected.residentAnimalIDs else {
+            guard Set(try activeResidents.map { try $0.requiredID() }) == expected.residentAnimalIDs else {
                 throw PastureDeletionTransactionError.residentSetChanged(
                     pastureID: expected.pastureID
                 )
