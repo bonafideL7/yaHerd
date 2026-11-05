@@ -390,10 +390,10 @@ actor CoreDataReadModelActor:
 
             var candidateIDs = Set<UUID>()
             for animal in hydratedCandidates {
-                guard candidateIDs.insert(animal.id).inserted else {
+                guard candidateIDs.insert((try animal.requiredID())).inserted else {
                     throw CoreDataPersistenceError.duplicateApplicationID(
                         entity: CDAnimal.coreDataEntityName,
-                        id: animal.id,
+                        id: (try animal.requiredID()),
                         herdID: herdID
                     )
                 }
@@ -715,8 +715,8 @@ actor CoreDataReadModelActor:
             }
         }
 
-        candidates.sort {
-            animalReferenceCandidatePrecedes(
+        try candidates.sort {
+            try animalReferenceCandidatePrecedes(
                 $0,
                 $1,
                 sortOrder: query.sortOrder
@@ -735,7 +735,7 @@ actor CoreDataReadModelActor:
         _ lhs: AnimalReferenceCandidate,
         _ rhs: AnimalReferenceCandidate,
         sortOrder: AnimalReferenceSortOrder
-    ) -> Bool {
+    ) throws -> Bool {
         let lhsKey: String
         let rhsKey: String
 
@@ -763,7 +763,7 @@ actor CoreDataReadModelActor:
         if nameOrder != .orderedSame {
             return nameOrder == .orderedAscending
         }
-        return lhs.animal.id.uuidString < rhs.animal.id.uuidString
+        return (try lhs.animal.requiredID()).uuidString < (try rhs.animal.requiredID()).uuidString
     }
 
     private static func fetchLightweightSortedQueryCandidates(
@@ -860,8 +860,8 @@ actor CoreDataReadModelActor:
             }
         }
 
-        candidates.sort { lhs, rhs in
-            animalListQueryCandidatePrecedes(
+        try candidates.sort { lhs, rhs in
+            try animalListQueryCandidatePrecedes(
                 lhs,
                 rhs,
                 sortOrder: sortOrder
@@ -880,10 +880,10 @@ actor CoreDataReadModelActor:
         _ lhs: AnimalListQueryCandidate,
         _ rhs: AnimalListQueryCandidate,
         sortOrder: AnimalListQuerySortOrder
-    ) -> Bool {
+    ) throws -> Bool {
         switch sortOrder {
         case .tagAscending:
-            return animalListCandidateTagAscending(lhs, rhs)
+            return try animalListCandidateTagAscending(lhs, rhs)
         case .tagDescending:
             let tagOrder = lhs.displayTagNumber.localizedStandardCompare(
                 rhs.displayTagNumber
@@ -891,66 +891,66 @@ actor CoreDataReadModelActor:
             if tagOrder != .orderedSame {
                 return tagOrder == .orderedDescending
             }
-            return animalListCandidateStableTieBreak(lhs, rhs)
+            return try animalListCandidateStableTieBreak(lhs, rhs)
         case .birthDateNewest:
             if lhs.birthDate != rhs.birthDate {
                 return lhs.birthDate > rhs.birthDate
             }
-            return animalListCandidateStableTieBreak(lhs, rhs)
+            return try animalListCandidateStableTieBreak(lhs, rhs)
         case .birthDateOldest:
             if lhs.birthDate != rhs.birthDate {
                 return lhs.birthDate < rhs.birthDate
             }
-            return animalListCandidateStableTieBreak(lhs, rhs)
+            return try animalListCandidateStableTieBreak(lhs, rhs)
         case .sex:
             if lhs.sex.rawValue != rhs.sex.rawValue {
                 return lhs.sex.rawValue < rhs.sex.rawValue
             }
-            return animalListCandidateTagAscending(lhs, rhs)
+            return try animalListCandidateTagAscending(lhs, rhs)
         case .animalType:
             let lhsKey = animalTypeSortKey(lhs.animalType)
             let rhsKey = animalTypeSortKey(rhs.animalType)
             if lhsKey != rhsKey {
                 return lhsKey < rhsKey
             }
-            return animalListCandidateTagAscending(lhs, rhs)
+            return try animalListCandidateTagAscending(lhs, rhs)
         case .status:
             if lhs.status.rawValue != rhs.status.rawValue {
                 return lhs.status.rawValue < rhs.status.rawValue
             }
-            return animalListCandidateTagAscending(lhs, rhs)
+            return try animalListCandidateTagAscending(lhs, rhs)
         case .pasture:
             if lhs.pastureSortKey != rhs.pastureSortKey {
                 return lhs.pastureSortKey < rhs.pastureSortKey
             }
-            return animalListCandidateTagAscending(lhs, rhs)
+            return try animalListCandidateTagAscending(lhs, rhs)
         }
     }
 
     private static func animalListCandidateTagAscending(
         _ lhs: AnimalListQueryCandidate,
         _ rhs: AnimalListQueryCandidate
-    ) -> Bool {
+    ) throws -> Bool {
         let tagOrder = lhs.displayTagNumber.localizedStandardCompare(
             rhs.displayTagNumber
         )
         if tagOrder != .orderedSame {
             return tagOrder == .orderedAscending
         }
-        return animalListCandidateStableTieBreak(lhs, rhs)
+        return try animalListCandidateStableTieBreak(lhs, rhs)
     }
 
     private static func animalListCandidateStableTieBreak(
         _ lhs: AnimalListQueryCandidate,
         _ rhs: AnimalListQueryCandidate
-    ) -> Bool {
+    ) throws -> Bool {
         let nameOrder = lhs.animal.name.localizedStandardCompare(
             rhs.animal.name
         )
         if nameOrder != .orderedSame {
             return nameOrder == .orderedAscending
         }
-        return lhs.animal.id.uuidString < rhs.animal.id.uuidString
+        return (try lhs.animal.requiredID()).uuidString < (try rhs.animal.requiredID()).uuidString
     }
 
     private static func animalTypeSortKey(_ type: AnimalType?) -> Int {
@@ -992,7 +992,7 @@ actor CoreDataReadModelActor:
         herd: CDHerd,
         in context: NSManagedObjectContext
     ) throws -> [CDAnimal] {
-        let ids = candidates.map(\.id)
+        let ids = try candidates.map { try $0.requiredID() }
         guard !ids.isEmpty else { return [] }
         let predicateIDs = ids.map { $0 as NSUUID }
 
@@ -1014,7 +1014,7 @@ actor CoreDataReadModelActor:
             )
         }
 
-        let byID = Dictionary(uniqueKeysWithValues: fetched.map { ($0.id, $0) })
+        let byID = Dictionary(uniqueKeysWithValues: try fetched.map { (try $0.requiredID(), $0) })
         return try ids.map { id in
             guard let animal = byID[id] else {
                 throw CoreDataReadModelError.inconsistentAnimalPage(
@@ -1068,21 +1068,21 @@ actor CoreDataReadModelActor:
                     guard pasture.herd?.id == herdID else {
                         throw CoreDataReadModelError.invalidHerdOwnership(
                             entity: CDPasture.coreDataEntityName,
-                            id: pasture.id,
+                            id: (try pasture.requiredID()),
                             expectedHerdID: herdID,
                             actualHerdID: pasture.herd?.id
                         )
                     }
-                    guard seenIDs.insert(pasture.id).inserted else {
+                    guard seenIDs.insert((try pasture.requiredID())).inserted else {
                         throw CoreDataPersistenceError.duplicateApplicationID(
                             entity: CDPasture.coreDataEntityName,
-                            id: pasture.id,
+                            id: (try pasture.requiredID()),
                             herdID: herdID
                         )
                     }
                     options.append(
                         PastureOption(
-                            id: pasture.id,
+                            id: (try pasture.requiredID()),
                             name: try pasture.validatedName()
                         )
                     )
@@ -1265,7 +1265,7 @@ actor CoreDataReadModelActor:
             return try templates.map { template in
                 let items = try WorkingMapper.treatmentTemplateItems(template)
                 return WorkingTreatmentTemplateSummary(
-                    id: template.id,
+                    id: (try template.requiredID()),
                     name: try WorkingMapper.treatmentTemplateName(template),
                     treatmentCount: items.count
                 )
@@ -1372,7 +1372,7 @@ actor CoreDataReadModelActor:
         if let tag = try context.fetch(crossHerdTagRequest).first {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDAnimalTag.coreDataEntityName,
-                id: tag.id,
+                id: (try tag.requiredID()),
                 expectedHerdID: herdID,
                 actualHerdID: tag.herd?.id
             )
@@ -1466,7 +1466,7 @@ actor CoreDataReadModelActor:
            let pasture = animal.currentPasture {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDPasture.coreDataEntityName,
-                id: pasture.id,
+                id: (try pasture.requiredID()),
                 expectedHerdID: herdID,
                 actualHerdID: pasture.herd?.id
             )
@@ -1491,7 +1491,7 @@ actor CoreDataReadModelActor:
            let session = animal.activeWorkingSession {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDWorkingSession.coreDataEntityName,
-                id: session.id,
+                id: (try session.requiredID()),
                 expectedHerdID: herdID,
                 actualHerdID: session.herd?.id
             )
@@ -1515,7 +1515,7 @@ actor CoreDataReadModelActor:
         if let record = try context.fetch(invalidHealthRequest).first {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDHealthRecord.coreDataEntityName,
-                id: record.id,
+                id: (try record.requiredID()),
                 expectedHerdID: herdID,
                 actualHerdID: record.herd?.id
             )
@@ -1535,7 +1535,7 @@ actor CoreDataReadModelActor:
         if let offspring = try context.fetch(invalidOffspringRequest).first {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDAnimal.coreDataEntityName,
-                id: offspring.id,
+                id: (try offspring.requiredID()),
                 expectedHerdID: herdID,
                 actualHerdID: offspring.herd?.id
             )
@@ -1612,7 +1612,7 @@ actor CoreDataReadModelActor:
             if nameOrder != .orderedSame {
                 return nameOrder == .orderedAscending
             }
-            return lhs.0.id.uuidString < rhs.0.id.uuidString
+            return (try lhs.0.requiredID()).uuidString < (try rhs.0.requiredID()).uuidString
         }
         .map { $0.1 }
     }
@@ -1627,7 +1627,7 @@ actor CoreDataReadModelActor:
             id: summary.id,
             displayTagNumber: summary.displayTagNumber,
             displayTagColorID: summary.displayTagColorID,
-            damID: animal.dam?.id,
+            damID: try animal.dam.map { try $0.requiredID() },
             damDisplayTagNumber: summary.damDisplayTagNumber,
             damDisplayTagColorID: summary.damDisplayTagColorID,
             sex: summary.sex,
@@ -1729,7 +1729,7 @@ actor CoreDataReadModelActor:
             if let resident = try context.fetch(invalidResidentRequest).first {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDAnimal.coreDataEntityName,
-                    id: resident.id,
+                    id: (try resident.requiredID()),
                     expectedHerdID: herdID,
                     actualHerdID: resident.herd?.id
                 )
@@ -1777,7 +1777,7 @@ actor CoreDataReadModelActor:
             guard pasture.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDPasture.coreDataEntityName,
-                    id: pasture.id,
+                    id: (try pasture.requiredID()),
                     expectedHerdID: herdID,
                     actualHerdID: pasture.herd?.id
                 )
@@ -1786,14 +1786,14 @@ actor CoreDataReadModelActor:
                group.herd?.id != herdID {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDPastureGroup.coreDataEntityName,
-                    id: group.id,
+                    id: (try group.requiredID()),
                     expectedHerdID: herdID,
                     actualHerdID: group.herd?.id
                 )
             }
 
             return DashboardPastureRecord(
-                id: pasture.id,
+                id: (try pasture.requiredID()),
                 name: try pasture.validatedName(),
                 acreage: pasture.acreage?.doubleValue,
                 usableAcreage: pasture.usableAcreage?.doubleValue,
@@ -1845,7 +1845,7 @@ actor CoreDataReadModelActor:
         guard animal.herd?.id == herdID else {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDAnimal.coreDataEntityName,
-                id: animal.id,
+                id: (try animal.requiredID()),
                 expectedHerdID: herdID,
                 actualHerdID: animal.herd?.id
             )
@@ -1855,7 +1855,7 @@ actor CoreDataReadModelActor:
             guard record.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDHealthRecord.coreDataEntityName,
-                    id: record.id,
+                    id: (try record.requiredID()),
                     expectedHerdID: herdID,
                     actualHerdID: record.herd?.id
                 )
@@ -1866,7 +1866,7 @@ actor CoreDataReadModelActor:
             guard offspring.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDAnimal.coreDataEntityName,
-                    id: offspring.id,
+                    id: (try offspring.requiredID()),
                     expectedHerdID: herdID,
                     actualHerdID: offspring.herd?.id
                 )
@@ -2278,7 +2278,7 @@ actor CoreDataReadModelActor:
         )
         undatedRequest.fetchLimit = 1
         if let undated = try context.fetch(undatedRequest).first {
-            throw CoreDataFieldCheckMappingError.missingFindingDate(findingID: undated.id)
+            throw CoreDataFieldCheckMappingError.missingFindingDate(findingID: (try undated.requiredID()))
         }
 
         let corruptRequest = NSFetchRequest<CDFieldCheckFinding>(
@@ -2333,17 +2333,17 @@ actor CoreDataReadModelActor:
             guard check.herd?.objectID == herd.objectID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDFieldCheckAnimalCheck.coreDataEntityName,
-                    id: check.id,
+                    id: (try check.requiredID()),
                     expectedHerdID: herdID,
                     actualHerdID: check.herd?.id
                 )
             }
             guard let session = check.session else {
-                throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: check.id)
+                throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: (try check.requiredID()))
             }
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDFieldCheckSession.coreDataEntityName,
-                id: session.id,
+                id: (try session.requiredID()),
                 expectedHerdID: herdID,
                 actualHerdID: session.herd?.id
             )
@@ -2391,7 +2391,7 @@ actor CoreDataReadModelActor:
             guard session.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDFieldCheckSession.coreDataEntityName,
-                    id: session.id,
+                    id: (try session.requiredID()),
                     expectedHerdID: herdID,
                     actualHerdID: session.herd?.id
                 )
@@ -2406,20 +2406,20 @@ actor CoreDataReadModelActor:
                 guard check.herd?.id == herdID else {
                     throw CoreDataReadModelError.invalidHerdOwnership(
                         entity: CDFieldCheckAnimalCheck.coreDataEntityName,
-                        id: check.id,
+                        id: (try check.requiredID()),
                         expectedHerdID: herdID,
                         actualHerdID: check.herd?.id
                     )
                 }
                 guard let linkedSession = check.session else {
-                    throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: check.id)
+                    throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: (try check.requiredID()))
                 }
                 guard linkedSession.objectID == session.objectID else {
                     throw CoreDataReadModelError.invalidSessionRelationship(
                         entity: CDFieldCheckAnimalCheck.coreDataEntityName,
-                        id: check.id,
-                        expectedSessionID: session.id,
-                        actualSessionID: linkedSession.id
+                        id: (try check.requiredID()),
+                        expectedSessionID: (try session.requiredID()),
+                        actualSessionID: (try linkedSession.requiredID())
                     )
                 }
             }
@@ -2462,12 +2462,12 @@ actor CoreDataReadModelActor:
         herdID: UUID
     ) throws {
         guard let session = finding.session else {
-            throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: finding.id)
+            throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: (try finding.requiredID()))
         }
         guard finding.herd?.id == herdID else {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDFieldCheckFinding.coreDataEntityName,
-                id: finding.id,
+                id: (try finding.requiredID()),
                 expectedHerdID: herdID,
                 actualHerdID: finding.herd?.id
             )
@@ -2475,7 +2475,7 @@ actor CoreDataReadModelActor:
         guard session.herd?.id == herdID else {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDFieldCheckSession.coreDataEntityName,
-                id: session.id,
+                id: (try session.requiredID()),
                 expectedHerdID: herdID,
                 actualHerdID: session.herd?.id
             )
@@ -2484,9 +2484,9 @@ actor CoreDataReadModelActor:
            session.objectID != expectedSession.objectID {
             throw CoreDataReadModelError.invalidSessionRelationship(
                 entity: CDFieldCheckFinding.coreDataEntityName,
-                id: finding.id,
-                expectedSessionID: expectedSession.id,
-                actualSessionID: session.id
+                id: (try finding.requiredID()),
+                expectedSessionID: (try expectedSession.requiredID()),
+                actualSessionID: (try session.requiredID())
             )
         }
     }
