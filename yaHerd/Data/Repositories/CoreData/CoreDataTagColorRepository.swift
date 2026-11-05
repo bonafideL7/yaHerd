@@ -58,7 +58,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         var persistedBuiltIns: [UUID: TagColorSnapshot] = [:]
         for color in persisted {
             if builtInIDs.contains(color.id),
-               let canonical = Self.seedBuiltIns().first(where: { $0.id == (try color.requiredID()) }) {
+               let canonical = Self.seedBuiltIns().first(where: { $0.id == color.id }) {
                 snapshotsByName.removeValue(
                     forKey: TagColorLibraryRules.normalizedNameKey(canonical.name)
                 )
