@@ -3,7 +3,7 @@ import Foundation
 
 @objc(CDWorkingQueueItem)
 final class CDWorkingQueueItem: NSManagedObject {
-    @NSManaged var id: UUID
+    @NSManaged var id: UUID?
     @NSManaged var statusRawValue: String?
     @NSManaged var completedAt: Date?
     @NSManaged var animalIDSnapshot: UUID?

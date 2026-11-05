@@ -3,7 +3,7 @@ import Foundation
 
 @objc(CDWorkingSession)
 final class CDWorkingSession: NSManagedObject {
-    @NSManaged var id: UUID
+    @NSManaged var id: UUID?
     @NSManaged var date: Date?
     @NSManaged var statusRawValue: String?
     @NSManaged var treatmentTemplateNameSnapshot: String

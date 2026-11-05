@@ -3,7 +3,7 @@ import Foundation
 
 @objc(CDWorkingTreatmentRecord)
 final class CDWorkingTreatmentRecord: NSManagedObject {
-    @NSManaged var id: UUID
+    @NSManaged var id: UUID?
     @NSManaged var date: Date?
     @NSManaged var treatmentItemID: UUID?
     @NSManaged var itemNameSnapshot: String?

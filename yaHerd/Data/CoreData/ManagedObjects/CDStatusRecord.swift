@@ -3,7 +3,7 @@ import Foundation
 
 @objc(CDStatusRecord)
 final class CDStatusRecord: NSManagedObject {
-    @NSManaged var id: UUID
+    @NSManaged var id: UUID?
     @NSManaged var date: Date?
     @NSManaged var oldStatusRawValue: String?
     @NSManaged var newStatusRawValue: String?
