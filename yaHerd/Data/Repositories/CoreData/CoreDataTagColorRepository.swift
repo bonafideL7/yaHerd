@@ -58,7 +58,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         var persistedBuiltIns: [UUID: TagColorSnapshot] = [:]
         for color in persisted {
             if builtInIDs.contains(color.id),
-               let canonical = Self.seedBuiltIns().first(where: { $0.id == color.id }) {
+               let canonical = Self.seedBuiltIns().first(where: { $0.id == (try color.requiredID()) }) {
                 snapshotsByName.removeValue(
                     forKey: TagColorLibraryRules.normalizedNameKey(canonical.name)
                 )
@@ -122,7 +122,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
             let originalDefaultID = Self.preferredDefaultID(
                 in: try colors.filter { !$0.isDeleted && !$0.isHidden }.map(Self.snapshot)
             )
-            let existingByID = colors.first { $0.id == color.id }
+            let existingByID = try colors.first { try $0.requiredID() == color.id }
             let nameKey = TagColorLibraryRules.normalizedNameKey(cleanedName)
             let existingByName = try colors.first {
                 try TagColorLibraryRules.normalizedNameKey(Self.requireName(from: $0)) == nameKey
@@ -143,8 +143,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
             // collision, but it must never overwrite or be remapped to another built-in.
             if incomingIDIsBuiltIn,
                let existingByName,
-               existingByName.id != color.id,
-               builtInIDs.contains(existingByName.id) {
+               (try existingByName.requiredID()) != color.id,
+               builtInIDs.contains(try existingByName.requiredID()) {
                 return
             }
             if let incomingBuiltIn,
@@ -178,7 +178,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
                     target = Self.insert(incomingBuiltIn, herd: herd, in: context)
                 }
             } else if let builtIn {
-                if let canonical = colors.first(where: { $0.id == builtIn.id }) {
+                if let canonical = try colors.first(where: { try $0.requiredID() == builtIn.id }) {
                     target = canonical
                 } else {
                     target = Self.insert(builtIn, herd: herd, in: context)
@@ -250,13 +250,13 @@ final class CoreDataTagColorRepository: TagColorRepository {
             if let existingByID, existingByID !== target { duplicates.append(existingByID) }
             if let existingByName,
                existingByName !== target,
-               !builtInIDs.contains(existingByName.id),
+               !builtInIDs.contains(try existingByName.requiredID()),
                !duplicates.contains(where: { $0 === existingByName }) {
                 duplicates.append(existingByName)
             }
             for duplicate in duplicates {
                 try Self.remapColorReferences(
-                    from: duplicate.id,
+                    from: try duplicate.requiredID(),
                     to: target,
                     herd: herd,
                     in: context
@@ -265,7 +265,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
             }
             try Self.normalizeDefaults(
                 in: colors.filter { !$0.isDeleted } + [target],
-                preserving: color.isDefault ? target.id : originalDefaultID
+                preserving: color.isDefault ? (try target.requiredID()) : originalDefaultID
             )
         }
     }
@@ -276,14 +276,14 @@ final class CoreDataTagColorRepository: TagColorRepository {
             requiresDefaultSlot: true
         ) { context, herd in
             var colors = try Self.fetchManagedColors(herd: herd, in: context)
-            if !colors.contains(where: { $0.id == id }),
+            if try !colors.contains(where: { try $0.requiredID() == id }),
                let builtIn = Self.seedBuiltIns().first(where: { $0.id == id }) {
                 let managed = Self.insert(builtIn, herd: herd, in: context)
                 colors.append(managed)
             }
-            guard colors.contains(where: { $0.id == id }) else { return }
+            guard try colors.contains(where: { try $0.requiredID() == id }) else { return }
             for color in colors {
-                let shouldBeDefault = color.id == id
+                let shouldBeDefault = (try color.requiredID()) == id
                 guard color.isDefault != shouldBeDefault else { continue }
                 color.isDefault = shouldBeDefault
                 color.updatedAt = .now
@@ -299,10 +299,10 @@ final class CoreDataTagColorRepository: TagColorRepository {
             let originalDefaultID = Self.preferredDefaultID(
                 in: try colors.filter { !$0.isDeleted && !$0.isHidden }.map(Self.snapshot)
             )
-            for color in colors where ids.contains(color.id) {
-                if TagColorDefaults.defaultColorIDs.contains(color.id) {
-                    if try Self.hasPersistedReferences(to: color.id, herd: herd, in: context),
-                       let canonical = Self.seedBuiltIns().first(where: { $0.id == color.id }) {
+            for color in colors where ids.contains(try color.requiredID()) {
+                if TagColorDefaults.defaultColorIDs.contains(try color.requiredID()) {
+                    if try Self.hasPersistedReferences(to: try color.requiredID(), herd: herd, in: context),
+                       let canonical = Self.seedBuiltIns().first(where: { $0.id == (try color.requiredID()) }) {
                         Self.applyCanonicalBuiltIn(
                             canonical,
                             to: color,
@@ -311,7 +311,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
                     } else {
                         context.delete(color)
                     }
-                } else if try Self.hasPersistedReferences(to: color.id, herd: herd, in: context) {
+                } else if try Self.hasPersistedReferences(to: try color.requiredID(), herd: herd, in: context) {
                     if !color.isHidden || color.isDefault {
                         color.isHidden = true
                         color.isDefault = false
@@ -335,7 +335,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
             materializingTagColorIDs: candidateBuiltInTagColorIDs(colorIDs)
         ) { context, herd in
             var colors = try Self.fetchManagedColors(herd: herd, in: context)
-            let persistedIDs = Set(colors.map(\.id))
+            let persistedIDs = Set(try colors.map { try $0.requiredID() })
             let existingDefaultID = Self.preferredDefaultID(
                 in: try colors.filter { !$0.isDeleted && !$0.isHidden }.map(Self.snapshot)
             )
@@ -349,7 +349,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
             }
 
             for color in colors {
-                guard let position = order[color.id] else { continue }
+                guard let position = order[try color.requiredID()] else { continue }
                 let desiredSortOrder = Int64(position)
                 guard color.sortOrder != desiredSortOrder else { continue }
                 color.sortOrder = desiredSortOrder
@@ -367,8 +367,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
             requiresDefaultSlot: true
         ) { context, herd in
             let colors = try Self.fetchManagedColors(herd: herd, in: context)
-            for color in colors where TagColorDefaults.retiredDefaultColorIDs.contains(color.id) {
-                if try Self.hasPersistedReferences(to: color.id, herd: herd, in: context) {
+            for color in colors where TagColorDefaults.retiredDefaultColorIDs.contains(try color.requiredID()) {
+                if try Self.hasPersistedReferences(to: try color.requiredID(), herd: herd, in: context) {
                     if !color.isHidden || color.isDefault {
                         color.isHidden = true
                         color.isDefault = false
@@ -385,13 +385,13 @@ final class CoreDataTagColorRepository: TagColorRepository {
             let currentBuiltInIDs = Set(Self.seedBuiltIns().map(\.id))
             for defaultColor in Self.seedBuiltIns() {
                 let normalizedDefaultName = TagColorLibraryRules.normalizedNameKey(defaultColor.name)
-                let canonical = colors.first {
-                    !$0.isDeleted && $0.id == defaultColor.id
+                let canonical = try colors.first {
+                    !$0.isDeleted && (try $0.requiredID()) == defaultColor.id
                 }
                 let competingNameRows = try colors.filter { candidate in
                     guard !candidate.isDeleted,
                           candidate !== canonical,
-                          !currentBuiltInIDs.contains(candidate.id) else {
+                          !currentBuiltInIDs.contains(try candidate.requiredID()) else {
                         return false
                     }
                     return try TagColorLibraryRules.normalizedNameKey(
@@ -406,9 +406,9 @@ final class CoreDataTagColorRepository: TagColorRepository {
                     target = Self.insert(defaultColor, herd: herd, in: context)
                 }
 
-                let shouldRemainDefault = existingDefaultID.map { persistedDefaultID in
-                    target.id == persistedDefaultID
-                        || competingNameRows.contains(where: { $0.id == persistedDefaultID })
+                let shouldRemainDefault = try existingDefaultID.map { persistedDefaultID in
+                    (try target.requiredID()) == persistedDefaultID
+                        || (try competingNameRows.contains(where: { try $0.requiredID() == persistedDefaultID }))
                 } ?? (defaultColor.id == TagColorDefaults.whiteID)
                 Self.applyCanonicalBuiltIn(
                     defaultColor,
@@ -418,7 +418,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
 
                 for duplicate in competingNameRows {
                     try Self.remapColorReferences(
-                        from: duplicate.id,
+                        from: try duplicate.requiredID(),
                         to: target,
                         herd: herd,
                         in: context
@@ -632,7 +632,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
     ) throws -> String {
         guard let name = color.name,
               !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw CoreDataTagColorRepositoryError.missingName(colorID: color.id)
+            throw CoreDataTagColorRepositoryError.missingName(colorID: (try color.requiredID()))
         }
         return name
     }
@@ -641,10 +641,10 @@ final class CoreDataTagColorRepository: TagColorRepository {
         from color: CDTagColorDefinition
     ) throws -> (createdAt: Date, updatedAt: Date) {
         guard let createdAt = color.createdAt else {
-            throw CoreDataTagColorRepositoryError.missingCreatedAt(colorID: color.id)
+            throw CoreDataTagColorRepositoryError.missingCreatedAt(colorID: (try color.requiredID()))
         }
         guard let updatedAt = color.updatedAt else {
-            throw CoreDataTagColorRepositoryError.missingUpdatedAt(colorID: color.id)
+            throw CoreDataTagColorRepositoryError.missingUpdatedAt(colorID: (try color.requiredID()))
         }
         return (createdAt, updatedAt)
     }
@@ -653,7 +653,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         let name = try requireName(from: color)
         let timestamps = try requireTimestamps(from: color)
         return TagColorSnapshot(
-            id: color.id,
+            id: try color.requiredID(),
             name: name,
             prefix: color.prefix,
             rgba: RGBAColor(r: color.red, g: color.green, b: color.blue, a: color.alpha),
@@ -679,10 +679,10 @@ final class CoreDataTagColorRepository: TagColorRepository {
         var affectedAnimals: [UUID: CDAnimal] = [:]
         for tag in try context.fetch(tagRequest) {
             guard let animal = tag.animal else {
-                throw CoreDataTagColorRepositoryError.missingTagAnimal(tagID: tag.id)
+                throw CoreDataTagColorRepositoryError.missingTagAnimal(tagID: (try tag.requiredID()))
             }
             tag.color = replacement
-            affectedAnimals[animal.id] = animal
+            affectedAnimals[try animal.requiredID()] = animal
         }
 
         for animal in affectedAnimals.values {
@@ -700,10 +700,10 @@ final class CoreDataTagColorRepository: TagColorRepository {
         )
         for check in try context.fetch(checkRequest) {
             if check.rosterTagColorIDSnapshot == oldColorID {
-                check.rosterTagColorIDSnapshot = replacement.id
+                check.rosterTagColorIDSnapshot = try replacement.requiredID()
             }
             if check.damRosterTagColorIDSnapshot == oldColorID {
-                check.damRosterTagColorIDSnapshot = replacement.id
+                check.damRosterTagColorIDSnapshot = try replacement.requiredID()
             }
         }
 
@@ -716,7 +716,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
             oldColorID as NSUUID
         )
         for finding in try context.fetch(findingRequest) {
-            finding.animalDisplayTagColorIDSnapshot = replacement.id
+            finding.animalDisplayTagColorIDSnapshot = try replacement.requiredID()
         }
 
         let queueRequest = NSFetchRequest<CDWorkingQueueItem>(
@@ -730,10 +730,10 @@ final class CoreDataTagColorRepository: TagColorRepository {
         )
         for item in try context.fetch(queueRequest) {
             if item.animalTagColorIDSnapshot == oldColorID {
-                item.animalTagColorIDSnapshot = replacement.id
+                item.animalTagColorIDSnapshot = try replacement.requiredID()
             }
             if item.animalDamDisplayTagColorIDSnapshot == oldColorID {
-                item.animalDamDisplayTagColorIDSnapshot = replacement.id
+                item.animalDamDisplayTagColorIDSnapshot = try replacement.requiredID()
             }
         }
     }
@@ -813,15 +813,15 @@ final class CoreDataTagColorRepository: TagColorRepository {
         // Mutations such as reorder and canonical repair can update the losing
         // default's metadata. Keep the choice shown before the mutation when
         // that same persisted identity is still a visible, flagged default.
-        let preservedID = defaultID.flatMap { id in
-            visible.contains(where: { $0.id == id }) ? id : nil
+        let preservedID = try defaultID.flatMap { id in
+            try visible.contains(where: { try $0.requiredID() == id }) ? id : nil
         }
         let visibleSnapshots = try visible.map(snapshot)
         let defaultSnapshots = try defaults.map(snapshot)
         let selectedID = preservedID
             ?? preferredDefaultID(in: visibleSnapshots)
             ?? preferredDefaultID(in: defaultSnapshots)
-        for color in defaults where color.id != selectedID {
+        for color in defaults where (try color.requiredID()) != selectedID {
             color.isDefault = false
             color.updatedAt = .now
         }
