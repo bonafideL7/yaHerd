@@ -445,16 +445,15 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
 
     func testSaveFailureRollsBackStagedState() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
-        let invalidHerdID = UUID()
+        let invalidName = "Invalid Pasture Missing Identity"
 
         do {
             try await assembly.transactionExecutor.performWrite { context in
-                let invalidHerd = CDHerd(context: context)
-                invalidHerd.name = "Invalid Missing Identity"
-                invalidHerd.createdAt = Date(timeIntervalSince1970: 100)
-                invalidHerd.updatedAt = Date(timeIntervalSince1970: 100)
-                // The UUID identity is still required and has no default. Saving
-                // this row must fail Core Data validation and roll back the write.
+                let invalidPasture = CDPasture(context: context)
+                invalidPasture.name = invalidName
+                invalidPasture.sortOrder = 0
+                // Unlike Herd.id, Pasture.id is still a required UUID without a
+                // default. The actual Core Data save must fail and roll back.
             }
             XCTFail("Saving an invalid required persisted value must fail.")
         } catch let error as CoreDataPersistenceError {
@@ -466,9 +465,11 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
 
         let context = assembly.contextFactory.makeReadContext()
         try context.performAndWait {
-            XCTAssertNil(
-                try CoreDataLookup().herd(id: invalidHerdID, in: context),
-                "A failed save must not leave the invalid Herd durable."
+            let request = NSFetchRequest<CDPasture>(entityName: CDPasture.coreDataEntityName)
+            request.predicate = NSPredicate(format: "name == %@", invalidName)
+            XCTAssertEqual(
+                try context.count(for: request), 0,
+                "A failed save must not leave the invalid Pasture durable."
             )
         }
     }
@@ -547,7 +548,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         let pastureID = UUID()
         let controlPastureID = UUID()
         let rejectedPastureID = UUID()
-        let invalidHerdID = UUID()
+        let invalidPastureName = "Invalid Missing Pasture Identity"
         let committedPastureID = UUID()
         let originalUpdatedAt = Date(timeIntervalSince1970: 100)
         let committedUpdatedAt = Date(timeIntervalSince1970: 300)
@@ -575,12 +576,12 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
                     id: rejectedPastureID, name: "Rejected Insert", herd: herd, in: context
                 )
 
-                let invalid = CDHerd(context: context)
-                invalid.name = "Invalid Missing Identity"
-                invalid.createdAt = originalUpdatedAt
-                invalid.updatedAt = originalUpdatedAt
-                // A missing required UUID must fail the actual Core Data save,
-                // rolling back the mixed transaction across both entity types.
+                let invalid = CDPasture(context: context)
+                invalid.name = invalidPastureName
+                invalid.sortOrder = 0
+                invalid.herd = herd
+                // A missing required Pasture UUID must fail the actual Core Data
+                // save, rolling back Herd updates and Pasture changes together.
             }
             XCTFail("The mixed transaction must fail during Core Data save.")
         } catch let error as CoreDataPersistenceError {
@@ -608,7 +609,11 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             XCTAssertNil(try CoreDataLookup().herdOwned(
                 CDPasture.self, id: rejectedPastureID, herdID: herdID, in: failedContext
             ))
-            XCTAssertNil(try CoreDataLookup().herd(id: invalidHerdID, in: failedContext))
+            let invalidRequest = NSFetchRequest<CDPasture>(
+                entityName: CDPasture.coreDataEntityName
+            )
+            invalidRequest.predicate = NSPredicate(format: "name == %@", invalidPastureName)
+            XCTAssertEqual(try failedContext.count(for: invalidRequest), 0)
             let control = try XCTUnwrap(CoreDataLookup().herdOwned(
                 CDPasture.self, id: controlPastureID, herdID: herdID, in: failedContext
             ))
