@@ -259,8 +259,9 @@ final class CoreDataModelStructureTests: XCTestCase {
             let historicalDate = Date(timeIntervalSinceReferenceDate: 200)
             movement.date = historicalDate
             let timeline = try CoreDataAnimalProjection.timeline(animal)
+            let movementID = try movement.requiredID()
             XCTAssertTrue(timeline.contains {
-                $0.id == "movement:\(movement.id.uuidString)" && $0.date == historicalDate
+                $0.id == "movement:\(movementID.uuidString)" && $0.date == historicalDate
             })
             context.rollback()
         }
@@ -310,8 +311,9 @@ final class CoreDataModelStructureTests: XCTestCase {
             let historicalDate = Date(timeIntervalSinceReferenceDate: 200)
             health.date = historicalDate
             let timeline = try CoreDataAnimalProjection.timeline(animal)
+            let healthID = try health.requiredID()
             XCTAssertTrue(timeline.contains {
-                $0.id == "health:\(health.id.uuidString)" && $0.date == historicalDate
+                $0.id == "health:\(healthID.uuidString)" && $0.date == historicalDate
             })
             XCTAssertEqual(
                 try CoreDataAnimalProjection.summary(animal).lastTreatmentDate,
@@ -389,8 +391,9 @@ final class CoreDataModelStructureTests: XCTestCase {
                     to: historicalDate
                 )
             )
+            let importedID = try imported.requiredID()
             XCTAssertTrue(try CoreDataAnimalProjection.timeline(animal).contains {
-                $0.id == "pregnancy:\(imported.id.uuidString)" && $0.date == historicalDate
+                $0.id == "pregnancy:\(importedID.uuidString)" && $0.date == historicalDate
             })
             XCTAssertEqual(
                 try WorkingMapper.makePregnancyCheckSnapshot(from: imported).date,
@@ -438,8 +441,9 @@ final class CoreDataModelStructureTests: XCTestCase {
             let historicalDate = Date(timeIntervalSinceReferenceDate: 200)
             status.date = historicalDate
             let timeline = try CoreDataAnimalProjection.timeline(animal)
+            let statusID = try status.requiredID()
             XCTAssertTrue(timeline.contains {
-                $0.id == "status:\(status.id.uuidString)" && $0.date == historicalDate
+                $0.id == "status:\(statusID.uuidString)" && $0.date == historicalDate
             })
             context.rollback()
         }
