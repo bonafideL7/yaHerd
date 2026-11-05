@@ -2964,7 +2964,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
                     in: context
                 ))
                 return try ((persisted.pregnancyChecks?.allObjects as? [CDPregnancyCheck]) ?? [])
-                    .map { (id: $0.id, result: try XCTUnwrap($0.resultRawValue), dueDate: $0.dueDate) }
+                    .map { (id: try $0.requiredID(), result: try XCTUnwrap($0.resultRawValue), dueDate: $0.dueDate) }
             }
         XCTAssertEqual(checks.count, 2)
         XCTAssertEqual(Set(checks.map(\.id)).count, 2)
@@ -6673,14 +6673,14 @@ private final class CoreDataAnimalWorkingSessionReader: WorkingSessionDetailRead
                 throw CoreDataAnimalContractTestError.invalidWorkingSessionStatus
             }
             guard let plannedTreatmentsData = session.plannedTreatmentsData else {
-                throw CoreDataWorkingMappingError.corruptPlannedTreatments(sessionID: session.id)
+                throw CoreDataWorkingMappingError.corruptPlannedTreatments(sessionID: (try session.requiredID()))
             }
             let plannedTreatments = try JSONDecoder().decode(
                 [WorkingTreatmentPlanItem].self,
                 from: plannedTreatmentsData
             )
             let queueItems = try ((session.queueItems?.allObjects as? [CDWorkingQueueItem]) ?? [])
-                .sorted { $0.id.uuidString < $1.id.uuidString }
+                .sorted { (try $0.requiredID()).uuidString < (try $1.requiredID()).uuidString }
                 .map { item -> WorkingQueueItemSnapshot in
                     guard let rawQueueStatus = item.statusRawValue,
                           let queueStatus = WorkingQueueStatus(rawValue: rawQueueStatus) else {
