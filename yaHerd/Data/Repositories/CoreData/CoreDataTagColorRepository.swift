@@ -302,7 +302,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
             for color in colors where ids.contains(try color.requiredID()) {
                 if TagColorDefaults.defaultColorIDs.contains(try color.requiredID()) {
                     if try Self.hasPersistedReferences(to: try color.requiredID(), herd: herd, in: context),
-                       let canonical = try Self.seedBuiltIns().first(where: { $0.id == color.requiredID() }) {
+                       let canonical = try Self.seedBuiltIns().first(where: { try $0.id == color.requiredID() }) {
                         Self.applyCanonicalBuiltIn(
                             canonical,
                             to: color,
