@@ -160,7 +160,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try FieldCheckMapper.startedAt(from: session)) {
                 XCTAssertEqual(
                     $0 as? CoreDataFieldCheckMappingError,
-                    .missingSessionStartDate(sessionID: session.id)
+                    .missingSessionStartDate(sessionID: session.id!)
                 )
             }
             XCTAssertNil(session.startedAt)
@@ -186,7 +186,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try WorkingMapper.sessionDate(session)) {
                 XCTAssertEqual(
                     $0 as? CoreDataWorkingMappingError,
-                    .missingSessionDate(sessionID: session.id)
+                    .missingSessionDate(sessionID: session.id!)
                 )
             }
             XCTAssertNil(session.date)
@@ -212,7 +212,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try WorkingMapper.queueAnimalID(from: item)) { error in
                 XCTAssertEqual(
                     error as? CoreDataWorkingMappingError,
-                    .missingQueueAnimalID(queueItemID: item.id)
+                    .missingQueueAnimalID(queueItemID: item.id!)
                 )
             }
 
@@ -252,7 +252,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try CoreDataAnimalProjection.timeline(animal)) { error in
                 XCTAssertEqual(
                     error as? CoreDataAnimalRepositoryError,
-                    .missingMovementDate(recordID: movement.id)
+                    .missingMovementDate(recordID: movement.id!)
                 )
             }
 
@@ -297,13 +297,13 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try CoreDataAnimalProjection.timeline(animal)) { error in
                 XCTAssertEqual(
                     error as? CoreDataAnimalRepositoryError,
-                    .missingHealthDate(recordID: health.id)
+                    .missingHealthDate(recordID: health.id!)
                 )
             }
             XCTAssertThrowsError(try CoreDataAnimalProjection.summary(animal)) { error in
                 XCTAssertEqual(
                     error as? CoreDataAnimalRepositoryError,
-                    .missingHealthDate(recordID: health.id)
+                    .missingHealthDate(recordID: health.id!)
                 )
             }
 
@@ -360,19 +360,19 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try CoreDataAnimalProjection.summary(animal)) { error in
                 XCTAssertEqual(
                     error as? CoreDataAnimalRepositoryError,
-                    .missingPregnancyDate(recordID: imported.id)
+                    .missingPregnancyDate(recordID: imported.id!)
                 )
             }
             XCTAssertThrowsError(try CoreDataAnimalProjection.timeline(animal)) { error in
                 XCTAssertEqual(
                     error as? CoreDataAnimalRepositoryError,
-                    .missingPregnancyDate(recordID: imported.id)
+                    .missingPregnancyDate(recordID: imported.id!)
                 )
             }
             XCTAssertThrowsError(try WorkingMapper.makePregnancyCheckSnapshot(from: imported)) { error in
                 XCTAssertEqual(
                     error as? CoreDataAnimalRepositoryError,
-                    .missingPregnancyDate(recordID: imported.id)
+                    .missingPregnancyDate(recordID: imported.id!)
                 )
             }
             XCTAssertNil(imported.date)
@@ -431,7 +431,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try CoreDataAnimalProjection.timeline(animal)) { error in
                 XCTAssertEqual(
                     error as? CoreDataAnimalRepositoryError,
-                    .missingStatusHistoryDate(recordID: status.id)
+                    .missingStatusHistoryDate(recordID: status.id!)
                 )
             }
 
@@ -485,7 +485,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try WorkingMapper.makeTreatmentRecordSnapshot(from: record)) { error in
                 XCTAssertEqual(
                     error as? CoreDataWorkingMappingError,
-                    .missingTreatmentDate(recordID: record.id)
+                    .missingTreatmentDate(recordID: record.id!)
                 )
             }
             XCTAssertNil(record.date)
@@ -528,7 +528,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try WorkingMapper.makeTreatmentRecordSnapshot(from: record)) { error in
                 XCTAssertEqual(
                     error as? CoreDataWorkingMappingError,
-                    .corruptTreatmentRecord(recordID: record.id)
+                    .corruptTreatmentRecord(recordID: record.id!)
                 )
             }
             record.treatmentItemID = itemID
@@ -536,7 +536,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try WorkingMapper.makeTreatmentRecordSnapshot(from: record)) { error in
                 XCTAssertEqual(
                     error as? CoreDataWorkingMappingError,
-                    .corruptTreatmentRecord(recordID: record.id)
+                    .corruptTreatmentRecord(recordID: record.id!)
                 )
             }
             record.animalIDSnapshot = animalID
@@ -561,7 +561,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             record.date = Date(timeIntervalSinceReferenceDate: 205_000)
             record.itemNameSnapshot = nil
             XCTAssertThrowsError(try WorkingMapper.makeTreatmentRecordSnapshot(from: record)) { error in
-                XCTAssertEqual(error as? CoreDataWorkingMappingError, .corruptTreatmentRecord(recordID: record.id))
+                XCTAssertEqual(error as? CoreDataWorkingMappingError, .corruptTreatmentRecord(recordID: record.id!))
             }
             context.rollback()
         }
@@ -583,7 +583,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try CoreDataAnimalProjection.statusReferenceName(reference)) { error in
                 XCTAssertEqual(
                     error as? CoreDataAnimalStatusReferenceRepositoryError,
-                    .invalidName(referenceID: reference.id)
+                    .invalidName(referenceID: reference.id!)
                 )
             }
 
@@ -611,7 +611,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try WorkingMapper.makeSessionSummary(from: session)) { error in
                 XCTAssertEqual(
                     error as? CoreDataWorkingMappingError,
-                    .invalidSessionStatus(sessionID: session.id, value: nil)
+                    .invalidSessionStatus(sessionID: session.id!, value: nil)
                 )
             }
             session.statusRawValue = WorkingSessionStatus.finished.rawValue
@@ -793,7 +793,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try CoreDataAnimalProjection.healthTreatment(record)) { error in
                 XCTAssertEqual(
                     error as? CoreDataAnimalRepositoryError,
-                    .corruptHealthTreatment(recordID: record.id)
+                    .corruptHealthTreatment(recordID: record.id!)
                 )
             }
             record.treatment = "Vaccination"
@@ -818,11 +818,11 @@ final class CoreDataModelStructureTests: XCTestCase {
 
             XCTAssertThrowsError(try CoreDataAnimalProjection.statusHistoryValue(record.oldStatusRawValue, record: record)) { error in
                 XCTAssertEqual(error as? CoreDataAnimalRepositoryError,
-                               .invalidStatusHistoryRawValue(recordID: record.id, value: nil))
+                               .invalidStatusHistoryRawValue(recordID: record.id!, value: nil))
             }
             XCTAssertThrowsError(try CoreDataAnimalProjection.statusHistoryValue(record.newStatusRawValue, record: record)) { error in
                 XCTAssertEqual(error as? CoreDataAnimalRepositoryError,
-                               .invalidStatusHistoryRawValue(recordID: record.id, value: nil))
+                               .invalidStatusHistoryRawValue(recordID: record.id!, value: nil))
             }
 
             record.oldStatusRawValue = AnimalStatus.active.rawValue
@@ -846,7 +846,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try FieldCheckMapper.recordedAt(from: finding)) { error in
                 XCTAssertEqual(
                     error as? CoreDataFieldCheckMappingError,
-                    .missingFindingDate(findingID: finding.id)
+                    .missingFindingDate(findingID: finding.id!)
                 )
             }
             XCTAssertNil(finding.recordedAt)
@@ -1129,7 +1129,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try WorkingMapper.makePregnancyCheckSnapshot(from: check)) { error in
                 XCTAssertEqual(
                     error as? CoreDataWorkingMappingError,
-                    .invalidPregnancyResult(checkID: check.id, value: "")
+                    .invalidPregnancyResult(checkID: check.id!, value: "")
                 )
             }
             XCTAssertNil(check.resultRawValue)
@@ -1157,7 +1157,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             ) { error in
                 XCTAssertEqual(
                     error as? CoreDataWorkingMappingError,
-                    .corruptTreatmentTemplate(templateID: template.id)
+                    .corruptTreatmentTemplate(templateID: template.id!)
                 )
             }
             context.rollback()
@@ -1182,7 +1182,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             ) { error in
                 XCTAssertEqual(
                     error as? CoreDataWorkingMappingError,
-                    .corruptPlannedTreatments(sessionID: session.id)
+                    .corruptPlannedTreatments(sessionID: session.id!)
                 )
             }
             context.rollback()
@@ -1206,7 +1206,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             ) { error in
                 XCTAssertEqual(
                     error as? CoreDataAnimalRepositoryError,
-                    .corruptDistinguishingFeatures(animalID: animal.id)
+                    .corruptDistinguishingFeatures(animalID: animal.id!)
                 )
             }
             XCTAssertNil(animal.distinguishingFeaturesData)
@@ -1272,7 +1272,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try FieldCheckMapper.makeFindingSnapshot(from: finding)) { error in
                 XCTAssertEqual(
                     error as? CoreDataFieldCheckMappingError,
-                    .invalidFindingSeverity(findingID: finding.id, value: "")
+                    .invalidFindingSeverity(findingID: finding.id!, value: "")
                 )
             }
             XCTAssertNil(finding.severityRawValue)
@@ -1304,7 +1304,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try FieldCheckMapper.makeFindingSnapshot(from: finding)) { error in
                 XCTAssertEqual(
                     error as? CoreDataFieldCheckMappingError,
-                    .invalidFindingType(findingID: finding.id, value: nil)
+                    .invalidFindingType(findingID: finding.id!, value: nil)
                 )
             }
             XCTAssertNil(finding.typeRawValue)
@@ -1337,7 +1337,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try WorkingMapper.makeQueueItemSnapshot(from: item)) { error in
                 XCTAssertEqual(
                     error as? CoreDataWorkingMappingError,
-                    .invalidQueueStatus(queueItemID: item.id, value: nil)
+                    .invalidQueueStatus(queueItemID: item.id!, value: nil)
                 )
             }
 
@@ -1345,7 +1345,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try WorkingMapper.makeQueueItemSnapshot(from: item)) { error in
                 XCTAssertEqual(
                     error as? CoreDataWorkingMappingError,
-                    .invalidQueueStatus(queueItemID: item.id, value: "invalid")
+                    .invalidQueueStatus(queueItemID: item.id!, value: "invalid")
                 )
             }
 
@@ -1376,7 +1376,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             XCTAssertThrowsError(try FieldCheckMapper.makeFindingSnapshot(from: finding)) { error in
                 XCTAssertEqual(
                     error as? CoreDataFieldCheckMappingError,
-                    .invalidFindingStatus(findingID: finding.id, value: nil)
+                    .invalidFindingStatus(findingID: finding.id!, value: nil)
                 )
             }
             XCTAssertNil(finding.statusRawValue)
@@ -1401,7 +1401,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             ) { error in
                 XCTAssertEqual(
                     error as? CoreDataFieldCheckMappingError,
-                    .missingFindingSession(findingID: finding.id)
+                    .missingFindingSession(findingID: finding.id!)
                 )
             }
             context.rollback()
@@ -1421,7 +1421,7 @@ final class CoreDataModelStructureTests: XCTestCase {
             ) { error in
                 XCTAssertEqual(
                     error as? CoreDataFieldCheckMappingError,
-                    .missingAnimalCheckSession(checkID: check.id)
+                    .missingAnimalCheckSession(checkID: check.id!)
                 )
             }
             context.rollback()
