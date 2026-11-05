@@ -657,9 +657,11 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             XCTAssertNil(try CoreDataLookup().herdOwned(
                 CDPasture.self, id: rejectedPastureID, herdID: herdID, in: committedContext
             ))
-            XCTAssertNil(try CoreDataLookup().herd(
-                id: invalidHerdID, in: committedContext
-            ))
+            let invalidRequest = NSFetchRequest<CDPasture>(
+                entityName: CDPasture.coreDataEntityName
+            )
+            invalidRequest.predicate = NSPredicate(format: "name == %@", invalidPastureName)
+            XCTAssertEqual(try committedContext.count(for: invalidRequest), 0)
         }
     }
 
