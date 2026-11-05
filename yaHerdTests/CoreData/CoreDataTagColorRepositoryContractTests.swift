@@ -745,7 +745,7 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
             let request = NSFetchRequest<CDTagColorDefinition>(
                 entityName: CDTagColorDefinition.coreDataEntityName
             )
-            return try context.fetch(request).filter(\.isDefault).map(\.id)
+            return try context.fetch(request).filter(\.isDefault).map { try $0.requiredID() }
         }
         XCTAssertEqual(
             physicalDefaultIDs,

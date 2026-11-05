@@ -397,7 +397,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             )
             check.animal = nil
             try context.save()
-            return check.id
+            return try check.requiredID()
         }
         let expected = CoreDataAnimalRepositoryError.missingPregnancyAnimalRelationship(recordID: checkID)
         XCTAssertThrowsError(try working.fetchSessionDetail(id: sessionID)) {
@@ -468,7 +468,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             let record = try XCTUnwrap(
                 (session.healthRecords?.allObjects as? [CDHealthRecord])?.first
             )
-            let id = record.id
+            let id = try record.requiredID()
             record.animal = nil
             try context.save()
             return id
@@ -654,7 +654,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             let tag = try XCTUnwrap(CoreDataAnimalProjection.managedTags(stored).first)
             tag.number = nil
             try context.save()
-            return tag.id
+            return try tag.requiredID()
         }
         let expected = CoreDataAnimalRepositoryError.missingAnimalTagNumber(tagID: tagID)
 
@@ -3245,7 +3245,7 @@ private final class CoreDataWorkingContractEnvironment {
                             throw CoreDataWorkingContractTestError.missingStagedQueueItem
                         }
                         throw WorkingRollbackInjectedError.afterSessionStartStaged(
-                            sessionID: session.id,
+                            sessionID: try session.requiredID(),
                             queueItemIDs: queueIDs
                         )
                     }
@@ -3318,7 +3318,7 @@ private final class CoreDataWorkingContractEnvironment {
                         throw WorkingRollbackInjectedError.afterPrimaryTagReplacementStaged(
                             sessionID: sessionID,
                             queueItemID: queueItemID,
-                            replacementTagID: replacement.id
+                            replacementTagID: try replacement.requiredID()
                         )
                     }
                 )
@@ -3355,7 +3355,7 @@ private final class CoreDataWorkingContractEnvironment {
                         let queueIDs = Set(
                             try context.fetch(request)
                                 .filter { $0.destinationPastureIDSnapshot != nil }
-                                .map(\.id)
+                                .map { try $0.requiredID() }
                         )
                         guard !queueIDs.isEmpty else {
                             throw CoreDataWorkingContractTestError.missingStagedDestination
@@ -3387,7 +3387,7 @@ private final class CoreDataWorkingContractEnvironment {
                         }
                         throw WorkingRollbackInjectedError.afterSessionDeletionStaged(
                             sessionID: sessionID,
-                            restoredAnimalID: restoredAnimal.id
+                            restoredAnimalID: try restoredAnimal.requiredID()
                         )
                     }
                 )
@@ -3510,7 +3510,7 @@ private final class CoreDataWorkingContractEnvironment {
                 format: "herd.id == %@",
                 herdID as NSUUID
             )
-            return Set(try context.fetch(request).map(\.id))
+            return Set(try context.fetch(request).map { try $0.requiredID() })
         }
     }
 
@@ -3551,9 +3551,9 @@ private final class CoreDataWorkingContractEnvironment {
             )
 
             return WorkingPersistedWorkDataIDs(
-                treatmentRecordIDs: Set(try context.fetch(treatmentRequest).map(\.id)),
-                pregnancyCheckIDs: Set(try context.fetch(pregnancyRequest).map(\.id)),
-                healthRecordIDs: Set(try context.fetch(healthRequest).map(\.id))
+                treatmentRecordIDs: Set(try context.fetch(treatmentRequest).map { try $0.requiredID() }),
+                pregnancyCheckIDs: Set(try context.fetch(pregnancyRequest).map { try $0.requiredID() }),
+                healthRecordIDs: Set(try context.fetch(healthRequest).map { try $0.requiredID() })
             )
         }
     }
@@ -3574,7 +3574,7 @@ private final class CoreDataWorkingContractEnvironment {
             return Set(
                 try context.fetch(request)
                     .filter { try animalIDs.contains(XCTUnwrap($0.animal?.id)) }
-                    .map(\.id)
+                    .map { try $0.requiredID() }
             )
         }
     }
@@ -3592,7 +3592,7 @@ private final class CoreDataWorkingContractEnvironment {
                 herdID as NSUUID,
                 animalID as NSUUID
             )
-            return Set(try context.fetch(request).map(\.id))
+            return Set(try context.fetch(request).map { try $0.requiredID() })
         }
     }
 
@@ -3606,7 +3606,7 @@ private final class CoreDataWorkingContractEnvironment {
                 format: "herd.id == %@",
                 herdID as NSUUID
             )
-            return Set(try context.fetch(request).map(\.id))
+            return Set(try context.fetch(request).map { try $0.requiredID() })
         }
     }
 
