@@ -1559,8 +1559,8 @@ private final class CoreDataTagColorContractEnvironment {
                 entityName: CDHerd.coreDataEntityName
             )
             let rows = try context.fetch(request)
-            return Dictionary(
-                grouping: rows, by: \.id
+            return try Dictionary(
+                grouping: rows, by: { try $0.requiredID() }
             ).mapValues(\.count)
         }
     }
