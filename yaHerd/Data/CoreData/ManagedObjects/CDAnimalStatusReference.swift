@@ -3,7 +3,7 @@ import Foundation
 
 @objc(CDAnimalStatusReference)
 final class CDAnimalStatusReference: NSManagedObject {
-    @NSManaged var id: UUID
+    @NSManaged var id: UUID?
     @NSManaged var name: String?
     @NSManaged var baseStatusRawValue: String?
     @NSManaged var herd: CDHerd?

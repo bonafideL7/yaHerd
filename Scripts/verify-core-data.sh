@@ -39,23 +39,23 @@ CLASSES = {
 # name:type:required. Only absence or incompatible mutation fails; additive fields pass.
 ATTRIBUTE_CONTRACT = {
     "Herd": "id:UUID:O,name:String:O,createdAt:Date:O,updatedAt:Date:O",
-    "TagColorDefinition": "id:UUID:R,name:String:O,prefix:String:R,red:Double:R,green:Double:R,blue:Double:R,alpha:Double:R,sortOrder:Integer 64:R,isHidden:Boolean:R,isDefault:Boolean:R,createdAt:Date:O,updatedAt:Date:O",
-    "AnimalStatusReference": "id:UUID:R,name:String:O,baseStatusRawValue:String:O",
-    "PastureGroup": "id:UUID:R,name:String:O,grazeDays:Integer 64:R,restDays:Integer 64:R",
-    "Pasture": "id:UUID:R,name:String:O,sortOrder:Integer 64:R,acreage:Double:O,usableAcreage:Double:O,targetAcresPerHead:Double:O,lastGrazedDate:Date:O",
-    "Animal": "id:UUID:R,editorRevision:UUID:O,name:String:R,sexRawValue:String:R,birthDate:Date:O,statusRawValue:String:O,saleDate:Date:O,salePrice:Double:O,reasonSold:String:O,deathDate:Date:O,causeOfDeath:String:O,isArchived:Boolean:R,archivedAt:Date:O,archiveReason:String:O,distinguishingFeaturesData:Binary:O",
-    "AnimalTag": "id:UUID:R,number:String:O,isPrimary:Boolean:R,isActive:Boolean:R,assignedAt:Date:O,removedAt:Date:O",
-    "MovementRecord": "id:UUID:R,date:Date:O,fromPastureIDSnapshot:UUID:O,fromPastureNameSnapshot:String:O,toPastureIDSnapshot:UUID:O,toPastureNameSnapshot:String:O",
-    "StatusRecord": "id:UUID:R,date:Date:O,oldStatusRawValue:String:O,newStatusRawValue:String:O",
-    "HealthRecord": "id:UUID:R,date:Date:O,treatment:String:O,notes:String:O",
-    "PregnancyCheck": "id:UUID:R,date:Date:O,resultRawValue:String:O,technician:String:O,estimatedDaysPregnant:Integer 64:O,dueDate:Date:O",
-    "FieldCheckSession": "id:UUID:R,startedAt:Date:O,completedAt:Date:O,notes:String:R,expectedHeadCountSnapshot:Integer 64:R,quickCowCount:Integer 64:R,quickHeiferCount:Integer 64:R,quickCalfCount:Integer 64:R,quickBullCount:Integer 64:R,quickSteerCount:Integer 64:R,pastureIDSnapshot:UUID:O,pastureNameSnapshot:String:R,pastureArchivedAt:Date:O",
-    "FieldCheckAnimalCheck": "id:UUID:R,animalIDSnapshot:UUID:O,rosterTagNumberSnapshot:String:R,rosterTagColorIDSnapshot:UUID:O,damRosterTagNumberSnapshot:String:O,damRosterTagColorIDSnapshot:UUID:O,animalNameSnapshot:String:R,animalSexRawValueSnapshot:String:R,animalTypeRawValueSnapshot:String:O,wasExpectedAtStart:Boolean:R,countedAt:Date:O,missingConfirmedAt:Date:O",
-    "FieldCheckFinding": "id:UUID:R,recordedAt:Date:O,typeRawValue:String:O,severityRawValue:String:O,statusRawValue:String:O,note:String:R,animalIDSnapshot:UUID:O,animalDisplayTagNumberSnapshot:String:O,animalDisplayTagColorIDSnapshot:UUID:O,animalNameSnapshot:String:O,pastureNameSnapshot:String:O",
-    "WorkingTreatmentTemplate": "id:UUID:R,name:String:O,itemsData:Binary:O",
-    "WorkingSession": "id:UUID:R,date:Date:O,statusRawValue:String:O,treatmentTemplateNameSnapshot:String:R,plannedTreatmentsData:Binary:O,sourcePastureIDSnapshot:UUID:O,sourcePastureNameSnapshot:String:O",
-    "WorkingQueueItem": "id:UUID:R,statusRawValue:String:O,completedAt:Date:O,animalIDSnapshot:UUID:O,animalTagNumberSnapshot:String:R,animalTagColorIDSnapshot:UUID:O,animalNameSnapshot:String:R,animalSexRawValueSnapshot:String:R,animalDamDisplayTagNumberSnapshot:String:O,animalDamDisplayTagColorIDSnapshot:UUID:O,collectedFromPastureIDSnapshot:UUID:O,collectedFromPastureNameSnapshot:String:O,destinationPastureIDSnapshot:UUID:O,destinationPastureNameSnapshot:String:O",
-    "WorkingTreatmentRecord": "id:UUID:R,date:Date:O,treatmentItemID:UUID:O,itemNameSnapshot:String:O,given:Boolean:R,doseAmount:Double:O,doseUnitRawValue:String:O,administrationRouteRawValue:String:O,animalIDSnapshot:UUID:O",
+    "TagColorDefinition": "id:UUID:O,name:String:O,prefix:String:R,red:Double:R,green:Double:R,blue:Double:R,alpha:Double:R,sortOrder:Integer 64:R,isHidden:Boolean:R,isDefault:Boolean:R,createdAt:Date:O,updatedAt:Date:O",
+    "AnimalStatusReference": "id:UUID:O,name:String:O,baseStatusRawValue:String:O",
+    "PastureGroup": "id:UUID:O,name:String:O,grazeDays:Integer 64:R,restDays:Integer 64:R",
+    "Pasture": "id:UUID:O,name:String:O,sortOrder:Integer 64:R,acreage:Double:O,usableAcreage:Double:O,targetAcresPerHead:Double:O,lastGrazedDate:Date:O",
+    "Animal": "id:UUID:O,editorRevision:UUID:O,name:String:R,sexRawValue:String:R,birthDate:Date:O,statusRawValue:String:O,saleDate:Date:O,salePrice:Double:O,reasonSold:String:O,deathDate:Date:O,causeOfDeath:String:O,isArchived:Boolean:R,archivedAt:Date:O,archiveReason:String:O,distinguishingFeaturesData:Binary:O",
+    "AnimalTag": "id:UUID:O,number:String:O,isPrimary:Boolean:R,isActive:Boolean:R,assignedAt:Date:O,removedAt:Date:O",
+    "MovementRecord": "id:UUID:O,date:Date:O,fromPastureIDSnapshot:UUID:O,fromPastureNameSnapshot:String:O,toPastureIDSnapshot:UUID:O,toPastureNameSnapshot:String:O",
+    "StatusRecord": "id:UUID:O,date:Date:O,oldStatusRawValue:String:O,newStatusRawValue:String:O",
+    "HealthRecord": "id:UUID:O,date:Date:O,treatment:String:O,notes:String:O",
+    "PregnancyCheck": "id:UUID:O,date:Date:O,resultRawValue:String:O,technician:String:O,estimatedDaysPregnant:Integer 64:O,dueDate:Date:O",
+    "FieldCheckSession": "id:UUID:O,startedAt:Date:O,completedAt:Date:O,notes:String:R,expectedHeadCountSnapshot:Integer 64:R,quickCowCount:Integer 64:R,quickHeiferCount:Integer 64:R,quickCalfCount:Integer 64:R,quickBullCount:Integer 64:R,quickSteerCount:Integer 64:R,pastureIDSnapshot:UUID:O,pastureNameSnapshot:String:R,pastureArchivedAt:Date:O",
+    "FieldCheckAnimalCheck": "id:UUID:O,animalIDSnapshot:UUID:O,rosterTagNumberSnapshot:String:R,rosterTagColorIDSnapshot:UUID:O,damRosterTagNumberSnapshot:String:O,damRosterTagColorIDSnapshot:UUID:O,animalNameSnapshot:String:R,animalSexRawValueSnapshot:String:R,animalTypeRawValueSnapshot:String:O,wasExpectedAtStart:Boolean:R,countedAt:Date:O,missingConfirmedAt:Date:O",
+    "FieldCheckFinding": "id:UUID:O,recordedAt:Date:O,typeRawValue:String:O,severityRawValue:String:O,statusRawValue:String:O,note:String:R,animalIDSnapshot:UUID:O,animalDisplayTagNumberSnapshot:String:O,animalDisplayTagColorIDSnapshot:UUID:O,animalNameSnapshot:String:O,pastureNameSnapshot:String:O",
+    "WorkingTreatmentTemplate": "id:UUID:O,name:String:O,itemsData:Binary:O",
+    "WorkingSession": "id:UUID:O,date:Date:O,statusRawValue:String:O,treatmentTemplateNameSnapshot:String:R,plannedTreatmentsData:Binary:O,sourcePastureIDSnapshot:UUID:O,sourcePastureNameSnapshot:String:O",
+    "WorkingQueueItem": "id:UUID:O,statusRawValue:String:O,completedAt:Date:O,animalIDSnapshot:UUID:O,animalTagNumberSnapshot:String:R,animalTagColorIDSnapshot:UUID:O,animalNameSnapshot:String:R,animalSexRawValueSnapshot:String:R,animalDamDisplayTagNumberSnapshot:String:O,animalDamDisplayTagColorIDSnapshot:UUID:O,collectedFromPastureIDSnapshot:UUID:O,collectedFromPastureNameSnapshot:String:O,destinationPastureIDSnapshot:UUID:O,destinationPastureNameSnapshot:String:O",
+    "WorkingTreatmentRecord": "id:UUID:O,date:Date:O,treatmentItemID:UUID:O,itemNameSnapshot:String:O,given:Boolean:R,doseAmount:Double:O,doseUnitRawValue:String:O,administrationRouteRawValue:String:O,animalIDSnapshot:UUID:O",
 }
 
 INDEX_CONTRACT = {
@@ -337,9 +337,8 @@ for name, entity in entities.items():
 
     attributes = {item.get("name"): item for item in entity.findall("attribute")}
     identifier = attributes.get("id")
-    # Herd identity may be absent while CloudKit imports its original UUID.
-    # Other entities retain their current required-ID contract until updated.
-    expected_optional = name == "Herd"
+    # Missing imported UUIDs must remain nullable until domain validation.
+    expected_optional = True
     if (
         identifier is None
         or identifier.get("attributeType") != "UUID"

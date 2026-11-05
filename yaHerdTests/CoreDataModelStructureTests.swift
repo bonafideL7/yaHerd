@@ -1488,7 +1488,25 @@ final class CoreDataModelStructureTests: XCTestCase {
             let id = try attribute(named: "id", in: entity)
 
             XCTAssertEqual(id.type, .uuid, "\(entityName).id must be UUID.")
-            XCTAssertEqual(id.isOptional, entityName == "Herd", "\(entityName).id has incorrect optionality.")
+            XCTAssertTrue(id.isOptional, "\(entityName).id must allow incomplete CloudKit imports.")
+        }
+    }
+
+    func testImportedApplicationIDRejectsMissingValueWithoutGeneratingIdentity() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let animal = CDAnimal(context: context)
+            XCTAssertNil(animal.id)
+            XCTAssertThrowsError(try animal.requiredID()) {
+                XCTAssertEqual($0 as? CoreDataPersistenceError,
+                               .missingApplicationID(entity: CDAnimal.coreDataEntityName))
+            }
+            XCTAssertNil(animal.id)
+            let originalID = UUID()
+            animal.id = originalID
+            XCTAssertEqual(try animal.requiredID(), originalID)
+            context.rollback()
         }
     }
 

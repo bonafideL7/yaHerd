@@ -104,7 +104,7 @@ enum CoreDataAnimalMutation {
             return []
         }
         let all = try fetchAnimals(herd: herd, in: context)
-        let byID = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
+        let byID = Dictionary(uniqueKeysWithValues: try all.map { (try $0.requiredID(), $0) })
         return uniqueIDs.compactMap { byID[$0] }
     }
 
@@ -113,7 +113,10 @@ enum CoreDataAnimalMutation {
         herdID: UUID
     ) throws
     where Object: NSManagedObject & CoreDataHerdOwnedManagedObject {
-        let grouped = Dictionary(grouping: objects, by: \.id)
+        var grouped: [UUID: [Object]] = [:]
+        for object in objects {
+            grouped[try object.requiredID(), default: []].append(object)
+        }
         if let duplicate = grouped.first(where: { $0.value.count > 1 }) {
             throw CoreDataPersistenceError.duplicateApplicationID(
                 entity: Object.coreDataEntityName,

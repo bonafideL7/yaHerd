@@ -3,7 +3,7 @@ import Foundation
 
 @objc(CDMovementRecord)
 final class CDMovementRecord: NSManagedObject {
-    @NSManaged var id: UUID
+    @NSManaged var id: UUID?
     @NSManaged var date: Date?
     @NSManaged var fromPastureIDSnapshot: UUID?
     @NSManaged var fromPastureNameSnapshot: String?
