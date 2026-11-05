@@ -63,14 +63,14 @@ private struct CoreDataWorkingTreatmentPlanItemPayload: Decodable {
 enum WorkingMapper {
     static func sessionDate(_ session: CDWorkingSession) throws -> Date {
         guard let date = session.date else {
-            throw CoreDataWorkingMappingError.missingSessionDate(sessionID: session.id)
+            throw CoreDataWorkingMappingError.missingSessionDate(sessionID: (try session.requiredID()))
         }
         return date
     }
 
     static func queueAnimalID(from item: CDWorkingQueueItem) throws -> UUID {
         guard let animalID = item.animalIDSnapshot else {
-            throw CoreDataWorkingMappingError.missingQueueAnimalID(queueItemID: item.id)
+            throw CoreDataWorkingMappingError.missingQueueAnimalID(queueItemID: (try item.requiredID()))
         }
         return animalID
     }
@@ -81,7 +81,7 @@ enum WorkingMapper {
             _ = try queueAnimalID(from: item)
         }
         return WorkingSessionSummary(
-            id: session.id,
+            id: (try session.requiredID()),
             date: try sessionDate(session),
             status: try workingStatus(session),
             sourcePastureName: session.sourcePastureNameSnapshot,
@@ -99,7 +99,7 @@ enum WorkingMapper {
             .sorted(by: queueItemSort)
 
         return WorkingSessionDetailSnapshot(
-            id: session.id,
+            id: (try session.requiredID()),
             date: try sessionDate(session),
             status: try workingStatus(session),
             sourcePastureID: session.sourcePastureIDSnapshot,
@@ -114,7 +114,7 @@ enum WorkingMapper {
     static func makeQueueItemSnapshot(from item: CDWorkingQueueItem) throws -> WorkingQueueItemSnapshot {
         let animalID = try queueAnimalID(from: item)
         return WorkingQueueItemSnapshot(
-            id: item.id,
+            id: (try item.requiredID()),
             status: try queueStatus(item),
             completedAt: item.completedAt,
             animalID: animalID,
@@ -141,7 +141,7 @@ enum WorkingMapper {
         let treatmentRecords = try managedTreatmentRecords(session)
             .filter {
                 $0.animalIDSnapshot == animalID
-                    && $0.animal?.id == animal.id
+                    && $0.animal?.id == (try animal.requiredID())
             }
             .map { record in (record: record, date: try treatmentDate(record)) }
             .sorted { lhs, rhs in
@@ -153,7 +153,7 @@ enum WorkingMapper {
                 if lhs.date != rhs.date {
                     return lhs.date > rhs.date
                 }
-                return lhs.record.id.uuidString < rhs.record.id.uuidString
+                return (try lhs.record.requiredID()).uuidString < (try rhs.record.requiredID()).uuidString
             }
             .map { try makeTreatmentRecordSnapshot(from: $0.record) }
 
@@ -161,10 +161,10 @@ enum WorkingMapper {
             .filter { check in
                 guard let linked = check.animal else {
                     throw CoreDataAnimalRepositoryError.missingPregnancyAnimalRelationship(
-                        recordID: check.id
+                        recordID: (try check.requiredID())
                     )
                 }
-                return linked.id == animal.id
+                return (try linked.requiredID()) == (try animal.requiredID())
             }
             .map { check in
                 (check: check, date: try CoreDataAnimalProjection.pregnancyDate(check))
@@ -173,7 +173,7 @@ enum WorkingMapper {
                 if $0.date != $1.date {
                     return $0.date > $1.date
                 }
-                return $0.check.id.uuidString < $1.check.id.uuidString
+                return (try $0.check.requiredID()).uuidString < (try $1.check.requiredID()).uuidString
             }
             .first
             .map { try makePregnancyCheckSnapshot(from: $0.check) }
@@ -182,7 +182,7 @@ enum WorkingMapper {
             .filter { record in
                 guard let linked = record.animal else {
                     throw CoreDataAnimalRepositoryError.missingHealthAnimalRelationship(
-                        recordID: record.id
+                        recordID: (try record.requiredID())
                     )
                 }
                 return linked.id == animal.id
@@ -198,8 +198,8 @@ enum WorkingMapper {
         }
 
         return WorkingQueueItemEditorSnapshot(
-            id: queueItem.id,
-            sessionID: session.id,
+            id: (try queueItem.requiredID()),
+            sessionID: (try session.requiredID()),
             sessionDate: try sessionDate(session),
             sessionStatus: try workingStatus(session),
             sessionSourcePastureName: session.sourcePastureNameSnapshot,
@@ -224,7 +224,7 @@ enum WorkingMapper {
 
     static func treatmentDate(_ record: CDWorkingTreatmentRecord) throws -> Date {
         guard let date = record.date else {
-            throw CoreDataWorkingMappingError.missingTreatmentDate(recordID: record.id)
+            throw CoreDataWorkingMappingError.missingTreatmentDate(recordID: (try record.requiredID()))
         }
         return date
     }
@@ -237,7 +237,7 @@ enum WorkingMapper {
         if let rawValue = record.doseUnitRawValue {
             guard let decoded = WorkingTreatmentDoseUnit(rawValue: rawValue) else {
                 throw CoreDataWorkingMappingError.invalidDoseUnit(
-                    recordID: record.id,
+                    recordID: (try record.requiredID()),
                     value: rawValue
                 )
             }
@@ -250,7 +250,7 @@ enum WorkingMapper {
         if let rawValue = record.administrationRouteRawValue {
             guard let decoded = WorkingTreatmentAdministrationRoute(rawValue: rawValue) else {
                 throw CoreDataWorkingMappingError.invalidAdministrationRoute(
-                    recordID: record.id,
+                    recordID: (try record.requiredID()),
                     value: rawValue
                 )
             }
@@ -262,7 +262,7 @@ enum WorkingMapper {
         guard let itemName = record.itemNameSnapshot,
               let treatmentItemID = record.treatmentItemID,
               record.animalIDSnapshot != nil else {
-            throw CoreDataWorkingMappingError.corruptTreatmentRecord(recordID: record.id)
+            throw CoreDataWorkingMappingError.corruptTreatmentRecord(recordID: (try record.requiredID()))
         }
 
         let dose = WorkingTreatmentDose(
@@ -281,11 +281,11 @@ enum WorkingMapper {
                 )
             ])
         } catch {
-            throw CoreDataWorkingMappingError.corruptTreatmentRecord(recordID: record.id)
+            throw CoreDataWorkingMappingError.corruptTreatmentRecord(recordID: (try record.requiredID()))
         }
 
         return WorkingTreatmentRecordSnapshot(
-            id: record.id,
+            id: (try record.requiredID()),
             date: date,
             treatmentItemID: treatmentItemID,
             itemName: itemName,
@@ -300,7 +300,7 @@ enum WorkingMapper {
         guard let rawValue = check.resultRawValue,
               let result = PregnancyResult(rawValue: rawValue) else {
             throw CoreDataWorkingMappingError.invalidPregnancyResult(
-                checkID: check.id,
+                checkID: (try check.requiredID()),
                 value: check.resultRawValue ?? ""
             )
         }
@@ -316,18 +316,18 @@ enum WorkingMapper {
 
     static func plannedTreatments(_ session: CDWorkingSession) throws -> [WorkingTreatmentPlanItem] {
         guard let data = session.plannedTreatmentsData else {
-            throw CoreDataWorkingMappingError.corruptPlannedTreatments(sessionID: session.id)
+            throw CoreDataWorkingMappingError.corruptPlannedTreatments(sessionID: (try session.requiredID()))
         }
         do {
             return try decodePersistedPlan(data)
         } catch {
-            throw CoreDataWorkingMappingError.corruptPlannedTreatments(sessionID: session.id)
+            throw CoreDataWorkingMappingError.corruptPlannedTreatments(sessionID: (try session.requiredID()))
         }
     }
 
     static func treatmentTemplateName(_ template: CDWorkingTreatmentTemplate) throws -> String {
         guard let name = template.name else {
-            throw CoreDataWorkingMappingError.corruptTreatmentTemplate(templateID: template.id)
+            throw CoreDataWorkingMappingError.corruptTreatmentTemplate(templateID: (try template.requiredID()))
         }
         return name
     }
@@ -336,12 +336,12 @@ enum WorkingMapper {
         _ template: CDWorkingTreatmentTemplate
     ) throws -> [WorkingTreatmentPlanItem] {
         guard let itemsData = template.itemsData else {
-            throw CoreDataWorkingMappingError.corruptTreatmentTemplate(templateID: template.id)
+            throw CoreDataWorkingMappingError.corruptTreatmentTemplate(templateID: (try template.requiredID()))
         }
         do {
             return try decodePersistedPlan(itemsData)
         } catch {
-            throw CoreDataWorkingMappingError.corruptTreatmentTemplate(templateID: template.id)
+            throw CoreDataWorkingMappingError.corruptTreatmentTemplate(templateID: (try template.requiredID()))
         }
     }
 
@@ -360,7 +360,7 @@ enum WorkingMapper {
         guard let rawValue = session.statusRawValue,
               let status = WorkingSessionStatus(rawValue: rawValue) else {
             throw CoreDataWorkingMappingError.invalidSessionStatus(
-                sessionID: session.id,
+                sessionID: (try session.requiredID()),
                 value: session.statusRawValue
             )
         }
@@ -371,7 +371,7 @@ enum WorkingMapper {
         guard let rawValue = item.statusRawValue,
               let status = WorkingQueueStatus(rawValue: rawValue) else {
             throw CoreDataWorkingMappingError.invalidQueueStatus(
-                queueItemID: item.id,
+                queueItemID: (try item.requiredID()),
                 value: item.statusRawValue
             )
         }
@@ -381,7 +381,7 @@ enum WorkingMapper {
     private static func animalSex(_ item: CDWorkingQueueItem) throws -> Sex {
         guard let sex = Sex(rawValue: item.animalSexRawValueSnapshot) else {
             throw CoreDataWorkingMappingError.invalidAnimalSex(
-                queueItemID: item.id,
+                queueItemID: (try item.requiredID()),
                 value: item.animalSexRawValueSnapshot
             )
         }

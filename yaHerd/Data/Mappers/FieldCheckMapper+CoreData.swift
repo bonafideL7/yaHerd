@@ -41,21 +41,21 @@ enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
 enum FieldCheckMapper {
     static func startedAt(from session: CDFieldCheckSession) throws -> Date {
         guard let startedAt = session.startedAt else {
-            throw CoreDataFieldCheckMappingError.missingSessionStartDate(sessionID: session.id)
+            throw CoreDataFieldCheckMappingError.missingSessionStartDate(sessionID: (try session.requiredID()))
         }
         return startedAt
     }
 
     static func recordedAt(from finding: CDFieldCheckFinding) throws -> Date {
         guard let recordedAt = finding.recordedAt else {
-            throw CoreDataFieldCheckMappingError.missingFindingDate(findingID: finding.id)
+            throw CoreDataFieldCheckMappingError.missingFindingDate(findingID: (try finding.requiredID()))
         }
         return recordedAt
     }
 
     static func animalID(from check: CDFieldCheckAnimalCheck) throws -> UUID {
         guard let animalID = check.animalIDSnapshot else {
-            throw CoreDataFieldCheckMappingError.missingAnimalIDSnapshot(checkID: check.id)
+            throw CoreDataFieldCheckMappingError.missingAnimalIDSnapshot(checkID: (try check.requiredID()))
         }
         return animalID
     }
@@ -65,19 +65,19 @@ enum FieldCheckMapper {
         needsAttention: Bool
     ) throws -> FieldCheckAnimalCheckSnapshot {
         guard check.session != nil else {
-            throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: check.id)
+            throw CoreDataFieldCheckMappingError.missingAnimalCheckSession(checkID: (try check.requiredID()))
         }
         let animalID = try animalID(from: check)
         guard let sex = Sex(rawValue: check.animalSexRawValueSnapshot) else {
             throw CoreDataFieldCheckMappingError.invalidAnimalSex(
-                checkID: check.id,
+                checkID: (try check.requiredID()),
                 value: check.animalSexRawValueSnapshot
             )
         }
         let animalType = try animalType(from: check)
 
         return FieldCheckAnimalCheckSnapshot(
-            id: check.id,
+            id: (try check.requiredID()),
             animalID: animalID,
             displayTagNumber: AnimalDisplayTagFormatter.displayTagNumber(
                 from: check.rosterTagNumberSnapshot
@@ -101,7 +101,7 @@ enum FieldCheckMapper {
         guard let rawValue = check.animalTypeRawValueSnapshot,
               let animalType = AnimalType(rawValue: rawValue) else {
             throw CoreDataFieldCheckMappingError.invalidAnimalType(
-                checkID: check.id,
+                checkID: (try check.requiredID()),
                 value: check.animalTypeRawValueSnapshot
             )
         }
@@ -112,31 +112,31 @@ enum FieldCheckMapper {
         from finding: CDFieldCheckFinding
     ) throws -> FieldCheckFindingSnapshot {
         guard let session = finding.session else {
-            throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: finding.id)
+            throw CoreDataFieldCheckMappingError.missingFindingSession(findingID: (try finding.requiredID()))
         }
         guard let rawType = finding.typeRawValue,
               let type = FieldCheckFindingType(rawValue: rawType) else {
             throw CoreDataFieldCheckMappingError.invalidFindingType(
-                findingID: finding.id,
+                findingID: (try finding.requiredID()),
                 value: finding.typeRawValue
             )
         }
         guard let severity = finding.severityRawValue.flatMap(FieldCheckFindingSeverity.init(rawValue:)) else {
             throw CoreDataFieldCheckMappingError.invalidFindingSeverity(
-                findingID: finding.id,
+                findingID: (try finding.requiredID()),
                 value: finding.severityRawValue ?? ""
             )
         }
         guard let status = finding.statusRawValue.flatMap(FieldCheckFindingStatus.init(rawValue:)) else {
             throw CoreDataFieldCheckMappingError.invalidFindingStatus(
-                findingID: finding.id,
+                findingID: (try finding.requiredID()),
                 value: finding.statusRawValue
             )
         }
 
         let recordedAt = try recordedAt(from: finding)
         return FieldCheckFindingSnapshot(
-            id: finding.id,
+            id: (try finding.requiredID()),
             recordedAt: recordedAt,
             type: type,
             severity: severity,
@@ -147,7 +147,7 @@ enum FieldCheckMapper {
                 ?? coreDataTrimmed(finding.animalNameSnapshot),
             animalDisplayTagColorID: finding.animalDisplayTagColorIDSnapshot,
             pastureName: coreDataTrimmed(finding.pastureNameSnapshot),
-            sessionID: session.id
+            sessionID: (try session.requiredID())
         )
     }
 
@@ -164,7 +164,7 @@ enum FieldCheckMapper {
         )
 
         return FieldCheckSessionSummary(
-            id: session.id,
+            id: (try session.requiredID()),
             startedAt: startedAt,
             completedAt: session.completedAt,
             pastureID: session.pastureIDSnapshot,
@@ -195,7 +195,7 @@ enum FieldCheckMapper {
         )
 
         return FieldCheckSessionDetailSnapshot(
-            id: session.id,
+            id: (try session.requiredID()),
             startedAt: startedAt,
             completedAt: session.completedAt,
             notes: session.notes,
@@ -251,11 +251,11 @@ private extension FieldCheckMapper {
         let dated = try findings.map { finding in
             (finding: finding, date: try recordedAt(from: finding))
         }
-        return dated.sorted {
+        return try dated.sorted {
             if $0.date != $1.date {
                 return $0.date > $1.date
             }
-            return $0.finding.id.uuidString < $1.finding.id.uuidString
+            return try $0.finding.requiredID().uuidString < $1.finding.requiredID().uuidString
         }.map(\.finding)
     }
 
