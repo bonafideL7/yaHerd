@@ -117,7 +117,7 @@ final class CoreDataPastureRepository:
                 .sorted { left, right in
                     let tagOrder = left.displayTagNumber.localizedStandardCompare(right.displayTagNumber)
                     if tagOrder != .orderedSame { return tagOrder == .orderedAscending }
-                    return left.id.uuidString < right.id.uuidString
+                    return (try left.requiredID()).uuidString < (try right.requiredID()).uuidString
                 }
         }
     }
@@ -146,7 +146,7 @@ final class CoreDataPastureRepository:
                     if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
                     return left.id.uuidString < right.id.uuidString
                 }
-                .map { PastureOption(id: $0.id, name: try $0.validatedName()) }
+                .map { PastureOption(id: try $0.requiredID(), name: try $0.validatedName()) }
         }
     }
 
@@ -210,12 +210,12 @@ final class CoreDataPastureRepository:
         let requested = Set(ids)
         try performWrite { context, herd in
             let allPastures = try Self.fetchPastures(herd: herd, in: context)
-            let byID = Dictionary(uniqueKeysWithValues: allPastures.map { ($0.id, $0) })
+            let byID = Dictionary(uniqueKeysWithValues: try allPastures.map { (try $0.requiredID(), $0) })
             for (index, id) in ids.enumerated() {
                 byID[id]?.sortOrder = Int64(index)
             }
-            let remaining = allPastures
-                .filter { !requested.contains($0.id) }
+            let remaining = try allPastures
+                .filter { try !requested.contains($0.requiredID()) }
                 .sorted(by: Self.pastureSort)
             for (offset, pasture) in remaining.enumerated() {
                 pasture.sortOrder = Int64(ids.count + offset)
@@ -308,7 +308,7 @@ final class CoreDataPastureRepository:
         try validatePastureGroupIDsExist(ids)
         let groupIDs = Set(ids)
         try performWrite { context, herd in
-            for group in try Self.fetchGroups(herd: herd, in: context) where groupIDs.contains(group.id) {
+            for group in try Self.fetchGroups(herd: herd, in: context) where groupIDs.contains(try group.requiredID()) {
                 context.delete(group)
             }
         }
@@ -336,7 +336,7 @@ final class CoreDataPastureRepository:
         let (context, herdID) = try makeReadScope()
         try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
-            let existingIDs = Set(try Self.fetchPastures(herd: herd, in: context).map(\.id))
+            let existingIDs = Set(try Self.fetchPastures(herd: herd, in: context).map { try $0.requiredID() })
             let missing = ids.filter { !existingIDs.contains($0) }
             guard missing.isEmpty else { throw PastureRepositoryError.pastureIDsNotFound(missing) }
         }
@@ -348,7 +348,7 @@ final class CoreDataPastureRepository:
         let (context, herdID) = try makeReadScope()
         try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
-            let existingIDs = Set(try Self.fetchGroups(herd: herd, in: context).map(\.id))
+            let existingIDs = Set(try Self.fetchGroups(herd: herd, in: context).map { try $0.requiredID() })
             let missing = ids.filter { !existingIDs.contains($0) }
             guard missing.isEmpty else { throw PastureRepositoryError.pastureGroupIDsNotFound(missing) }
         }
@@ -454,7 +454,7 @@ final class CoreDataPastureRepository:
            let group = pasture.group {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDPastureGroup.coreDataEntityName,
-                id: group.id,
+                id: (try group.requiredID()),
                 expectedHerdID: (try herd.requiredID()),
                 actualHerdID: nil
             )
@@ -485,7 +485,7 @@ final class CoreDataPastureRepository:
         _ = try pasture.validatedName()
         try validateHerdOwnership(
             entity: CDPasture.coreDataEntityName,
-            id: pasture.id,
+            id: (try pasture.requiredID()),
             actualHerdID: pasture.herd?.id,
             selectedHerdID: herdID
         )
@@ -493,7 +493,7 @@ final class CoreDataPastureRepository:
             _ = try validatedGroupName(group)
             try validateHerdOwnership(
                 entity: CDPastureGroup.coreDataEntityName,
-                id: group.id,
+                id: (try group.requiredID()),
                 actualHerdID: group.herd?.id,
                 selectedHerdID: herdID
             )
@@ -501,7 +501,7 @@ final class CoreDataPastureRepository:
         for resident in pasture.animals as? Set<CDAnimal> ?? [] {
             try validateHerdOwnership(
                 entity: CDAnimal.coreDataEntityName,
-                id: resident.id,
+                id: (try resident.requiredID()),
                 actualHerdID: resident.herd?.id,
                 selectedHerdID: herdID
             )
@@ -522,7 +522,7 @@ final class CoreDataPastureRepository:
         _ = try validatedGroupName(group)
         try validateHerdOwnership(
             entity: CDPastureGroup.coreDataEntityName,
-            id: group.id,
+            id: (try group.requiredID()),
             actualHerdID: group.herd?.id,
             selectedHerdID: herdID
         )
@@ -530,7 +530,7 @@ final class CoreDataPastureRepository:
             _ = try pasture.validatedName()
             try validateHerdOwnership(
                 entity: CDPasture.coreDataEntityName,
-                id: pasture.id,
+                id: (try pasture.requiredID()),
                 actualHerdID: pasture.herd?.id,
                 selectedHerdID: herdID
             )
@@ -548,7 +548,7 @@ final class CoreDataPastureRepository:
     private nonisolated static func summary(_ pasture: CDPasture, herdID: UUID) throws -> PastureSummary {
         try validatePastureReadGraph(pasture, herdID: herdID)
         return PastureSummary(
-            id: pasture.id, name: try pasture.validatedName(),
+            id: (try pasture.requiredID()), name: try pasture.validatedName(),
             acreage: pasture.acreage?.doubleValue, usableAcreage: pasture.usableAcreage?.doubleValue,
             targetAcresPerHead: pasture.targetAcresPerHead?.doubleValue,
             activeAnimalCount: try activeAnimalCount(pasture), sortOrder: Int(pasture.sortOrder),
@@ -560,7 +560,7 @@ final class CoreDataPastureRepository:
     private nonisolated static func detail(_ pasture: CDPasture, herdID: UUID) throws -> PastureDetailSnapshot {
         try validatePastureReadGraph(pasture, herdID: herdID)
         return PastureDetailSnapshot(
-            id: pasture.id, name: try pasture.validatedName(),
+            id: (try pasture.requiredID()), name: try pasture.validatedName(),
             acreage: pasture.acreage?.doubleValue, usableAcreage: pasture.usableAcreage?.doubleValue,
             targetAcresPerHead: pasture.targetAcresPerHead?.doubleValue,
             activeAnimalCount: try activeAnimalCount(pasture), lastGrazedDate: pasture.lastGrazedDate,
@@ -570,7 +570,7 @@ final class CoreDataPastureRepository:
 
     private nonisolated static func groupSummary(_ group: CDPastureGroup, herdID: UUID) throws -> PastureGroupSummary {
         try validateGroupReadGraph(group, herdID: herdID)
-        return PastureGroupSummary(id: group.id, name: try validatedGroupName(group), grazeDays: Int(group.grazeDays), restDays: Int(group.restDays), pastureCount: group.pastures?.count ?? 0)
+        return PastureGroupSummary(id: (try group.requiredID()), name: try validatedGroupName(group), grazeDays: Int(group.grazeDays), restDays: Int(group.restDays), pastureCount: group.pastures?.count ?? 0)
     }
 
     private nonisolated static func groupDetail(_ group: CDPastureGroup, herdID: UUID) throws -> PastureGroupDetailSnapshot {
@@ -583,13 +583,13 @@ final class CoreDataPastureRepository:
             if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
             return $0.id.uuidString < $1.id.uuidString
         }
-        return PastureGroupDetailSnapshot(id: group.id, name: try validatedGroupName(group), grazeDays: Int(group.grazeDays), restDays: Int(group.restDays), pastures: pastures)
+        return PastureGroupDetailSnapshot(id: (try group.requiredID()), name: try validatedGroupName(group), grazeDays: Int(group.grazeDays), restDays: Int(group.restDays), pastures: pastures)
     }
 
-    private nonisolated static func pastureSort(_ lhs: CDPasture, _ rhs: CDPasture) -> Bool {
+    private nonisolated static func pastureSort(_ lhs: CDPasture, _ rhs: CDPasture) throws -> Bool {
         if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
         let nameOrder = (lhs.name ?? "").localizedStandardCompare(rhs.name ?? "")
         if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
-        return lhs.id.uuidString < rhs.id.uuidString
+        return (try lhs.requiredID()).uuidString < (try rhs.requiredID()).uuidString
     }
 }

@@ -45,7 +45,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
             return try Self.fetchTemplates(herd: herd, in: context).map { template in
                 let items = try WorkingMapper.treatmentTemplateItems(template)
                 return WorkingTreatmentTemplateSummary(
-                    id: template.id,
+                    id: (try template.requiredID()),
                     name: try WorkingMapper.treatmentTemplateName(template),
                     treatmentCount: items.count
                 )
@@ -72,7 +72,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
                 return nil
             }
             return WorkingTreatmentTemplateDetailSnapshot(
-                id: template.id,
+                id: (try template.requiredID()),
                 name: try WorkingMapper.treatmentTemplateName(template),
                 plannedTreatments: try WorkingMapper.treatmentTemplateItems(template)
             )
@@ -137,7 +137,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
         let requestedIDs = Set(ids)
         try performWrite(beforeSave: beforeSave) { context, herd in
             let templates = try Self.fetchTemplates(herd: herd, in: context)
-            let templatesByID = Dictionary(uniqueKeysWithValues: templates.map { ($0.id, $0) })
+            let templatesByID = Dictionary(uniqueKeysWithValues: try templates.map { (try $0.requiredID(), $0) })
             guard requestedIDs.allSatisfy({ templatesByID[$0] != nil }) else {
                 throw WorkingRepositoryError.templateNotFound
             }
@@ -261,7 +261,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
         in context: NSManagedObjectContext
     ) throws -> Bool {
         try fetchTemplates(herd: herd, in: context).contains { template in
-            guard template.id != id else { return false }
+            guard try template.requiredID() != id else { return false }
             return try WorkingMapper.treatmentTemplateName(template)
                 .compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
         }

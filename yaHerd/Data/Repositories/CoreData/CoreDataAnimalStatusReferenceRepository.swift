@@ -65,24 +65,17 @@ final class CoreDataAnimalStatusReferenceRepository: AnimalStatusReferenceReadin
             ]
 
             let references = try context.fetch(request)
-            let grouped = Dictionary(grouping: references, by: \.id)
-            if let duplicate = grouped.first(where: { $0.value.count > 1 }) {
-                throw CoreDataPersistenceError.duplicateApplicationID(
-                    entity: CDAnimalStatusReference.coreDataEntityName,
-                    id: duplicate.key,
-                    herdID: (try herd.requiredID())
-                )
-            }
+            try CoreDataAnimalMutation.validateUniqueApplicationIDs(references, herdID: herd.requiredID())
             return try references.map { reference in
                 guard let value = reference.baseStatusRawValue,
                       let baseStatus = AnimalStatus(rawValue: value) else {
                     throw CoreDataAnimalStatusReferenceRepositoryError.invalidBaseStatus(
-                        referenceID: reference.id,
+                        referenceID: (try reference.requiredID()),
                         value: reference.baseStatusRawValue
                     )
                 }
                 return AnimalStatusReferenceOption(
-                    id: reference.id,
+                    id: (try reference.requiredID()),
                     name: try CoreDataAnimalProjection.statusReferenceName(reference),
                     baseStatus: baseStatus
                 )
