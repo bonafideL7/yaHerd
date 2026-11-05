@@ -140,8 +140,8 @@ enum WorkingMapper {
         let plannedTreatments = try plannedTreatments(session)
         let treatmentRecords = try managedTreatmentRecords(session)
             .filter {
-                $0.animalIDSnapshot == animalID
-                    && $0.animal?.id == (try animal.requiredID())
+                try $0.animalIDSnapshot == animalID
+                    && $0.animal?.id == animal.requiredID()
             }
             .map { record in (record: record, date: try treatmentDate(record)) }
             .sorted { lhs, rhs in

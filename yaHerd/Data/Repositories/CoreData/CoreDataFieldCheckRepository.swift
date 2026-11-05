@@ -573,7 +573,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 lookup: lookup,
                 in: context
             )
-            let linkedAnimalID = input.animalID ?? (try animal.map { try $0.requiredID() })
+            let linkedAnimalID = try input.animalID ?? animal.map { try $0.requiredID() }
             let check = try linkedAnimalID.flatMap {
                 try Self.animalCheck(for: $0, in: session)
             }
@@ -676,7 +676,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 lookup: lookup,
                 in: context
             )
-            let linkedAnimalID = input.animalID ?? (try animal.map { try $0.requiredID() })
+            let linkedAnimalID = try input.animalID ?? animal.map { try $0.requiredID() }
             let check = try linkedAnimalID.flatMap {
                 try Self.animalCheck(for: $0, in: session)
             }
