@@ -51,11 +51,11 @@ enum CoreDataAnimalProjection {
         }
         // Prefer the newest date, then the smallest persisted UUID on ties.
         // Match WorkingMapper.makeQueueItemEditorSnapshot's pregnancy-check ordering.
-        let latestPregnancyCheck = pregnancyChecks.max { lhs, rhs in
+        let latestPregnancyCheck = try pregnancyChecks.max { lhs, rhs in
             if lhs.date != rhs.date {
                 return lhs.date < rhs.date
             }
-            return lhs.check.id.uuidString > rhs.check.id.uuidString
+            return (try lhs.check.requiredID()).uuidString > (try rhs.check.requiredID()).uuidString
         }
         let latestPregnancyResult = try latestPregnancyCheck.map {
             try pregnancyResult($0.check)
@@ -82,7 +82,7 @@ enum CoreDataAnimalProjection {
         let sex = try sex(animal)
 
         return AnimalSummary(
-            id: animal.id,
+            id: (try animal.requiredID()),
             name: animal.name,
             displayTagNumber: primary.number,
             displayTagColorID: primary.colorID,
@@ -101,7 +101,7 @@ enum CoreDataAnimalProjection {
             birthDate: try birthDate(animal),
             status: try status(animal),
             isArchived: animal.isArchived,
-            pastureID: animal.currentPasture?.id,
+            pastureID: (try animal.currentPasture.map { try $0.requiredID() }),
             pastureName: try animal.currentPasture.map { try $0.validatedName() },
             location: animal.activeWorkingSession == nil ? .pasture : .workingPen,
             lastPregnancyCheckDate: latestPregnancyCheck?.date,
@@ -134,11 +134,11 @@ enum CoreDataAnimalProjection {
                 if tagOrder != .orderedSame {
                     return tagOrder == .orderedAscending
                 }
-                return lhs.animal.id.uuidString < rhs.animal.id.uuidString
+                return (try lhs.animal.requiredID()).uuidString < (try rhs.animal.requiredID()).uuidString
             }
 
         return AnimalDetailSnapshot(
-            id: animal.id,
+            id: (try animal.requiredID()),
             name: animal.name,
             displayTagNumber: primary.number,
             displayTagColorID: primary.colorID,
@@ -146,11 +146,11 @@ enum CoreDataAnimalProjection {
             animalType: try animalType(animal),
             birthDate: try birthDate(animal),
             status: try status(animal),
-            pastureID: animal.currentPasture?.id,
+            pastureID: (try animal.currentPasture.map { try $0.requiredID() }),
             pastureName: try animal.currentPasture.map { try $0.validatedName() },
-            sireID: animal.sire?.id,
+            sireID: (try animal.sire.map { try $0.requiredID() }),
             sire: try animal.sire.map { try parentDisplayName($0) },
-            damID: animal.dam?.id,
+            damID: (try animal.dam.map { try $0.requiredID() }),
             dam: try animal.dam.map { try parentDisplayName($0) },
             distinguishingFeatures: try distinguishingFeatures(animal)
                 .normalizedDistinguishingFeatureOrder,
@@ -159,7 +159,7 @@ enum CoreDataAnimalProjection {
             reasonSold: animal.reasonSold,
             deathDate: animal.deathDate,
             causeOfDeath: animal.causeOfDeath,
-            statusReferenceID: animal.statusReference?.id,
+            statusReferenceID: (try animal.statusReference.map { try $0.requiredID() }),
             statusReferenceName: try animal.statusReference.map { try statusReferenceName($0) },
             isArchived: animal.isArchived,
             archivedAt: animal.archivedAt,
@@ -176,7 +176,7 @@ enum CoreDataAnimalProjection {
 
     static func statusReferenceName(_ reference: CDAnimalStatusReference) throws -> String {
         guard let name = reference.name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw CoreDataAnimalStatusReferenceRepositoryError.invalidName(referenceID: reference.id)
+            throw CoreDataAnimalStatusReferenceRepositoryError.invalidName(referenceID: (try reference.requiredID()))
         }
         return name
     }
@@ -185,7 +185,7 @@ enum CoreDataAnimalProjection {
         try CoreDataAnimalMutation.validateOwnedGraphIdentity(animal)
         let primary = try primaryTagFields(managedTags(animal))
         return AnimalParentOption(
-            id: animal.id,
+            id: (try animal.requiredID()),
             name: animal.name,
             displayTagNumber: primary.number,
             displayTagColorID: primary.colorID,
@@ -196,9 +196,9 @@ enum CoreDataAnimalProjection {
 
     static func tagSnapshot(_ tag: CDAnimalTag) throws -> AnimalTagSnapshot {
         AnimalTagSnapshot(
-            id: tag.id,
+            id: (try tag.requiredID()),
             number: try tagNumber(tag),
-            colorID: tag.color?.id,
+            colorID: (try tag.color.map { try $0.requiredID() }),
             isPrimary: tag.isPrimary,
             isActive: tag.isActive,
             assignedAt: try tagAssignmentDate(tag),
@@ -211,13 +211,13 @@ enum CoreDataAnimalProjection {
         var events: [TimelineProjectionEvent] = [
             TimelineProjectionEvent(
                 event: AnimalTimelineEvent(
-                    id: "birth:primary:\(animal.id.uuidString)",
+                    id: "birth:primary:\((try animal.requiredID()).uuidString)",
                     date: try birthDate(animal),
                     type: .birth,
                     title: "Birth",
                     details: try birthEventDetails(animal)
                 ),
-                sourceID: animal.id,
+                sourceID: (try animal.requiredID()),
                 kindOrder: 0
             )
         ]
@@ -226,13 +226,13 @@ enum CoreDataAnimalProjection {
             events.append(
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
-                        id: "birth:offspring:\(offspring.id.uuidString)",
+                        id: "birth:offspring:\((try offspring.requiredID()).uuidString)",
                         date: try birthDate(offspring),
                         type: .birth,
                         title: "Offspring Recorded",
                         details: try offspringBirthEventDetails(offspring)
                     ),
-                    sourceID: offspring.id,
+                    sourceID: (try offspring.requiredID()),
                     kindOrder: 1
                 )
             )
@@ -242,13 +242,13 @@ enum CoreDataAnimalProjection {
             events.append(
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
-                        id: "health:\(record.id.uuidString)",
+                        id: "health:\((try record.requiredID()).uuidString)",
                         date: try healthDate(record),
                         type: .health,
                         title: try healthTreatment(record),
                         details: record.notes
                     ),
-                    sourceID: record.id,
+                    sourceID: (try record.requiredID()),
                     kindOrder: 0
                 )
             )
@@ -259,13 +259,13 @@ enum CoreDataAnimalProjection {
             events.append(
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
-                        id: "pregnancy:\(check.id.uuidString)",
+                        id: "pregnancy:\((try check.requiredID()).uuidString)",
                         date: try pregnancyDate(check),
                         type: .pregnancy,
                         title: "Pregnancy Check: \(result.rawValue.capitalized)",
                         details: check.technician
                     ),
-                    sourceID: check.id,
+                    sourceID: (try check.requiredID()),
                     kindOrder: 0
                 )
             )
@@ -273,18 +273,18 @@ enum CoreDataAnimalProjection {
 
         for movement in managedMovementRecords(animal) {
             guard let movementDate = movement.date else {
-                throw CoreDataAnimalRepositoryError.missingMovementDate(recordID: movement.id)
+                throw CoreDataAnimalRepositoryError.missingMovementDate(recordID: (try movement.requiredID()))
             }
             events.append(
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
-                        id: "movement:\(movement.id.uuidString)",
+                        id: "movement:\((try movement.requiredID()).uuidString)",
                         date: movementDate,
                         type: .movement,
                         title: "Pasture Movement",
                         details: "\(movement.fromPastureNameSnapshot ?? "—") → \(movement.toPastureNameSnapshot ?? "—")"
                     ),
-                    sourceID: movement.id,
+                    sourceID: (try movement.requiredID()),
                     kindOrder: 0
                 )
             )
@@ -292,20 +292,20 @@ enum CoreDataAnimalProjection {
 
         for record in managedStatusRecords(animal) {
             guard let statusDate = record.date else {
-                throw CoreDataAnimalRepositoryError.missingStatusHistoryDate(recordID: record.id)
+                throw CoreDataAnimalRepositoryError.missingStatusHistoryDate(recordID: (try record.requiredID()))
             }
             let oldStatus = try statusHistoryValue(record.oldStatusRawValue, record: record)
             let newStatus = try statusHistoryValue(record.newStatusRawValue, record: record)
             events.append(
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
-                        id: "status:\(record.id.uuidString)",
+                        id: "status:\((try record.requiredID()).uuidString)",
                         date: statusDate,
                         type: .status,
                         title: "Status Change",
                         details: "\(oldStatus.label) → \(newStatus.label)"
                     ),
-                    sourceID: record.id,
+                    sourceID: (try record.requiredID()),
                     kindOrder: 0
                 )
             )
@@ -316,13 +316,13 @@ enum CoreDataAnimalProjection {
             events.append(
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
-                        id: "tag:assigned:\(tag.id.uuidString)",
+                        id: "tag:assigned:\((try tag.requiredID()).uuidString)",
                         date: try tagAssignmentDate(tag),
                         type: .tag,
                         title: "Tag Assigned",
                         details: normalizedNumber
                     ),
-                    sourceID: tag.id,
+                    sourceID: (try tag.requiredID()),
                     kindOrder: 0
                 )
             )
@@ -330,13 +330,13 @@ enum CoreDataAnimalProjection {
                 events.append(
                     TimelineProjectionEvent(
                         event: AnimalTimelineEvent(
-                            id: "tag:retired:\(tag.id.uuidString)",
+                            id: "tag:retired:\((try tag.requiredID()).uuidString)",
                             date: removedAt,
                             type: .tag,
                             title: "Tag Retired",
                             details: normalizedNumber
                         ),
-                        sourceID: tag.id,
+                        sourceID: (try tag.requiredID()),
                         kindOrder: 1
                     )
                 )
@@ -356,16 +356,16 @@ enum CoreDataAnimalProjection {
 
     static func tagNumber(_ tag: CDAnimalTag) throws -> String {
         guard let number = tag.number else {
-            throw CoreDataAnimalRepositoryError.missingAnimalTagNumber(tagID: tag.id)
+            throw CoreDataAnimalRepositoryError.missingAnimalTagNumber(tagID: (try tag.requiredID()))
         }
         return number
     }
 
     static func tagState(_ tag: CDAnimalTag) throws -> AnimalTagState {
         AnimalTagState(
-            id: tag.id,
+            id: (try tag.requiredID()),
             number: try tagNumber(tag),
-            colorID: tag.color?.id,
+            colorID: (try tag.color.map { try $0.requiredID() }),
             isPrimary: tag.isPrimary,
             isActive: tag.isActive,
             assignedAt: try tagAssignmentDate(tag),
@@ -375,14 +375,14 @@ enum CoreDataAnimalProjection {
 
     static func birthDate(_ animal: CDAnimal) throws -> Date {
         guard let date = animal.birthDate else {
-            throw CoreDataAnimalRepositoryError.missingAnimalBirthDate(animalID: animal.id)
+            throw CoreDataAnimalRepositoryError.missingAnimalBirthDate(animalID: (try animal.requiredID()))
         }
         return date
     }
 
     static func tagAssignmentDate(_ tag: CDAnimalTag) throws -> Date {
         guard let assignedAt = tag.assignedAt else {
-            throw CoreDataAnimalRepositoryError.missingTagAssignmentDate(tagID: tag.id)
+            throw CoreDataAnimalRepositoryError.missingTagAssignmentDate(tagID: (try tag.requiredID()))
         }
         return assignedAt
     }
@@ -393,14 +393,14 @@ enum CoreDataAnimalProjection {
 
     static func healthDate(_ record: CDHealthRecord) throws -> Date {
         guard let date = record.date else {
-            throw CoreDataAnimalRepositoryError.missingHealthDate(recordID: record.id)
+            throw CoreDataAnimalRepositoryError.missingHealthDate(recordID: (try record.requiredID()))
         }
         return date
     }
 
     static func healthTreatment(_ record: CDHealthRecord) throws -> String {
         guard let treatment = record.treatment else {
-            throw CoreDataAnimalRepositoryError.corruptHealthTreatment(recordID: record.id)
+            throw CoreDataAnimalRepositoryError.corruptHealthTreatment(recordID: (try record.requiredID()))
         }
         return treatment
     }
@@ -415,7 +415,7 @@ enum CoreDataAnimalProjection {
 
     static func pregnancyDate(_ check: CDPregnancyCheck) throws -> Date {
         guard let date = check.date else {
-            throw CoreDataAnimalRepositoryError.missingPregnancyDate(recordID: check.id)
+            throw CoreDataAnimalRepositoryError.missingPregnancyDate(recordID: (try check.requiredID()))
         }
         return date
     }
@@ -435,7 +435,7 @@ enum CoreDataAnimalProjection {
     static func distinguishingFeatures(_ animal: CDAnimal) throws -> [DistinguishingFeature] {
         try CoreDataAnimalPayloadCodec.decodeDistinguishingFeatures(
             animal.distinguishingFeaturesData,
-            animalID: animal.id
+            animalID: (try animal.requiredID())
         )
     }
 
@@ -481,7 +481,7 @@ enum CoreDataAnimalProjection {
     static func sex(_ animal: CDAnimal) throws -> Sex {
         guard let value = Sex(rawValue: animal.sexRawValue) else {
             throw CoreDataAnimalRepositoryError.invalidAnimalSexRawValue(
-                animalID: animal.id,
+                animalID: (try animal.requiredID()),
                 value: animal.sexRawValue
             )
         }
@@ -492,7 +492,7 @@ enum CoreDataAnimalProjection {
         guard let rawValue = animal.statusRawValue,
               let value = AnimalStatus(rawValue: rawValue) else {
             throw CoreDataAnimalRepositoryError.invalidAnimalStatusRawValue(
-                animalID: animal.id,
+                animalID: (try animal.requiredID()),
                 value: animal.statusRawValue
             )
         }
@@ -503,7 +503,7 @@ enum CoreDataAnimalProjection {
         guard let rawValue = check.resultRawValue,
               let value = PregnancyResult(rawValue: rawValue) else {
             throw CoreDataAnimalRepositoryError.invalidPregnancyResultRawValue(
-                checkID: check.id,
+                checkID: (try check.requiredID()),
                 value: check.resultRawValue ?? ""
             )
         }
@@ -516,7 +516,7 @@ enum CoreDataAnimalProjection {
     ) throws -> AnimalStatus {
         guard let rawValue, let value = AnimalStatus(rawValue: rawValue) else {
             throw CoreDataAnimalRepositoryError.invalidStatusHistoryRawValue(
-                recordID: record.id,
+                recordID: (try record.requiredID()),
                 value: rawValue
             )
         }
@@ -528,8 +528,8 @@ enum CoreDataAnimalProjection {
         matching ordering: ([AnimalTagState]) -> [AnimalTagState]
     ) throws -> [CDAnimalTag] {
         let orderedIDs = ordering(try tags.map(tagState)).map(\.id)
-        return orderedIDs.compactMap { id in
-            tags.first { $0.id == id }
+        return try orderedIDs.compactMap { id in
+            try tags.first { try $0.requiredID() == id }
         }
     }
 
@@ -653,7 +653,7 @@ enum CoreDataAnimalReadGraphValidator {
         guard animal.herd?.id == herdID else {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDAnimal.coreDataEntityName,
-                id: animal.id,
+                id: (try animal.requiredID()),
                 expectedHerdID: herdID,
                 actualHerdID: animal.herd?.id
             )
@@ -662,7 +662,7 @@ enum CoreDataAnimalReadGraphValidator {
            pasture.herd?.id != herdID {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDPasture.coreDataEntityName,
-                id: pasture.id,
+                id: (try pasture.requiredID()),
                 expectedHerdID: herdID,
                 actualHerdID: pasture.herd?.id
             )
@@ -671,7 +671,7 @@ enum CoreDataAnimalReadGraphValidator {
            session.herd?.id != herdID {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDWorkingSession.coreDataEntityName,
-                id: session.id,
+                id: (try session.requiredID()),
                 expectedHerdID: herdID,
                 actualHerdID: session.herd?.id
             )
@@ -680,7 +680,7 @@ enum CoreDataAnimalReadGraphValidator {
             guard dam.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDAnimal.coreDataEntityName,
-                    id: dam.id,
+                    id: (try dam.requiredID()),
                     expectedHerdID: herdID,
                     actualHerdID: dam.herd?.id
                 )
@@ -694,14 +694,14 @@ enum CoreDataAnimalReadGraphValidator {
         if let sire = animal.sire {
             try validateHerd(
                 sire.herd?.id, herdID: herdID,
-                entity: CDAnimal.coreDataEntityName, id: sire.id
+                entity: CDAnimal.coreDataEntityName, id: (try sire.requiredID())
             )
             try validateTagRelationships(sire, herdID: herdID)
         }
         if let reference = animal.statusReference {
             try validateHerd(
                 reference.herd?.id, herdID: herdID,
-                entity: CDAnimalStatusReference.coreDataEntityName, id: reference.id
+                entity: CDAnimalStatusReference.coreDataEntityName, id: (try reference.requiredID())
             )
         }
 
@@ -713,7 +713,7 @@ enum CoreDataAnimalReadGraphValidator {
             guard record.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDHealthRecord.coreDataEntityName,
-                    id: record.id,
+                    id: (try record.requiredID()),
                     expectedHerdID: herdID,
                     actualHerdID: record.herd?.id
                 )
@@ -721,15 +721,15 @@ enum CoreDataAnimalReadGraphValidator {
             guard record.animal?.objectID == animal.objectID else {
                 throw CoreDataReadModelError.invalidAnimalRelationship(
                     entity: CDHealthRecord.coreDataEntityName,
-                    id: record.id,
-                    expectedAnimalID: animal.id,
+                    id: (try record.requiredID()),
+                    expectedAnimalID: (try animal.requiredID()),
                     actualAnimalID: record.animal?.id
                 )
             }
             if let session = record.workingSession {
                 try validateHerd(
                     session.herd?.id, herdID: herdID,
-                    entity: CDWorkingSession.coreDataEntityName, id: session.id
+                    entity: CDWorkingSession.coreDataEntityName, id: (try session.requiredID())
                 )
             }
         }
@@ -737,7 +737,7 @@ enum CoreDataAnimalReadGraphValidator {
             guard check.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDPregnancyCheck.coreDataEntityName,
-                    id: check.id,
+                    id: (try check.requiredID()),
                     expectedHerdID: herdID,
                     actualHerdID: check.herd?.id
                 )
@@ -745,21 +745,21 @@ enum CoreDataAnimalReadGraphValidator {
             guard check.animal?.objectID == animal.objectID else {
                 throw CoreDataReadModelError.invalidAnimalRelationship(
                     entity: CDPregnancyCheck.coreDataEntityName,
-                    id: check.id,
-                    expectedAnimalID: animal.id,
+                    id: (try check.requiredID()),
+                    expectedAnimalID: (try animal.requiredID()),
                     actualAnimalID: check.animal?.id
                 )
             }
             if let sire = check.sire {
                 try validateHerd(
                     sire.herd?.id, herdID: herdID,
-                    entity: CDAnimal.coreDataEntityName, id: sire.id
+                    entity: CDAnimal.coreDataEntityName, id: (try sire.requiredID())
                 )
             }
             if let session = check.workingSession {
                 try validateHerd(
                     session.herd?.id, herdID: herdID,
-                    entity: CDWorkingSession.coreDataEntityName, id: session.id
+                    entity: CDWorkingSession.coreDataEntityName, id: (try session.requiredID())
                 )
             }
         }
@@ -767,7 +767,7 @@ enum CoreDataAnimalReadGraphValidator {
             guard offspring.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDAnimal.coreDataEntityName,
-                    id: offspring.id,
+                    id: (try offspring.requiredID()),
                     expectedHerdID: herdID,
                     actualHerdID: offspring.herd?.id
                 )
@@ -775,8 +775,8 @@ enum CoreDataAnimalReadGraphValidator {
             guard offspring.dam?.objectID == animal.objectID else {
                 throw CoreDataReadModelError.invalidAnimalRelationship(
                     entity: CDAnimal.coreDataEntityName,
-                    id: offspring.id,
-                    expectedAnimalID: animal.id,
+                    id: (try offspring.requiredID()),
+                    expectedAnimalID: (try animal.requiredID()),
                     actualAnimalID: offspring.dam?.id
                 )
             }
@@ -790,7 +790,7 @@ enum CoreDataAnimalReadGraphValidator {
             guard movement.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDMovementRecord.coreDataEntityName,
-                    id: movement.id,
+                    id: (try movement.requiredID()),
                     expectedHerdID: herdID,
                     actualHerdID: movement.herd?.id
                 )
@@ -798,8 +798,8 @@ enum CoreDataAnimalReadGraphValidator {
             guard movement.animal?.objectID == animal.objectID else {
                 throw CoreDataReadModelError.invalidAnimalRelationship(
                     entity: CDMovementRecord.coreDataEntityName,
-                    id: movement.id,
-                    expectedAnimalID: animal.id,
+                    id: (try movement.requiredID()),
+                    expectedAnimalID: (try animal.requiredID()),
                     actualAnimalID: movement.animal?.id
                 )
             }
@@ -808,7 +808,7 @@ enum CoreDataAnimalReadGraphValidator {
             guard statusRecord.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDStatusRecord.coreDataEntityName,
-                    id: statusRecord.id,
+                    id: (try statusRecord.requiredID()),
                     expectedHerdID: herdID,
                     actualHerdID: statusRecord.herd?.id
                 )
@@ -816,8 +816,8 @@ enum CoreDataAnimalReadGraphValidator {
             guard statusRecord.animal?.objectID == animal.objectID else {
                 throw CoreDataReadModelError.invalidAnimalRelationship(
                     entity: CDStatusRecord.coreDataEntityName,
-                    id: statusRecord.id,
-                    expectedAnimalID: animal.id,
+                    id: (try statusRecord.requiredID()),
+                    expectedAnimalID: (try animal.requiredID()),
                     actualAnimalID: statusRecord.animal?.id
                 )
             }
@@ -834,7 +834,7 @@ enum CoreDataAnimalReadGraphValidator {
             guard tag.herd?.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDAnimalTag.coreDataEntityName,
-                    id: tag.id,
+                    id: (try tag.requiredID()),
                     expectedHerdID: herdID,
                     actualHerdID: tag.herd?.id
                 )
@@ -842,8 +842,8 @@ enum CoreDataAnimalReadGraphValidator {
             guard tag.animal?.objectID == animal.objectID else {
                 throw CoreDataReadModelError.invalidAnimalRelationship(
                     entity: CDAnimalTag.coreDataEntityName,
-                    id: tag.id,
-                    expectedAnimalID: animal.id,
+                    id: (try tag.requiredID()),
+                    expectedAnimalID: (try animal.requiredID()),
                     actualAnimalID: tag.animal?.id
                 )
             }
@@ -851,7 +851,7 @@ enum CoreDataAnimalReadGraphValidator {
                color.herd?.id != herdID {
                 throw CoreDataReadModelError.invalidHerdOwnership(
                     entity: CDTagColorDefinition.coreDataEntityName,
-                    id: color.id,
+                    id: (try color.requiredID()),
                     expectedHerdID: herdID,
                     actualHerdID: color.herd?.id
                 )
@@ -861,7 +861,7 @@ enum CoreDataAnimalReadGraphValidator {
         let activeTags = tags.filter(\.isActive)
         guard activeTags.isEmpty || activeTags.filter(\.isPrimary).count == 1 else {
             throw CoreDataReadModelError.invalidActivePrimaryTagCardinality(
-                animalID: animal.id,
+                animalID: (try animal.requiredID()),
                 activeTagCount: activeTags.count,
                 primaryTagCount: activeTags.filter(\.isPrimary).count
             )
