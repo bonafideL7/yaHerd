@@ -33,7 +33,7 @@ enum CoreDataWorkingLifecycleMutation {
             )
         }
 
-        let queueItemIDs = Set(queueItems.map(\.id))
+        let queueItemIDs = Set(try queueItems.map { try $0.requiredID() })
         guard Set(destinationsByQueueItemID.keys) == queueItemIDs else {
             throw WorkingRepositoryError.assignmentSetDoesNotMatchSession
         }
@@ -41,7 +41,7 @@ enum CoreDataWorkingLifecycleMutation {
         return try queueItems.map { item in
             try validateQueueOwnership(item, session: session, herd: herd)
 
-            guard let assignedDestination = destinationsByQueueItemID[item.id] else {
+            guard let assignedDestination = destinationsByQueueItemID[try item.requiredID()] else {
                 throw WorkingRepositoryError.assignmentSetDoesNotMatchSession
             }
 
@@ -99,14 +99,14 @@ enum CoreDataWorkingLifecycleMutation {
             let destinationName = try destination.validatedName()
 
             item.destinationPasture = destination
-            item.destinationPastureIDSnapshot = destination.id
+            item.destinationPastureIDSnapshot = (try destination.requiredID())
             item.destinationPastureNameSnapshot = destinationName
 
             guard let animal = item.animal else {
                 continue
             }
 
-            let isOwnedBySession = animal.activeWorkingSession?.id == session.id
+            let isOwnedBySession = animal.activeWorkingSession?.id == (try session.requiredID())
             let sourceID: UUID?
             let sourceName: String?
 
@@ -120,7 +120,7 @@ enum CoreDataWorkingLifecycleMutation {
             }
 
             let shouldMove = isOwnedBySession
-                || animal.currentPasture?.id != destination.id
+                || animal.currentPasture?.id != (try destination.requiredID())
                 || animal.activeWorkingSession != nil
 
             guard shouldMove else {
@@ -137,7 +137,7 @@ enum CoreDataWorkingLifecycleMutation {
             movement.date = date
             movement.fromPastureIDSnapshot = sourceID
             movement.fromPastureNameSnapshot = sourceName
-            movement.toPastureIDSnapshot = destination.id
+            movement.toPastureIDSnapshot = (try destination.requiredID())
             movement.toPastureNameSnapshot = destinationName
             movement.herd = herd
             movement.animal = animal
@@ -179,7 +179,7 @@ enum CoreDataWorkingLifecycleMutation {
                 throw CoreDataWorkingRepositoryError.invalidSnapshotRelationship(
                     relationship: "WorkingQueueItem.animal",
                     expectedID: item.animalIDSnapshot,
-                    actualID: animal.id
+                    actualID: (try animal.requiredID())
                 )
             }
 
@@ -282,7 +282,7 @@ enum CoreDataWorkingLifecycleMutation {
             )
         }
         guard let owningSession = item.session else {
-            throw CoreDataWorkingRepositoryError.missingQueueSession(queueItemID: item.id)
+            throw CoreDataWorkingRepositoryError.missingQueueSession(queueItemID: (try item.requiredID()))
         }
         guard owningSession.herd?.id == (try herd.requiredID()) else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
@@ -294,8 +294,8 @@ enum CoreDataWorkingLifecycleMutation {
         guard owningSession.objectID == session.objectID else {
             throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
                 relationship: "WorkingQueueItem.session",
-                expectedSessionID: session.id,
-                actualSessionID: owningSession.id
+                expectedSessionID: (try session.requiredID()),
+                actualSessionID: (try owningSession.requiredID())
             )
         }
 
@@ -334,7 +334,7 @@ enum CoreDataWorkingLifecycleMutation {
             throw CoreDataWorkingRepositoryError.invalidSnapshotRelationship(
                 relationship: "WorkingQueueItem.animal",
                 expectedID: item.animalIDSnapshot,
-                actualID: animal.id
+                actualID: (try animal.requiredID())
             )
         }
 
@@ -378,7 +378,7 @@ enum CoreDataWorkingLifecycleMutation {
             throw CoreDataWorkingRepositoryError.invalidSnapshotRelationship(
                 relationship: relationship,
                 expectedID: expectedID,
-                actualID: pasture.id
+                actualID: (try pasture.requiredID())
             )
         }
     }

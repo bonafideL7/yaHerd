@@ -70,7 +70,7 @@ enum CoreDataWorkingWorkDataMutation {
             }
             record.doseUnitRawValue = entry.dose.unit?.rawValue
             record.administrationRouteRawValue = entry.dose.route?.rawValue
-            record.animalIDSnapshot = animal.id
+            record.animalIDSnapshot = (try animal.requiredID())
             record.herd = herd
             record.animal = animal
             record.session = session
@@ -179,11 +179,11 @@ enum CoreDataWorkingWorkDataMutation {
         for record in records {
             guard record.treatmentItemID != nil,
                   record.animalIDSnapshot != nil else {
-                throw CoreDataWorkingMappingError.corruptTreatmentRecord(recordID: record.id)
+                throw CoreDataWorkingMappingError.corruptTreatmentRecord(recordID: (try record.requiredID()))
             }
             _ = try WorkingMapper.treatmentDate(record)
         }
-        for record in records where record.animalIDSnapshot == animal.id {
+        for record in records where record.animalIDSnapshot == (try animal.requiredID()) {
             context.delete(record)
         }
     }
@@ -196,10 +196,10 @@ enum CoreDataWorkingWorkDataMutation {
         let checks = (session.pregnancyChecks?.allObjects as? [CDPregnancyCheck]) ?? []
         if let unlinked = checks.first(where: { $0.animal == nil }) {
             throw CoreDataAnimalRepositoryError.missingPregnancyAnimalRelationship(
-                recordID: unlinked.id
+                recordID: (try unlinked.requiredID())
             )
         }
-        for check in checks where check.animal?.id == animal.id {
+        for check in checks where check.animal?.id == (try animal.requiredID()) {
             context.delete(check)
         }
     }
@@ -212,10 +212,10 @@ enum CoreDataWorkingWorkDataMutation {
         let records = (session.healthRecords?.allObjects as? [CDHealthRecord]) ?? []
         if let unlinked = records.first(where: { $0.animal == nil }) {
             throw CoreDataAnimalRepositoryError.missingHealthAnimalRelationship(
-                recordID: unlinked.id
+                recordID: (try unlinked.requiredID())
             )
         }
-        for record in records where record.animal?.id == animal.id {
+        for record in records where record.animal?.id == (try animal.requiredID()) {
             context.delete(record)
         }
     }

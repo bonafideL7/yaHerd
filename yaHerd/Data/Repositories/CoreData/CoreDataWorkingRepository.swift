@@ -283,7 +283,7 @@ final class CoreDataWorkingRepository:
             resolved.queueItem.statusRawValue = statusRawValue
             resolved.queueItem.completedAt = completedAt
             resolved.queueItem.destinationPasture = destination
-            resolved.queueItem.destinationPastureIDSnapshot = destination?.id
+            resolved.queueItem.destinationPastureIDSnapshot = (try destination.map { try $0.requiredID() })
             resolved.queueItem.destinationPastureNameSnapshot = destinationName
 
             try CoreDataWorkingWorkDataMutation.replace(
@@ -349,7 +349,7 @@ final class CoreDataWorkingRepository:
             guard let rawValue = session.statusRawValue,
                   let status = WorkingSessionStatus(rawValue: rawValue) else {
                 throw CoreDataWorkingMappingError.invalidSessionStatus(
-                    sessionID: session.id,
+                    sessionID: (try session.requiredID()),
                     value: session.statusRawValue
                 )
             }
@@ -393,7 +393,7 @@ final class CoreDataWorkingRepository:
             guard let rawValue = session.statusRawValue,
                   let status = WorkingSessionStatus(rawValue: rawValue) else {
                 throw CoreDataWorkingMappingError.invalidSessionStatus(
-                    sessionID: session.id,
+                    sessionID: (try session.requiredID()),
                     value: session.statusRawValue
                 )
             }
@@ -482,7 +482,7 @@ final class CoreDataWorkingRepository:
             guard let rawValue = session.statusRawValue,
                   let status = WorkingSessionStatus(rawValue: rawValue) else {
                 throw CoreDataWorkingMappingError.invalidSessionStatus(
-                    sessionID: session.id,
+                    sessionID: (try session.requiredID()),
                     value: session.statusRawValue
                 )
             }
@@ -565,11 +565,11 @@ final class CoreDataWorkingRepository:
 
             try CoreDataAnimalMutation.enforceActivePrimary(
                 in: CoreDataAnimalProjection.managedTags(animal),
-                preferredPrimaryID: replacement.id
+                preferredPrimaryID: (try replacement.requiredID())
             )
 
             resolved.queueItem.animalTagNumberSnapshot = normalizedNumber
-            resolved.queueItem.animalTagColorIDSnapshot = replacementColor?.id
+            resolved.queueItem.animalTagColorIDSnapshot = (try replacementColor.map { try $0.requiredID() })
             try CoreDataAnimalMutation.rotateRevision(animal)
 
             try Self.validateSessionGraph(
@@ -643,7 +643,7 @@ final class CoreDataWorkingRepository:
             session.statusRawValue = WorkingSessionStatus.active.rawValue
             session.treatmentTemplateNameSnapshot = templateName
             session.plannedTreatmentsData = plannedTreatmentsData
-            session.sourcePastureIDSnapshot = sourcePasture.id
+            session.sourcePastureIDSnapshot = (try sourcePasture.requiredID())
             session.sourcePastureNameSnapshot = try sourcePasture.validatedName()
             session.herd = herd
             session.sourcePasture = sourcePasture
@@ -659,7 +659,7 @@ final class CoreDataWorkingRepository:
                 )
             }
 
-            return session.id
+            return (try session.requiredID())
         }
     }
 
@@ -687,7 +687,7 @@ final class CoreDataWorkingRepository:
             guard let rawValue = session.statusRawValue,
                   let status = WorkingSessionStatus(rawValue: rawValue) else {
                 throw CoreDataWorkingMappingError.invalidSessionStatus(
-                    sessionID: session.id,
+                    sessionID: (try session.requiredID()),
                     value: session.statusRawValue
                 )
             }
@@ -702,7 +702,7 @@ final class CoreDataWorkingRepository:
                 throw CoreDataWorkingRepositoryError.invalidSnapshotRelationship(
                     relationship: "WorkingSession.sourcePasture",
                     expectedID: session.sourcePastureIDSnapshot,
-                    actualID: sourcePasture.id
+                    actualID: (try sourcePasture.requiredID())
                 )
             }
 
@@ -719,16 +719,16 @@ final class CoreDataWorkingRepository:
                 try ((session.queueItems?.allObjects as? [CDWorkingQueueItem]) ?? [])
                     .map { try WorkingMapper.queueAnimalID(from: $0) }
             )
-            let candidates = animals.map {
+            let candidates = try animals.map {
                 WorkingCollectionCandidate(
-                    animalID: $0.id,
+                    animalID: try $0.requiredID(),
                     activeSessionID: $0.activeWorkingSession?.id
                 )
             }
             try WorkingCollectionRules.validateCollection(
                 existingAnimalIDs: existingAnimalIDs,
                 candidates: candidates,
-                sessionID: session.id
+                sessionID: (try session.requiredID())
             )
 
             guard try animals.allSatisfy({
@@ -924,7 +924,7 @@ final class CoreDataWorkingRepository:
             herdID: (try herd.requiredID())
         )
         for item in queueItems where item.session == nil {
-            throw CoreDataWorkingRepositoryError.missingQueueSession(queueItemID: item.id)
+            throw CoreDataWorkingRepositoryError.missingQueueSession(queueItemID: (try item.requiredID()))
         }
 
         let treatmentRequest = NSFetchRequest<CDWorkingTreatmentRecord>(
@@ -937,7 +937,7 @@ final class CoreDataWorkingRepository:
             herdID: (try herd.requiredID())
         )
         for record in treatmentRecords where record.session == nil {
-            throw CoreDataWorkingRepositoryError.missingTreatmentSession(recordID: record.id)
+            throw CoreDataWorkingRepositoryError.missingTreatmentSession(recordID: (try record.requiredID()))
         }
 
         // Health and pregnancy checks also belong to the Animal aggregate.
@@ -954,7 +954,7 @@ final class CoreDataWorkingRepository:
         )
         for record in healthRecords where record.workingSession != nil && record.animal == nil {
             throw CoreDataAnimalRepositoryError.missingHealthAnimalRelationship(
-                recordID: record.id
+                recordID: (try record.requiredID())
             )
         }
 
@@ -969,7 +969,7 @@ final class CoreDataWorkingRepository:
         )
         for check in pregnancyChecks where check.workingSession != nil && check.animal == nil {
             throw CoreDataAnimalRepositoryError.missingPregnancyAnimalRelationship(
-                recordID: check.id
+                recordID: (try check.requiredID())
             )
         }
     }
@@ -994,7 +994,7 @@ final class CoreDataWorkingRepository:
             try validateSnapshotRelationship(
                 relationship: "WorkingSession.sourcePasture",
                 expectedID: session.sourcePastureIDSnapshot,
-                actualID: sourcePasture.id
+                actualID: (try sourcePasture.requiredID())
             )
         }
 
@@ -1031,7 +1031,7 @@ final class CoreDataWorkingRepository:
                 try validateSnapshotRelationship(
                     relationship: "WorkingQueueItem.animal",
                     expectedID: item.animalIDSnapshot,
-                    actualID: animal.id
+                    actualID: (try animal.requiredID())
                 )
             }
             if let collectedFromPasture = item.collectedFromPasture {
@@ -1043,7 +1043,7 @@ final class CoreDataWorkingRepository:
                 try validateSnapshotRelationship(
                     relationship: "WorkingQueueItem.collectedFromPasture",
                     expectedID: item.collectedFromPastureIDSnapshot,
-                    actualID: collectedFromPasture.id
+                    actualID: (try collectedFromPasture.requiredID())
                 )
             }
             if let destinationPasture = item.destinationPasture {
@@ -1055,7 +1055,7 @@ final class CoreDataWorkingRepository:
                 try validateSnapshotRelationship(
                     relationship: "WorkingQueueItem.destinationPasture",
                     expectedID: item.destinationPastureIDSnapshot,
-                    actualID: destinationPasture.id
+                    actualID: (try destinationPasture.requiredID())
                 )
             }
         }
@@ -1063,7 +1063,7 @@ final class CoreDataWorkingRepository:
         for record in treatmentRecords {
             guard record.treatmentItemID != nil,
                   record.animalIDSnapshot != nil else {
-                throw CoreDataWorkingMappingError.corruptTreatmentRecord(recordID: record.id)
+                throw CoreDataWorkingMappingError.corruptTreatmentRecord(recordID: (try record.requiredID()))
             }
             _ = try WorkingMapper.treatmentDate(record)
             try validateHerdOwnership(
@@ -1072,7 +1072,7 @@ final class CoreDataWorkingRepository:
                 actualHerdID: record.herd?.id
             )
             guard let owningSession = record.session else {
-                throw CoreDataWorkingRepositoryError.missingTreatmentSession(recordID: record.id)
+                throw CoreDataWorkingRepositoryError.missingTreatmentSession(recordID: (try record.requiredID()))
             }
             guard owningSession.herd?.id == herdID else {
                 throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
@@ -1084,8 +1084,8 @@ final class CoreDataWorkingRepository:
             guard owningSession.objectID == session.objectID else {
                 throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
                     relationship: "WorkingTreatmentRecord.session",
-                    expectedSessionID: session.id,
-                    actualSessionID: owningSession.id
+                    expectedSessionID: (try session.requiredID()),
+                    actualSessionID: (try owningSession.requiredID())
                 )
             }
             if let animal = record.animal {
@@ -1097,7 +1097,7 @@ final class CoreDataWorkingRepository:
                 try validateSnapshotRelationship(
                     relationship: "WorkingTreatmentRecord.animal",
                     expectedID: record.animalIDSnapshot,
-                    actualID: animal.id
+                    actualID: (try animal.requiredID())
                 )
             }
         }
@@ -1111,7 +1111,7 @@ final class CoreDataWorkingRepository:
             guard let workingSession = record.workingSession else {
                 throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
                     relationship: "HealthRecord.workingSession",
-                    expectedSessionID: session.id,
+                    expectedSessionID: (try session.requiredID()),
                     actualSessionID: nil
                 )
             }
@@ -1125,13 +1125,13 @@ final class CoreDataWorkingRepository:
             guard workingSession.objectID == session.objectID else {
                 throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
                     relationship: "HealthRecord.workingSession",
-                    expectedSessionID: session.id,
-                    actualSessionID: workingSession.id
+                    expectedSessionID: (try session.requiredID()),
+                    actualSessionID: (try workingSession.requiredID())
                 )
             }
             guard let animal = record.animal else {
                 throw CoreDataAnimalRepositoryError.missingHealthAnimalRelationship(
-                    recordID: record.id
+                    recordID: (try record.requiredID())
                 )
             }
             try validateHerdOwnership(
@@ -1150,7 +1150,7 @@ final class CoreDataWorkingRepository:
             guard let workingSession = check.workingSession else {
                 throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
                     relationship: "PregnancyCheck.workingSession",
-                    expectedSessionID: session.id,
+                    expectedSessionID: (try session.requiredID()),
                     actualSessionID: nil
                 )
             }
@@ -1164,13 +1164,13 @@ final class CoreDataWorkingRepository:
             guard workingSession.objectID == session.objectID else {
                 throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
                     relationship: "PregnancyCheck.workingSession",
-                    expectedSessionID: session.id,
-                    actualSessionID: workingSession.id
+                    expectedSessionID: (try session.requiredID()),
+                    actualSessionID: (try workingSession.requiredID())
                 )
             }
             guard let animal = check.animal else {
                 throw CoreDataAnimalRepositoryError.missingPregnancyAnimalRelationship(
-                    recordID: check.id
+                    recordID: (try check.requiredID())
                 )
             }
             try validateHerdOwnership(
@@ -1196,7 +1196,7 @@ final class CoreDataWorkingRepository:
             guard let activeSession = animal.activeWorkingSession else {
                 throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
                     relationship: "Animal.activeWorkingSession",
-                    expectedSessionID: session.id,
+                    expectedSessionID: (try session.requiredID()),
                     actualSessionID: nil
                 )
             }
@@ -1210,8 +1210,8 @@ final class CoreDataWorkingRepository:
             guard activeSession.objectID == session.objectID else {
                 throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
                     relationship: "Animal.activeWorkingSession",
-                    expectedSessionID: session.id,
-                    actualSessionID: activeSession.id
+                    expectedSessionID: (try session.requiredID()),
+                    actualSessionID: (try activeSession.requiredID())
                 )
             }
         }
@@ -1277,7 +1277,7 @@ private extension CoreDataWorkingRepository {
             guard tag.animal?.objectID == animal.objectID else {
                 throw CoreDataWorkingRepositoryError.invalidSnapshotRelationship(
                     relationship: "AnimalTag.animal",
-                    expectedID: animal.id,
+                    expectedID: (try animal.requiredID()),
                     actualID: tag.animal?.id
                 )
             }
@@ -1299,7 +1299,7 @@ private extension CoreDataWorkingRepository {
     ) throws {
         _ = try WorkingMapper.queueAnimalID(from: queueItem)
         guard let owningSession = queueItem.session else {
-            throw CoreDataWorkingRepositoryError.missingQueueSession(queueItemID: queueItem.id)
+            throw CoreDataWorkingRepositoryError.missingQueueSession(queueItemID: (try queueItem.requiredID()))
         }
         guard owningSession.herd?.id == herdID else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
@@ -1311,8 +1311,8 @@ private extension CoreDataWorkingRepository {
         guard owningSession.objectID == session.objectID else {
             throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
                 relationship: "WorkingQueueItem.session",
-                expectedSessionID: session.id,
-                actualSessionID: owningSession.id
+                expectedSessionID: (try session.requiredID()),
+                actualSessionID: (try owningSession.requiredID())
             )
         }
     }
@@ -1340,7 +1340,7 @@ private extension CoreDataWorkingRepository {
         guard let rawValue = session.statusRawValue,
                   let status = WorkingSessionStatus(rawValue: rawValue) else {
             throw CoreDataWorkingMappingError.invalidSessionStatus(
-                sessionID: session.id,
+                sessionID: (try session.requiredID()),
                 value: session.statusRawValue
             )
         }
@@ -1362,7 +1362,7 @@ private extension CoreDataWorkingRepository {
             herdID: (try herd.requiredID())
         )
 
-        guard queueItem.animal?.id == queueItem.animalIDSnapshot || queueItem.animal == nil else {
+        guard (try queueItem.animal.map { try $0.requiredID() }) == queueItem.animalIDSnapshot || queueItem.animal == nil else {
             throw CoreDataWorkingRepositoryError.invalidSnapshotRelationship(
                 relationship: "WorkingQueueItem.animal",
                 expectedID: queueItem.animalIDSnapshot,
@@ -1442,7 +1442,7 @@ private extension CoreDataWorkingRepository {
             return false
         }
         guard let animalHerdID = animal.herd?.id else {
-            throw CoreDataAnimalRepositoryError.missingAnimalHerdRelationship(animalID: animal.id)
+            throw CoreDataAnimalRepositoryError.missingAnimalHerdRelationship(animalID: (try animal.requiredID()))
         }
         guard let sourceHerdID = sourcePasture.herd?.id else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
@@ -1461,7 +1461,7 @@ private extension CoreDataWorkingRepository {
 
         return try CoreDataAnimalProjection.status(animal) == .active
             && !animal.isArchived
-            && currentPasture.id == sourcePasture.id
+            && currentPasture.id == (try sourcePasture.requiredID())
             && animal.activeWorkingSession == nil
     }
 
@@ -1525,14 +1525,14 @@ private extension CoreDataWorkingRepository {
         )
         item.statusRawValue = WorkingQueueStatus.queued.rawValue
         item.completedAt = nil
-        item.animalIDSnapshot = animal.id
+        item.animalIDSnapshot = (try animal.requiredID())
         item.animalTagNumberSnapshot = primary.number
         item.animalTagColorIDSnapshot = primary.colorID
         item.animalNameSnapshot = animal.name
         item.animalSexRawValueSnapshot = try CoreDataAnimalProjection.sex(animal).rawValue
         item.animalDamDisplayTagNumberSnapshot = damDisplayTagNumber
         item.animalDamDisplayTagColorIDSnapshot = damPrimary?.colorID
-        item.collectedFromPastureIDSnapshot = sourcePasture.id
+        item.collectedFromPastureIDSnapshot = (try sourcePasture.requiredID())
         item.collectedFromPastureNameSnapshot = try sourcePasture.validatedName()
         item.destinationPastureIDSnapshot = nil
         item.destinationPastureNameSnapshot = nil
@@ -1558,12 +1558,12 @@ private extension CoreDataWorkingRepository {
                 ).number
             )
         }
-        return keyed.sorted { lhs, rhs in
+        return try keyed.sorted { lhs, rhs in
             let comparison = lhs.tag.localizedStandardCompare(rhs.tag)
             if comparison != .orderedSame {
                 return comparison == .orderedAscending
             }
-            return lhs.animal.id.uuidString < rhs.animal.id.uuidString
+            return (try lhs.animal.requiredID()).uuidString < (try rhs.animal.requiredID()).uuidString
         }.map(\.animal)
     }
 }
