@@ -119,8 +119,8 @@ enum CoreDataWorkingLifecycleMutation {
                 sourceName = try animal.currentPasture.map { try $0.validatedName() }
             }
 
-            let shouldMove = isOwnedBySession
-                || animal.currentPasture?.id != (try destination.requiredID())
+            let shouldMove = try isOwnedBySession
+                || animal.currentPasture?.id != destination.requiredID()
                 || animal.activeWorkingSession != nil
 
             guard shouldMove else {

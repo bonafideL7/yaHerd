@@ -302,7 +302,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
             for color in colors where ids.contains(try color.requiredID()) {
                 if TagColorDefaults.defaultColorIDs.contains(try color.requiredID()) {
                     if try Self.hasPersistedReferences(to: try color.requiredID(), herd: herd, in: context),
-                       let canonical = Self.seedBuiltIns().first(where: { $0.id == (try color.requiredID()) }) {
+                       let canonical = try Self.seedBuiltIns().first(where: { $0.id == color.requiredID() }) {
                         Self.applyCanonicalBuiltIn(
                             canonical,
                             to: color,
@@ -386,7 +386,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
             for defaultColor in Self.seedBuiltIns() {
                 let normalizedDefaultName = TagColorLibraryRules.normalizedNameKey(defaultColor.name)
                 let canonical = try colors.first {
-                    !$0.isDeleted && (try $0.requiredID()) == defaultColor.id
+                    try !$0.isDeleted && $0.requiredID() == defaultColor.id
                 }
                 let competingNameRows = try colors.filter { candidate in
                     guard !candidate.isDeleted,
@@ -407,8 +407,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 }
 
                 let shouldRemainDefault = try existingDefaultID.map { persistedDefaultID in
-                    (try target.requiredID()) == persistedDefaultID
-                        || (try competingNameRows.contains(where: { try $0.requiredID() == persistedDefaultID }))
+                    try target.requiredID() == persistedDefaultID
+                        || competingNameRows.contains(where: { try $0.requiredID() == persistedDefaultID })
                 } ?? (defaultColor.id == TagColorDefaults.whiteID)
                 Self.applyCanonicalBuiltIn(
                     defaultColor,
