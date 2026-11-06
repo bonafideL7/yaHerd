@@ -634,7 +634,9 @@ final class CoreDataAnimalRepository:
             for animal in try CoreDataAnimalMutation.fetchAnimals(ids: ids, herd: herd, in: context) {
                 _ = try CoreDataAnimalProjection.birthDate(animal)
                 _ = try CoreDataAnimalMutation.aggregateTagStates(animal)
-                guard animal.currentPasture?.id != pasture?.id else {
+                let sourceID = try animal.currentPasture.map { try $0.requiredID() }
+                let destinationID = try pasture.map { try $0.requiredID() }
+                guard sourceID != destinationID else {
                     continue
                 }
                 try CoreDataAnimalMutation.move(
