@@ -62,7 +62,7 @@ final class CoreDataHistoricalStoreCompatibilityTests: XCTestCase {
         "WorkingTreatmentRecord": ["given"]
     ]
 
-    private struct Record: Equatable {
+    private struct Record: Equatable, Sendable {
         let attributes: [String: String]
         let relationships: [String: [String]]
     }
@@ -78,6 +78,7 @@ final class CoreDataHistoricalStoreCompatibilityTests: XCTestCase {
     func testPreCloudKitFullGraphSurvivesCurrentProductionStoreOpen() async throws {
         let targetModel = try compiledModel()
         let sourceModel = try preCloudKitModel(from: targetModel)
+        let targetEntityNames = Set(targetModel.entitiesByName.keys)
 
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("yaHerd-HistoricalGraph-\(UUID().uuidString)", isDirectory: true)
@@ -114,7 +115,7 @@ final class CoreDataHistoricalStoreCompatibilityTests: XCTestCase {
         let persistent = try await CoreDataPersistentContainer.load(storeURL: storeURL)
         let readContext = persistent.makeBackgroundContext()
         try await readContext.perform {
-            let actual = try Self.snapshot(in: readContext, entityNames: Set(targetModel.entitiesByName.keys))
+            let actual = try Self.snapshot(in: readContext, entityNames: targetEntityNames)
             XCTAssertEqual(
                 actual, expected,
                 "Opening the pre-CloudKit store must preserve every UUID, persisted field and relationship across all 18 entities."
@@ -131,7 +132,7 @@ final class CoreDataHistoricalStoreCompatibilityTests: XCTestCase {
             XCTAssertEqual(reloaded.count, 1)
             XCTAssertEqual(reloaded.first?.value(forKey: "id") as? UUID, originalID)
             XCTAssertEqual(reloaded.first?.value(forKey: "name") as? String, "Post-upgrade Herd")
-            let afterSave = try Self.snapshot(in: readContext, entityNames: Set(targetModel.entitiesByName.keys))
+            let afterSave = try Self.snapshot(in: readContext, entityNames: targetEntityNames)
             XCTAssertEqual(afterSave["Animal"], expected["Animal"])
             XCTAssertEqual(afterSave["AnimalTag"], expected["AnimalTag"])
             XCTAssertEqual(afterSave["MovementRecord"], expected["MovementRecord"])
