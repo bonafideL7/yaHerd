@@ -1,3 +1,4 @@
+import CloudKit
 @preconcurrency import CoreData
 import Foundation
 import XCTest
