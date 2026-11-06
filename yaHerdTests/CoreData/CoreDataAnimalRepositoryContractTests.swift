@@ -34,6 +34,12 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let missingID = CoreDataPersistenceError.missingApplicationID(
             entity: CDPasture.coreDataEntityName
         )
+        XCTAssertThrowsError(try animals.fetchAnimalDetail(id: animal.id)) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, missingID)
+        }
+        XCTAssertThrowsError(try animals.fetchAnimalAggregateForEditing(id: animal.id)) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, missingID)
+        }
         for target in [nil, destination.id] as [UUID?] {
             XCTAssertThrowsError(try animals.move(ids: [animal.id], toPastureID: target)) {
                 XCTAssertEqual($0 as? CoreDataPersistenceError, missingID)
