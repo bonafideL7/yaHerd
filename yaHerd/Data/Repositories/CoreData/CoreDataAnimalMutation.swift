@@ -891,7 +891,9 @@ enum CoreDataAnimalMutation {
         at date: Date
     ) throws {
         let source = animal.currentPasture
-        guard source?.id != pasture?.id else {
+        let sourceID = try source.map { try $0.requiredID() }
+        let destinationID = try pasture.map { try $0.requiredID() }
+        guard sourceID != destinationID else {
             return
         }
         let sourceName = try source.map { try $0.validatedName() }
@@ -905,9 +907,9 @@ enum CoreDataAnimalMutation {
             in: context
         )
         movement.date = date
-        movement.fromPastureIDSnapshot = source?.id
+        movement.fromPastureIDSnapshot = sourceID
         movement.fromPastureNameSnapshot = sourceName
-        movement.toPastureIDSnapshot = pasture?.id
+        movement.toPastureIDSnapshot = destinationID
         movement.toPastureNameSnapshot = destinationName
         movement.herd = herd
         movement.animal = animal
