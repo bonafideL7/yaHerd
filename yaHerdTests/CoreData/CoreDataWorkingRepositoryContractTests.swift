@@ -5,6 +5,118 @@ import XCTest
 
 @MainActor
 final class CoreDataWorkingRepositoryContractTests: XCTestCase {
+    func testCompletionRejectsImportedCurrentPastureWithoutUUIDAndPreservesSourceHistory() async throws {
+        let environment = try await CoreDataWorkingContractEnvironment.make()
+        let pastures = environment.makePastureRepository()
+        let animals = environment.makeAnimalRepository()
+        let working = environment.makeCoreWorkingRepository()
+        let original = try pastures.create(
+            input: PastureInput(name: "Original Working Pasture", acreage: 10, usableAcreage: 9, targetAcresPerHead: 1)
+        )
+        let pending = try pastures.create(
+            input: PastureInput(name: "Pending Imported Pasture", acreage: 10, usableAcreage: 9, targetAcresPerHead: 1)
+        )
+        let destination = try pastures.create(
+            input: PastureInput(name: "Working Destination", acreage: 10, usableAcreage: 9, targetAcresPerHead: 1)
+        )
+        let animal = try animals.create(
+            input: Self.animalInput(
+                name: "Pending Working Cow", tagNumber: "WORK-PENDING-ID", pastureID: original.id
+            )
+        )
+        let sessionID = try await working.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSinceReferenceDate: 240_000),
+                sourcePastureID: original.id,
+                treatmentTemplateName: "Pending source",
+                plannedTreatments: [],
+                animalIDs: [animal.id]
+            )
+        )
+        let queueID = try XCTUnwrap(working.fetchSessionDetail(id: sessionID)?.queueItems.first?.id)
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        let lookup = CoreDataLookup()
+        var movementCountBefore = 0
+
+        try context.performAndWait {
+            let storedAnimal = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            let pendingPasture = try XCTUnwrap(lookup.herdOwned(
+                CDPasture.self, id: pending.id, herdID: environment.herdID, in: context
+            ))
+            storedAnimal.activeWorkingSession = nil
+            storedAnimal.currentPasture = pendingPasture
+            pendingPasture.id = nil
+            try context.save()
+            movementCountBefore = try context.count(
+                for: NSFetchRequest<CDMovementRecord>(entityName: CDMovementRecord.coreDataEntityName)
+            )
+        }
+
+        let assignments = [
+            WorkingQueueDestinationAssignment(
+                queueItemID: queueID, destinationPastureID: destination.id
+            )
+        ]
+        do {
+            try await working.completeSession(id: sessionID, assignments: assignments)
+            XCTFail("Completion must reject an imported source pasture with no UUID.")
+        } catch {
+            XCTAssertEqual(
+                error as? CoreDataPersistenceError,
+                .missingApplicationID(entity: CDPasture.coreDataEntityName)
+            )
+        }
+
+        try context.performAndWait {
+            context.refreshAllObjects()
+            let storedAnimal = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            let session = try XCTUnwrap(lookup.herdOwned(
+                CDWorkingSession.self, id: sessionID, herdID: environment.herdID, in: context
+            ))
+            let queueItem = try XCTUnwrap(lookup.herdOwned(
+                CDWorkingQueueItem.self, id: queueID, herdID: environment.herdID, in: context
+            ))
+            XCTAssertNil(storedAnimal.currentPasture?.id)
+            XCTAssertEqual(storedAnimal.currentPasture?.name, pending.name)
+            XCTAssertEqual(session.statusRawValue, WorkingSessionStatus.active.rawValue)
+            XCTAssertNil(queueItem.destinationPastureIDSnapshot)
+            XCTAssertEqual(
+                try context.count(for: NSFetchRequest<CDMovementRecord>(
+                    entityName: CDMovementRecord.coreDataEntityName
+                )),
+                movementCountBefore
+            )
+            let pendingPasture = try XCTUnwrap(storedAnimal.currentPasture)
+            pendingPasture.id = pending.id
+            try context.save()
+        }
+
+        try await working.completeSession(id: sessionID, assignments: assignments)
+        let readContext = environment.assembly.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            let storedAnimal = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: readContext
+            ))
+            let session = try XCTUnwrap(lookup.herdOwned(
+                CDWorkingSession.self, id: sessionID, herdID: environment.herdID, in: readContext
+            ))
+            XCTAssertEqual(storedAnimal.currentPasture?.id, destination.id)
+            XCTAssertEqual(session.statusRawValue, WorkingSessionStatus.finished.rawValue)
+            let movements = try readContext.fetch(
+                NSFetchRequest<CDMovementRecord>(entityName: CDMovementRecord.coreDataEntityName)
+            )
+            XCTAssertEqual(movements.count, movementCountBefore + 1)
+            XCTAssertTrue(movements.contains {
+                $0.fromPastureIDSnapshot == pending.id &&
+                $0.toPastureIDSnapshot == destination.id
+            })
+        }
+    }
+
     func testUnattachedImportedWorkingSessionPreventsMutationsUntilOwnerAndPastureArrive() async throws {
         let environment = try await CoreDataWorkingContractEnvironment.make()
         let pasture = try environment.makePastureRepository().create(
