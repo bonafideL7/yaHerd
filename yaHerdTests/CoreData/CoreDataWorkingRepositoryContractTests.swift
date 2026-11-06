@@ -36,8 +36,6 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         let queueID = try XCTUnwrap(working.fetchSessionDetail(id: sessionID)?.queueItems.first?.id)
         let context = try environment.assembly.contextFactory.makeWriteContext()
         let lookup = CoreDataLookup()
-        var movementCountBefore = 0
-
         try context.performAndWait {
             let storedAnimal = try XCTUnwrap(lookup.herdOwned(
                 CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
@@ -49,7 +47,9 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             storedAnimal.currentPasture = pendingPasture
             pendingPasture.id = nil
             try context.save()
-            movementCountBefore = try context.count(
+        }
+        let movementCountBefore = try context.performAndWait {
+            try context.count(
                 for: NSFetchRequest<CDMovementRecord>(entityName: CDMovementRecord.coreDataEntityName)
             )
         }
