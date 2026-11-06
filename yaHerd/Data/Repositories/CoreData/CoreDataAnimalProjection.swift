@@ -658,14 +658,18 @@ enum CoreDataAnimalReadGraphValidator {
                 actualHerdID: animal.herd?.id
             )
         }
-        if let pasture = animal.currentPasture,
-           pasture.herd?.id != herdID {
-            throw CoreDataReadModelError.invalidHerdOwnership(
-                entity: CDPasture.coreDataEntityName,
-                id: (try pasture.requiredID()),
-                expectedHerdID: herdID,
-                actualHerdID: pasture.herd?.id
-            )
+        if let pasture = animal.currentPasture {
+            // The relationship can arrive before its application identity.
+            // Never project a linked pasture as an absent pasture.
+            _ = try pasture.requiredID()
+            if pasture.herd?.id != herdID {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDPasture.coreDataEntityName,
+                    id: (try pasture.requiredID()),
+                    expectedHerdID: herdID,
+                    actualHerdID: pasture.herd?.id
+                )
+            }
         }
         if let session = animal.activeWorkingSession,
            session.herd?.id != herdID {
