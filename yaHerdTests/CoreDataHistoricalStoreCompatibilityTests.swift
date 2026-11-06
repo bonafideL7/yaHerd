@@ -79,6 +79,7 @@ final class CoreDataHistoricalStoreCompatibilityTests: XCTestCase {
         let targetModel = try compiledModel()
         let sourceModel = try preCloudKitModel(from: targetModel)
         let targetEntityNames = Set(targetModel.entitiesByName.keys)
+        let sourceEntityNames = Set(sourceModel.entitiesByName.keys)
 
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("yaHerd-HistoricalGraph-\(UUID().uuidString)", isDirectory: true)
@@ -97,7 +98,7 @@ final class CoreDataHistoricalStoreCompatibilityTests: XCTestCase {
         let expected = try writeContext.performAndWait { () throws -> StoreSnapshot in
             try Self.seedCompleteGraph(in: writeContext)
             try writeContext.save()
-            return try Self.snapshot(in: writeContext, entityNames: Set(sourceModel.entitiesByName.keys))
+            return try Self.snapshot(in: writeContext, entityNames: sourceEntityNames)
         }
         XCTAssertEqual(expected.count, 18)
         XCTAssertEqual(expected["Animal"]?.count, 3)
