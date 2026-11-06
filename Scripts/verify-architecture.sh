@@ -48,7 +48,7 @@ swiftui_core_data_accessor = re.compile(
 approved_production_imports = {
     "Foundation", "SwiftUI", "CoreData", "Combine", "Dispatch", "OSLog", "os",
     "UIKit", "Observation", "Synchronization", "UniformTypeIdentifiers",
-    "Charts", "LucideIcons",
+    "Charts", "LucideIcons", "CloudKit",
 }
 
 for path in root.rglob("*.swift"):
@@ -308,9 +308,12 @@ for path in Path("yaHerd").rglob("*.swift"):
                 f"{path}:{line_number}: active production code must not reference the retired SwiftData schema"
             )
         if module == "CloudKit" or cloudkit_api.search(code):
-            failures.append(
-                f"{path}:{line_number}: cloud/sync/shared persistence is not part of the local-only architecture"
-            )
+            # Stage 2 prepares store descriptions in the existing persistence
+            # boundary but does not activate CloudKit before write routing is safe.
+            if path != Path("yaHerd/Data/Persistence/CoreData/CoreDataPersistentContainer.swift"):
+                failures.append(
+                    f"{path}:{line_number}: CloudKit APIs must remain in the reviewed persistence boundary"
+                )
 
 # The source tree is not the only way to enable CloudKit: an Xcode capability or
 # provisioning entitlement can reintroduce iCloud persistence. Guard those
