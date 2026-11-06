@@ -5,6 +5,73 @@ import XCTest
 
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
+    func testMoveRejectsImportedSourcePastureWithoutUUIDAndPreservesHistory() async throws {
+        let environment = try await makeEnvironment()
+        let pastures = environment.makePastureRepository()
+        let animals = environment.makeAnimalRepository()
+        let source = try pastures.create(
+            input: PastureInput(name: "Source Pending ID", acreage: 10, usableAcreage: 9, targetAcresPerHead: 1)
+        )
+        let destination = try pastures.create(
+            input: PastureInput(name: "Known Destination", acreage: 10, usableAcreage: 9, targetAcresPerHead: 1)
+        )
+        let animal = try animals.create(
+            input: readGraphAnimalInput(
+                name: "Pending Pasture Cow", tag: "PENDING-SOURCE", pastureID: source.id
+            )
+        )
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        let lookup = CoreDataLookup()
+
+        try context.performAndWait {
+            let pasture = try XCTUnwrap(lookup.herdOwned(
+                CDPasture.self, id: source.id, herdID: environment.herdID, in: context
+            ))
+            pasture.id = nil
+            try context.save()
+        }
+
+        let missingID = CoreDataPersistenceError.missingApplicationID(
+            entity: CDPasture.coreDataEntityName
+        )
+        for target in [nil, destination.id] as [UUID?] {
+            XCTAssertThrowsError(try animals.move(ids: [animal.id], toPastureID: target)) {
+                XCTAssertEqual($0 as? CoreDataPersistenceError, missingID)
+            }
+        }
+
+        try context.performAndWait {
+            context.refreshAllObjects()
+            let stored = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            XCTAssertNil(stored.currentPasture?.id)
+            XCTAssertEqual(stored.currentPasture?.name, source.name)
+            let movements = try context.fetch(
+                NSFetchRequest<CDMovementRecord>(entityName: CDMovementRecord.coreDataEntityName)
+            )
+            XCTAssertTrue(movements.isEmpty, "Rejected moves must not write incomplete history.")
+            let pasture = try XCTUnwrap(stored.currentPasture)
+            pasture.id = source.id
+            try context.save()
+        }
+
+        try animals.move(ids: [animal.id], toPastureID: destination.id)
+        let readContext = environment.assembly.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            let stored = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: readContext
+            ))
+            XCTAssertEqual(stored.currentPasture?.id, destination.id)
+            let movements = try readContext.fetch(
+                NSFetchRequest<CDMovementRecord>(entityName: CDMovementRecord.coreDataEntityName)
+            )
+            XCTAssertEqual(movements.count, 1)
+            XCTAssertEqual(movements.first?.fromPastureIDSnapshot, source.id)
+            XCTAssertEqual(movements.first?.toPastureIDSnapshot, destination.id)
+        }
+    }
+
     func testImportedAnimalMissingHerdPreservesOriginalAnimalAndBlocksMutation() async throws {
         let environment = try await makeEnvironment()
         let repository = environment.makeAnimalRepository()
