@@ -1,3 +1,4 @@
+import CloudKit
 @preconcurrency import CoreData
 import Foundation
 
@@ -9,6 +10,9 @@ enum CoreDataStoreAccessMode: Equatable, Sendable {
 final class CoreDataPersistentContainer {
     static let modelName = "yaHerdModel"
     static let storeFileName = "yaHerd.sqlite"
+    static let sharedStoreFileName = "yaHerd-shared.sqlite"
+    // Must match the app's CloudKit capability when that capability is enabled.
+    static let cloudKitContainerIdentifier = "iCloud.ltd.yaherd"
 
     private let container: NSPersistentContainer
     let accessMode: CoreDataStoreAccessMode
@@ -58,6 +62,43 @@ final class CoreDataPersistentContainer {
             withIntermediateDirectories: true
         )
         return directory.appendingPathComponent(storeFileName)
+    }
+
+    /// Stage 2 store topology. The existing app continues using its local-only
+    /// loader until Herd-qualified reads and every write path can route to the
+    /// correct store. Constructing descriptions must never move or modify data.
+    static func cloudKitStoreDescriptions(
+        privateStoreURL: URL
+    ) -> [NSPersistentStoreDescription] {
+        let privateStore = NSPersistentStoreDescription(url: privateStoreURL)
+        let sharedStore = NSPersistentStoreDescription(
+            url: privateStoreURL.deletingLastPathComponent()
+                .appendingPathComponent(sharedStoreFileName)
+        )
+
+        func configure(
+            _ description: NSPersistentStoreDescription,
+            scope: CKDatabase.Scope
+        ) {
+            description.type = NSSQLiteStoreType
+            description.shouldAddStoreAsynchronously = true
+            description.shouldMigrateStoreAutomatically = true
+            description.shouldInferMappingModelAutomatically = true
+            description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
+            description.setOption(
+                true as NSNumber,
+                forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey
+            )
+            let options = NSPersistentCloudKitContainerOptions(
+                containerIdentifier: cloudKitContainerIdentifier
+            )
+            options.databaseScope = scope
+            description.cloudKitContainerOptions = options
+        }
+
+        configure(privateStore, scope: .private)
+        configure(sharedStore, scope: .shared)
+        return [privateStore, sharedStore]
     }
 
     private static func load(
