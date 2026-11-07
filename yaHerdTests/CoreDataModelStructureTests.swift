@@ -1334,7 +1334,7 @@ final class CoreDataModelStructureTests: XCTestCase {
 
     func testEntireModelMeetsCloudKitStructuralRestrictions() throws {
         let model = try loadModel()
-        XCTAssertEqual(Set(model.entities.compactMap(\\.name)), Self.expectedEntities)
+        XCTAssertEqual(Set(model.entities.compactMap(\.name)), Self.expectedEntities)
 
         for entity in model.entities {
             let entityName = try XCTUnwrap(entity.name)
