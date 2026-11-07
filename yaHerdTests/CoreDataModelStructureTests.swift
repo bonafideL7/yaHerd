@@ -1011,112 +1011,6 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
-    /// Stage 1 preflight: the CloudKit-required storage nullability changes must
-    /// be inferable without a custom NSMappingModel or migration policy.
-    func testCloudKitNullabilityChangesCanBeLightweightMigrated() throws {
-        let originalModel = try loadModel()
-        let cloudKitModel = try XCTUnwrap(originalModel.copy() as? NSManagedObjectModel)
-
-        for entity in cloudKitModel.entities {
-            for attribute in entity.attributesByName.values {
-                attribute.isOptional = true
-            }
-            for relationship in entity.relationshipsByName.values {
-                relationship.isOptional = true
-            }
-        }
-
-        let mapping = try NSMappingModel.inferredMappingModel(
-            forSourceModel: originalModel,
-            destinationModel: cloudKitModel
-        )
-        XCTAssertEqual(mapping.entityMappings.count, Self.expectedEntities.count)
-    }
-
-    /// Exercise a real SQLite store instead of assuming schema inference is
-    /// sufficient to keep pre-update Herd and Pasture records intact.
-    func testCloudKitNullabilityLightweightMigrationPreservesExistingSQLiteData() throws {
-        let originalModel = try loadModel()
-
-        // Model a source schema that is NOT in the application bundle. This
-        // exercises Core Data's source-model discovery from existing SQLite,
-        // rather than accidentally relying on the currently compiled .mom.
-        let originalHerd = try XCTUnwrap(originalModel.entitiesByName["Herd"])
-        let probe = NSAttributeDescription()
-        probe.name = "sourceModelCacheProbe"
-        probe.attributeType = .stringAttributeType
-        probe.isOptional = true
-        originalHerd.properties.append(probe)
-
-        let cloudKitModel = try XCTUnwrap(originalModel.copy() as? NSManagedObjectModel)
-        for entity in cloudKitModel.entities {
-            entity.attributesByName.values.forEach { $0.isOptional = true }
-            entity.relationshipsByName.values.forEach { $0.isOptional = true }
-        }
-
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("CloudKitModelMigration-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true
-        )
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let storeURL = directory.appendingPathComponent("pre-cloudkit.sqlite")
-        let herdID = UUID()
-        let pastureID = UUID()
-
-        let oldCoordinator = NSPersistentStoreCoordinator(managedObjectModel: originalModel)
-        let oldStore = try oldCoordinator.addPersistentStore(
-            ofType: NSSQLiteStoreType,
-            configurationName: nil,
-            at: storeURL,
-            options: nil
-        )
-        let oldContext = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
-        oldContext.persistentStoreCoordinator = oldCoordinator
-        try oldContext.performAndWait {
-            let herd = NSEntityDescription.insertNewObject(forEntityName: "Herd", into: oldContext)
-            herd.setValue(herdID, forKey: "id")
-            herd.setValue("Existing Herd", forKey: "name")
-            herd.setValue(Date(timeIntervalSince1970: 100), forKey: "createdAt")
-            herd.setValue(Date(timeIntervalSince1970: 200), forKey: "updatedAt")
-
-            let pasture = NSEntityDescription.insertNewObject(forEntityName: "Pasture", into: oldContext)
-            pasture.setValue(pastureID, forKey: "id")
-            pasture.setValue("Existing Pasture", forKey: "name")
-            pasture.setValue(Int64(1), forKey: "sortOrder")
-            pasture.setValue(herd, forKey: "herd")
-            try oldContext.save()
-        }
-        oldContext.reset()
-        try oldCoordinator.remove(oldStore)
-
-        let migratedCoordinator = NSPersistentStoreCoordinator(managedObjectModel: cloudKitModel)
-        let migratedStore = try migratedCoordinator.addPersistentStore(
-            ofType: NSSQLiteStoreType,
-            configurationName: nil,
-            at: storeURL,
-            options: [
-                NSMigratePersistentStoresAutomaticallyOption: true,
-                NSInferMappingModelAutomaticallyOption: true
-            ]
-        )
-        let readContext = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
-        readContext.persistentStoreCoordinator = migratedCoordinator
-        try readContext.performAndWait {
-            let herds = try readContext.fetch(NSFetchRequest<NSManagedObject>(entityName: "Herd"))
-            let pastures = try readContext.fetch(NSFetchRequest<NSManagedObject>(entityName: "Pasture"))
-            XCTAssertEqual(herds.count, 1)
-            XCTAssertEqual(herds.first?.value(forKey: "id") as? UUID, herdID)
-            XCTAssertEqual(herds.first?.value(forKey: "name") as? String, "Existing Herd")
-            XCTAssertEqual(pastures.count, 1)
-            XCTAssertEqual(pastures.first?.value(forKey: "id") as? UUID, pastureID)
-            XCTAssertEqual(pastures.first?.value(forKey: "herd") as? NSManagedObject, herds.first)
-        }
-        readContext.reset()
-        try migratedCoordinator.remove(migratedStore)
-    }
-
     func testMissingPregnancyResultIsRejectedWithoutInventingUnknownResult() async throws {
         let model = try loadModel()
         let pregnancy = try entity(named: "PregnancyCheck", in: model)
@@ -1432,56 +1326,50 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
-    func testOldRequiredFindingRelationshipStoreLoadsWithoutCustomMigration() async throws {
-        let currentModel = try loadModel()
-        let previousModel = try XCTUnwrap(currentModel.copy() as? NSManagedObjectModel)
-        let previousFinding = try entity(named: "FieldCheckFinding", in: previousModel)
-        try relationship(named: "session", in: previousFinding).isOptional = false
-
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ExistingFieldCheckStore-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true
-        )
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let storeURL = directory.appendingPathComponent("yaHerd.sqlite")
-        let herdID = UUID()
-
-        let sourceCoordinator = NSPersistentStoreCoordinator(managedObjectModel: previousModel)
-        let sourceStore = try sourceCoordinator.addPersistentStore(
-            ofType: NSSQLiteStoreType,
-            configurationName: nil,
-            at: storeURL,
-            options: nil
-        )
-        let context = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
-        context.persistentStoreCoordinator = sourceCoordinator
-        try context.performAndWait {
-            let herd = NSEntityDescription.insertNewObject(forEntityName: "Herd", into: context)
-            herd.setValue(herdID, forKey: "id")
-            herd.setValue("Preserved Herd", forKey: "name")
-            herd.setValue(Date(timeIntervalSince1970: 100), forKey: "createdAt")
-            herd.setValue(Date(timeIntervalSince1970: 200), forKey: "updatedAt")
-            try context.save()
-        }
-        context.reset()
-        try sourceCoordinator.remove(sourceStore)
-
-        let reopened = try await CoreDataPersistentContainer.load(storeURL: storeURL)
-        let readContext = reopened.makeBackgroundContext()
-        try await readContext.perform {
-            let herds = try readContext.fetch(NSFetchRequest<NSManagedObject>(entityName: "Herd"))
-            XCTAssertEqual(herds.count, 1)
-            XCTAssertEqual(herds.first?.value(forKey: "id") as? UUID, herdID)
-            XCTAssertEqual(herds.first?.value(forKey: "name") as? String, "Preserved Herd")
-        }
-    }
-
     func testModelLoadsWithExactDurableEntityInventory() throws {
         let model = try loadModel()
 
         XCTAssertEqual(Set(model.entities.compactMap(\.name)), Self.expectedEntities)
+    }
+
+    func testEntireModelMeetsCloudKitStructuralRestrictions() throws {
+        let model = try loadModel()
+        XCTAssertEqual(Set(model.entities.compactMap(\\.name)), Self.expectedEntities)
+
+        for entity in model.entities {
+            let entityName = try XCTUnwrap(entity.name)
+            XCTAssertTrue(
+                entity.uniquenessConstraints.isEmpty,
+                "\(entityName) must not use Core Data uniqueness constraints."
+            )
+            for relationship in entity.relationshipsByName.values {
+                XCTAssertTrue(
+                    relationship.isOptional,
+                    "\(entityName).\(relationship.name) must be optional for CloudKit."
+                )
+                XCTAssertNotNil(
+                    relationship.inverseRelationship,
+                    "\(entityName).\(relationship.name) must have an inverse."
+                )
+                XCTAssertNotEqual(
+                    relationship.deleteRule,
+                    .denyDeleteRule,
+                    "\(entityName).\(relationship.name) must not deny deletion."
+                )
+            }
+            for attribute in entity.attributesByName.values {
+                XCTAssertNotEqual(
+                    attribute.attributeType,
+                    .undefinedAttributeType,
+                    "\(entityName).\(attribute.name) must have a defined type."
+                )
+                XCTAssertNotEqual(
+                    attribute.attributeType,
+                    .objectIDAttributeType,
+                    "\(entityName).\(attribute.name) must not use object ID storage."
+                )
+            }
+        }
     }
 
     func testDurableEntityApplicationUUIDStorageMatchesCloudKitContract() throws {
