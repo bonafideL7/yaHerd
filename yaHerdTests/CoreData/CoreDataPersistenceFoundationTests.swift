@@ -49,6 +49,30 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         }
     }
 
+    func testWritableAndReadOnlyStoresNeverEnableAutomaticSchemaMigration() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let writable = try await CoreDataPersistentContainer.load(storeURL: harness.storeURL)
+        let readOnly = try await CoreDataPersistentContainer.load(
+            storeURL: harness.storeURL,
+            accessMode: .readOnly
+        )
+
+        for container in [writable, readOnly] {
+            let store = try XCTUnwrap(container.persistentStoreCoordinator.persistentStores.first)
+            let options = try XCTUnwrap(store.options)
+            XCTAssertEqual(
+                (options[NSMigratePersistentStoresAutomaticallyOption] as? NSNumber)?.boolValue,
+                false,
+                "No development database should be automatically migrated."
+            )
+            XCTAssertEqual(
+                (options[NSInferMappingModelAutomaticallyOption] as? NSNumber)?.boolValue,
+                false,
+                "Core Data must not infer old-to-new schema mappings."
+            )
+        }
+    }
+
     func testStoreLoadFailureSurfacesPersistenceErrorWithoutFallback() async throws {
         let harness = try CoreDataPersistenceHarness()
 
