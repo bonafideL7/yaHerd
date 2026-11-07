@@ -35,7 +35,7 @@ Automated tests are part of normal implementation and defect correction, not opt
 
 ## Persistence direction
 
-yaHerd currently uses a local-only Core Data `NSPersistentContainer`. The approved future direction is iCloud synchronization and multi-user Herd sharing using Core Data and CloudKit, as specified in [Info/CLOUDKIT_COLLABORATION.md](Info/CLOUDKIT_COLLABORATION.md). Do not describe that target as already implemented. A SwiftData migration, compatibility layer, or dual-write path is not required.
+yaHerd currently uses a local-only Core Data `NSPersistentContainer`. The approved future direction is iCloud synchronization and multi-user Herd sharing using Core Data and CloudKit, as specified in [Info/CLOUDKIT_COLLABORATION.md](Info/CLOUDKIT_COLLABORATION.md). Do not describe that target as already implemented. A SwiftData migration, compatibility layer, or dual-write path is not required. yaHerd is unreleased: do not introduce Core Data schema migrations, automatic lightweight migration, inferred old-model mappings, or historical model-version compatibility infrastructure.
 
 - Do not reintroduce SwiftData production repositories, models, migration adapters, or supporting infrastructure.
 - Do not treat historical SwiftData implementation or historical planning documents as the active architecture.
@@ -47,7 +47,7 @@ The explicitly requested [CloudKit synchronization and collaboration specificati
 
 ChatGPT owns implementation and PR fixes. Codex is used only for code review, not implementation, documentation authoring, test creation, or CI work.
 
-For any CloudKit, sharing, Herd selection, Core Data model migration, or related persistence work:
+For any CloudKit, sharing, Herd selection, Core Data model compatibility, or related persistence work:
 
 - Read the specification and the current affected production source before making changes. The latest production code remains authoritative for existing implementation details; user-approved feature requirements determine intended behavior.
 - Implement only the stage requested by the user and its demonstrably necessary dependencies. Do not automatically execute later stages or reintroduce discarded infrastructure.
