@@ -1,6 +1,7 @@
 import CloudKit
 @preconcurrency import CoreData
 import Foundation
+import Synchronization
 
 enum CoreDataStoreAccessMode: Equatable, Sendable {
     case readWrite
@@ -13,6 +14,12 @@ final class CoreDataPersistentContainer {
     static let sharedStoreFileName = "yaHerd-shared.sqlite"
     // Must match the app's CloudKit capability when that capability is enabled.
     static let cloudKitContainerIdentifier = "iCloud.ltd.yaherd"
+
+    private struct StoreLoadProgress {
+        let continuation: CheckedContinuation<Void, Error>
+        var remaining: Int
+        var firstFailure: CoreDataPersistenceError?
+    }
 
     private let container: NSPersistentContainer
     let accessMode: CoreDataStoreAccessMode
@@ -99,6 +106,69 @@ final class CoreDataPersistentContainer {
         configure(privateStore, scope: .private)
         configure(sharedStore, scope: .shared)
         return [privateStore, sharedStore]
+    }
+
+    /// Loads the existing local SQLite store as the private database and a
+    /// separate shared SQLite store. Not used by app startup until all Herd
+    /// reads and writes are store-qualified.
+    static func loadCloudKit(storeURL: URL) async throws -> CoreDataPersistentContainer {
+        try await loadCloudKit(
+            storeDescriptions: cloudKitStoreDescriptions(privateStoreURL: storeURL)
+        )
+    }
+
+    /// The same dual-store loading path can be exercised with mirroring disabled
+    /// in unsigned simulator tests; production descriptions retain CloudKit options.
+    static func loadCloudKit(
+        storeDescriptions: [NSPersistentStoreDescription]
+    ) async throws -> CoreDataPersistentContainer {
+        guard storeDescriptions.count == 2 else {
+            throw CoreDataPersistenceError.storeLoadFailed(
+                url: nil,
+                description: "Both private and shared persistent store descriptions are required."
+            )
+        }
+
+        let model = try loadModel()
+        let container = NSPersistentCloudKitContainer(
+            name: modelName,
+            managedObjectModel: model
+        )
+        container.persistentStoreDescriptions = storeDescriptions
+
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, Error>) in
+            let progress = Mutex(StoreLoadProgress(
+                continuation: continuation,
+                remaining: storeDescriptions.count
+            ))
+
+            // Core Data calls this once for each store description. Do not
+            // report success after only the private store has finished loading.
+            container.loadPersistentStores { description, error in
+                progress.withLock { state in
+                    if let error, state.firstFailure == nil {
+                        state.firstFailure = .storeLoadFailed(
+                            url: description.url,
+                            description: error.localizedDescription
+                        )
+                    }
+                    state.remaining -= 1
+                    guard state.remaining == 0 else { return }
+                    if let failure = state.firstFailure {
+                        state.continuation.resume(throwing: failure)
+                    } else {
+                        state.continuation.resume()
+                    }
+                }
+            }
+        }
+
+        return CoreDataPersistentContainer(
+            container: container,
+            accessMode: .readWrite,
+            storeURL: storeDescriptions[0].url
+        )
     }
 
     private static func load(
