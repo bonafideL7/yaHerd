@@ -347,8 +347,8 @@ if entitlements != expected_entitlements:
 # Preserve the existing rule for every other entitlement file; approval is
 # limited to the app target's declared CloudKit entitlement, not arbitrary files.
 icloud_configuration = re.compile(
-    r"\\b(?:com\\.apple\\.developer\\.(?:icloud|ubiquity)[A-Za-z0-9_.-]*|"
-    r"com\\.apple\\.iCloud|iCloud\\.[A-Za-z0-9_.-]+|CloudKit)\\b",
+    r"\b(?:com\.apple\.developer\.(?:icloud|ubiquity)[A-Za-z0-9_.-]*|"
+    r"com\.apple\.iCloud|iCloud\.[A-Za-z0-9_.-]+|CloudKit)\b",
     re.IGNORECASE,
 )
 for other_entitlements in Path(".").rglob("*.entitlements"):
