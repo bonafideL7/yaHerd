@@ -85,24 +85,30 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
         )
         let stores = cloudContainer.persistentStoreCoordinator.persistentStores
         XCTAssertEqual(stores.count, 2)
-        let privateStore = try XCTUnwrap(stores.first { $0.url == harness.storeURL })
+        let privateURL = harness.storeURL
         let sharedURL = harness.directoryURL.appendingPathComponent(
             CoreDataPersistentContainer.sharedStoreFileName
         )
-        let sharedStore = try XCTUnwrap(stores.first { $0.url == sharedURL })
+        XCTAssertTrue(stores.contains { $0.url == privateURL })
+        XCTAssertTrue(stores.contains { $0.url == sharedURL })
 
         let context = cloudContainer.makeBackgroundContext()
         try context.performAndWait {
             let ownedHerd = try XCTUnwrap(
                 CoreDataLookup().herd(id: ownedHerdID, in: context)
             )
-            XCTAssertTrue(ownedHerd.objectID.persistentStore === privateStore)
+            XCTAssertEqual(ownedHerd.objectID.persistentStore?.url, privateURL)
 
             let sharedHerd = CDHerd(context: context)
             sharedHerd.id = sharedHerdID
             sharedHerd.name = "Shared Herd"
             sharedHerd.createdAt = Date(timeIntervalSince1970: 200)
             sharedHerd.updatedAt = Date(timeIntervalSince1970: 200)
+            let sharedStore = try XCTUnwrap(
+                context.persistentStoreCoordinator?.persistentStores.first {
+                    $0.url == sharedURL
+                }
+            )
             context.assign(sharedHerd, to: sharedStore)
             try context.save()
         }
@@ -119,7 +125,7 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
             let sharedHerd = try XCTUnwrap(
                 CoreDataLookup().herd(id: sharedHerdID, in: readContext)
             )
-            XCTAssertTrue(sharedHerd.objectID.persistentStore === sharedStore)
+            XCTAssertEqual(sharedHerd.objectID.persistentStore?.url, sharedURL)
         }
     }
 
