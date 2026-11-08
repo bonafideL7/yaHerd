@@ -25,8 +25,8 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
                 description.cloudKitContainerOptions?.containerIdentifier,
                 CoreDataPersistentContainer.cloudKitContainerIdentifier
             )
-            XCTAssertTrue(description.shouldMigrateStoreAutomatically)
-            XCTAssertTrue(description.shouldInferMappingModelAutomatically)
+            XCTAssertFalse(description.shouldMigrateStoreAutomatically)
+            XCTAssertFalse(description.shouldInferMappingModelAutomatically)
             XCTAssertEqual(
                 description.options[NSPersistentHistoryTrackingKey] as? NSNumber,
                 NSNumber(value: true)
