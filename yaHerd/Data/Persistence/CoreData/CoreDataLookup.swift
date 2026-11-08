@@ -42,6 +42,31 @@ struct CoreDataLookup: Sendable {
         return matches.first
     }
 
+    /// The persisted Herd root, not the currently selected UI, determines which
+    /// store owns its records. A missing or ambiguous root cannot select a store.
+    func store(
+        forHerdID id: UUID,
+        in context: NSManagedObjectContext
+    ) throws -> NSPersistentStore? {
+        guard let herd = try herd(id: id, in: context) else {
+            return nil
+        }
+        return try owningStore(of: herd, in: context)
+    }
+
+    private func owningStore(
+        of herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) throws -> NSPersistentStore {
+        let herdID = try herd.requiredID()
+        guard !herd.objectID.isTemporaryID,
+              let coordinator = context.persistentStoreCoordinator,
+              let store = coordinator.persistentStore(for: herd.objectID) else {
+            throw CoreDataPersistenceError.unresolvedHerdStore(id: herdID)
+        }
+        return store
+    }
+
     func herdOwned<Object>(
         _ type: Object.Type,
         id: UUID,
@@ -60,6 +85,9 @@ struct CoreDataLookup: Sendable {
             herd
         )
         request.fetchLimit = 2
+        if !herd.isInserted {
+            request.affectedStores = [try owningStore(of: herd, in: context)]
+        }
 
         let matches = try context.fetch(request)
         guard matches.count <= 1 else {
