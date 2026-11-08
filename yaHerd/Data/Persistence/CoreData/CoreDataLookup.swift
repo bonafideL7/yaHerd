@@ -61,7 +61,8 @@ struct CoreDataLookup: Sendable {
         let herdID = try herd.requiredID()
         guard !herd.objectID.isTemporaryID,
               let coordinator = context.persistentStoreCoordinator,
-              let store = coordinator.persistentStore(for: herd.objectID) else {
+              let store = herd.objectID.persistentStore,
+              coordinator.persistentStores.contains(where: { $0 === store }) else {
             throw CoreDataPersistenceError.unresolvedHerdStore(id: herdID)
         }
         return store
