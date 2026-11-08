@@ -82,8 +82,8 @@ final class CoreDataPersistentContainer {
         ) {
             description.type = NSSQLiteStoreType
             description.shouldAddStoreAsynchronously = true
-            description.shouldMigrateStoreAutomatically = true
-            description.shouldInferMappingModelAutomatically = true
+            description.shouldMigrateStoreAutomatically = false
+            description.shouldInferMappingModelAutomatically = false
             description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
             description.setOption(
                 true as NSNumber,
