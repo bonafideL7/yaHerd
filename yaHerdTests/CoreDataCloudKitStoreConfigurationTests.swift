@@ -150,7 +150,7 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
             XCTFail("An invalid shared store must fail the entire two-store loader.")
         } catch let error as CoreDataPersistenceError {
             guard case .storeLoadFailed = error else {
-                return XCTFail("Expected the actual shared-store load failure, got \\(error).")
+                return XCTFail("Expected the actual shared-store load failure, got \(error).")
             }
         }
 
@@ -163,5 +163,4 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
             )
         }
     }
-
 }
