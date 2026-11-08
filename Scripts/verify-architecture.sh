@@ -344,11 +344,28 @@ if entitlements != expected_entitlements:
         "from the provisioning profile"
     )
 
+# Preserve the existing rule for every other entitlement file; approval is
+# limited to the app target's declared CloudKit entitlement, not arbitrary files.
+icloud_configuration = re.compile(
+    r"\\b(?:com\\.apple\\.developer\\.(?:icloud|ubiquity)[A-Za-z0-9_.-]*|"
+    r"com\\.apple\\.iCloud|iCloud\\.[A-Za-z0-9_.-]+|CloudKit)\\b",
+    re.IGNORECASE,
+)
+for other_entitlements in Path(".").rglob("*.entitlements"):
+    if other_entitlements == entitlements_path:
+        continue
+    for line_number, line in enumerate(other_entitlements.read_text().splitlines(), start=1):
+        if icloud_configuration.search(line):
+            failures.append(
+                f"{other_entitlements}:{line_number}: unapproved iCloud/CloudKit capability"
+            )
+
 if project_text.count("CODE_SIGN_ENTITLEMENTS = yaHerd/yaHerd.entitlements;") != 2:
     failures.append("yaHerd.xcodeproj: Debug and Release app builds must use CloudKit entitlements")
 for capability in ("com.apple.iCloud", "com.apple.Push", "com.apple.BackgroundModes"):
-    if not re.search(rf"\b{re.escape(capability)}\s*=\s*\{{\s*enabled\s*=\s*1;", project_text):
-        failures.append(f"yaHerd.xcodeproj: missing enabled {capability} target capability")
+    enabled = re.findall(rf"\b{re.escape(capability)}\s*=\s*\{{\s*enabled\s*=\s*1;", project_text)
+    if len(enabled) != 1:
+        failures.append(f"yaHerd.xcodeproj: expected one enabled {capability} app capability")
 
 try:
     info_plist = plistlib.loads(Path("yaHerd/Info.plist").read_bytes())
