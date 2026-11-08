@@ -53,8 +53,8 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
             ))
             XCTAssertEqual(owned.name, "Owned Pasture")
             XCTAssertEqual(shared.name, "Shared Pasture")
-            XCTAssertTrue(coordinator.persistentStore(for: owned.objectID) === privateStore)
-            XCTAssertTrue(coordinator.persistentStore(for: shared.objectID) === sharedStore)
+            XCTAssertTrue(owned.objectID.persistentStore === privateStore)
+            XCTAssertTrue(shared.objectID.persistentStore === sharedStore)
         }
     }
 
