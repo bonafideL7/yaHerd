@@ -315,22 +315,48 @@ for path in Path("yaHerd").rglob("*.swift"):
                     f"{path}:{line_number}: CloudKit APIs must remain in the reviewed persistence boundary"
                 )
 
-# The source tree is not the only way to enable CloudKit: an Xcode capability or
-# provisioning entitlement can reintroduce iCloud persistence. Guard those
-# declarations without blocking unrelated capabilities (e.g. keychain access).
-icloud_configuration = re.compile(
-    r"\b(?:com\.apple\.developer\.(?:icloud|ubiquity)[A-Za-z0-9_.-]*|"
-    r"com\.apple\.iCloud|iCloud\.[A-Za-z0-9_.-]+|CloudKit)\b",
-    re.IGNORECASE,
-)
-configuration_files = [Path("yaHerd.xcodeproj/project.pbxproj")]
-configuration_files.extend(Path(".").rglob("*.entitlements"))
-for path in configuration_files:
-    for line_number, line in enumerate(path.read_text().splitlines(), start=1):
-        if icloud_configuration.search(line):
-            failures.append(
-                f"{path}:{line_number}: iCloud/CloudKit persistence capability is forbidden"
-            )
+# Capability configuration is intentionally limited to this app target and the
+# same container identifier used by the Core Data persistence boundary.
+entitlements_path = Path("yaHerd/yaHerd.entitlements")
+try:
+    entitlements = plistlib.loads(entitlements_path.read_bytes())
+except (OSError, ValueError, plistlib.InvalidFileException) as error:
+    failures.append(f"{entitlements_path}: cannot parse CloudKit entitlements: {error}")
+    entitlements = {}
+
+container_source = Path("yaHerd/Data/Persistence/CoreData/CoreDataPersistentContainer.swift").read_text()
+container_match = re.search(r'static let cloudKitContainerIdentifier = "([^"]+)"', container_source)
+if not container_match:
+    failures.append("CoreDataPersistentContainer: missing stable CloudKit container identifier")
+    container_id = ""
+else:
+    container_id = container_match.group(1)
+
+expected_entitlements = {
+    "com.apple.developer.icloud-container-identifiers": [container_id],
+    "com.apple.developer.icloud-services": ["CloudKit"],
+    "aps-environment": "development",
+}
+if entitlements != expected_entitlements:
+    failures.append(
+        f"{entitlements_path}: expected only the CloudKit container, CloudKit service, "
+        "and development APNs entitlement; Xcode selects the signed APNs environment "
+        "from the provisioning profile"
+    )
+
+if project_text.count("CODE_SIGN_ENTITLEMENTS = yaHerd/yaHerd.entitlements;") != 2:
+    failures.append("yaHerd.xcodeproj: Debug and Release app builds must use CloudKit entitlements")
+for capability in ("com.apple.iCloud", "com.apple.Push", "com.apple.BackgroundModes"):
+    if not re.search(rf"\b{re.escape(capability)}\s*=\s*\{{\s*enabled\s*=\s*1;", project_text):
+        failures.append(f"yaHerd.xcodeproj: missing enabled {capability} target capability")
+
+try:
+    info_plist = plistlib.loads(Path("yaHerd/Info.plist").read_bytes())
+except (OSError, ValueError, plistlib.InvalidFileException) as error:
+    failures.append(f"yaHerd/Info.plist: cannot parse remote notification mode: {error}")
+else:
+    if info_plist.get("UIBackgroundModes") != ["remote-notification"]:
+        failures.append("yaHerd/Info.plist: only the Remote notifications background mode is approved")
 
 # An unapproved remote persistence SDK can enter via Swift Package Manager
 # without using CloudKit APIs. Review both compiled package products and
