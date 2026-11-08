@@ -25,15 +25,15 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
 
         let writer = try assembly.contextFactory.makeWriteContext()
         try writer.performAndWait {
-            let privateHerd = makeHerd(
+            let privateHerd = Self.makeHerd(
                 id: privateHerdID, name: "Owned Herd", in: writer, store: privateStore
             )
-            let sharedHerd = makeHerd(
+            let sharedHerd = Self.makeHerd(
                 id: sharedHerdID, name: "Shared Herd", in: writer, store: sharedStore
             )
-            makePasture(id: pastureID, name: "Owned Pasture", herd: privateHerd,
+            Self.makePasture(id: pastureID, name: "Owned Pasture", herd: privateHerd,
                         in: writer, store: privateStore)
-            makePasture(id: pastureID, name: "Shared Pasture", herd: sharedHerd,
+            Self.makePasture(id: pastureID, name: "Shared Pasture", herd: sharedHerd,
                         in: writer, store: sharedStore)
             try writer.save()
         }
@@ -74,8 +74,8 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
 
         let writer = try assembly.contextFactory.makeWriteContext()
         try writer.performAndWait {
-            _ = makeHerd(id: herdID, name: "First", in: writer, store: privateStore)
-            _ = makeHerd(id: herdID, name: "Second", in: writer, store: sharedStore)
+            _ = Self.makeHerd(id: herdID, name: "First", in: writer, store: privateStore)
+            _ = Self.makeHerd(id: herdID, name: "Second", in: writer, store: sharedStore)
             try writer.save()
         }
 
@@ -92,7 +92,7 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
     }
 
     @discardableResult
-    private func makeHerd(
+    private static func makeHerd(
         id: UUID,
         name: String,
         in context: NSManagedObjectContext,
@@ -107,7 +107,7 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         return herd
     }
 
-    private func makePasture(
+    private static func makePasture(
         id: UUID,
         name: String,
         herd: CDHerd,
