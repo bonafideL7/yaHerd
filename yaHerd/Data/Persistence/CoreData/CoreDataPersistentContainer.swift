@@ -18,7 +18,7 @@ final class CoreDataPersistentContainer {
     private struct StoreLoadProgress {
         let continuation: CheckedContinuation<Void, Error>
         var remaining: Int
-        var firstFailure: CoreDataPersistenceError?
+        var firstFailure: CoreDataPersistenceError? = nil
     }
 
     private let container: NSPersistentContainer
