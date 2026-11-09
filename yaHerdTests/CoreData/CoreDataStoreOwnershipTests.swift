@@ -605,6 +605,71 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testFieldCheckSessionReadsUseOwningStoreWithCollidingApplicationIDs() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let coordinator = try XCTUnwrap(
+            assembly.contextFactory.makeReadContext().persistentStoreCoordinator
+        )
+        let privateStore = try XCTUnwrap(coordinator.persistentStores.first)
+        let sharedStore = try coordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType,
+            configurationName: nil,
+            at: harness.directoryURL.appendingPathComponent("yaHerd-test-shared.sqlite"),
+            options: nil
+        )
+        let privateHerdID = UUID()
+        let sharedHerdID = UUID()
+        let sessionID = UUID()
+
+        let writer = try assembly.contextFactory.makeWriteContext()
+        try writer.performAndWait {
+            let privateHerd = Self.makeHerd(
+                id: privateHerdID, name: "Private", in: writer, store: privateStore
+            )
+            let sharedHerd = Self.makeHerd(
+                id: sharedHerdID, name: "Shared", in: writer, store: sharedStore
+            )
+            let privateSession = CDFieldCheckSession(context: writer)
+            privateSession.id = sessionID
+            privateSession.herd = privateHerd
+            privateSession.startedAt = Date(timeIntervalSince1970: 100)
+            privateSession.notes = "Private field check"
+            privateSession.pastureNameSnapshot = "Private pasture"
+            writer.assign(privateSession, to: privateStore)
+
+            let sharedSession = CDFieldCheckSession(context: writer)
+            sharedSession.id = sessionID
+            sharedSession.herd = sharedHerd
+            sharedSession.startedAt = Date(timeIntervalSince1970: 200)
+            sharedSession.notes = "Shared field check"
+            sharedSession.pastureNameSnapshot = "Shared pasture"
+            writer.assign(sharedSession, to: sharedStore)
+            try writer.save()
+        }
+
+        let privateRepository = CoreDataFieldCheckRepository(
+            selection: AppCurrentHerdSelection(currentHerdID: privateHerdID),
+            assembly: assembly
+        )
+        let sharedRepository = CoreDataFieldCheckRepository(
+            selection: AppCurrentHerdSelection(currentHerdID: sharedHerdID),
+            assembly: assembly
+        )
+
+        XCTAssertEqual(try privateRepository.fetchSessions().map(\.id), [sessionID])
+        XCTAssertEqual(try sharedRepository.fetchSessions().map(\.id), [sessionID])
+        XCTAssertEqual(
+            try privateRepository.fetchSessionDetail(id: sessionID)?.notes,
+            "Private field check"
+        )
+        XCTAssertEqual(
+            try sharedRepository.fetchSessionDetail(id: sessionID)?.notes,
+            "Shared field check"
+        )
+    }
+
     @discardableResult
     private static func makeHerd(
         id: UUID,
