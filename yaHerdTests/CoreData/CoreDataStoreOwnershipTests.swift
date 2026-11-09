@@ -670,7 +670,6 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         )
     }
 
-
     @MainActor
     func testReferenceCatalogsReadFromOnlyTheSelectedHerdStore() async throws {
         let harness = try CoreDataPersistenceHarness()
@@ -752,6 +751,10 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
             XCTAssertEqual(statuses.map(\.id), [statusID])
             XCTAssertEqual(statuses.map(\.name), ["\(label) status"])
             XCTAssertEqual(try colorRepository.fetchColor(id: colorID)?.name, "\(label) color")
+            let allColors = try colorRepository.fetchColors()
+            XCTAssertEqual(allColors.filter { $0.id == colorID }.map(\.name), [
+                "\(label) color"
+            ])
             XCTAssertEqual(try templateRepository.fetchTemplates().map(\.name), [
                 "\(label) treatment"
             ])
