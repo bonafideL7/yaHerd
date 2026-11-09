@@ -216,7 +216,8 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
             }
 
             let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
-            request.predicate = NSPredicate(
+            try CoreDataLookup().scope(request, toHerd: herd, in: context)
+        request.predicate = NSPredicate(
                 format: "herd == %@ AND currentPasture == %@",
                 herd,
                 pasture
@@ -303,6 +304,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
         let request = NSFetchRequest<CDFieldCheckSession>(
             entityName: CDFieldCheckSession.coreDataEntityName
         )
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(
             format: "herd == %@ AND pastureIDSnapshot IN %@",
             herd,
@@ -334,6 +336,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
         }
 
         let survivorRequest = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
+        try CoreDataLookup().scope(survivorRequest, toHerd: herd, in: context)
         survivorRequest.predicate = NSPredicate(
             format: "herd == %@ AND currentPasture.id IN %@",
             herd,
