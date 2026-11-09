@@ -76,7 +76,16 @@ struct CoreDataLookup: Sendable {
             if let root = object as? CDHerd {
                 owningHerdID = root.objectID
             } else if let owned = object as? any CoreDataHerdOwnedManagedObject {
-                owningHerdID = owned.herd?.objectID
+                if let currentHerd = owned.herd {
+                    owningHerdID = currentHerd.objectID
+                } else if object.isDeleted,
+                          let previousHerd = object.committedValues(
+                              forKeys: ["herd"]
+                          )["herd"] as? CDHerd {
+                    owningHerdID = previousHerd.objectID
+                } else {
+                    owningHerdID = nil
+                }
             } else {
                 owningHerdID = nil
             }
