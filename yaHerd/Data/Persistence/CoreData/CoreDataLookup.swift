@@ -20,7 +20,9 @@ extension CoreDataApplicationIdentifiedManagedObject {
 
 // Herd ownership is declared in the Core Data model. Its stored relationship may be
 // temporarily nil while CloudKit imports related records.
-protocol CoreDataHerdOwnedManagedObject: CoreDataApplicationIdentifiedManagedObject {}
+protocol CoreDataHerdOwnedManagedObject: CoreDataApplicationIdentifiedManagedObject {
+    var herd: CDHerd? { get }
+}
 
 struct CoreDataLookup: Sendable {
     func herd(
@@ -52,6 +54,67 @@ struct CoreDataLookup: Sendable {
             return nil
         }
         return try owningStore(of: herd, in: context)
+    }
+
+    /// Validate the complete pending transaction against its selected Herd
+    /// before assigning inserted objects to that Herd's persistent store.
+    func prepareForSave(
+        herdID: UUID,
+        in context: NSManagedObjectContext
+    ) throws {
+        guard let herd = try herd(id: herdID, in: context) else {
+            throw HerdRepositoryError.missingHerd
+        }
+        let destination = try owningStore(of: herd, in: context)
+        let changedObjects = context.insertedObjects
+            .union(context.updatedObjects)
+            .union(context.deletedObjects)
+
+        func validateOwnership(_ object: NSManagedObject) throws {
+            let entity = object.entity.name ?? String(describing: type(of: object))
+            let owningHerdID: NSManagedObjectID?
+            if let root = object as? CDHerd {
+                owningHerdID = root.objectID
+            } else if let owned = object as? any CoreDataHerdOwnedManagedObject {
+                owningHerdID = owned.herd?.objectID
+            } else {
+                owningHerdID = nil
+            }
+            guard owningHerdID == herd.objectID else {
+                throw CoreDataPersistenceError.wrongHerdMutation(
+                    entity: entity, herdID: herdID
+                )
+            }
+            if let assignedStore = object.objectID.persistentStore {
+                guard assignedStore === destination else {
+                    throw CoreDataPersistenceError.wrongStoreMutation(
+                        entity: entity, herdID: herdID
+                    )
+                }
+            } else if !object.isInserted {
+                throw CoreDataPersistenceError.wrongStoreMutation(
+                    entity: entity, herdID: herdID
+                )
+            }
+        }
+
+        for object in changedObjects {
+            try validateOwnership(object)
+            // A child can have the correct Herd relationship but still refer to
+            // an animal, pasture, group, or session owned by another Herd.
+            // Inspect to-one links only; walking to-many inverse collections
+            // would fault entire Herd graphs during common single-row saves.
+            for relationship in object.entity.relationshipsByName.values
+            where !relationship.isToMany {
+                if let relatedObject = object.value(forKey: relationship.name) as? NSManagedObject {
+                    try validateOwnership(relatedObject)
+                }
+            }
+        }
+
+        for object in context.insertedObjects {
+            context.assign(object, to: destination)
+        }
     }
 
     private func owningStore(

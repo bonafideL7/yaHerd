@@ -7,6 +7,8 @@ enum CoreDataPersistenceError: LocalizedError, Equatable {
     case duplicateApplicationID(entity: String, id: UUID, herdID: UUID?)
     case missingApplicationID(entity: String)
     case unresolvedHerdStore(id: UUID)
+    case wrongHerdMutation(entity: String, herdID: UUID)
+    case wrongStoreMutation(entity: String, herdID: UUID)
     case tagColorMaterializationInProgress(id: UUID, herdID: UUID)
     case tagColorDefaultMaterializationInProgress(herdID: UUID)
     case readOnlyStore
@@ -29,6 +31,10 @@ enum CoreDataPersistenceError: LocalizedError, Equatable {
             return "An imported \(entity) has no application UUID."
         case let .unresolvedHerdStore(id):
             return "The persistent store owning Herd \(id.uuidString) could not be resolved."
+        case let .wrongHerdMutation(entity, herdID):
+            return "The pending \(entity) change does not belong to selected Herd \(herdID.uuidString)."
+        case let .wrongStoreMutation(entity, herdID):
+            return "The pending \(entity) change belongs to a different persistent store than Herd \(herdID.uuidString)."
         case let .tagColorMaterializationInProgress(id, herdID):
             return "Tag color \(id.uuidString) is already being materialized in Herd \(herdID.uuidString). Retry the change after the in-flight transaction completes."
         case let .tagColorDefaultMaterializationInProgress(herdID):

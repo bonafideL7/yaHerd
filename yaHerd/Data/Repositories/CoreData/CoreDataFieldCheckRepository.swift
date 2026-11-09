@@ -900,6 +900,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
         let animalWriteBoundary = self.animalWriteBoundary
         do {
             let result = try await transactionExecutor.performWrite(
+                herdID: herdID,
                 beforeSave: beforeSave,
                 afterTransaction: {
                     animalWriteBoundary.releaseFieldCheck()

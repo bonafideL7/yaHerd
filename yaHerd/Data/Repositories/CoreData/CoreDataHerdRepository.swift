@@ -64,7 +64,7 @@ final class CoreDataHerdRepository: HerdRepository {
 
         let mutationDate = Date()
         let lookup = self.lookup
-        return try await transactionExecutor.performWrite(beforeSave: beforeSave) { context in
+        return try await transactionExecutor.performWrite(herdID: herdID, beforeSave: beforeSave) { context in
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }

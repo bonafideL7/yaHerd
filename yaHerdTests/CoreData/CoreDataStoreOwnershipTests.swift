@@ -91,6 +91,279 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         }
     }
 
+    func testHerdQualifiedTransactionAssignsNewChildToTheSharedStore() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let coordinator = try XCTUnwrap(
+            assembly.contextFactory.makeReadContext().persistentStoreCoordinator
+        )
+        let privateStore = try XCTUnwrap(coordinator.persistentStores.first)
+        let sharedStore = try coordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType,
+            configurationName: nil,
+            at: harness.directoryURL.appendingPathComponent("yaHerd-test-shared.sqlite"),
+            options: nil
+        )
+        let privateHerdID = UUID()
+        let sharedHerdID = UUID()
+        let sharedPastureID = UUID()
+
+        let seedContext = try assembly.contextFactory.makeWriteContext()
+        try seedContext.performAndWait {
+            _ = Self.makeHerd(
+                id: privateHerdID, name: "Private", in: seedContext, store: privateStore
+            )
+            _ = Self.makeHerd(
+                id: sharedHerdID, name: "Shared", in: seedContext, store: sharedStore
+            )
+            try seedContext.save()
+        }
+
+        try await assembly.transactionExecutor.performWrite(herdID: sharedHerdID) { context in
+            let herd = try XCTUnwrap(CoreDataLookup().herd(id: sharedHerdID, in: context))
+            let pasture = CDPasture(context: context)
+            pasture.id = sharedPastureID
+            pasture.name = "Shared Pasture"
+            pasture.sortOrder = 0
+            pasture.herd = herd
+        }
+
+        let readContext = assembly.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            let pasture = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDPasture.self,
+                id: sharedPastureID,
+                herdID: sharedHerdID,
+                in: readContext
+            ))
+            XCTAssertTrue(pasture.objectID.persistentStore === sharedStore)
+
+            let privateRequest = NSFetchRequest<CDPasture>(
+                entityName: CDPasture.coreDataEntityName
+            )
+            privateRequest.predicate = NSPredicate(
+                format: "id == %@", sharedPastureID as NSUUID
+            )
+            privateRequest.affectedStores = [privateStore]
+            XCTAssertEqual(try readContext.count(for: privateRequest), 0)
+        }
+    }
+
+    func testHerdQualifiedTransactionRejectsForeignHerdChangesAndRollsBack() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let coordinator = try XCTUnwrap(
+            assembly.contextFactory.makeReadContext().persistentStoreCoordinator
+        )
+        let privateStore = try XCTUnwrap(coordinator.persistentStores.first)
+        let privateHerdID = UUID()
+        let foreignHerdID = UUID()
+        let rejectedPastureID = UUID()
+
+        let seedContext = try assembly.contextFactory.makeWriteContext()
+        try seedContext.performAndWait {
+            _ = Self.makeHerd(
+                id: privateHerdID, name: "Private", in: seedContext, store: privateStore
+            )
+            _ = Self.makeHerd(
+                id: foreignHerdID, name: "Foreign", in: seedContext, store: privateStore
+            )
+            try seedContext.save()
+        }
+
+        do {
+            try await assembly.transactionExecutor.performWrite(herdID: privateHerdID) { context in
+                let foreignHerd = try XCTUnwrap(
+                    CoreDataLookup().herd(id: foreignHerdID, in: context)
+                )
+                foreignHerd.name = "Should Roll Back"
+                let pasture = CDPasture(context: context)
+                pasture.id = rejectedPastureID
+                pasture.name = "Foreign Child"
+                pasture.sortOrder = 0
+                pasture.herd = foreignHerd
+            }
+            XCTFail("The write must not commit objects owned by another Herd.")
+        } catch let error as CoreDataPersistenceError {
+            guard case let .wrongHerdMutation(_, expectedHerdID) = error else {
+                return XCTFail("Expected wrongHerdMutation, got \(error).")
+            }
+            XCTAssertEqual(expectedHerdID, privateHerdID)
+        }
+
+        let readContext = assembly.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            XCTAssertEqual(
+                try CoreDataLookup().herd(id: foreignHerdID, in: readContext)?.name,
+                "Foreign"
+            )
+            XCTAssertNil(try CoreDataLookup().herdOwned(
+                CDPasture.self,
+                id: rejectedPastureID,
+                herdID: foreignHerdID,
+                in: readContext
+            ))
+        }
+    }
+
+    func testHerdQualifiedTransactionRejectsAnExplicitForeignStoreAssignment() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let coordinator = try XCTUnwrap(
+            assembly.contextFactory.makeReadContext().persistentStoreCoordinator
+        )
+        let privateStore = try XCTUnwrap(coordinator.persistentStores.first)
+        let sharedStore = try coordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType,
+            configurationName: nil,
+            at: harness.directoryURL.appendingPathComponent("yaHerd-test-shared.sqlite"),
+            options: nil
+        )
+        let sharedURL = try XCTUnwrap(sharedStore.url)
+        let privateHerdID = UUID()
+        let rejectedPastureID = UUID()
+
+        let seed = try assembly.contextFactory.makeWriteContext()
+        try seed.performAndWait {
+            _ = Self.makeHerd(
+                id: privateHerdID,
+                name: "Private",
+                in: seed,
+                store: privateStore
+            )
+            try seed.save()
+        }
+
+        do {
+            try await assembly.transactionExecutor.performWrite(herdID: privateHerdID) { context in
+                let herd = try XCTUnwrap(
+                    CoreDataLookup().herd(id: privateHerdID, in: context)
+                )
+                let pasture = CDPasture(context: context)
+                pasture.id = rejectedPastureID
+                pasture.name = "Wrong Store"
+                pasture.sortOrder = 0
+                pasture.herd = herd
+                let foreignStore = try XCTUnwrap(
+                    context.persistentStoreCoordinator?.persistentStores.first {
+                        $0.url == sharedURL
+                    }
+                )
+                context.assign(pasture, to: foreignStore)
+            }
+            XCTFail("Explicitly assigning a private Herd child into the shared store must fail.")
+        } catch let error as CoreDataPersistenceError {
+            guard case .wrongStoreMutation = error else {
+                return XCTFail("Expected wrongStoreMutation, got \(error).")
+            }
+        }
+
+        let read = assembly.contextFactory.makeReadContext()
+        try read.performAndWait {
+            XCTAssertNil(try CoreDataLookup().herdOwned(
+                CDPasture.self,
+                id: rejectedPastureID,
+                herdID: privateHerdID,
+                in: read
+            ))
+        }
+    }
+
+    func testHerdQualifiedTransactionRejectsRelatedRecordFromAnotherHerd() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let herdAID = UUID()
+        let herdBID = UUID()
+        let groupBID = UUID()
+        let rejectedPastureID = UUID()
+
+        let seed = try assembly.contextFactory.makeWriteContext()
+        try seed.performAndWait {
+            let herdA = CDHerd(context: seed)
+            herdA.id = herdAID
+            herdA.name = "Herd A"
+            herdA.createdAt = Date(timeIntervalSince1970: 100)
+            herdA.updatedAt = Date(timeIntervalSince1970: 100)
+
+            let herdB = CDHerd(context: seed)
+            herdB.id = herdBID
+            herdB.name = "Herd B"
+            herdB.createdAt = Date(timeIntervalSince1970: 100)
+            herdB.updatedAt = Date(timeIntervalSince1970: 100)
+
+            let groupB = CDPastureGroup(context: seed)
+            groupB.id = groupBID
+            groupB.name = "Foreign Group"
+            groupB.grazeDays = 0
+            groupB.restDays = 0
+            groupB.herd = herdB
+            try seed.save()
+        }
+
+        do {
+            try await assembly.transactionExecutor.performWrite(herdID: herdAID) { context in
+                let herdA = try XCTUnwrap(CoreDataLookup().herd(id: herdAID, in: context))
+                let foreignGroup = try XCTUnwrap(CoreDataLookup().herdOwned(
+                    CDPastureGroup.self,
+                    id: groupBID,
+                    herdID: herdBID,
+                    in: context
+                ))
+                let pasture = CDPasture(context: context)
+                pasture.id = rejectedPastureID
+                pasture.name = "Invalid Relationship"
+                pasture.sortOrder = 0
+                pasture.herd = herdA
+                pasture.group = foreignGroup
+            }
+            XCTFail("A selected Herd cannot link to another Herd's group.")
+        } catch let error as CoreDataPersistenceError {
+            guard case .wrongHerdMutation = error else {
+                return XCTFail("Expected wrongHerdMutation, got \(error).")
+            }
+        }
+
+        let read = assembly.contextFactory.makeReadContext()
+        try read.performAndWait {
+            XCTAssertNil(try CoreDataLookup().herdOwned(
+                CDPasture.self,
+                id: rejectedPastureID,
+                herdID: herdAID,
+                in: read
+            ))
+            XCTAssertNotNil(try CoreDataLookup().herdOwned(
+                CDPastureGroup.self,
+                id: groupBID,
+                herdID: herdBID,
+                in: read
+            ))
+        }
+    }
+
+    func testHerdQualifiedTransactionRefusesUnknownHerdWithoutPersistingInsert() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let unknownHerdID = UUID()
+        let rejectedHerdID = UUID()
+
+        do {
+            try await assembly.transactionExecutor.performWrite(herdID: unknownHerdID) { context in
+                let herd = CDHerd(context: context)
+                herd.id = rejectedHerdID
+                herd.name = "Unscoped Root"
+                herd.createdAt = Date(timeIntervalSince1970: 100)
+                herd.updatedAt = Date(timeIntervalSince1970: 100)
+            }
+            XCTFail("An unknown selected Herd must prevent committing a new root.")
+        } catch {
+            XCTAssertTrue(error is HerdRepositoryError)
+        }
+
+        let readContext = assembly.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            XCTAssertNil(try CoreDataLookup().herd(id: rejectedHerdID, in: readContext))
+        }
+    }
+
     @discardableResult
     private static func makeHerd(
         id: UUID,

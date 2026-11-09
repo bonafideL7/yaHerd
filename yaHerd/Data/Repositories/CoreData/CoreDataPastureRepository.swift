@@ -386,6 +386,7 @@ final class CoreDataPastureRepository:
                 try Self.validateLinkedGroupOwnership(herd: herd, in: context)
                 let result = try operation(context, herd)
                 if context.hasChanges {
+                    try lookup.prepareForSave(herdID: herdID, in: context)
                     do {
                         try context.save()
                     } catch {
