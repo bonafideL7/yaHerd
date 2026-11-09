@@ -1,3 +1,4 @@
+@preconcurrency import CoreData
 import Dispatch
 import Foundation
 import Synchronization
@@ -383,6 +384,28 @@ final class CoreDataPersistenceAssembly {
 
     static func load(storeURL: URL, accessMode: CoreDataStoreAccessMode = .readWrite) async throws -> CoreDataPersistenceAssembly {
         CoreDataPersistenceAssembly(persistence: try await CoreDataPersistentContainer.load(storeURL: storeURL, accessMode: accessMode))
+    }
+
+    /// Stage 2 two-store assembly. App startup remains local-only until signed
+    /// CloudKit schema validation and Herd selection are ready.
+    static func loadCloudKit(storeURL: URL) async throws -> CoreDataPersistenceAssembly {
+        try await loadCloudKit(
+            storeDescriptions: CoreDataPersistentContainer.cloudKitStoreDescriptions(
+                privateStoreURL: storeURL
+            )
+        )
+    }
+
+    /// Allows the same production Core Data assembly to exercise both SQLite
+    /// stores in unsigned tests with CloudKit mirroring disabled.
+    static func loadCloudKit(
+        storeDescriptions: [NSPersistentStoreDescription]
+    ) async throws -> CoreDataPersistenceAssembly {
+        CoreDataPersistenceAssembly(
+            persistence: try await CoreDataPersistentContainer.loadCloudKit(
+                storeDescriptions: storeDescriptions
+            )
+        )
     }
 
     static func inMemory() async throws -> CoreDataPersistenceAssembly {
