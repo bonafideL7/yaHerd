@@ -773,6 +773,91 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         }
     }
 
+
+    @MainActor
+    func testSampleSeedKeepsPrivateHerdIntactWhenSeedingSharedStore() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let coordinator = try XCTUnwrap(
+            assembly.contextFactory.makeReadContext().persistentStoreCoordinator
+        )
+        let privateStore = try XCTUnwrap(coordinator.persistentStores.first)
+        let sharedStore = try coordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType,
+            configurationName: nil,
+            at: harness.directoryURL.appendingPathComponent("yaHerd-seed-shared.sqlite"),
+            options: nil
+        )
+        let privateHerdID = UUID()
+        let sharedHerdID = UUID()
+        let privatePastureID = UUID()
+
+        let initial = try assembly.contextFactory.makeWriteContext()
+        try initial.performAndWait {
+            let privateHerd = Self.makeHerd(
+                id: privateHerdID, name: "Private", in: initial, store: privateStore
+            )
+            _ = Self.makeHerd(
+                id: sharedHerdID, name: "Shared", in: initial, store: sharedStore
+            )
+            Self.makePasture(
+                id: privatePastureID, name: "Keep private pasture", herd: privateHerd,
+                in: initial, store: privateStore
+            )
+            try initial.save()
+        }
+
+        let preflight = assembly.contextFactory.makeReadContext()
+        try preflight.performAndWait {
+            let lookup = CoreDataLookup()
+            let privateHerd = try XCTUnwrap(lookup.herd(id: privateHerdID, in: preflight))
+            let sharedHerd = try XCTUnwrap(lookup.herd(id: sharedHerdID, in: preflight))
+            XCTAssertFalse(try CoreDataSampleHerdFactory.isEmpty(herd: privateHerd, in: preflight))
+            XCTAssertTrue(try CoreDataSampleHerdFactory.isEmpty(herd: sharedHerd, in: preflight))
+        }
+
+        let inserted = try await assembly.transactionExecutor.performWrite(
+            herdID: sharedHerdID
+        ) { context in
+            let herd = try XCTUnwrap(CoreDataLookup().herd(id: sharedHerdID, in: context))
+            return try CoreDataSampleHerdFactory.insert(
+                size: .compact, herd: herd, in: context
+            )
+        }
+        XCTAssertTrue(inserted)
+
+        let verification = assembly.contextFactory.makeReadContext()
+        try verification.performAndWait {
+            let lookup = CoreDataLookup()
+            let privatePasture = try XCTUnwrap(lookup.herdOwned(
+                CDPasture.self,
+                id: privatePastureID,
+                herdID: privateHerdID,
+                in: verification
+            ))
+            XCTAssertTrue(privatePasture.objectID.persistentStore === privateStore)
+            XCTAssertEqual(privatePasture.name, "Keep private pasture")
+
+            let sharedAnimals = NSFetchRequest<CDAnimal>(
+                entityName: CDAnimal.coreDataEntityName
+            )
+            sharedAnimals.affectedStores = [sharedStore]
+            sharedAnimals.predicate = NSPredicate(
+                format: "herd.id == %@", sharedHerdID as NSUUID
+            )
+            XCTAssertEqual(
+                try verification.count(for: sharedAnimals),
+                CoreDataSampleHerdFactory.Size.compact.animalCount
+            )
+
+            let privateAnimals = NSFetchRequest<CDAnimal>(
+                entityName: CDAnimal.coreDataEntityName
+            )
+            privateAnimals.affectedStores = [privateStore]
+            XCTAssertEqual(try verification.count(for: privateAnimals), 0)
+        }
+    }
+
     @discardableResult
     private static func makeHerd(
         id: UUID,
