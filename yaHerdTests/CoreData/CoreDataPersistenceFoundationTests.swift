@@ -199,6 +199,70 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         }
     }
 
+    func testAnimalAggregateQueriesStayInSelectedStoreWithCollidingUUIDs() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let coordinator = try XCTUnwrap(
+            assembly.contextFactory.makeReadContext().persistentStoreCoordinator
+        )
+        let privateStore = try XCTUnwrap(coordinator.persistentStores.first)
+        let sharedStore = try coordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType,
+            configurationName: nil,
+            at: harness.directoryURL.appendingPathComponent("yaHerd-test-shared.sqlite"),
+            options: nil
+        )
+        let privateHerdID = UUID()
+        let sharedHerdID = UUID()
+        let animalID = UUID()
+
+        let writer = try assembly.contextFactory.makeWriteContext()
+        try writer.performAndWait {
+            let privateHerd = Self.makeHerd(
+                id: privateHerdID, name: "Private", in: writer
+            )
+            writer.assign(privateHerd, to: privateStore)
+            let sharedHerd = Self.makeHerd(
+                id: sharedHerdID, name: "Shared", in: writer
+            )
+            writer.assign(sharedHerd, to: sharedStore)
+
+            let privateAnimal = try Self.makeAnimal(
+                id: animalID, name: "Private Animal", herd: privateHerd, in: writer
+            )
+            writer.assign(privateAnimal, to: privateStore)
+            let sharedAnimal = try Self.makeAnimal(
+                id: animalID, name: "Shared Animal", herd: sharedHerd, in: writer
+            )
+            writer.assign(sharedAnimal, to: sharedStore)
+            try writer.save()
+        }
+
+        let read = assembly.contextFactory.makeReadContext()
+        try read.performAndWait {
+            let lookup = CoreDataLookup()
+            let privateHerd = try XCTUnwrap(lookup.herd(id: privateHerdID, in: read))
+            let sharedHerd = try XCTUnwrap(lookup.herd(id: sharedHerdID, in: read))
+
+            let privateAnimals = try CoreDataAnimalMutation.fetchAnimals(
+                herd: privateHerd, in: read
+            )
+            let sharedAnimals = try CoreDataAnimalMutation.fetchAnimals(
+                herd: sharedHerd, in: read
+            )
+            XCTAssertEqual(privateAnimals.map(\.name), ["Private Animal"])
+            XCTAssertEqual(sharedAnimals.map(\.name), ["Shared Animal"])
+            XCTAssertTrue(privateAnimals.first?.objectID.persistentStore === privateStore)
+            XCTAssertTrue(sharedAnimals.first?.objectID.persistentStore === sharedStore)
+            XCTAssertNoThrow(try CoreDataAnimalMutation.validateLinkedStatusReferences(
+                herd: privateHerd, in: read
+            ))
+            XCTAssertNoThrow(try CoreDataAnimalMutation.validateLinkedAnimalTags(
+                herd: sharedHerd, in: read
+            ))
+        }
+    }
+
     func testHerdOwnedLookupScopesSameApplicationUUIDByHerd() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let herdAID = UUID()
