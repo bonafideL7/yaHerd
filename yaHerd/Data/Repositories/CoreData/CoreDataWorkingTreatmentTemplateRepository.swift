@@ -59,10 +59,10 @@ final class CoreDataWorkingTreatmentTemplateRepository:
         }
         let context = contextFactory.makeReadContext()
         return try context.performAndWait {
-            guard try lookup.herd(id: herdID, in: context) != nil else {
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
-            try Self.validateNoOrphanedTemplates(herdID: herdID, in: context)
+            try Self.validateNoOrphanedTemplates(herd: herd, in: context)
             guard let template = try lookup.herdOwned(
                 CDWorkingTreatmentTemplate.self,
                 id: id,
@@ -189,7 +189,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
                 guard let herd = try lookup.herd(id: herdID, in: context) else {
                     throw HerdRepositoryError.missingHerd
                 }
-                try Self.validateNoOrphanedTemplates(herdID: herdID, in: context)
+                try Self.validateNoOrphanedTemplates(herd: herd, in: context)
                 let result = try operation(context, herd)
                 if context.hasChanges {
                     try beforeSave?(context)
@@ -217,13 +217,18 @@ final class CoreDataWorkingTreatmentTemplateRepository:
     // ownership until its Herd link arrives. Block template operations rather than
     // silently hiding imported templates or creating colliding local definitions.
     nonisolated static func validateNoOrphanedTemplates(
-        herdID: UUID,
+        herd: CDHerd,
         in context: NSManagedObjectContext
     ) throws {
+        let herdID = try herd.requiredID()
+        guard let store = try CoreDataLookup().store(forHerdID: herdID, in: context) else {
+            throw HerdRepositoryError.missingHerd
+        }
         let request = NSFetchRequest<CDWorkingTreatmentTemplate>(
             entityName: CDWorkingTreatmentTemplate.coreDataEntityName
         )
         request.predicate = NSPredicate(format: "herd == nil")
+        request.affectedStores = [store]
         request.fetchLimit = 1
         if try !context.fetch(request).isEmpty {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
@@ -238,7 +243,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
         herd: CDHerd,
         in context: NSManagedObjectContext
     ) throws -> [CDWorkingTreatmentTemplate] {
-        try validateNoOrphanedTemplates(herdID: (try herd.requiredID()), in: context)
+        try validateNoOrphanedTemplates(herd: herd, in: context)
         let request = NSFetchRequest<CDWorkingTreatmentTemplate>(
             entityName: CDWorkingTreatmentTemplate.coreDataEntityName
         )
