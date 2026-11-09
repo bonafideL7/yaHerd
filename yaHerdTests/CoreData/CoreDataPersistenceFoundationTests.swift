@@ -334,6 +334,78 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testWorkingSessionReadsUseSelectedPrivateOrSharedStore() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let coordinator = try XCTUnwrap(
+            assembly.contextFactory.makeReadContext().persistentStoreCoordinator
+        )
+        let privateStore = try XCTUnwrap(coordinator.persistentStores.first)
+        let sharedStore = try coordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType,
+            configurationName: nil,
+            at: harness.directoryURL.appendingPathComponent("yaHerd-test-shared.sqlite"),
+            options: nil
+        )
+        let privateHerdID = UUID()
+        let sharedHerdID = UUID()
+        let sessionID = UUID()
+        let sourcePastureID = UUID()
+
+        let writer = try assembly.contextFactory.makeWriteContext()
+        try writer.performAndWait {
+            let privateHerd = Self.makeHerd(id: privateHerdID, name: "Private", in: writer)
+            writer.assign(privateHerd, to: privateStore)
+            let sharedHerd = Self.makeHerd(id: sharedHerdID, name: "Shared", in: writer)
+            writer.assign(sharedHerd, to: sharedStore)
+            let privatePasture = Self.makePasture(
+                id: sourcePastureID, name: "Private Pasture", herd: privateHerd, in: writer
+            )
+            writer.assign(privatePasture, to: privateStore)
+            let sharedPasture = Self.makePasture(
+                id: sourcePastureID, name: "Shared Pasture", herd: sharedHerd, in: writer
+            )
+            writer.assign(sharedPasture, to: sharedStore)
+            let privateSession = Self.makeWorkingSession(
+                id: sessionID, pasture: privatePasture, herd: privateHerd,
+                date: Date(timeIntervalSince1970: 100), in: writer
+            )
+            writer.assign(privateSession, to: privateStore)
+            let sharedSession = Self.makeWorkingSession(
+                id: sessionID, pasture: sharedPasture, herd: sharedHerd,
+                date: Date(timeIntervalSince1970: 200), in: writer
+            )
+            writer.assign(sharedSession, to: sharedStore)
+            try writer.save()
+        }
+
+        let privateRepository = CoreDataWorkingRepository(
+            selection: AppCurrentHerdSelection(currentHerdID: privateHerdID),
+            assembly: assembly
+        )
+        let sharedRepository = CoreDataWorkingRepository(
+            selection: AppCurrentHerdSelection(currentHerdID: sharedHerdID),
+            assembly: assembly
+        )
+        XCTAssertEqual(
+            try privateRepository.fetchSessions().map(\.sourcePastureName),
+            ["Private Pasture"]
+        )
+        XCTAssertEqual(
+            try sharedRepository.fetchSessions().map(\.sourcePastureName),
+            ["Shared Pasture"]
+        )
+        XCTAssertEqual(
+            try privateRepository.fetchSessionDetail(id: sessionID)?.sourcePastureName,
+            "Private Pasture"
+        )
+        XCTAssertEqual(
+            try sharedRepository.fetchSessionDetail(id: sessionID)?.sourcePastureName,
+            "Shared Pasture"
+        )
+    }
+
     func testHerdOwnedLookupScopesSameApplicationUUIDByHerd() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let herdAID = UUID()

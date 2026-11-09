@@ -87,6 +87,7 @@ final class CoreDataWorkingRepository:
             let request = NSFetchRequest<CDWorkingSession>(
                 entityName: CDWorkingSession.coreDataEntityName
             )
+            try CoreDataLookup().scope(request, toHerd: herd, in: context)
             request.predicate = NSPredicate(format: "herd == %@", herd)
             let sessions = try context.fetch(request)
             try CoreDataAnimalMutation.validateUniqueApplicationIDs(
@@ -890,6 +891,7 @@ final class CoreDataWorkingRepository:
             let request = NSFetchRequest<CDTagColorDefinition>(
                 entityName: CDTagColorDefinition.coreDataEntityName
             )
+            try CoreDataLookup().scope(request, toHerd: herd, in: context)
             request.predicate = NSPredicate(
                 format: "herd == %@ AND isHidden == NO AND isDefault == YES",
                 herd
@@ -918,6 +920,7 @@ final class CoreDataWorkingRepository:
         let queueRequest = NSFetchRequest<CDWorkingQueueItem>(
             entityName: CDWorkingQueueItem.coreDataEntityName
         )
+        try CoreDataLookup().scope(queueRequest, toHerd: herd, in: context)
         queueRequest.predicate = NSPredicate(format: "herd == %@", herd)
         let queueItems = try context.fetch(queueRequest)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
@@ -931,6 +934,7 @@ final class CoreDataWorkingRepository:
         let treatmentRequest = NSFetchRequest<CDWorkingTreatmentRecord>(
             entityName: CDWorkingTreatmentRecord.coreDataEntityName
         )
+        try CoreDataLookup().scope(treatmentRequest, toHerd: herd, in: context)
         treatmentRequest.predicate = NSPredicate(format: "herd == %@", herd)
         let treatmentRecords = try context.fetch(treatmentRequest)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
@@ -947,6 +951,7 @@ final class CoreDataWorkingRepository:
         let healthRequest = NSFetchRequest<CDHealthRecord>(
             entityName: CDHealthRecord.coreDataEntityName
         )
+        try CoreDataLookup().scope(healthRequest, toHerd: herd, in: context)
         healthRequest.predicate = NSPredicate(format: "herd == %@", herd)
         let healthRecords = try context.fetch(healthRequest)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
@@ -962,6 +967,7 @@ final class CoreDataWorkingRepository:
         let pregnancyRequest = NSFetchRequest<CDPregnancyCheck>(
             entityName: CDPregnancyCheck.coreDataEntityName
         )
+        try CoreDataLookup().scope(pregnancyRequest, toHerd: herd, in: context)
         pregnancyRequest.predicate = NSPredicate(format: "herd == %@", herd)
         let pregnancyChecks = try context.fetch(pregnancyRequest)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
