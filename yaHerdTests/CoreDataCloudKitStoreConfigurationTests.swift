@@ -261,6 +261,7 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
             storeURL: harness.storeURL,
             mirroringEnabled: false
         )
+        let privateURL = harness.storeURL
         let read = reopened.contextFactory.makeReadContext()
         try read.performAndWait {
             let lookup = CoreDataLookup()
@@ -278,7 +279,7 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
             ))
             XCTAssertEqual(owned.name, "Private Pasture")
             XCTAssertEqual(shared.name, "Shared Pasture")
-            XCTAssertEqual(owned.objectID.persistentStore?.url, harness.storeURL)
+            XCTAssertEqual(owned.objectID.persistentStore?.url, privateURL)
             XCTAssertEqual(shared.objectID.persistentStore?.url, sharedURL)
             XCTAssertNil(try lookup.herdOwned(
                 CDPasture.self,
