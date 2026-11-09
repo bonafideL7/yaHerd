@@ -55,6 +55,22 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
             XCTAssertEqual(shared.name, "Shared Pasture")
             XCTAssertTrue(owned.objectID.persistentStore === privateStore)
             XCTAssertTrue(shared.objectID.persistentStore === sharedStore)
+
+            let unqualifiedRequest = NSFetchRequest<CDPasture>(
+                entityName: CDPasture.coreDataEntityName
+            )
+            unqualifiedRequest.predicate = NSPredicate(
+                format: "id == %@", pastureID as NSUUID
+            )
+            let privateHerd = try XCTUnwrap(lookup.herd(id: privateHerdID, in: reader))
+            try lookup.scope(unqualifiedRequest, toHerd: privateHerd, in: reader)
+            XCTAssertTrue(unqualifiedRequest.affectedStores?.first === privateStore)
+            XCTAssertEqual(try reader.fetch(unqualifiedRequest).map(\.name), ["Owned Pasture"])
+
+            let sharedHerd = try XCTUnwrap(lookup.herd(id: sharedHerdID, in: reader))
+            try lookup.scope(unqualifiedRequest, toHerd: sharedHerd, in: reader)
+            XCTAssertTrue(unqualifiedRequest.affectedStores?.first === sharedStore)
+            XCTAssertEqual(try reader.fetch(unqualifiedRequest).map(\.name), ["Shared Pasture"])
         }
     }
 
