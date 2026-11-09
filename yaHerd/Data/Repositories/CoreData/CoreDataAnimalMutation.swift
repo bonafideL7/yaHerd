@@ -156,6 +156,22 @@ enum CoreDataAnimalMutation {
         }
     }
 
+    private static func validationStore(
+        for herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) throws -> NSPersistentStore? {
+        if herd.isInserted {
+            return herd.objectID.persistentStore
+        }
+        guard let store = try CoreDataLookup().store(
+            forHerdID: (try herd.requiredID()),
+            in: context
+        ) else {
+            throw HerdRepositoryError.missingHerd
+        }
+        return store
+    }
+
     // A record may import through its Animal or Working Session before the Herd link.
     // Reject incomplete scoped projections and writes until ownership arrives.
     static func validateUnownedImportedAnimals(
@@ -166,6 +182,7 @@ enum CoreDataAnimalMutation {
         let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
         request.predicate = NSPredicate(format: "herd == nil")
         request.fetchLimit = 1
+        request.affectedStores = try validationStore(for: herd, in: context).map { [$0] }
         if let animal = try context.fetch(request).first {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDAnimal.coreDataEntityName,
@@ -185,6 +202,7 @@ enum CoreDataAnimalMutation {
         )
         request.predicate = NSPredicate(format: "herd == nil")
         request.fetchLimit = 1
+        request.affectedStores = try validationStore(for: herd, in: context).map { [$0] }
         if let pasture = try context.fetch(request).first {
             throw CoreDataReadModelError.invalidHerdOwnership(
                 entity: CDPasture.coreDataEntityName,
@@ -199,12 +217,14 @@ enum CoreDataAnimalMutation {
     ) throws {
         try validateUnownedImportedPastures(herd: herd, in: context)
         try validateUnownedImportedAnimals(herd: herd, in: context)
+        let store = try validationStore(for: herd, in: context)
         // CloudKit can import a Working session through a Pasture, Animal or
         // historical child before its direct Herd relationship. Never hide it
         // behind Herd-qualified queries or permit destructive edits.
         let sessionRequest = NSFetchRequest<CDWorkingSession>(
             entityName: CDWorkingSession.coreDataEntityName
         )
+        sessionRequest.affectedStores = store.map { [$0] }
         sessionRequest.predicate = NSPredicate(
             format: """
             herd == nil AND (
@@ -259,6 +279,7 @@ enum CoreDataAnimalMutation {
         let statusRequest = NSFetchRequest<CDStatusRecord>(
             entityName: CDStatusRecord.coreDataEntityName
         )
+        statusRequest.affectedStores = store.map { [$0] }
         statusRequest.predicate = NSPredicate(
             format: "herd == nil AND animal.herd == %@", herd
         )
@@ -273,6 +294,7 @@ enum CoreDataAnimalMutation {
         let healthRequest = NSFetchRequest<CDHealthRecord>(
             entityName: CDHealthRecord.coreDataEntityName
         )
+        healthRequest.affectedStores = store.map { [$0] }
         healthRequest.predicate = NSPredicate(
             format: "herd == nil AND (animal.herd == %@ OR workingSession.herd == %@)",
             herd, herd
@@ -288,6 +310,7 @@ enum CoreDataAnimalMutation {
         let pregnancyRequest = NSFetchRequest<CDPregnancyCheck>(
             entityName: CDPregnancyCheck.coreDataEntityName
         )
+        pregnancyRequest.affectedStores = store.map { [$0] }
         pregnancyRequest.predicate = NSPredicate(
             format: "herd == nil AND (animal.herd == %@ OR workingSession.herd == %@ OR sire.herd == %@)",
             herd, herd, herd
@@ -305,6 +328,7 @@ enum CoreDataAnimalMutation {
         let treatmentRequest = NSFetchRequest<CDWorkingTreatmentRecord>(
             entityName: CDWorkingTreatmentRecord.coreDataEntityName
         )
+        treatmentRequest.affectedStores = store.map { [$0] }
         treatmentRequest.predicate = NSPredicate(
             format: "herd == nil AND (animal.herd == %@ OR session.herd == %@)",
             herd, herd
@@ -336,6 +360,7 @@ enum CoreDataAnimalMutation {
         let queueRequest = NSFetchRequest<CDWorkingQueueItem>(
             entityName: CDWorkingQueueItem.coreDataEntityName
         )
+        queueRequest.affectedStores = store.map { [$0] }
         queueRequest.predicate = NSPredicate(
             format: """
             herd == nil AND (
