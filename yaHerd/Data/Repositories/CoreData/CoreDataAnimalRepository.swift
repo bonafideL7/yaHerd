@@ -121,6 +121,7 @@ final class CoreDataAnimalRepository:
             let unlinkedMovements = NSFetchRequest<CDMovementRecord>(
                 entityName: CDMovementRecord.coreDataEntityName
             )
+            try lookup.scope(unlinkedMovements, toHerd: herd, in: context)
             unlinkedMovements.predicate = NSPredicate(
                 format: "herd == %@ AND animal == nil",
                 herd
@@ -136,6 +137,7 @@ final class CoreDataAnimalRepository:
             let unlinkedStatuses = NSFetchRequest<CDStatusRecord>(
                 entityName: CDStatusRecord.coreDataEntityName
             )
+            try lookup.scope(unlinkedStatuses, toHerd: herd, in: context)
             unlinkedStatuses.predicate = NSPredicate(
                 format: "herd == %@ AND animal == nil",
                 herd
@@ -1272,6 +1274,7 @@ final class CoreDataAnimalRepository:
             let request = NSFetchRequest<CDTagColorDefinition>(
                 entityName: CDTagColorDefinition.coreDataEntityName
             )
+            try lookup.scope(request, toHerd: herd, in: context)
             request.predicate = NSPredicate(
                 format: "herd == %@ AND isHidden == NO AND isDefault == YES",
                 herd
