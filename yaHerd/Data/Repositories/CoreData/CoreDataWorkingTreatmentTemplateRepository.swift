@@ -247,6 +247,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
         let request = NSFetchRequest<CDWorkingTreatmentTemplate>(
             entityName: CDWorkingTreatmentTemplate.coreDataEntityName
         )
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(format: "herd == %@", herd)
         request.sortDescriptors = [
             NSSortDescriptor(key: "name", ascending: true),
