@@ -58,6 +58,7 @@ final class CoreDataAnimalStatusReferenceRepository: AnimalStatusReferenceReadin
             let request = NSFetchRequest<CDAnimalStatusReference>(
                 entityName: CDAnimalStatusReference.coreDataEntityName
             )
+            try lookup.scope(request, toHerd: herd, in: context)
             request.predicate = NSPredicate(format: "herd == %@", herd)
             request.sortDescriptors = [
                 NSSortDescriptor(key: "name", ascending: true),
