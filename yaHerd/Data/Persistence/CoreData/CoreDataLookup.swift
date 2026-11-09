@@ -56,6 +56,16 @@ struct CoreDataLookup: Sendable {
         return try owningStore(of: herd, in: context)
     }
 
+    func scope<Result: NSFetchRequestResult>(
+        _ request: NSFetchRequest<Result>,
+        toHerd herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) throws {
+        if !herd.isInserted {
+            request.affectedStores = [try owningStore(of: herd, in: context)]
+        }
+    }
+
     /// Validate the complete pending transaction against its selected Herd
     /// before assigning inserted objects to that Herd's persistent store.
     func prepareForSave(
@@ -170,9 +180,7 @@ struct CoreDataLookup: Sendable {
             herd
         )
         request.fetchLimit = 2
-        if !herd.isInserted {
-            request.affectedStores = [try owningStore(of: herd, in: context)]
-        }
+        try scope(request, toHerd: herd, in: context)
 
         let matches = try context.fetch(request)
         guard matches.count <= 1 else {
