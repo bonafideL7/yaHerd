@@ -74,6 +74,61 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         }
     }
 
+    func testBackgroundPastureProjectionsUseOnlyTheSelectedHerdStore() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let coordinator = try XCTUnwrap(
+            assembly.contextFactory.makeReadContext().persistentStoreCoordinator
+        )
+        let privateStore = try XCTUnwrap(coordinator.persistentStores.first)
+        let sharedStore = try coordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType,
+            configurationName: nil,
+            at: harness.directoryURL.appendingPathComponent("yaHerd-test-shared.sqlite"),
+            options: nil
+        )
+        let privateHerdID = UUID()
+        let sharedHerdID = UUID()
+        let matchingPastureID = UUID()
+
+        let writer = try assembly.contextFactory.makeWriteContext()
+        try writer.performAndWait {
+            let privateHerd = Self.makeHerd(
+                id: privateHerdID, name: "Private", in: writer, store: privateStore
+            )
+            let sharedHerd = Self.makeHerd(
+                id: sharedHerdID, name: "Shared", in: writer, store: sharedStore
+            )
+            Self.makePasture(
+                id: matchingPastureID, name: "Private Pasture", herd: privateHerd,
+                in: writer, store: privateStore
+            )
+            Self.makePasture(
+                id: matchingPastureID, name: "Shared Pasture", herd: sharedHerd,
+                in: writer, store: sharedStore
+            )
+            try writer.save()
+        }
+
+        let privateReader = CoreDataReadModelActor(
+            contextFactory: assembly.contextFactory,
+            lookup: CoreDataLookup(),
+            currentHerdID: { privateHerdID }
+        )
+        let sharedReader = CoreDataReadModelActor(
+            contextFactory: assembly.contextFactory,
+            lookup: CoreDataLookup(),
+            currentHerdID: { sharedHerdID }
+        )
+
+        let privatePastures = try await privateReader.fetchDashboardPastureRecords()
+        let sharedPastures = try await sharedReader.fetchDashboardPastureRecords()
+        XCTAssertEqual(privatePastures.map(\.name), ["Private Pasture"])
+        XCTAssertEqual(sharedPastures.map(\.name), ["Shared Pasture"])
+        XCTAssertEqual(privatePastures.map(\.id), [matchingPastureID])
+        XCTAssertEqual(sharedPastures.map(\.id), [matchingPastureID])
+    }
+
     func testDuplicateHerdIDAcrossStoresNeverSelectsArbitraryOwner() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await harness.makeAssembly()
