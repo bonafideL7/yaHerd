@@ -91,7 +91,8 @@ final class CoreDataPastureRepository:
             }
             try CoreDataAnimalMutation.validateLinkedClinicalHistory(herd: herd, in: context)
             let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
-            request.predicate = NSPredicate(
+            try CoreDataLookup().scope(request, toHerd: herd, in: context)
+        request.predicate = NSPredicate(
                 format: "herd.id == %@ AND currentPasture == %@",
                 herdID as NSUUID,
                 pasture
@@ -406,6 +407,7 @@ final class CoreDataPastureRepository:
 
     private nonisolated static func fetchPastures(herd: CDHerd, in context: NSManagedObjectContext) throws -> [CDPasture] {
         let request = NSFetchRequest<CDPasture>(entityName: CDPasture.coreDataEntityName)
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(format: "herd == %@", herd)
         request.sortDescriptors = [
             NSSortDescriptor(key: "sortOrder", ascending: true),
@@ -423,6 +425,7 @@ final class CoreDataPastureRepository:
 
     private nonisolated static func fetchGroups(herd: CDHerd, in context: NSManagedObjectContext) throws -> [CDPastureGroup] {
         let request = NSFetchRequest<CDPastureGroup>(entityName: CDPastureGroup.coreDataEntityName)
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(format: "herd == %@", herd)
         request.sortDescriptors = [
             NSSortDescriptor(key: "name", ascending: true),
@@ -446,6 +449,7 @@ final class CoreDataPastureRepository:
         try CoreDataAnimalMutation.validateUnownedImportedPastures(herd: herd, in: context)
         try CoreDataAnimalMutation.validateUnownedImportedAnimals(herd: herd, in: context)
         let request = NSFetchRequest<CDPasture>(entityName: CDPasture.coreDataEntityName)
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(
             format: "herd == %@ AND group != nil AND group.herd == nil",
             herd
