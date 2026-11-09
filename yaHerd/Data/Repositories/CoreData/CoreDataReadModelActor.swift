@@ -107,6 +107,7 @@ actor CoreDataReadModelActor:
             let animalRequest = NSFetchRequest<CDAnimal>(
                 entityName: CDAnimal.coreDataEntityName
             )
+            try CoreDataLookup().scope(animalRequest, toHerd: herd, in: context)
             animalRequest.predicate = NSPredicate(format: "herd == %@", herd)
             animalRequest.relationshipKeyPathsForPrefetching =
                 Self.dashboardAnimalPrefetchPaths
@@ -129,6 +130,7 @@ actor CoreDataReadModelActor:
             let missingDateRequest = NSFetchRequest<CDWorkingSession>(
                 entityName: CDWorkingSession.coreDataEntityName
             )
+            try CoreDataLookup().scope(missingDateRequest, toHerd: herd, in: context)
             missingDateRequest.predicate = NSPredicate(
                 format: "herd == %@ AND statusRawValue == %@ AND date == nil",
                 herd,
@@ -142,6 +144,7 @@ actor CoreDataReadModelActor:
             let workingRequest = NSFetchRequest<CDWorkingSession>(
                 entityName: CDWorkingSession.coreDataEntityName
             )
+            try CoreDataLookup().scope(workingRequest, toHerd: herd, in: context)
             workingRequest.predicate = NSPredicate(
                 format: "herd == %@ AND statusRawValue == %@",
                 herd,
@@ -210,6 +213,7 @@ actor CoreDataReadModelActor:
             let request = NSFetchRequest<CDAnimal>(
                 entityName: CDAnimal.coreDataEntityName
             )
+            try CoreDataLookup().scope(request, toHerd: herd, in: context)
             request.predicate = Self.dashboardAnimalPredicate(
                 kind: kind,
                 herd: herd
@@ -441,6 +445,7 @@ actor CoreDataReadModelActor:
             let request = NSFetchRequest<CDAnimal>(
                 entityName: CDAnimal.coreDataEntityName
             )
+            try CoreDataLookup().scope(request, toHerd: herd, in: context)
             var predicates: [NSPredicate] = [
                 NSPredicate(format: "herd == %@", herd),
                 NSPredicate(format: "isArchived == NO")
@@ -626,6 +631,7 @@ actor CoreDataReadModelActor:
             let request = NSFetchRequest<NSDictionary>(
                 entityName: CDAnimal.coreDataEntityName
             )
+            try CoreDataLookup().scope(request, toHerd: herd, in: context)
             request.resultType = .dictionaryResultType
             request.propertiesToFetch = ["id"]
             request.predicate = NSPredicate(
@@ -683,6 +689,7 @@ actor CoreDataReadModelActor:
             let request = NSFetchRequest<CDAnimal>(
                 entityName: CDAnimal.coreDataEntityName
             )
+            try CoreDataLookup().scope(request, toHerd: herd, in: context)
             request.predicate = predicate
             request.sortDescriptors = [
                 NSSortDescriptor(key: "id", ascending: true)
@@ -805,6 +812,7 @@ actor CoreDataReadModelActor:
             let request = NSFetchRequest<CDAnimal>(
                 entityName: CDAnimal.coreDataEntityName
             )
+            try CoreDataLookup().scope(request, toHerd: herd, in: context)
             request.predicate = predicate
             request.sortDescriptors = [
                 NSSortDescriptor(key: "id", ascending: true)
@@ -999,6 +1007,7 @@ actor CoreDataReadModelActor:
         let request = NSFetchRequest<CDAnimal>(
             entityName: CDAnimal.coreDataEntityName
         )
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(
             format: "herd == %@ AND id IN %@",
             herd,
@@ -1054,6 +1063,7 @@ actor CoreDataReadModelActor:
                 let request = NSFetchRequest<CDPasture>(
                     entityName: CDPasture.coreDataEntityName
                 )
+                try CoreDataLookup().scope(request, toHerd: herd, in: context)
                 request.predicate = NSPredicate(format: "herd == %@", herd)
                 request.sortDescriptors = [
                     NSSortDescriptor(key: "name", ascending: true),
@@ -1133,6 +1143,7 @@ actor CoreDataReadModelActor:
             let sessionRequest = NSFetchRequest<CDFieldCheckSession>(
                 entityName: CDFieldCheckSession.coreDataEntityName
             )
+            try CoreDataLookup().scope(sessionRequest, toHerd: herd, in: context)
             sessionRequest.predicate = NSPredicate(
                 format: """
                 herd == %@ AND pastureArchivedAt == nil AND pasture != nil AND (
@@ -1166,6 +1177,7 @@ actor CoreDataReadModelActor:
             let findingRequest = NSFetchRequest<CDFieldCheckFinding>(
                 entityName: CDFieldCheckFinding.coreDataEntityName
             )
+            try CoreDataLookup().scope(findingRequest, toHerd: herd, in: context)
             findingRequest.predicate = NSPredicate(
                 format: "herd == %@ AND session.herd == %@ AND session.pastureArchivedAt == nil AND session.pasture != nil AND statusRawValue IN %@",
                 herd,
@@ -1202,6 +1214,7 @@ actor CoreDataReadModelActor:
             let historyRequest = NSFetchRequest<CDFieldCheckSession>(
                 entityName: CDFieldCheckSession.coreDataEntityName
             )
+            try CoreDataLookup().scope(historyRequest, toHerd: herd, in: context)
             historyRequest.predicate = NSPredicate(format: "herd == %@", herd)
             historyRequest.fetchLimit = 1
             let hasHistory = try context.count(for: historyRequest) > 0
@@ -1249,6 +1262,7 @@ actor CoreDataReadModelActor:
             let request = NSFetchRequest<CDWorkingTreatmentTemplate>(
                 entityName: CDWorkingTreatmentTemplate.coreDataEntityName
             )
+            try CoreDataLookup().scope(request, toHerd: herd, in: context)
             request.predicate = NSPredicate(format: "herd == %@", herd)
             request.sortDescriptors = [
                 NSSortDescriptor(key: "name", ascending: true),
@@ -1308,6 +1322,7 @@ actor CoreDataReadModelActor:
         in context: NSManagedObjectContext
     ) throws {
         let request = NSFetchRequest<NSDictionary>(entityName: entityName)
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.resultType = .dictionaryResultType
         request.propertiesToFetch = ["id"]
         request.predicate = NSPredicate(format: "herd == %@", herd)
@@ -1361,6 +1376,7 @@ actor CoreDataReadModelActor:
         let crossHerdTagRequest = NSFetchRequest<CDAnimalTag>(
             entityName: CDAnimalTag.coreDataEntityName
         )
+        try CoreDataLookup().scope(crossHerdTagRequest, toHerd: herd, in: context)
         crossHerdTagRequest.predicate = NSPredicate(
             format: "animal.herd == %@ AND (herd == nil OR herd != %@)",
             herd,
@@ -1381,6 +1397,7 @@ actor CoreDataReadModelActor:
         let missingNumberRequest = NSFetchRequest<CDAnimalTag>(
             entityName: CDAnimalTag.coreDataEntityName
         )
+        try CoreDataLookup().scope(missingNumberRequest, toHerd: herd, in: context)
         missingNumberRequest.predicate = NSPredicate(
             format: "herd == %@ AND number == nil",
             herd
@@ -1393,6 +1410,7 @@ actor CoreDataReadModelActor:
         let cardinalityRequest = NSFetchRequest<CDAnimal>(
             entityName: CDAnimal.coreDataEntityName
         )
+        try CoreDataLookup().scope(cardinalityRequest, toHerd: herd, in: context)
         cardinalityRequest.predicate = NSPredicate(
             format: """
             herd == %@ AND
@@ -1426,6 +1444,7 @@ actor CoreDataReadModelActor:
         let invalidEnumRequest = NSFetchRequest<CDAnimal>(
             entityName: CDAnimal.coreDataEntityName
         )
+        try CoreDataLookup().scope(invalidEnumRequest, toHerd: herd, in: context)
         invalidEnumRequest.predicate = NSPredicate(
             format: """
             herd == %@ AND (
@@ -1450,6 +1469,7 @@ actor CoreDataReadModelActor:
         let invalidPastureRequest = NSFetchRequest<CDAnimal>(
             entityName: CDAnimal.coreDataEntityName
         )
+        try CoreDataLookup().scope(invalidPastureRequest, toHerd: herd, in: context)
         invalidPastureRequest.predicate = NSPredicate(
             format: """
             herd == %@ AND
@@ -1475,6 +1495,7 @@ actor CoreDataReadModelActor:
         let invalidWorkingRequest = NSFetchRequest<CDAnimal>(
             entityName: CDAnimal.coreDataEntityName
         )
+        try CoreDataLookup().scope(invalidWorkingRequest, toHerd: herd, in: context)
         invalidWorkingRequest.predicate = NSPredicate(
             format: """
             herd == %@ AND
@@ -1504,6 +1525,7 @@ actor CoreDataReadModelActor:
         let invalidHealthRequest = NSFetchRequest<CDHealthRecord>(
             entityName: CDHealthRecord.coreDataEntityName
         )
+        try CoreDataLookup().scope(invalidHealthRequest, toHerd: herd, in: context)
         invalidHealthRequest.predicate = NSPredicate(
             format: "animal.herd == %@ AND herd != %@",
             herd,
@@ -1524,6 +1546,7 @@ actor CoreDataReadModelActor:
         let invalidOffspringRequest = NSFetchRequest<CDAnimal>(
             entityName: CDAnimal.coreDataEntityName
         )
+        try CoreDataLookup().scope(invalidOffspringRequest, toHerd: herd, in: context)
         invalidOffspringRequest.predicate = NSPredicate(
             format: "dam.herd == %@ AND herd != %@",
             herd,
@@ -1684,6 +1707,7 @@ actor CoreDataReadModelActor:
         let request = NSFetchRequest<CDPasture>(
             entityName: CDPasture.coreDataEntityName
         )
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(format: "herd == %@", herd)
         request.sortDescriptors = [
             NSSortDescriptor(key: "name", ascending: true),
@@ -1704,6 +1728,7 @@ actor CoreDataReadModelActor:
             let groupRequest = NSFetchRequest<CDPastureGroup>(
                 entityName: CDPastureGroup.coreDataEntityName
             )
+            try CoreDataLookup().scope(groupRequest, toHerd: herd, in: context)
             groupRequest.predicate = NSPredicate(format: "herd == %@", herd)
             let groups = try context.fetch(groupRequest)
             try CoreDataAnimalMutation.validateUniqueApplicationIDs(
@@ -1720,6 +1745,7 @@ actor CoreDataReadModelActor:
             let invalidResidentRequest = NSFetchRequest<CDAnimal>(
                 entityName: CDAnimal.coreDataEntityName
             )
+            try CoreDataLookup().scope(invalidResidentRequest, toHerd: herd, in: context)
             invalidResidentRequest.predicate = NSPredicate(
                 format: "currentPasture.herd == %@ AND herd != %@",
                 herd,
@@ -1748,6 +1774,7 @@ actor CoreDataReadModelActor:
             let residentRequest = NSFetchRequest<CDAnimal>(
                 entityName: CDAnimal.coreDataEntityName
             )
+            try CoreDataLookup().scope(residentRequest, toHerd: herd, in: context)
             residentRequest.predicate = NSPredicate(
                 format: """
                 herd == %@ AND currentPasture != nil
@@ -2272,6 +2299,7 @@ actor CoreDataReadModelActor:
         let undatedRequest = NSFetchRequest<CDFieldCheckFinding>(
             entityName: CDFieldCheckFinding.coreDataEntityName
         )
+        try CoreDataLookup().scope(undatedRequest, toHerd: herd, in: context)
         undatedRequest.predicate = NSPredicate(
             format: "herd == %@ AND recordedAt == nil",
             herd
@@ -2284,6 +2312,7 @@ actor CoreDataReadModelActor:
         let corruptRequest = NSFetchRequest<CDFieldCheckFinding>(
             entityName: CDFieldCheckFinding.coreDataEntityName
         )
+        try CoreDataLookup().scope(corruptRequest, toHerd: herd, in: context)
         corruptRequest.predicate = NSPredicate(
             format: """
             (herd == %@ AND (
@@ -2314,6 +2343,7 @@ actor CoreDataReadModelActor:
         let corruptCheckRequest = NSFetchRequest<CDFieldCheckAnimalCheck>(
             entityName: CDFieldCheckAnimalCheck.coreDataEntityName
         )
+        try CoreDataLookup().scope(corruptCheckRequest, toHerd: herd, in: context)
         corruptCheckRequest.predicate = NSPredicate(
             format: """
             (herd == %@ AND session == nil) OR
