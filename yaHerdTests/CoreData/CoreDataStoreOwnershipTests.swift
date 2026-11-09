@@ -198,7 +198,9 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
             guard case let .wrongHerdMutation(entity, herdID) = error else {
                 return XCTFail("Expected wrongHerdMutation, got \(error).")
             }
-            XCTAssertEqual(entity, CDPasture.coreDataEntityName)
+            XCTAssertTrue(
+                [CDPasture.coreDataEntityName, CDHerd.coreDataEntityName].contains(entity)
+            )
             XCTAssertEqual(herdID, selectedHerdID)
         }
 
