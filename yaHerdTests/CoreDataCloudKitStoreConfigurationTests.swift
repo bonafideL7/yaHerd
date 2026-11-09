@@ -169,4 +169,126 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
             )
         }
     }
+
+    @MainActor
+    func testTwoStorePersistenceAssemblyConnectsSelectedHerdApplicationGraphs() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let existingAssembly = try await harness.makeAssembly()
+        let privateHerdID = UUID()
+        let sharedHerdID = UUID()
+
+        // An existing development installation already has this private Herd.
+        try await existingAssembly.transactionExecutor.performWrite { context in
+            let herd = CDHerd(context: context)
+            herd.id = privateHerdID
+            herd.name = "Existing Private Herd"
+            herd.createdAt = Date(timeIntervalSince1970: 100)
+            herd.updatedAt = Date(timeIntervalSince1970: 100)
+        }
+
+        let descriptions = CoreDataPersistentContainer.cloudKitStoreDescriptions(
+            privateStoreURL: harness.storeURL
+        )
+        // Simulator verification must not activate unvalidated CloudKit mirroring.
+        descriptions.forEach { $0.cloudKitContainerOptions = nil }
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeDescriptions: descriptions
+        )
+        let sharedURL = harness.directoryURL.appendingPathComponent(
+            CoreDataPersistentContainer.sharedStoreFileName
+        )
+
+        // Simulate a shared root imported into the shared SQLite store.
+        let writer = try assembly.contextFactory.makeWriteContext()
+        try writer.performAndWait {
+            let sharedStore = try XCTUnwrap(
+                writer.persistentStoreCoordinator?.persistentStores.first {
+                    $0.url == sharedURL
+                }
+            )
+            let herd = CDHerd(context: writer)
+            herd.id = sharedHerdID
+            herd.name = "Imported Shared Herd"
+            herd.createdAt = Date(timeIntervalSince1970: 200)
+            herd.updatedAt = Date(timeIntervalSince1970: 200)
+            writer.assign(herd, to: sharedStore)
+            try writer.save()
+        }
+
+        let privateDependencies = CoreDataAppPersistenceAssembly(
+            assembly: assembly,
+            currentHerdID: privateHerdID
+        ).makeDependencies(dataAccessMode: .readWrite)
+        let sharedDependencies = CoreDataAppPersistenceAssembly(
+            assembly: assembly,
+            currentHerdID: sharedHerdID
+        ).makeDependencies(dataAccessMode: .readWrite)
+
+        XCTAssertEqual(
+            try privateDependencies.herdRepository.fetchCurrentHerd().name,
+            "Existing Private Herd"
+        )
+        XCTAssertEqual(
+            try sharedDependencies.herdRepository.fetchCurrentHerd().name,
+            "Imported Shared Herd"
+        )
+
+        let privatePasture = try privateDependencies.pastureFeatureDependencies
+            .createRepository.create(input: PastureInput(
+                name: "Private Pasture",
+                acreage: nil,
+                usableAcreage: nil,
+                targetAcresPerHead: nil
+            ))
+        let sharedPasture = try sharedDependencies.pastureFeatureDependencies
+            .createRepository.create(input: PastureInput(
+                name: "Shared Pasture",
+                acreage: nil,
+                usableAcreage: nil,
+                targetAcresPerHead: nil
+            ))
+
+        XCTAssertEqual(
+            try privateDependencies.pastureFeatureDependencies.listRepository
+                .fetchPastures().map(\.id),
+            [privatePasture.id]
+        )
+        XCTAssertEqual(
+            try sharedDependencies.pastureFeatureDependencies.listRepository
+                .fetchPastures().map(\.id),
+            [sharedPasture.id]
+        )
+
+        // Reopen both SQLite stores, not just fresh contexts in the same assembly.
+        let reopened = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeDescriptions: descriptions
+        )
+        let read = reopened.contextFactory.makeReadContext()
+        try read.performAndWait {
+            let lookup = CoreDataLookup()
+            let owned = try XCTUnwrap(lookup.herdOwned(
+                CDPasture.self,
+                id: privatePasture.id,
+                herdID: privateHerdID,
+                in: read
+            ))
+            let shared = try XCTUnwrap(lookup.herdOwned(
+                CDPasture.self,
+                id: sharedPasture.id,
+                herdID: sharedHerdID,
+                in: read
+            ))
+            XCTAssertEqual(owned.name, "Private Pasture")
+            XCTAssertEqual(shared.name, "Shared Pasture")
+            XCTAssertEqual(owned.objectID.persistentStore?.url, harness.storeURL)
+            XCTAssertEqual(shared.objectID.persistentStore?.url, sharedURL)
+            XCTAssertNil(try lookup.herdOwned(
+                CDPasture.self,
+                id: sharedPasture.id,
+                herdID: privateHerdID,
+                in: read
+            ))
+        }
+    }
+
 }
