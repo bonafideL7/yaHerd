@@ -117,6 +117,88 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         }
     }
 
+    func testSharedStoreOrphansDoNotBlockPrivateHerdValidation() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let coordinator = try XCTUnwrap(
+            assembly.contextFactory.makeReadContext().persistentStoreCoordinator
+        )
+        let privateStore = try XCTUnwrap(coordinator.persistentStores.first)
+        let sharedStore = try coordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType,
+            configurationName: nil,
+            at: harness.directoryURL.appendingPathComponent("unowned-shared.sqlite"),
+            options: nil
+        )
+        let privateHerdID = UUID()
+        let sharedHerdID = UUID()
+
+        let seed = try assembly.contextFactory.makeWriteContext()
+        try seed.performAndWait {
+            let privateHerd = CDHerd(context: seed)
+            privateHerd.id = privateHerdID
+            privateHerd.name = "Private"
+            privateHerd.createdAt = Date(timeIntervalSince1970: 100)
+            privateHerd.updatedAt = Date(timeIntervalSince1970: 100)
+            seed.assign(privateHerd, to: privateStore)
+
+            let sharedHerd = CDHerd(context: seed)
+            sharedHerd.id = sharedHerdID
+            sharedHerd.name = "Shared"
+            sharedHerd.createdAt = Date(timeIntervalSince1970: 100)
+            sharedHerd.updatedAt = Date(timeIntervalSince1970: 100)
+            seed.assign(sharedHerd, to: sharedStore)
+
+            let animal = CDAnimal(context: seed)
+            animal.id = UUID()
+            animal.name = "Incomplete shared animal"
+            seed.assign(animal, to: sharedStore)
+
+            let pasture = CDPasture(context: seed)
+            pasture.id = UUID()
+            pasture.name = "Incomplete shared pasture"
+            seed.assign(pasture, to: sharedStore)
+
+            let session = CDWorkingSession(context: seed)
+            session.id = UUID()
+            seed.assign(session, to: sharedStore)
+
+            let queue = CDWorkingQueueItem(context: seed)
+            queue.id = UUID()
+            seed.assign(queue, to: sharedStore)
+
+            let treatment = CDWorkingTreatmentRecord(context: seed)
+            treatment.id = UUID()
+            seed.assign(treatment, to: sharedStore)
+            try seed.save()
+        }
+
+        let read = assembly.contextFactory.makeReadContext()
+        try read.performAndWait {
+            let lookup = CoreDataLookup()
+            let privateHerd = try XCTUnwrap(
+                lookup.herd(id: privateHerdID, in: read)
+            )
+            let sharedHerd = try XCTUnwrap(
+                lookup.herd(id: sharedHerdID, in: read)
+            )
+            XCTAssertNoThrow(
+                try CoreDataAnimalMutation.validateLinkedImportedHistoryHerdOwnership(
+                    herd: privateHerd, in: read
+                )
+            )
+            XCTAssertThrowsError(
+                try CoreDataAnimalMutation.validateUnownedImportedAnimals(
+                    herd: sharedHerd, in: read
+                )
+            ) { error in
+                guard case .invalidHerdOwnership = error as? CoreDataReadModelError else {
+                    return XCTFail("Expected an incomplete shared-Herd ownership error.")
+                }
+            }
+        }
+    }
+
     func testHerdOwnedLookupScopesSameApplicationUUIDByHerd() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let herdAID = UUID()
