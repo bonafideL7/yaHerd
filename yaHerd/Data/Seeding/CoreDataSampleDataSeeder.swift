@@ -125,6 +125,7 @@ enum CoreDataSampleHerdFactory {
         // duplicate logical group names in a user-configured Herd.
         for name in ["Animal", "Pasture", "PastureGroup", "FieldCheckSession", "WorkingSession", "WorkingQueueItem", "WorkingTreatmentRecord"] {
             let request = NSFetchRequest<NSManagedObject>(entityName: name)
+            try CoreDataLookup().scope(request, toHerd: herd, in: context)
             request.predicate = NSPredicate(format: "herd == %@", herd)
             request.fetchLimit = 1
             if !(try context.fetch(request)).isEmpty {
@@ -151,6 +152,7 @@ enum CoreDataSampleHerdFactory {
         let existingColorsRequest = NSFetchRequest<CDTagColorDefinition>(
             entityName: CDTagColorDefinition.coreDataEntityName
         )
+        try CoreDataLookup().scope(existingColorsRequest, toHerd: herd, in: context)
         existingColorsRequest.predicate = NSPredicate(format: "herd == %@", herd)
         let existingColors = try context.fetch(existingColorsRequest)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
@@ -179,6 +181,7 @@ enum CoreDataSampleHerdFactory {
         let statusRequest = NSFetchRequest<CDAnimalStatusReference>(
             entityName: CDAnimalStatusReference.coreDataEntityName
         )
+        try CoreDataLookup().scope(statusRequest, toHerd: herd, in: context)
         statusRequest.predicate = NSPredicate(format: "herd == %@", herd)
         var statusRefs = try context.fetch(statusRequest)
         for status in AnimalStatus.allCases {
@@ -380,6 +383,7 @@ enum CoreDataSampleHerdFactory {
         let templateRequest = NSFetchRequest<CDWorkingTreatmentTemplate>(
             entityName: CDWorkingTreatmentTemplate.coreDataEntityName
         )
+        try CoreDataLookup().scope(templateRequest, toHerd: herd, in: context)
         templateRequest.predicate = NSPredicate(format: "herd == %@", herd)
         var templates = try context.fetch(templateRequest)
         let planned = [
