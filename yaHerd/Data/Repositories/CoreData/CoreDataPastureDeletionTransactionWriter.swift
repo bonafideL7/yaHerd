@@ -217,7 +217,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
 
             let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
             try CoreDataLookup().scope(request, toHerd: herd, in: context)
-        request.predicate = NSPredicate(
+            request.predicate = NSPredicate(
                 format: "herd == %@ AND currentPasture == %@",
                 herd,
                 pasture
