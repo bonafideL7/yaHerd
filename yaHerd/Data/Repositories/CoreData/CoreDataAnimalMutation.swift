@@ -87,6 +87,7 @@ enum CoreDataAnimalMutation {
         in context: NSManagedObjectContext
     ) throws -> [CDAnimal] {
         let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(format: "herd == %@", herd)
         try validateUnownedImportedAnimals(herd: herd, in: context)
         let animals = try context.fetch(request)
@@ -136,6 +137,7 @@ enum CoreDataAnimalMutation {
         let healthRequest = NSFetchRequest<CDHealthRecord>(
             entityName: CDHealthRecord.coreDataEntityName
         )
+        try CoreDataLookup().scope(healthRequest, toHerd: herd, in: context)
         healthRequest.predicate = NSPredicate(format: "herd == %@ AND animal == nil", herd)
         healthRequest.fetchLimit = 1
         if let record = try context.fetch(healthRequest).first {
@@ -147,6 +149,7 @@ enum CoreDataAnimalMutation {
         let pregnancyRequest = NSFetchRequest<CDPregnancyCheck>(
             entityName: CDPregnancyCheck.coreDataEntityName
         )
+        try CoreDataLookup().scope(pregnancyRequest, toHerd: herd, in: context)
         pregnancyRequest.predicate = NSPredicate(format: "herd == %@ AND animal == nil", herd)
         pregnancyRequest.fetchLimit = 1
         if let check = try context.fetch(pregnancyRequest).first {
@@ -402,6 +405,7 @@ enum CoreDataAnimalMutation {
         in context: NSManagedObjectContext
     ) throws {
         let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(
             format: "herd == %@ AND statusReference != nil AND statusReference.herd == nil",
             herd
@@ -427,6 +431,7 @@ enum CoreDataAnimalMutation {
         let request = NSFetchRequest<CDMovementRecord>(
             entityName: CDMovementRecord.coreDataEntityName
         )
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(
             format: "herd == nil AND animal.herd == %@",
             herd
@@ -449,6 +454,7 @@ enum CoreDataAnimalMutation {
         in context: NSManagedObjectContext
     ) throws {
         let request = NSFetchRequest<CDAnimalTag>(entityName: CDAnimalTag.coreDataEntityName)
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(
             format: "herd == nil AND (animal.herd == %@ OR color.herd == %@)",
             herd,
@@ -468,6 +474,7 @@ enum CoreDataAnimalMutation {
         // Herd is evidence of that incomplete graph even when the Color itself
         // is absent from all Herd-scoped color queries.
         let colorRequest = NSFetchRequest<CDAnimalTag>(entityName: CDAnimalTag.coreDataEntityName)
+        try CoreDataLookup().scope(colorRequest, toHerd: herd, in: context)
         colorRequest.predicate = NSPredicate(
             format: "color != nil AND color.herd == nil AND (herd == %@ OR animal.herd == %@)",
             herd,
@@ -628,6 +635,7 @@ enum CoreDataAnimalMutation {
         let colorRequest = NSFetchRequest<CDTagColorDefinition>(
             entityName: CDTagColorDefinition.coreDataEntityName
         )
+        try CoreDataLookup().scope(colorRequest, toHerd: herd, in: context)
         colorRequest.predicate = NSPredicate(format: "herd == %@", herd)
         let persistedColors = try context.fetch(colorRequest)
         if persistedColors.contains(where: { !$0.isHidden && $0.isDefault }) {
