@@ -111,10 +111,15 @@ final class CoreDataPersistentContainer {
     /// Loads the existing local SQLite store as the private database and a
     /// separate shared SQLite store. Not used by app startup until all Herd
     /// reads and writes are store-qualified.
-    static func loadCloudKit(storeURL: URL) async throws -> CoreDataPersistentContainer {
-        try await loadCloudKit(
-            storeDescriptions: cloudKitStoreDescriptions(privateStoreURL: storeURL)
-        )
+    static func loadCloudKit(
+        storeURL: URL,
+        mirroringEnabled: Bool = true
+    ) async throws -> CoreDataPersistentContainer {
+        let descriptions = cloudKitStoreDescriptions(privateStoreURL: storeURL)
+        if !mirroringEnabled {
+            descriptions.forEach { $0.cloudKitContainerOptions = nil }
+        }
+        return try await loadCloudKit(storeDescriptions: descriptions)
     }
 
     /// The same dual-store loading path can be exercised with mirroring disabled
