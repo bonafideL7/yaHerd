@@ -55,7 +55,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         let createdID = try privateRepository.createTemplate(
             name: "Private treatment", items: []
         )
-        XCTAssertEqual(try privateRepository.fetchTemplates().map(\\.id), [createdID])
+        XCTAssertEqual(try privateRepository.fetchTemplates().map(\.id), [createdID])
 
         let sharedRepository = CoreDataWorkingTreatmentTemplateRepository(
             selection: AppCurrentHerdSelection(currentHerdID: sharedHerdID),
