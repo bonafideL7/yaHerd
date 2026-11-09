@@ -587,6 +587,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         let request = NSFetchRequest<CDTagColorDefinition>(
             entityName: CDTagColorDefinition.coreDataEntityName
         )
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(format: "herd == %@", herd)
         request.sortDescriptors = [
             NSSortDescriptor(key: "sortOrder", ascending: true),
@@ -672,6 +673,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         in context: NSManagedObjectContext
     ) throws {
         let tagRequest = NSFetchRequest<CDAnimalTag>(entityName: CDAnimalTag.coreDataEntityName)
+        try CoreDataLookup().scope(tagRequest, toHerd: herd, in: context)
         tagRequest.predicate = NSPredicate(
             format: "herd == %@ AND color.id == %@",
             herd,
@@ -693,6 +695,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         let checkRequest = NSFetchRequest<CDFieldCheckAnimalCheck>(
             entityName: CDFieldCheckAnimalCheck.coreDataEntityName
         )
+        try CoreDataLookup().scope(checkRequest, toHerd: herd, in: context)
         checkRequest.predicate = NSPredicate(
             format: "herd == %@ AND (rosterTagColorIDSnapshot == %@ OR damRosterTagColorIDSnapshot == %@)",
             herd,
@@ -711,6 +714,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         let findingRequest = NSFetchRequest<CDFieldCheckFinding>(
             entityName: CDFieldCheckFinding.coreDataEntityName
         )
+        try CoreDataLookup().scope(findingRequest, toHerd: herd, in: context)
         findingRequest.predicate = NSPredicate(
             format: "herd == %@ AND animalDisplayTagColorIDSnapshot == %@",
             herd,
@@ -723,6 +727,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         let queueRequest = NSFetchRequest<CDWorkingQueueItem>(
             entityName: CDWorkingQueueItem.coreDataEntityName
         )
+        try CoreDataLookup().scope(queueRequest, toHerd: herd, in: context)
         queueRequest.predicate = NSPredicate(
             format: "herd == %@ AND (animalTagColorIDSnapshot == %@ OR animalDamDisplayTagColorIDSnapshot == %@)",
             herd,
@@ -775,11 +780,13 @@ final class CoreDataTagColorRepository: TagColorRepository {
         in context: NSManagedObjectContext
     ) throws -> Bool {
         let tagRequest = NSFetchRequest<CDAnimalTag>(entityName: CDAnimalTag.coreDataEntityName)
+        try CoreDataLookup().scope(tagRequest, toHerd: herd, in: context)
         tagRequest.predicate = NSPredicate(format: "herd == %@ AND color.id == %@", herd, colorID as NSUUID)
         tagRequest.fetchLimit = 1
         if try context.count(for: tagRequest) > 0 { return true }
 
         let checkRequest = NSFetchRequest<CDFieldCheckAnimalCheck>(entityName: CDFieldCheckAnimalCheck.coreDataEntityName)
+        try CoreDataLookup().scope(checkRequest, toHerd: herd, in: context)
         checkRequest.predicate = NSPredicate(
             format: "herd == %@ AND (rosterTagColorIDSnapshot == %@ OR damRosterTagColorIDSnapshot == %@)",
             herd, colorID as NSUUID, colorID as NSUUID
@@ -788,6 +795,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         if try context.count(for: checkRequest) > 0 { return true }
 
         let findingRequest = NSFetchRequest<CDFieldCheckFinding>(entityName: CDFieldCheckFinding.coreDataEntityName)
+        try CoreDataLookup().scope(findingRequest, toHerd: herd, in: context)
         findingRequest.predicate = NSPredicate(
             format: "herd == %@ AND animalDisplayTagColorIDSnapshot == %@",
             herd, colorID as NSUUID
@@ -796,6 +804,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         if try context.count(for: findingRequest) > 0 { return true }
 
         let queueRequest = NSFetchRequest<CDWorkingQueueItem>(entityName: CDWorkingQueueItem.coreDataEntityName)
+        try CoreDataLookup().scope(queueRequest, toHerd: herd, in: context)
         queueRequest.predicate = NSPredicate(
             format: "herd == %@ AND (animalTagColorIDSnapshot == %@ OR animalDamDisplayTagColorIDSnapshot == %@)",
             herd, colorID as NSUUID, colorID as NSUUID
