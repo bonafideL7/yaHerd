@@ -149,6 +149,81 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         }
     }
 
+    func testHerdQualifiedTransactionRejectsReparentingAnExistingForeignChild() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let selectedHerdID = UUID()
+        let foreignHerdID = UUID()
+        let foreignPastureID = UUID()
+
+        let seed = try assembly.contextFactory.makeWriteContext()
+        try seed.performAndWait {
+            let selectedHerd = CDHerd(context: seed)
+            selectedHerd.id = selectedHerdID
+            selectedHerd.name = "Selected"
+            selectedHerd.createdAt = Date(timeIntervalSince1970: 100)
+            selectedHerd.updatedAt = Date(timeIntervalSince1970: 100)
+
+            let foreignHerd = CDHerd(context: seed)
+            foreignHerd.id = foreignHerdID
+            foreignHerd.name = "Foreign"
+            foreignHerd.createdAt = Date(timeIntervalSince1970: 100)
+            foreignHerd.updatedAt = Date(timeIntervalSince1970: 100)
+
+            let pasture = CDPasture(context: seed)
+            pasture.id = foreignPastureID
+            pasture.name = "Original Foreign Pasture"
+            pasture.herd = foreignHerd
+            try seed.save()
+        }
+
+        do {
+            try await assembly.transactionExecutor.performWrite(herdID: selectedHerdID) { context in
+                let lookup = CoreDataLookup()
+                let selectedHerd = try XCTUnwrap(
+                    lookup.herd(id: selectedHerdID, in: context)
+                )
+                let foreignPasture = try XCTUnwrap(
+                    lookup.herdOwned(
+                        CDPasture.self,
+                        id: foreignPastureID,
+                        herdID: foreignHerdID,
+                        in: context
+                    )
+                )
+                foreignPasture.herd = selectedHerd
+                foreignPasture.name = "Stolen Pasture"
+            }
+            XCTFail("A selected Herd must not take ownership of an existing foreign child.")
+        } catch let error as CoreDataPersistenceError {
+            guard case let .wrongHerdMutation(entity, herdID) = error else {
+                return XCTFail("Expected wrongHerdMutation, got \(error).")
+            }
+            XCTAssertEqual(entity, CDPasture.coreDataEntityName)
+            XCTAssertEqual(herdID, selectedHerdID)
+        }
+
+        let read = assembly.contextFactory.makeReadContext()
+        try read.performAndWait {
+            let lookup = CoreDataLookup()
+            let pasture = try XCTUnwrap(
+                lookup.herdOwned(
+                    CDPasture.self,
+                    id: foreignPastureID,
+                    herdID: foreignHerdID,
+                    in: read
+                )
+            )
+            XCTAssertEqual(pasture.name, "Original Foreign Pasture")
+            XCTAssertEqual(pasture.herd?.id, foreignHerdID)
+            XCTAssertNil(try lookup.herdOwned(
+                CDPasture.self,
+                id: foreignPastureID,
+                herdID: selectedHerdID,
+                in: read
+            ))
+        }
+    }
+
     func testHerdQualifiedTransactionRejectsForeignHerdChangesAndRollsBack() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await harness.makeAssembly()
