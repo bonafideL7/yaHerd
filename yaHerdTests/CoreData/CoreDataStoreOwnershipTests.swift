@@ -670,6 +670,106 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         )
     }
 
+
+    @MainActor
+    func testReferenceCatalogsReadFromOnlyTheSelectedHerdStore() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let coordinator = try XCTUnwrap(
+            assembly.contextFactory.makeReadContext().persistentStoreCoordinator
+        )
+        let privateStore = try XCTUnwrap(coordinator.persistentStores.first)
+        let sharedStore = try coordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType,
+            configurationName: nil,
+            at: harness.directoryURL.appendingPathComponent("yaHerd-reference-shared.sqlite"),
+            options: nil
+        )
+        let privateHerdID = UUID()
+        let sharedHerdID = UUID()
+        let statusID = UUID()
+        let colorID = UUID()
+        let templateID = UUID()
+
+        let writer = try assembly.contextFactory.makeWriteContext()
+        try writer.performAndWait {
+            let privateHerd = Self.makeHerd(
+                id: privateHerdID, name: "Private", in: writer, store: privateStore
+            )
+            let sharedHerd = Self.makeHerd(
+                id: sharedHerdID, name: "Shared", in: writer, store: sharedStore
+            )
+            for (herd, store, suffix) in [
+                (privateHerd, privateStore, "Private"),
+                (sharedHerd, sharedStore, "Shared")
+            ] {
+                let status = CDAnimalStatusReference(context: writer)
+                status.id = statusID
+                status.name = "\(suffix) status"
+                status.baseStatusRawValue = AnimalStatus.active.rawValue
+                status.herd = herd
+                writer.assign(status, to: store)
+
+                let color = CDTagColorDefinition(context: writer)
+                color.id = colorID
+                color.name = "\(suffix) color"
+                color.prefix = suffix
+                color.red = 0.4
+                color.green = 0.3
+                color.blue = 0.2
+                color.alpha = 1
+                color.createdAt = Date(timeIntervalSince1970: 100)
+                color.updatedAt = Date(timeIntervalSince1970: 100)
+                color.herd = herd
+                writer.assign(color, to: store)
+
+                let template = CDWorkingTreatmentTemplate(context: writer)
+                template.id = templateID
+                template.name = "\(suffix) treatment"
+                template.itemsData = Data("[]".utf8)
+                template.herd = herd
+                writer.assign(template, to: store)
+            }
+            try writer.save()
+        }
+
+        for (herdID, label, expectedStore) in [
+            (privateHerdID, "Private", privateStore),
+            (sharedHerdID, "Shared", sharedStore)
+        ] {
+            let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+            let statusRepository = CoreDataAnimalStatusReferenceRepository(
+                selection: selection, assembly: assembly
+            )
+            let colorRepository = CoreDataTagColorRepository(
+                selection: selection, assembly: assembly
+            )
+            let templateRepository = CoreDataWorkingTreatmentTemplateRepository(
+                selection: selection, assembly: assembly
+            )
+
+            let statuses = try statusRepository.fetchStatusReferenceOptions()
+            XCTAssertEqual(statuses.map(\.id), [statusID])
+            XCTAssertEqual(statuses.map(\.name), ["\(label) status"])
+            XCTAssertEqual(try colorRepository.fetchColor(id: colorID)?.name, "\(label) color")
+            XCTAssertEqual(try templateRepository.fetchTemplates().map(\.name), [
+                "\(label) treatment"
+            ])
+            XCTAssertEqual(
+                try templateRepository.fetchTemplateDetail(id: templateID)?.name,
+                "\(label) treatment"
+            )
+
+            let read = assembly.contextFactory.makeReadContext()
+            try read.performAndWait {
+                let persisted = try XCTUnwrap(CoreDataLookup().herdOwned(
+                    CDTagColorDefinition.self, id: colorID, herdID: herdID, in: read
+                ))
+                XCTAssertTrue(persisted.objectID.persistentStore === expectedStore)
+            }
+        }
+    }
+
     @discardableResult
     private static func makeHerd(
         id: UUID,
