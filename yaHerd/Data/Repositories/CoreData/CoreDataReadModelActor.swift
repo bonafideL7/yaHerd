@@ -1249,7 +1249,7 @@ actor CoreDataReadModelActor:
             // An imported template without its Herd link has no other ownership
             // path. Do not report an incomplete list while that link is pending.
             try CoreDataWorkingTreatmentTemplateRepository.validateNoOrphanedTemplates(
-                herdID: herdID, in: context
+                herd: herd, in: context
             )
             // The Home limit does not constrain complete-Herd template IDs.
             try Self.validateHerdApplicationIDs(
