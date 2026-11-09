@@ -92,7 +92,7 @@ final class CoreDataPastureRepository:
             try CoreDataAnimalMutation.validateLinkedClinicalHistory(herd: herd, in: context)
             let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
             try CoreDataLookup().scope(request, toHerd: herd, in: context)
-        request.predicate = NSPredicate(
+            request.predicate = NSPredicate(
                 format: "herd.id == %@ AND currentPasture == %@",
                 herdID as NSUUID,
                 pasture
