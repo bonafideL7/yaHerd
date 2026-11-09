@@ -935,6 +935,7 @@ extension CoreDataFieldCheckRepository {
         let request = NSFetchRequest<CDFieldCheckSession>(
             entityName: CDFieldCheckSession.coreDataEntityName
         )
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(
             format: """
             herd == nil AND (
@@ -970,6 +971,7 @@ extension CoreDataFieldCheckRepository {
         // Child records may arrive with their owning session or animal before
         // the independent Herd link. They still belong to this Herd's history.
         let request = NSFetchRequest<Object>(entityName: Object.coreDataEntityName)
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(
             format: "herd == nil AND (session.herd == %@ OR animal.herd == %@)",
             herd, herd
@@ -996,6 +998,7 @@ private extension CoreDataFieldCheckRepository {
         let request = NSFetchRequest<CDFieldCheckSession>(
             entityName: CDFieldCheckSession.coreDataEntityName
         )
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(format: "herd == %@", herd)
         let sessions = try context.fetch(request)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
@@ -1014,6 +1017,7 @@ private extension CoreDataFieldCheckRepository {
         let request = NSFetchRequest<CDFieldCheckFinding>(
             entityName: CDFieldCheckFinding.coreDataEntityName
         )
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(format: "herd == %@", herd)
         return try context.fetch(request)
     }
@@ -1025,6 +1029,7 @@ private extension CoreDataFieldCheckRepository {
         let request = NSFetchRequest<CDFieldCheckAnimalCheck>(
             entityName: CDFieldCheckAnimalCheck.coreDataEntityName
         )
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(format: "herd == %@", herd)
         return try context.fetch(request)
     }
@@ -1037,6 +1042,7 @@ private extension CoreDataFieldCheckRepository {
         let request = NSFetchRequest<CDAnimal>(
             entityName: CDAnimal.coreDataEntityName
         )
+        try CoreDataLookup().scope(request, toHerd: herd, in: context)
         request.predicate = NSPredicate(
             format: "herd == %@ AND currentPasture == %@",
             herd,
