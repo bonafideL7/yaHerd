@@ -5,6 +5,86 @@ import XCTest
 
 @MainActor
 final class CoreDataWorkingRepositoryContractTests: XCTestCase {
+
+    func testSharedStoreOrphanedTemplateDoesNotBlockPrivateTemplateOperations() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let coordinator = try XCTUnwrap(
+            assembly.contextFactory.makeReadContext().persistentStoreCoordinator
+        )
+        let privateStore = try XCTUnwrap(coordinator.persistentStores.first)
+        let sharedStore = try coordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType,
+            configurationName: nil,
+            at: harness.directoryURL.appendingPathComponent("template-shared.sqlite"),
+            options: nil
+        )
+        let privateHerdID = UUID()
+        let sharedHerdID = UUID()
+        let importedTemplateID = UUID()
+
+        let seed = try assembly.contextFactory.makeWriteContext()
+        try seed.performAndWait {
+            let privateHerd = CDHerd(context: seed)
+            privateHerd.id = privateHerdID
+            privateHerd.name = "Owned"
+            privateHerd.createdAt = Date(timeIntervalSince1970: 100)
+            privateHerd.updatedAt = Date(timeIntervalSince1970: 100)
+            seed.assign(privateHerd, to: privateStore)
+
+            let sharedHerd = CDHerd(context: seed)
+            sharedHerd.id = sharedHerdID
+            sharedHerd.name = "Shared"
+            sharedHerd.createdAt = Date(timeIntervalSince1970: 100)
+            sharedHerd.updatedAt = Date(timeIntervalSince1970: 100)
+            seed.assign(sharedHerd, to: sharedStore)
+
+            let orphan = CDWorkingTreatmentTemplate(context: seed)
+            orphan.id = importedTemplateID
+            orphan.name = "Pending shared template"
+            orphan.itemsData = Data("[]".utf8)
+            seed.assign(orphan, to: sharedStore)
+            try seed.save()
+        }
+
+        let privateRepository = CoreDataWorkingTreatmentTemplateRepository(
+            selection: AppCurrentHerdSelection(currentHerdID: privateHerdID),
+            assembly: assembly
+        )
+        XCTAssertTrue(try privateRepository.fetchTemplates().isEmpty)
+        let createdID = try privateRepository.createTemplate(
+            name: "Private treatment", items: []
+        )
+        XCTAssertEqual(try privateRepository.fetchTemplates().map(\\.id), [createdID])
+
+        let sharedRepository = CoreDataWorkingTreatmentTemplateRepository(
+            selection: AppCurrentHerdSelection(currentHerdID: sharedHerdID),
+            assembly: assembly
+        )
+        XCTAssertThrowsError(try sharedRepository.fetchTemplates()) { error in
+            XCTAssertEqual(
+                error as? CoreDataWorkingRepositoryError,
+                .invalidHerdOwnership(
+                    relationship: "template.herd",
+                    expectedHerdID: sharedHerdID,
+                    actualHerdID: nil
+                )
+            )
+        }
+
+        let verify = assembly.contextFactory.makeReadContext()
+        try verify.performAndWait {
+            let request = NSFetchRequest<CDWorkingTreatmentTemplate>(
+                entityName: CDWorkingTreatmentTemplate.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "id == %@", importedTemplateID as NSUUID)
+            request.affectedStores = [sharedStore]
+            let orphan = try XCTUnwrap(verify.fetch(request).first)
+            XCTAssertNil(orphan.herd)
+            XCTAssertEqual(orphan.name, "Pending shared template")
+        }
+    }
+
     func testCompletionRejectsImportedCurrentPastureWithoutUUIDAndPreservesSourceHistory() async throws {
         let environment = try await CoreDataWorkingContractEnvironment.make()
         let pastures = environment.makePastureRepository()
