@@ -79,7 +79,7 @@ final class CoreDataSampleDataSeeder: SampleDataSeeding {
             )
         }
         let lookup = assembly.lookup
-        let inserted = try await assembly.transactionExecutor.performWrite { context in
+        let inserted = try await assembly.transactionExecutor.performWrite(herdID: herdID) { context in
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }

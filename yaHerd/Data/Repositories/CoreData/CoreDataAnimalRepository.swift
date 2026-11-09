@@ -1357,6 +1357,7 @@ final class CoreDataAnimalRepository:
 
         do {
             let result = try await transactionExecutor.performWrite(
+                herdID: herdID,
                 beforeSave: beforeSave
             ) { context in
                 guard let herd = try lookup.herd(id: herdID, in: context) else {
@@ -1471,7 +1472,7 @@ final class CoreDataAnimalRepository:
                 guard context.hasChanges else {
                     return result
                 }
-
+                try lookup.prepareForSave(herdID: herdID, in: context)
                 do {
                     try context.save()
                     return result

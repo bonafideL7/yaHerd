@@ -1,4 +1,5 @@
 @preconcurrency import CoreData
+import Foundation
 
 final class CoreDataTransactionExecutor {
     private let contextFactory: CoreDataContextFactory
@@ -8,6 +9,7 @@ final class CoreDataTransactionExecutor {
     }
 
     func performWrite<Result: Sendable>(
+        herdID: UUID? = nil,
         beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil,
         afterTransaction: (@Sendable () -> Void)? = nil,
         _ operation: @escaping @Sendable (NSManagedObjectContext) throws -> Result
@@ -30,6 +32,9 @@ final class CoreDataTransactionExecutor {
                 }
 
                 try beforeSave?(context)
+                if let herdID {
+                    try CoreDataLookup().prepareForSave(herdID: herdID, in: context)
+                }
 
                 do {
                     try context.save()

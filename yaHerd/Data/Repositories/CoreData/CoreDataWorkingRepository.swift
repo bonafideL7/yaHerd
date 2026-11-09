@@ -802,6 +802,7 @@ final class CoreDataWorkingRepository:
         let animalWriteBoundary = self.animalWriteBoundary
         do {
             let result = try await transactionExecutor.performWrite(
+                herdID: herdID,
                 beforeSave: beforeSave,
                 afterTransaction: {
                     animalWriteBoundary.endAnimalWrite()
