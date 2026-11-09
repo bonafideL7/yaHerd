@@ -186,13 +186,10 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
             herd.updatedAt = Date(timeIntervalSince1970: 100)
         }
 
-        let descriptions = CoreDataPersistentContainer.cloudKitStoreDescriptions(
-            privateStoreURL: harness.storeURL
-        )
-        // Simulator verification must not activate unvalidated CloudKit mirroring.
-        descriptions.forEach { $0.cloudKitContainerOptions = nil }
+        // Use the production two-store assembly without starting CloudKit in CI.
         let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
-            storeDescriptions: descriptions
+            storeURL: harness.storeURL,
+            mirroringEnabled: false
         )
         let sharedURL = harness.directoryURL.appendingPathComponent(
             CoreDataPersistentContainer.sharedStoreFileName
@@ -261,7 +258,8 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
 
         // Reopen both SQLite stores, not just fresh contexts in the same assembly.
         let reopened = try await CoreDataPersistenceAssembly.loadCloudKit(
-            storeDescriptions: descriptions
+            storeURL: harness.storeURL,
+            mirroringEnabled: false
         )
         let read = reopened.contextFactory.makeReadContext()
         try read.performAndWait {
