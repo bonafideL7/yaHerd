@@ -94,6 +94,18 @@ struct CoreDataLookup: Sendable {
                     entity: entity, herdID: herdID
                 )
             }
+            if !object.isInserted,
+               changedObjects.contains(object),
+               object is any CoreDataHerdOwnedManagedObject {
+                let committedHerd = object.committedValues(
+                    forKeys: ["herd"]
+                )["herd"] as? CDHerd
+                guard committedHerd?.objectID == herd.objectID else {
+                    throw CoreDataPersistenceError.wrongHerdMutation(
+                        entity: entity, herdID: herdID
+                    )
+                }
+            }
             if let assignedStore = object.objectID.persistentStore {
                 guard assignedStore === destination else {
                     throw CoreDataPersistenceError.wrongStoreMutation(
