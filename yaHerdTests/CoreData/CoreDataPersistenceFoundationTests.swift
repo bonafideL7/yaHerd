@@ -263,6 +263,77 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testPastureReadsAndGrazingUpdatesUseOnlySelectedHerdStore() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let coordinator = try XCTUnwrap(
+            assembly.contextFactory.makeReadContext().persistentStoreCoordinator
+        )
+        let privateStore = try XCTUnwrap(coordinator.persistentStores.first)
+        let sharedStore = try coordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType,
+            configurationName: nil,
+            at: harness.directoryURL.appendingPathComponent("yaHerd-test-shared.sqlite"),
+            options: nil
+        )
+        let privateHerdID = UUID()
+        let sharedHerdID = UUID()
+        let pastureID = UUID()
+        let grazingDate = Date(timeIntervalSince1970: 5_000)
+
+        let writer = try assembly.contextFactory.makeWriteContext()
+        try writer.performAndWait {
+            let privateHerd = Self.makeHerd(id: privateHerdID, name: "Private", in: writer)
+            writer.assign(privateHerd, to: privateStore)
+            let sharedHerd = Self.makeHerd(id: sharedHerdID, name: "Shared", in: writer)
+            writer.assign(sharedHerd, to: sharedStore)
+            let privatePasture = Self.makePasture(
+                id: pastureID, name: "Private Pasture", herd: privateHerd, in: writer
+            )
+            writer.assign(privatePasture, to: privateStore)
+            let sharedPasture = Self.makePasture(
+                id: pastureID, name: "Shared Pasture", herd: sharedHerd, in: writer
+            )
+            writer.assign(sharedPasture, to: sharedStore)
+            try writer.save()
+        }
+
+        let privateRepository = CoreDataPastureRepository(
+            selection: AppCurrentHerdSelection(currentHerdID: privateHerdID),
+            assembly: assembly
+        )
+        let sharedRepository = CoreDataPastureRepository(
+            selection: AppCurrentHerdSelection(currentHerdID: sharedHerdID),
+            assembly: assembly
+        )
+        XCTAssertEqual(try privateRepository.fetchPastures().map(\.name), ["Private Pasture"])
+        XCTAssertEqual(try sharedRepository.fetchPastures().map(\.name), ["Shared Pasture"])
+        XCTAssertEqual(
+            try privateRepository.fetchPastureDetail(id: pastureID)?.name,
+            "Private Pasture"
+        )
+        XCTAssertEqual(
+            try sharedRepository.fetchPastureDetail(id: pastureID)?.name,
+            "Shared Pasture"
+        )
+
+        try privateRepository.markPastureGrazedToday(id: pastureID, on: grazingDate)
+        let read = assembly.contextFactory.makeReadContext()
+        try read.performAndWait {
+            let lookup = CoreDataLookup()
+            XCTAssertEqual(
+                try lookup.herdOwned(
+                    CDPasture.self, id: pastureID, herdID: privateHerdID, in: read
+                )?.lastGrazedDate,
+                grazingDate
+            )
+            XCTAssertNil(try lookup.herdOwned(
+                CDPasture.self, id: pastureID, herdID: sharedHerdID, in: read
+            )?.lastGrazedDate)
+        }
+    }
+
     func testHerdOwnedLookupScopesSameApplicationUUIDByHerd() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let herdAID = UUID()
