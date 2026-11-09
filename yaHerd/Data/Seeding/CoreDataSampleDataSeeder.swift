@@ -119,7 +119,7 @@ enum CoreDataSampleHerdFactory {
         // Template imports can precede their Herd link; never seed conflicting
         // definitions before the pending ownership relationship is resolved.
         try CoreDataWorkingTreatmentTemplateRepository.validateNoOrphanedTemplates(
-            herdID: (try herd.requiredID()), in: context
+            herd: herd, in: context
         )
         // A group can exist without a Pasture. Do not overwrite or create
         // duplicate logical group names in a user-configured Herd.
