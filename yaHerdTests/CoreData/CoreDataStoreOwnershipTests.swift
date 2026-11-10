@@ -900,6 +900,106 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         }
     }
 
+
+    func testDashboardRejectsMissingImportedWorkingSessionIDOnlyInOwningStore() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL,
+            mirroringEnabled: false
+        )
+        let coordinator = try XCTUnwrap(
+            assembly.contextFactory.makeReadContext().persistentStoreCoordinator
+        )
+        let privateStore = try XCTUnwrap(coordinator.persistentStores.first {
+            $0.url == harness.storeURL
+        })
+        let sharedStoreURL = harness.directoryURL.appendingPathComponent(
+            CoreDataPersistentContainer.sharedStoreFileName
+        )
+        let sharedStore = try XCTUnwrap(coordinator.persistentStores.first {
+            $0.url == sharedStoreURL
+        })
+        let privateHerdID = UUID()
+        let sharedHerdID = UUID()
+
+        let writer = try assembly.contextFactory.makeWriteContext()
+        try writer.performAndWait {
+            _ = Self.makeHerd(
+                id: privateHerdID, name: "Private Herd", in: writer, store: privateStore
+            )
+            let sharedHerd = Self.makeHerd(
+                id: sharedHerdID, name: "Shared Herd", in: writer, store: sharedStore
+            )
+            // A remotely imported finished session is outside the Dashboard's
+            // active-session page. Its missing UUID must still be reported.
+            let incomplete = CDWorkingSession(context: writer)
+            incomplete.id = nil
+            incomplete.herd = sharedHerd
+            incomplete.date = Date(timeIntervalSince1970: 200)
+            incomplete.statusRawValue = WorkingSessionStatus.finished.rawValue
+            incomplete.treatmentTemplateNameSnapshot = "Imported Session"
+            writer.assign(incomplete, to: sharedStore)
+            try writer.save()
+        }
+
+        let privateReader = CoreDataReadModelActor(
+            contextFactory: assembly.contextFactory,
+            lookup: CoreDataLookup(),
+            currentHerdID: { privateHerdID }
+        )
+        let sharedReader = CoreDataReadModelActor(
+            contextFactory: assembly.contextFactory,
+            lookup: CoreDataLookup(),
+            currentHerdID: { sharedHerdID }
+        )
+
+        let privateDashboard = try await privateReader.fetchDashboardRecords()
+        XCTAssertTrue(privateDashboard.workingSessions.isEmpty)
+
+        do {
+            _ = try await sharedReader.fetchDashboardRecords()
+            XCTFail("A selected Herd must reject an imported session without its UUID.")
+        } catch let error as CoreDataPersistenceError {
+            XCTAssertEqual(
+                error,
+                .missingApplicationID(entity: CDWorkingSession.coreDataEntityName)
+            )
+        }
+
+        // Restoring the imported UUID must restore normal reads without
+        // altering the private Herd or recreating the shared session.
+        let restoredID = UUID()
+        try writer.performAndWait {
+            let request = NSFetchRequest<CDWorkingSession>(
+                entityName: CDWorkingSession.coreDataEntityName
+            )
+            request.affectedStores = [sharedStore]
+            request.predicate = NSPredicate(
+                format: "herd.id == %@ AND id == nil",
+                sharedHerdID as NSUUID
+            )
+            let incomplete = try XCTUnwrap(writer.fetch(request).first)
+            incomplete.id = restoredID
+            try writer.save()
+        }
+        let restoredSharedDashboard = try await sharedReader.fetchDashboardRecords()
+        XCTAssertTrue(restoredSharedDashboard.workingSessions.isEmpty)
+        let restoredPrivateDashboard = try await privateReader.fetchDashboardRecords()
+        XCTAssertTrue(restoredPrivateDashboard.workingSessions.isEmpty)
+        let read = assembly.contextFactory.makeReadContext()
+        try read.performAndWait {
+            let sharedHerd = try XCTUnwrap(
+                CoreDataLookup().herd(id: sharedHerdID, in: read)
+            )
+            let request = NSFetchRequest<CDWorkingSession>(
+                entityName: CDWorkingSession.coreDataEntityName
+            )
+            request.affectedStores = [sharedStore]
+            request.predicate = NSPredicate(format: "herd == %@", sharedHerd)
+            XCTAssertEqual(try read.fetch(request).map(\.id), [restoredID])
+        }
+    }
+
     @discardableResult
     private static func makeHerd(
         id: UUID,
