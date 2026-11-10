@@ -360,14 +360,30 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
         )
         descriptions.forEach { $0.cloudKitContainerOptions = nil }
 
-        do {
-            _ = try await CoreDataPersistentContainer.loadCloudKit(
-                storeDescriptions: descriptions
-            )
-            XCTFail("A hard link must not make one SQLite file both private and shared.")
-        } catch let error as CoreDataPersistenceError {
-            guard case .storeLoadFailed = error else {
-                return XCTFail("Expected a store topology error, got \(error).")
+        // Both a direct hard link and a symlink to a hard-linked alias must
+        // fail before Core Data opens either store. Resolving only the URLs
+        // (or looking up the symlink's inode) does not catch both cases.
+        for variant in 0..<2 {
+            if variant == 1 {
+                let aliasURL = harness.directoryURL.appendingPathComponent(
+                    "shared-hard-link-alias.sqlite"
+                )
+                try FileManager.default.moveItem(at: sharedURL, to: aliasURL)
+                try FileManager.default.createSymbolicLink(
+                    at: sharedURL,
+                    withDestinationURL: aliasURL
+                )
+            }
+
+            do {
+                _ = try await CoreDataPersistentContainer.loadCloudKit(
+                    storeDescriptions: descriptions
+                )
+                XCTFail("A hard link must not make one SQLite file both private and shared.")
+            } catch let error as CoreDataPersistenceError {
+                guard case .storeLoadFailed = error else {
+                    return XCTFail("Expected a store topology error, got \(error).")
+                }
             }
         }
 
