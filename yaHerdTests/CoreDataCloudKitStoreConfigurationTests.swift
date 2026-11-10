@@ -146,7 +146,6 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
             privateStoreURL: harness.storeURL
         )
         descriptions.forEach { $0.cloudKitContainerOptions = nil }
-        // A directory cannot be opened as the shared SQLite file.
         // An invalid SQLite payload exercises the actual per-store load failure,
         // rather than being rejected by the topology preflight.
         let sharedURL = harness.directoryURL.appendingPathComponent(
