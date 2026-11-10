@@ -336,6 +336,51 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
         ))
     }
 
+    func testTwoStoreLoaderRejectsHardLinkedPrivateAndSharedSQLiteFiles() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let existingAssembly = try await harness.makeAssembly()
+        let herdID = UUID()
+
+        try await existingAssembly.transactionExecutor.performWrite { context in
+            let herd = CDHerd(context: context)
+            herd.id = herdID
+            herd.name = "Existing Private Herd"
+            herd.createdAt = Date(timeIntervalSince1970: 100)
+            herd.updatedAt = Date(timeIntervalSince1970: 100)
+        }
+
+        let sharedURL = harness.directoryURL.appendingPathComponent(
+            CoreDataPersistentContainer.sharedStoreFileName
+        )
+        try FileManager.default.linkItem(at: harness.storeURL, to: sharedURL)
+        XCTAssertNotEqual(harness.storeURL, sharedURL)
+
+        let descriptions = CoreDataPersistentContainer.cloudKitStoreDescriptions(
+            privateStoreURL: harness.storeURL
+        )
+        descriptions.forEach { $0.cloudKitContainerOptions = nil }
+
+        do {
+            _ = try await CoreDataPersistentContainer.loadCloudKit(
+                storeDescriptions: descriptions
+            )
+            XCTFail("A hard link must not make one SQLite file both private and shared.")
+        } catch let error as CoreDataPersistenceError {
+            guard case .storeLoadFailed = error else {
+                return XCTFail("Expected a store topology error, got \\(error).")
+            }
+        }
+
+        let reopened = try await harness.makeAssembly(accessMode: .readOnly)
+        let read = reopened.contextFactory.makeReadContext()
+        try read.performAndWait {
+            XCTAssertEqual(
+                try CoreDataLookup().herd(id: herdID, in: read)?.name,
+                "Existing Private Herd"
+            )
+        }
+    }
+
     func testTwoStoreLoaderRejectsIncorrectCloudKitScopesWithoutOpeningStores() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
