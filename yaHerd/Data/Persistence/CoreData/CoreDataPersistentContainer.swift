@@ -183,11 +183,13 @@ final class CoreDataPersistentContainer {
         // Different URLs can still point at one physical SQLite file via hard
         // links. A private store must never also be attached as a shared store.
         let fileManager = FileManager.default
+        let privateFilePath = privateURL.standardizedFileURL.resolvingSymlinksInPath().path
+        let sharedFilePath = sharedURL.standardizedFileURL.resolvingSymlinksInPath().path
         if let privateFileNumber = try? fileManager.attributesOfItem(
-            atPath: privateURL.path
+            atPath: privateFilePath
         )[.systemFileNumber] as? NSNumber,
            let sharedFileNumber = try? fileManager.attributesOfItem(
-            atPath: sharedURL.path
+            atPath: sharedFilePath
            )[.systemFileNumber] as? NSNumber,
            privateFileNumber == sharedFileNumber {
             throw CoreDataPersistenceError.storeLoadFailed(
