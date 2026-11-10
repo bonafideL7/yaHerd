@@ -383,7 +383,6 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: privateURL.path))
     }
 
-
     func testTwoStoreLoaderRejectsSwappedSQLiteURLsBeforeTouchingExistingHerd() async throws {
         let harness = try CoreDataPersistenceHarness()
         let existingAssembly = try await harness.makeAssembly()
@@ -416,7 +415,7 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
             XCTFail("Swapped private and shared SQLite URLs must be rejected.")
         } catch let error as CoreDataPersistenceError {
             guard case .storeLoadFailed = error else {
-                return XCTFail("Expected a store topology error, got \\(error).")
+                return XCTFail("Expected a store topology error, got \(error).")
             }
         }
 
