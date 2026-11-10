@@ -61,9 +61,22 @@ struct CoreDataLookup: Sendable {
         toHerd herd: CDHerd,
         in context: NSManagedObjectContext
     ) throws {
-        if !herd.isInserted {
-            request.affectedStores = [try owningStore(of: herd, in: context)]
+        if herd.isInserted {
+            // Core Data has not assigned a permanent store identity to this
+            // Herd yet. In a two-store context, an unrestricted fetch can read
+            // private and shared records before the new Herd has an owner.
+            // Keep the existing single-store creation path functional.
+            guard let stores = context.persistentStoreCoordinator?.persistentStores,
+                  stores.count == 1,
+                  let store = stores.first else {
+                throw CoreDataPersistenceError.unresolvedHerdStore(
+                    id: try herd.requiredID()
+                )
+            }
+            request.affectedStores = [store]
+            return
         }
+        request.affectedStores = [try owningStore(of: herd, in: context)]
     }
 
     /// Validate the complete pending transaction against its selected Herd
