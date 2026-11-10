@@ -367,7 +367,7 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
             XCTFail("A hard link must not make one SQLite file both private and shared.")
         } catch let error as CoreDataPersistenceError {
             guard case .storeLoadFailed = error else {
-                return XCTFail("Expected a store topology error, got \\(error).")
+                return XCTFail("Expected a store topology error, got \(error).")
             }
         }
 
