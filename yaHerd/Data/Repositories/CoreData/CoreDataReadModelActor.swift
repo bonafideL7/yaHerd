@@ -1350,7 +1350,7 @@ actor CoreDataReadModelActor:
                     id = nil
                 }
                 guard let id else {
-                    continue
+                    throw CoreDataPersistenceError.missingApplicationID(entity: entityName)
                 }
                 if previousID == id {
                     throw CoreDataPersistenceError.duplicateApplicationID(
