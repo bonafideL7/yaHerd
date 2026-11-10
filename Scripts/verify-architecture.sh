@@ -335,13 +335,11 @@ else:
 expected_entitlements = {
     "com.apple.developer.icloud-container-identifiers": [container_id],
     "com.apple.developer.icloud-services": ["CloudKit"],
-    "aps-environment": "development",
 }
 if entitlements != expected_entitlements:
     failures.append(
-        f"{entitlements_path}: expected only the CloudKit container, CloudKit service, "
-        "and development APNs entitlement; Xcode selects the signed APNs environment "
-        "from the provisioning profile"
+        f"{entitlements_path}: expected only CloudKit container and service entitlements; "
+        "Xcode must select the APNs environment from the signing provisioning profile"
     )
 
 # Preserve the existing rule for every other entitlement file; approval is
@@ -359,6 +357,19 @@ for other_entitlements in Path(".").rglob("*.entitlements"):
             failures.append(
                 f"{other_entitlements}:{line_number}: unapproved iCloud/CloudKit capability"
             )
+
+# Automatic signing must choose a development or distribution identity for
+# Release. Pinning Apple Development in Release risks packaging an incorrect
+# APNs environment for a distribution build.
+release_settings = re.search(
+    r"8D40A2992EDAA2A200C89DD2 /\* Release \*/ = \{.*?buildSettings = \{(.*?)\};",
+    project_text,
+    re.S,
+)
+if not release_settings or 'CODE_SIGN_IDENTITY = "Apple Development";' in release_settings.group(1):
+    failures.append(
+        "yaHerd.xcodeproj: Release must not force an Apple Development signing identity"
+    )
 
 if project_text.count("CODE_SIGN_ENTITLEMENTS = yaHerd/yaHerd.entitlements;") != 2:
     failures.append("yaHerd.xcodeproj: Debug and Release app builds must use CloudKit entitlements")
