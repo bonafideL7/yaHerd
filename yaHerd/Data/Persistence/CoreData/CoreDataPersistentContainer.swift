@@ -134,6 +134,38 @@ final class CoreDataPersistentContainer {
             )
         }
 
+        // Reject an invalid topology before Core Data opens either store.
+        // Loading two descriptions for the same SQLite file could expose an
+        // existing private Herd through the shared CloudKit database.
+        let privateDescription = storeDescriptions[0]
+        let sharedDescription = storeDescriptions[1]
+        guard privateDescription.type == NSSQLiteStoreType,
+              sharedDescription.type == NSSQLiteStoreType,
+              let privateURL = privateDescription.url, privateURL.isFileURL,
+              let sharedURL = sharedDescription.url, sharedURL.isFileURL,
+              privateURL.standardizedFileURL.resolvingSymlinksInPath()
+                != sharedURL.standardizedFileURL.resolvingSymlinksInPath() else {
+            throw CoreDataPersistenceError.storeLoadFailed(
+                url: sharedDescription.url,
+                description: "Private and shared stores require distinct local SQLite files."
+            )
+        }
+
+        let privateOptions = privateDescription.cloudKitContainerOptions
+        let sharedOptions = sharedDescription.cloudKitContainerOptions
+        let localOnly = privateOptions == nil && sharedOptions == nil
+        let cloudKitConfigured =
+            privateOptions?.databaseScope == .private
+            && sharedOptions?.databaseScope == .shared
+            && privateOptions?.containerIdentifier == cloudKitContainerIdentifier
+            && sharedOptions?.containerIdentifier == cloudKitContainerIdentifier
+        guard localOnly || cloudKitConfigured else {
+            throw CoreDataPersistenceError.storeLoadFailed(
+                url: sharedURL,
+                description: "Private and shared CloudKit scopes must both match the configured container."
+            )
+        }
+
         let model = try loadModel()
         let container = NSPersistentCloudKitContainer(
             name: modelName,

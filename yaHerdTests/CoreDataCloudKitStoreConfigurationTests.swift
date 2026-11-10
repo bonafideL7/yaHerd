@@ -290,4 +290,90 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
         }
     }
 
+    func testTwoStoreLoaderRejectsDuplicateFileAndSymlinkBeforeTouchingPrivateData() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let privateURL = directory.appendingPathComponent("yaHerd.sqlite")
+        let original = Data("existing local Herd sentinel".utf8)
+        try original.write(to: privateURL)
+
+        let aliasURL = directory.appendingPathComponent("same-store-alias.sqlite")
+        try FileManager.default.createSymbolicLink(at: aliasURL, withDestinationURL: privateURL)
+
+        for duplicateURL in [privateURL, aliasURL] {
+            let descriptions = CoreDataPersistentContainer.cloudKitStoreDescriptions(
+                privateStoreURL: privateURL
+            )
+            descriptions.forEach { $0.cloudKitContainerOptions = nil }
+            descriptions[1].url = duplicateURL
+
+            do {
+                _ = try await CoreDataPersistentContainer.loadCloudKit(
+                    storeDescriptions: descriptions
+                )
+                XCTFail("A private SQLite file cannot also be the shared store.")
+            } catch let error as CoreDataPersistenceError {
+                guard case .storeLoadFailed = error else {
+                    return XCTFail("Expected a store topology error, got \(error).")
+                }
+            }
+            XCTAssertEqual(try Data(contentsOf: privateURL), original)
+        }
+
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent(
+                CoreDataPersistentContainer.sharedStoreFileName
+            ).path
+        ))
+    }
+
+    func testTwoStoreLoaderRejectsIncorrectCloudKitScopesWithoutOpeningStores() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let privateURL = directory.appendingPathComponent("yaHerd.sqlite")
+        let descriptions = CoreDataPersistentContainer.cloudKitStoreDescriptions(
+            privateStoreURL: privateURL
+        )
+        let privateOptions = descriptions[0].cloudKitContainerOptions
+        descriptions[0].cloudKitContainerOptions = descriptions[1].cloudKitContainerOptions
+        descriptions[1].cloudKitContainerOptions = privateOptions
+
+        do {
+            _ = try await CoreDataPersistentContainer.loadCloudKit(
+                storeDescriptions: descriptions
+            )
+            XCTFail("Swapped private and shared CloudKit scopes must be rejected.")
+        } catch let error as CoreDataPersistenceError {
+            guard case .storeLoadFailed = error else {
+                return XCTFail("Expected a CloudKit scope error, got \(error).")
+            }
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: privateURL.path))
+    }
+
+    func testTwoStoreLoaderRejectsMixedMirroredAndLocalConfiguration() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let privateURL = directory.appendingPathComponent("yaHerd.sqlite")
+        let descriptions = CoreDataPersistentContainer.cloudKitStoreDescriptions(
+            privateStoreURL: privateURL
+        )
+        descriptions[1].cloudKitContainerOptions = nil
+
+        do {
+            _ = try await CoreDataPersistentContainer.loadCloudKit(
+                storeDescriptions: descriptions
+            )
+            XCTFail("A local-only shared store cannot accompany a mirrored private store.")
+        } catch let error as CoreDataPersistenceError {
+            guard case .storeLoadFailed = error else {
+                return XCTFail("Expected a mismatched mirroring configuration error, got \(error).")
+            }
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: privateURL.path))
+    }
+
 }
