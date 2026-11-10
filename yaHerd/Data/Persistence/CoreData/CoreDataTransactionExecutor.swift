@@ -26,6 +26,14 @@ final class CoreDataTransactionExecutor {
             defer { afterTransaction?() }
 
             do {
+                // The legacy unscoped entry point is valid only while one store
+                // is loaded. In a private/shared container, an unqualified
+                // insert (including legacy Herd bootstrap) has no safe owner.
+                guard herdID != nil
+                        || context.persistentStoreCoordinator?.persistentStores.count == 1 else {
+                    throw CoreDataPersistenceError.unscopedMultiStoreWrite
+                }
+
                 let result = try operation(context)
                 guard context.hasChanges else {
                     return result
