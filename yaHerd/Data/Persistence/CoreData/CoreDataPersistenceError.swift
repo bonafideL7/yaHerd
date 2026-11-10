@@ -9,6 +9,7 @@ enum CoreDataPersistenceError: LocalizedError, Equatable {
     case unresolvedHerdStore(id: UUID)
     case wrongHerdMutation(entity: String, herdID: UUID)
     case wrongStoreMutation(entity: String, herdID: UUID)
+    case unscopedMultiStoreWrite
     case tagColorMaterializationInProgress(id: UUID, herdID: UUID)
     case tagColorDefaultMaterializationInProgress(herdID: UUID)
     case readOnlyStore
@@ -35,6 +36,8 @@ enum CoreDataPersistenceError: LocalizedError, Equatable {
             return "The pending \(entity) change does not belong to selected Herd \(herdID.uuidString)."
         case let .wrongStoreMutation(entity, herdID):
             return "The pending \(entity) change belongs to a different persistent store than Herd \(herdID.uuidString)."
+        case .unscopedMultiStoreWrite:
+            return "A write to private and shared Herd stores requires a selected Herd and its owning persistent store."
         case let .tagColorMaterializationInProgress(id, herdID):
             return "Tag color \(id.uuidString) is already being materialized in Herd \(herdID.uuidString). Retry the change after the in-flight transaction completes."
         case let .tagColorDefaultMaterializationInProgress(herdID):
