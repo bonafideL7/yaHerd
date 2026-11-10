@@ -83,7 +83,7 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         let context = assembly.contextFactory.makeReadContext()
         let herdID = UUID()
 
-        context.performAndWait {
+        try context.performAndWait {
             let unsavedHerd = CDHerd(context: context)
             unsavedHerd.id = herdID
             unsavedHerd.name = "Unpersisted Herd"
