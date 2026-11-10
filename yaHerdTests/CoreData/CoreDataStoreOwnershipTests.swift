@@ -858,6 +858,48 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         }
     }
 
+    func testTwoStoreUnscopedTransactionsCannotCreateAnAmbiguousHerd() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL,
+            mirroringEnabled: false
+        )
+        let attemptedHerdID = UUID()
+
+        // The old one-store transaction entry point must not pick an arbitrary
+        // private/shared destination when no owning Herd has been supplied.
+        do {
+            try await assembly.transactionExecutor.performWrite { context in
+                let herd = CDHerd(context: context)
+                herd.id = attemptedHerdID
+                herd.name = "Unscoped Herd"
+                herd.createdAt = Date(timeIntervalSince1970: 100)
+                herd.updatedAt = Date(timeIntervalSince1970: 100)
+            }
+            XCTFail("An unscoped transaction must not write through a two-store container.")
+        } catch let error as CoreDataPersistenceError {
+            XCTAssertEqual(error, .unscopedMultiStoreWrite)
+        }
+
+        // Until the multi-Herd lifecycle is implemented, legacy single-Herd
+        // bootstrap must also refuse to invent a root in either CloudKit scope.
+        do {
+            _ = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+                assembly: assembly
+            )
+            XCTFail("Legacy bootstrap must not choose a store for a new Herd.")
+        } catch let error as CoreDataPersistenceError {
+            XCTAssertEqual(error, .unscopedMultiStoreWrite)
+        }
+
+        let read = assembly.contextFactory.makeReadContext()
+        try read.performAndWait {
+            let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            XCTAssertEqual(try read.count(for: request), 0)
+            XCTAssertNil(try CoreDataLookup().herd(id: attemptedHerdID, in: read))
+        }
+    }
+
     @discardableResult
     private static func makeHerd(
         id: UUID,
