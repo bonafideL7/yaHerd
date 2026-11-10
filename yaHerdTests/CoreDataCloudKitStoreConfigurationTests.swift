@@ -147,7 +147,13 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
         )
         descriptions.forEach { $0.cloudKitContainerOptions = nil }
         // A directory cannot be opened as the shared SQLite file.
-        descriptions[1].url = harness.directoryURL
+        // An invalid SQLite payload exercises the actual per-store load failure,
+        // rather than being rejected by the topology preflight.
+        let sharedURL = harness.directoryURL.appendingPathComponent(
+            CoreDataPersistentContainer.sharedStoreFileName
+        )
+        let invalidSharedStore = Data("not a SQLite database".utf8)
+        try invalidSharedStore.write(to: sharedURL)
 
         do {
             _ = try await CoreDataPersistentContainer.loadCloudKit(
@@ -160,6 +166,7 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
             }
         }
 
+        XCTAssertEqual(try Data(contentsOf: sharedURL), invalidSharedStore)
         let reopenedLocal = try await harness.makeAssembly(accessMode: .readOnly)
         let context = reopenedLocal.contextFactory.makeReadContext()
         try context.performAndWait {
@@ -376,4 +383,53 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: privateURL.path))
     }
 
+
+    func testTwoStoreLoaderRejectsSwappedSQLiteURLsBeforeTouchingExistingHerd() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let existingAssembly = try await harness.makeAssembly()
+        let ownedHerdID = UUID()
+
+        try await existingAssembly.transactionExecutor.performWrite { context in
+            let herd = CDHerd(context: context)
+            herd.id = ownedHerdID
+            herd.name = "Existing Private Herd"
+            herd.createdAt = Date(timeIntervalSince1970: 100)
+            herd.updatedAt = Date(timeIntervalSince1970: 100)
+        }
+
+        let descriptions = CoreDataPersistentContainer.cloudKitStoreDescriptions(
+            privateStoreURL: harness.storeURL
+        )
+        // Exercise the same production store loader on the unsigned CI runner.
+        descriptions.forEach { $0.cloudKitContainerOptions = nil }
+
+        // Both files have valid local URLs; merely checking that URLs differ or
+        // CloudKit scopes are in order cannot prevent reversed file ownership.
+        let sharedURL = try XCTUnwrap(descriptions[1].url)
+        descriptions[0].url = sharedURL
+        descriptions[1].url = harness.storeURL
+
+        do {
+            _ = try await CoreDataPersistentContainer.loadCloudKit(
+                storeDescriptions: descriptions
+            )
+            XCTFail("Swapped private and shared SQLite URLs must be rejected.")
+        } catch let error as CoreDataPersistenceError {
+            guard case .storeLoadFailed = error else {
+                return XCTFail("Expected a store topology error, got \\(error).")
+            }
+        }
+
+        // A failed preflight must not create the shared database or alter the
+        // existing local-only installation's private Herd.
+        XCTAssertFalse(FileManager.default.fileExists(atPath: sharedURL.path))
+        let reopened = try await harness.makeAssembly(accessMode: .readOnly)
+        let context = reopened.contextFactory.makeReadContext()
+        try context.performAndWait {
+            XCTAssertEqual(
+                try CoreDataLookup().herd(id: ownedHerdID, in: context)?.name,
+                "Existing Private Herd"
+            )
+        }
+    }
 }

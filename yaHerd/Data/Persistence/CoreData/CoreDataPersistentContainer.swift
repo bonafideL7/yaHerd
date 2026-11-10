@@ -151,6 +151,20 @@ final class CoreDataPersistentContainer {
             )
         }
 
+        // The second store must be the stable shared sibling of the first.
+        // Distinct file URLs alone cannot prevent reversed private/shared
+        // descriptions from exporting an existing Herd to the wrong database.
+        let expectedSharedURL = privateURL.deletingLastPathComponent()
+            .appendingPathComponent(sharedStoreFileName)
+            .standardizedFileURL.resolvingSymlinksInPath()
+        guard sharedURL.standardizedFileURL.resolvingSymlinksInPath()
+            == expectedSharedURL else {
+            throw CoreDataPersistenceError.storeLoadFailed(
+                url: sharedURL,
+                description: "The shared store must use the configured shared SQLite URL."
+            )
+        }
+
         let privateOptions = privateDescription.cloudKitContainerOptions
         let sharedOptions = sharedDescription.cloudKitContainerOptions
         let localOnly = privateOptions == nil && sharedOptions == nil
