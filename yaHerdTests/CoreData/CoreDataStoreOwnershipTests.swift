@@ -74,6 +74,57 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         }
     }
 
+    func testInsertedHerdCannotLeaveAReadUnscopedAcrossPrivateAndSharedStores() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL,
+            mirroringEnabled: false
+        )
+        let context = assembly.contextFactory.makeReadContext()
+        let herdID = UUID()
+
+        context.performAndWait {
+            let unsavedHerd = CDHerd(context: context)
+            unsavedHerd.id = herdID
+            unsavedHerd.name = "Unpersisted Herd"
+
+            // A newly inserted root does not identify its eventual SQLite
+            // store. An unrestricted fetch would inspect BOTH databases.
+            let request = NSFetchRequest<CDPasture>(
+                entityName: CDPasture.coreDataEntityName
+            )
+            XCTAssertThrowsError(
+                try CoreDataLookup().scope(request, toHerd: unsavedHerd, in: context)
+            ) { error in
+                XCTAssertEqual(
+                    error as? CoreDataPersistenceError,
+                    .unresolvedHerdStore(id: herdID)
+                )
+            }
+            context.rollback()
+        }
+    }
+
+    func testInsertedHerdReadScopeRetainsSingleStoreBehavior() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = assembly.contextFactory.makeReadContext()
+        let store = try XCTUnwrap(context.persistentStoreCoordinator?.persistentStores.first)
+
+        try context.performAndWait {
+            let unsavedHerd = CDHerd(context: context)
+            unsavedHerd.id = UUID()
+            unsavedHerd.name = "Unpersisted Local Herd"
+
+            let request = NSFetchRequest<CDPasture>(
+                entityName: CDPasture.coreDataEntityName
+            )
+            try CoreDataLookup().scope(request, toHerd: unsavedHerd, in: context)
+            XCTAssertEqual(request.affectedStores?.count, 1)
+            XCTAssertTrue(request.affectedStores?.first === store)
+            context.rollback()
+        }
+    }
+
     func testBackgroundPastureProjectionsUseOnlyTheSelectedHerdStore() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await harness.makeAssembly()
