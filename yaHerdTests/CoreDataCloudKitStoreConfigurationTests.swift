@@ -527,7 +527,8 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
         // database or initialize CloudKit schema on application startup.
         let harness = try CoreDataPersistenceHarness()
         let container = try await CoreDataPersistentContainer.loadCloudKit(
-            storeURL: harness.storeURL
+            storeURL: harness.storeURL,
+            mirroringEnabled: true
         )
         XCTAssertEqual(container.persistentStoreCoordinator.persistentStores.count, 2)
 
@@ -550,7 +551,8 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
 
         let harness = try CoreDataPersistenceHarness()
         let container = try await CoreDataPersistentContainer.loadCloudKit(
-            storeURL: harness.storeURL
+            storeURL: harness.storeURL,
+            mirroringEnabled: true
         )
         XCTAssertEqual(container.persistentStoreCoordinator.persistentStores.count, 2)
 
