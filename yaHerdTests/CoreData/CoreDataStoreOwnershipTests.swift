@@ -633,6 +633,67 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         }
     }
 
+    func testDeletingSelectedAnimalRejectsCascadeToForeignHerdTag() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let selectedHerdID = UUID()
+        let foreignHerdID = UUID()
+        let animalID = UUID()
+        let foreignTagID = UUID()
+        let seed = try assembly.contextFactory.makeWriteContext()
+        try seed.performAndWait {
+            let selected = CDHerd(context: seed)
+            selected.id = selectedHerdID
+            selected.name = "Selected"
+            selected.createdAt = Date(timeIntervalSince1970: 100)
+            selected.updatedAt = Date(timeIntervalSince1970: 100)
+
+            let foreign = CDHerd(context: seed)
+            foreign.id = foreignHerdID
+            foreign.name = "Foreign"
+            foreign.createdAt = Date(timeIntervalSince1970: 100)
+            foreign.updatedAt = Date(timeIntervalSince1970: 100)
+
+            let animal = CDAnimal(context: seed)
+            animal.id = animalID
+            animal.name = "Selected Cow"
+            animal.birthDate = Date(timeIntervalSince1970: 100)
+            animal.herd = selected
+
+            // Simulate an inconsistent relationship imported before the
+            // associated Herd records have finished reconciling.
+            let tag = CDAnimalTag(context: seed)
+            tag.id = foreignTagID
+            tag.number = "Foreign Tag"
+            tag.herd = foreign
+            tag.animal = animal
+            try seed.save()
+        }
+
+        do {
+            try await assembly.transactionExecutor.performWrite(herdID: selectedHerdID) { context in
+                let animal = try XCTUnwrap(CoreDataLookup().herdOwned(
+                    CDAnimal.self, id: animalID, herdID: selectedHerdID, in: context
+                ))
+                context.delete(animal)
+            }
+            XCTFail("Deleting a selected Animal must not cascade-delete a foreign Herd's tag.")
+        } catch let error as CoreDataPersistenceError {
+            guard case .wrongHerdMutation = error else {
+                return XCTFail("Expected wrongHerdMutation, got \(error).")
+            }
+        }
+
+        let read = assembly.contextFactory.makeReadContext()
+        try read.performAndWait {
+            XCTAssertNotNil(try CoreDataLookup().herdOwned(
+                CDAnimal.self, id: animalID, herdID: selectedHerdID, in: read
+            ))
+            XCTAssertNotNil(try CoreDataLookup().herdOwned(
+                CDAnimalTag.self, id: foreignTagID, herdID: foreignHerdID, in: read
+            ))
+        }
+    }
+
     func testSelectedHerdDeleteStillRejectsForeignOwnedRecord() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let selectedHerdID = UUID()
