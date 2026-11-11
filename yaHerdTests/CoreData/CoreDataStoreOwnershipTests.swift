@@ -105,6 +105,48 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         }
     }
 
+    func testInsertedHerdImportValidatorsRejectUnscopedTwoStoreReads() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL,
+            mirroringEnabled: false
+        )
+        let context = assembly.contextFactory.makeReadContext()
+        let herdID = UUID()
+
+        try context.performAndWait {
+            let unsavedHerd = CDHerd(context: context)
+            unsavedHerd.id = herdID
+            unsavedHerd.name = "Unpersisted Herd"
+            let expected = CoreDataPersistenceError.unresolvedHerdStore(id: herdID)
+
+            // These import-integrity checks must not fall back to fetching
+            // from both stores when the root has no resolved store identity.
+            XCTAssertThrowsError(
+                try CoreDataAnimalMutation.validateUnownedImportedAnimals(
+                    herd: unsavedHerd, in: context
+                )
+            ) { error in
+                XCTAssertEqual(error as? CoreDataPersistenceError, expected)
+            }
+            XCTAssertThrowsError(
+                try CoreDataAnimalMutation.validateUnownedImportedPastures(
+                    herd: unsavedHerd, in: context
+                )
+            ) { error in
+                XCTAssertEqual(error as? CoreDataPersistenceError, expected)
+            }
+            XCTAssertThrowsError(
+                try CoreDataAnimalMutation.validateLinkedImportedHistoryHerdOwnership(
+                    herd: unsavedHerd, in: context
+                )
+            ) { error in
+                XCTAssertEqual(error as? CoreDataPersistenceError, expected)
+            }
+            context.rollback()
+        }
+    }
+
     func testInsertedHerdReadScopeRetainsSingleStoreBehavior() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let context = assembly.contextFactory.makeReadContext()
@@ -121,6 +163,13 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
             try CoreDataLookup().scope(request, toHerd: unsavedHerd, in: context)
             XCTAssertEqual(request.affectedStores?.count, 1)
             XCTAssertTrue(request.affectedStores?.first === store)
+            // Existing single-store bootstrap and local validation remain valid.
+            XCTAssertNoThrow(try CoreDataAnimalMutation.validateUnownedImportedAnimals(
+                herd: unsavedHerd, in: context
+            ))
+            XCTAssertNoThrow(try CoreDataAnimalMutation.validateUnownedImportedPastures(
+                herd: unsavedHerd, in: context
+            ))
             context.rollback()
         }
     }
