@@ -240,6 +240,26 @@ final class CoreDataPersistentContainer {
         )
     }
 
+    #if DEBUG
+    /// Explicit, opt-in development validation. Apple's dry-run checks the
+    /// compiled model for both mirrored stores without uploading schema records.
+    /// This is never called by app startup or included in Release builds.
+    func validateCloudKitSchemaDryRun() throws {
+        guard let cloudKitContainer = container as? NSPersistentCloudKitContainer,
+              cloudKitContainer.persistentStoreDescriptions.count == 2,
+              cloudKitContainer.persistentStoreDescriptions.allSatisfy({
+                  $0.cloudKitContainerOptions != nil
+              }) else {
+            throw CoreDataPersistenceError.storeLoadFailed(
+                url: storeURL,
+                description: "CloudKit schema validation requires mirrored private and shared stores."
+            )
+        }
+
+        try cloudKitContainer.initializeCloudKitSchema(options: [.dryRun])
+    }
+    #endif
+
     private static func load(
         storeURL: URL?,
         storeType: String,
