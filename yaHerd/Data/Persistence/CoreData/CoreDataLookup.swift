@@ -154,6 +154,22 @@ struct CoreDataLookup: Sendable {
                     try validateOwnership(relatedObject)
                 }
             }
+
+            // Core Data can cascade-delete children when a parent is removed,
+            // even if those children were not explicitly changed by the caller.
+            // Inspect the committed cascade graph before saving so an imported
+            // cross-Herd relationship cannot delete another Herd's records.
+            if object.isDeleted {
+                for relationship in object.entity.relationshipsByName.values
+                where relationship.isToMany && relationship.deleteRule == .cascadeDeleteRule {
+                    let related = object.committedValues(
+                        forKeys: [relationship.name]
+                    )[relationship.name] as? NSSet
+                    for case let child as NSManagedObject in related ?? NSSet() {
+                        try validateOwnership(child)
+                    }
+                }
+            }
         }
 
         for object in context.insertedObjects {
