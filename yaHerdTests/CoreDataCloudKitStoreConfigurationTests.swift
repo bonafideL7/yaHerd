@@ -502,7 +502,7 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
 
         XCTAssertThrowsError(try container.validateCloudKitSchemaDryRun()) { error in
             guard case .storeLoadFailed = error as? CoreDataPersistenceError else {
-                return XCTFail("Expected mirrored-store preflight failure, got \\(error).")
+                return XCTFail("Expected mirrored-store preflight failure, got \(error).")
             }
         }
     }
