@@ -164,7 +164,17 @@ enum CoreDataAnimalMutation {
         in context: NSManagedObjectContext
     ) throws -> NSPersistentStore? {
         if herd.isInserted {
-            return herd.objectID.persistentStore
+            // A temporary Herd has no authoritative CloudKit store. Match
+            // CoreDataLookup.scope: permit local single-store validation, but
+            // never let nil affectedStores scan private and shared stores.
+            guard let stores = context.persistentStoreCoordinator?.persistentStores,
+                  stores.count == 1,
+                  let store = stores.first else {
+                throw CoreDataPersistenceError.unresolvedHerdStore(
+                    id: try herd.requiredID()
+                )
+            }
+            return store
         }
         guard let store = try CoreDataLookup().store(
             forHerdID: (try herd.requiredID()),
