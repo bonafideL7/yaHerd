@@ -491,4 +491,44 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
             )
         }
     }
+
+    #if DEBUG
+    func testSchemaDryRunRejectsLocalOnlyStoreDescriptions() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let container = try await CoreDataPersistentContainer.loadCloudKit(
+            storeURL: harness.storeURL,
+            mirroringEnabled: false
+        )
+
+        XCTAssertThrowsError(try container.validateCloudKitSchemaDryRun()) { error in
+            guard case .storeLoadFailed = error as? CoreDataPersistenceError else {
+                return XCTFail("Expected mirrored-store preflight failure, got \\(error).")
+            }
+        }
+    }
+
+    func testSignedDevelopmentCloudKitSchemaDryRun() async throws {
+        // Run explicitly from a development-signed Xcode test scheme with
+        // YAHERD_CLOUDKIT_SCHEMA_DRY_RUN=1 in the test process environment.
+        // CI deliberately uses unsigned simulator builds and skips this test.
+        guard ProcessInfo.processInfo.environment["YAHERD_CLOUDKIT_SCHEMA_DRY_RUN"] == "1" else {
+            throw XCTSkip(
+                "Signed CloudKit schema validation requires explicit opt-in: " +
+                "set YAHERD_CLOUDKIT_SCHEMA_DRY_RUN=1 in the signed development test scheme."
+            )
+        }
+
+        // This fresh, isolated store pair must never open the user's existing
+        // database or initialize CloudKit schema on application startup.
+        let harness = try CoreDataPersistenceHarness()
+        let container = try await CoreDataPersistentContainer.loadCloudKit(
+            storeURL: harness.storeURL
+        )
+        XCTAssertEqual(container.persistentStoreCoordinator.persistentStores.count, 2)
+
+        // Apple's dry-run validates schema compatibility and does not upload
+        // representative records to CloudKit.
+        try container.validateCloudKitSchemaDryRun()
+    }
+    #endif
 }
