@@ -669,6 +669,14 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
             try seed.save()
         }
 
+        let persisted = assembly.contextFactory.makeReadContext()
+        try persisted.performAndWait {
+            let tag = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDAnimalTag.self, id: foreignTagID, herdID: foreignHerdID, in: persisted
+            ))
+            XCTAssertEqual(tag.animal?.id, animalID)
+        }
+
         do {
             try await assembly.transactionExecutor.performWrite(herdID: selectedHerdID) { context in
                 let animal = try XCTUnwrap(CoreDataLookup().herdOwned(
