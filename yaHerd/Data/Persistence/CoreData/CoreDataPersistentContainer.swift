@@ -245,6 +245,17 @@ final class CoreDataPersistentContainer {
     /// compiled model for both mirrored stores without uploading schema records.
     /// This is never called by app startup or included in Release builds.
     func validateCloudKitSchemaDryRun() throws {
+        try mirroredCloudKitContainer().initializeCloudKitSchema(options: [.dryRun])
+    }
+
+    /// Uploads representative records to initialize the CloudKit DEVELOPMENT
+    /// schema. Only call from an explicitly opted-in development-signed test.
+    /// Never call during normal app launch or when provisioned for production.
+    func initializeDevelopmentCloudKitSchema() throws {
+        try mirroredCloudKitContainer().initializeCloudKitSchema(options: [])
+    }
+
+    private func mirroredCloudKitContainer() throws -> NSPersistentCloudKitContainer {
         guard let cloudKitContainer = container as? NSPersistentCloudKitContainer,
               cloudKitContainer.persistentStoreDescriptions.count == 2,
               cloudKitContainer.persistentStoreDescriptions.allSatisfy({
@@ -255,8 +266,7 @@ final class CoreDataPersistentContainer {
                 description: "CloudKit schema validation requires mirrored private and shared stores."
             )
         }
-
-        try cloudKitContainer.initializeCloudKitSchema(options: [.dryRun])
+        return cloudKitContainer
     }
     #endif
 
