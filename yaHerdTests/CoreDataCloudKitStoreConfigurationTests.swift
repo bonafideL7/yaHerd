@@ -505,6 +505,11 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
                 return XCTFail("Expected mirrored-store preflight failure, got \(error).")
             }
         }
+        XCTAssertThrowsError(try container.initializeDevelopmentCloudKitSchema()) { error in
+            guard case .storeLoadFailed = error as? CoreDataPersistenceError else {
+                return XCTFail("Expected mirrored-store preflight failure, got \(error).")
+            }
+        }
     }
 
     func testSignedDevelopmentCloudKitSchemaDryRun() async throws {
@@ -529,6 +534,30 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
         // Apple's dry-run validates schema compatibility and does not upload
         // representative records to CloudKit.
         try container.validateCloudKitSchemaDryRun()
+    }
+
+    func testSignedDevelopmentCloudKitSchemaInitialization() async throws {
+        // This test uploads representative records to the DEVELOPMENT
+        // CloudKit environment. Run only with a development-provisioned
+        // test host and YAHERD_CLOUDKIT_SCHEMA_INITIALIZE=1 explicitly set.
+        // It must never run during ordinary app launch or unsigned CI.
+        guard ProcessInfo.processInfo.environment["YAHERD_CLOUDKIT_SCHEMA_INITIALIZE"] == "1" else {
+            throw XCTSkip(
+                "Development CloudKit schema initialization requires explicit opt-in: " +
+                "set YAHERD_CLOUDKIT_SCHEMA_INITIALIZE=1 in a development-signed test scheme."
+            )
+        }
+
+        let harness = try CoreDataPersistenceHarness()
+        let container = try await CoreDataPersistentContainer.loadCloudKit(
+            storeURL: harness.storeURL
+        )
+        XCTAssertEqual(container.persistentStoreCoordinator.persistentStores.count, 2)
+
+        // Validate locally before creating record types in the development
+        // CloudKit schema. Isolated SQLite files leave existing data untouched.
+        try container.validateCloudKitSchemaDryRun()
+        try container.initializeDevelopmentCloudKitSchema()
     }
     #endif
 }
