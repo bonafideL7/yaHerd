@@ -146,8 +146,9 @@ struct CoreDataLookup: Sendable {
             try validateOwnership(object)
             // A child can have the correct Herd relationship but still refer to
             // an animal, pasture, group, or session owned by another Herd.
-            // Inspect to-one links only; walking to-many inverse collections
-            // would fault entire Herd graphs during common single-row saves.
+            // Inspect to-one links on ordinary saves. Only explicit deletion
+            // needs the cascade graph; loading every to-many inverse during
+            // routine updates would fault entire Herd graphs.
             for relationship in object.entity.relationshipsByName.values
             where !relationship.isToMany {
                 if let relatedObject = object.value(forKey: relationship.name) as? NSManagedObject {
