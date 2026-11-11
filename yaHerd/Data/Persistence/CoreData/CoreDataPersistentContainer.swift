@@ -113,7 +113,7 @@ final class CoreDataPersistentContainer {
     /// reads and writes are store-qualified.
     static func loadCloudKit(
         storeURL: URL,
-        mirroringEnabled: Bool = true
+        mirroringEnabled: Bool
     ) async throws -> CoreDataPersistentContainer {
         let descriptions = cloudKitStoreDescriptions(privateStoreURL: storeURL)
         if !mirroringEnabled {
