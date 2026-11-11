@@ -390,7 +390,7 @@ final class CoreDataPersistenceAssembly {
     /// stay local to the loader rather than crossing Swift 6 actor boundaries.
     static func loadCloudKit(
         storeURL: URL,
-        mirroringEnabled: Bool = true
+        mirroringEnabled: Bool
     ) async throws -> CoreDataPersistenceAssembly {
         CoreDataPersistenceAssembly(
             persistence: try await CoreDataPersistentContainer.loadCloudKit(
