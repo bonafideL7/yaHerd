@@ -71,9 +71,10 @@ struct yaHerdApp: App {
                     at: storeURL
                 )
                 storageMode = .local
-            case .mirrored:
+            case .mirrored(let selectedHerdID):
                 persistence = try await CoreDataAppPersistenceAssembly.loadCloudKit(
                     at: storeURL,
+                    selectedHerdID: selectedHerdID,
                     mirroringEnabled: true
                 )
                 storageMode = .cloudKitDevelopment
@@ -393,7 +394,7 @@ private struct StartupStorageFailureView: View {
 /// This is not a release feature flag or proof that CloudKit has synchronized.
 enum CloudKitDevelopmentLaunch: Equatable {
     case disabled
-    case mirrored
+    case mirrored(selectedHerdID: UUID?)
 
     static func resolve(environment: [String: String]) throws -> Self {
         guard environment["YAHERD_CLOUDKIT_DEV_MIRRORING"] == "1" else {
@@ -402,7 +403,13 @@ enum CloudKitDevelopmentLaunch: Equatable {
         guard environment["YAHERD_CLOUDKIT_M04_VERIFIED"] == "1" else {
             throw CloudKitDevelopmentLaunchError.schemaDryRunRequired
         }
-        return .mirrored
+        if let rawHerdID = environment["YAHERD_CLOUDKIT_DEV_SELECTED_HERD_ID"] {
+            guard let selectedHerdID = UUID(uuidString: rawHerdID) else {
+                throw CloudKitDevelopmentLaunchError.invalidSelectedHerdID
+            }
+            return .mirrored(selectedHerdID: selectedHerdID)
+        }
+        return .mirrored(selectedHerdID: nil)
     }
 
     static func nonStorageStartupMessage(for error: Error) -> String? {
@@ -410,12 +417,12 @@ enum CloudKitDevelopmentLaunch: Equatable {
             return configurationError.localizedDescription
         }
         if error as? HerdRepositoryError == .missingHerd {
-            return "No complete owned Herd is available yet. It may still be importing " +
-                "or this account may not have an owned Herd. No replacement Herd was " +
-                "created. Relaunch yaHerd to check again."
+            return "The selected or default Herd is not available yet. It may still " +
+                "be importing. No replacement Herd was created. Relaunch yaHerd " +
+                "to check again."
         }
         if error is CoreDataHerdMappingError {
-            return "An owned Herd is missing required fields. Its import may be " +
+            return "A Herd is missing required fields. Its import may be  +
                 "incomplete. No data was changed. Relaunch yaHerd to check again."
         }
         if error is CoreDataAppHerdBootstrapError {
@@ -428,6 +435,7 @@ enum CloudKitDevelopmentLaunch: Equatable {
 
 enum CloudKitDevelopmentLaunchError: LocalizedError, Equatable {
     case schemaDryRunRequired
+    case invalidSelectedHerdID
 
     var errorDescription: String? {
         switch self {
@@ -438,6 +446,10 @@ enum CloudKitDevelopmentLaunchError: LocalizedError, Equatable {
             with YAHERD_CLOUDKIT_DEV_MIRRORING=1 in the development app scheme. \
             Mirroring can upload this device's Herd data to the development Apple Account.
             """
+        case .invalidSelectedHerdID:
+            return "YAHERD_CLOUDKIT_DEV_SELECTED_HERD_ID must be an existing Herd UUID. " +
+                "Use it only with the signed development mirroring scheme to select a " +
+                "specific owned or shared Herd. No Herd records were changed."
         }
     }
 }
