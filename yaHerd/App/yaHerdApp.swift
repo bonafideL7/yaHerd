@@ -422,7 +422,7 @@ enum CloudKitDevelopmentLaunch: Equatable {
                 "to check again."
         }
         if error is CoreDataHerdMappingError {
-            return "A Herd is missing required fields. Its import may be  +
+            return "A Herd is missing required fields. Its import may be " +
                 "incomplete. No data was changed. Relaunch yaHerd to check again."
         }
         if error is CoreDataAppHerdBootstrapError {
