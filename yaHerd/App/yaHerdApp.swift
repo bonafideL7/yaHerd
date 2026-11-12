@@ -404,6 +404,26 @@ enum CloudKitDevelopmentLaunch: Equatable {
         }
         return .mirrored
     }
+
+    static func nonStorageStartupMessage(for error: Error) -> String? {
+        if let configurationError = error as? CloudKitDevelopmentLaunchError {
+            return configurationError.localizedDescription
+        }
+        if error as? HerdRepositoryError == .missingHerd {
+            return "No complete owned Herd is available yet. It may still be importing " +
+                "or this account may not have an owned Herd. No replacement Herd was " +
+                "created. Relaunch yaHerd to check again."
+        }
+        if error is CoreDataHerdMappingError {
+            return "An owned Herd is missing required fields. Its import may be " +
+                "incomplete. No data was changed. Relaunch yaHerd to check again."
+        }
+        if error is CoreDataAppHerdBootstrapError {
+            return "More than one owned Herd exists. Automatic development " +
+                "selection cannot choose one; no Herd data was changed."
+        }
+        return nil
+    }
 }
 
 enum CloudKitDevelopmentLaunchError: LocalizedError, Equatable {
