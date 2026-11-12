@@ -117,6 +117,9 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
         )
         defer { try? FileManager.default.removeItem(at: recoveryRoot) }
 
+        let originalHerdID = UUID()
+        let corruptBytes = Data("invalid shared SQLite contents".utf8)
+
         // Use an actual populated private store at the recovery path, rather
         // than copying only the SQLite main file and losing pending WAL data.
         let recoveryAssembly = try await CoreDataPersistenceAssembly.load(
