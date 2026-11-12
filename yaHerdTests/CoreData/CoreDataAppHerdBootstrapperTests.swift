@@ -434,7 +434,33 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
                 "YAHERD_CLOUDKIT_DEV_MIRRORING": "1",
                 "YAHERD_CLOUDKIT_M04_VERIFIED": "1"
             ]),
-            .mirrored
+            .mirrored(selectedHerdID: nil)
+        )
+
+        let selectedSharedHerdID = UUID()
+        XCTAssertEqual(
+            try CloudKitDevelopmentLaunch.resolve(environment: [
+                "YAHERD_CLOUDKIT_DEV_MIRRORING": "1",
+                "YAHERD_CLOUDKIT_M04_VERIFIED": "1",
+                "YAHERD_CLOUDKIT_DEV_SELECTED_HERD_ID": selectedSharedHerdID.uuidString
+            ]),
+            .mirrored(selectedHerdID: selectedSharedHerdID)
+        )
+        XCTAssertThrowsError(try CloudKitDevelopmentLaunch.resolve(environment: [
+            "YAHERD_CLOUDKIT_DEV_MIRRORING": "1",
+            "YAHERD_CLOUDKIT_M04_VERIFIED": "1",
+            "YAHERD_CLOUDKIT_DEV_SELECTED_HERD_ID": "not-a-uuid"
+        ])) { error in
+            XCTAssertEqual(
+                error as? CloudKitDevelopmentLaunchError,
+                .invalidSelectedHerdID
+            )
+        }
+        XCTAssertEqual(
+            try CloudKitDevelopmentLaunch.resolve(environment: [
+                "YAHERD_CLOUDKIT_DEV_SELECTED_HERD_ID": "not-a-uuid"
+            ]),
+            .disabled
         )
         XCTAssertEqual(AppLaunchStorageMode.cloudKitDevelopment.displayName, "iCloud Development")
     }
@@ -513,6 +539,68 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             let herds = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
             XCTAssertEqual(try reader.fetch(herds).count, 2)
             XCTAssertNotNil(try CoreDataLookup().herd(id: sharedHerdID, in: reader))
+        }
+    }
+
+    @MainActor
+    func testDevelopmentTwoStoreStartupOpensExplicitlySelectedSharedOnlyHerd() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let dualStore = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let sharedURL = harness.directoryURL.appendingPathComponent(
+            CoreDataPersistentContainer.sharedStoreFileName
+        )
+        let sharedHerdID = UUID()
+        let writer = try dualStore.contextFactory.makeWriteContext()
+        try writer.performAndWait {
+            let sharedStore = try XCTUnwrap(writer.persistentStoreCoordinator?
+                .persistentStores.first { $0.url == sharedURL })
+            let sharedHerd = CDHerd(context: writer)
+            sharedHerd.id = sharedHerdID
+            sharedHerd.name = "Participant Herd"
+            sharedHerd.createdAt = Date(timeIntervalSince1970: 100)
+            sharedHerd.updatedAt = Date(timeIntervalSince1970: 100)
+            writer.assign(sharedHerd, to: sharedStore)
+            try writer.save()
+        }
+
+        let app = try await CoreDataAppPersistenceAssembly.loadCloudKit(
+            at: harness.storeURL,
+            selectedHerdID: sharedHerdID,
+            mirroringEnabled: false
+        )
+        let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
+        XCTAssertEqual(
+            try dependencies.herdRepository.fetchCurrentHerd().id,
+            sharedHerdID
+        )
+        let pasture = try dependencies.pastureFeatureDependencies.createRepository.create(
+            input: PastureInput(
+                name: "Participant Pasture",
+                acreage: 12,
+                usableAcreage: 10,
+                targetAcresPerHead: 2
+            )
+        )
+
+        let reader = dualStore.contextFactory.makeReadContext()
+        let privateURL = harness.storeURL
+        try reader.performAndWait {
+            let privateStore = try XCTUnwrap(reader.persistentStoreCoordinator?
+                .persistentStores.first { $0.url == privateURL })
+            let sharedStore = try XCTUnwrap(reader.persistentStoreCoordinator?
+                .persistentStores.first { $0.url == sharedURL })
+            let request = NSFetchRequest<CDPasture>(
+                entityName: CDPasture.coreDataEntityName
+            )
+            request.predicate = NSPredicate(
+                format: "id == %@", pasture.id as NSUUID
+            )
+            request.affectedStores = [privateStore]
+            XCTAssertTrue(try reader.fetch(request).isEmpty)
+            request.affectedStores = [sharedStore]
+            XCTAssertEqual(try reader.fetch(request).count, 1)
         }
     }
 
