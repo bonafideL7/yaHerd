@@ -129,8 +129,36 @@ final class RecoveryModeController: ObservableObject {
         }
         throw CoreDataAppHerdBootstrapError.multipleLocalHerds(count: herdCount)
       }
+
+      // A healthy private store alone cannot establish that a failed
+      // private/shared startup is safe to retry. Probe the shared store too,
+      // without creating a missing shared store or starting CloudKit mirroring.
+      let sharedURL = storeURL.deletingLastPathComponent().appendingPathComponent(
+        CoreDataPersistentContainer.sharedStoreFileName
+      )
+      let sharedExists = fileManager.fileExists(atPath: sharedURL.path)
+      if sharedExists {
+        let values = try sharedURL.resourceValues(forKeys: [.isRegularFileKey])
+        guard values.isRegularFile == true else {
+          throw RecoveryStoreProbeError.invalidSharedStore
+        }
+        let sharedAssembly = try await CoreDataPersistenceAssembly.load(
+          storeURL: sharedURL,
+          accessMode: .readOnly
+        )
+        let sharedContext = sharedAssembly.contextFactory.makeReadContext()
+        _ = try sharedContext.performAndWait {
+          try sharedContext.count(for: NSFetchRequest<CDHerd>(
+            entityName: CDHerd.coreDataEntityName
+          ))
+        }
+      } else if ["-wal", "-shm", "-journal"].contains(where: {
+        fileManager.fileExists(atPath: sharedURL.path + $0)
+      }) {
+        throw RecoveryStoreProbeError.missingSharedStore
+      }
       storeCheckResult = .succeeded(
-        "The persistent Core Data store opened read-only. No repair, migration, or write was performed. Recovery mode stays read-only for this launch. Restart yaHerd to retry normal storage."
+        "The existing Core Data store\(sharedExists ? "s" : "") opened read-only. No repair, migration, or write was performed. Recovery mode stays read-only for this launch. Restart yaHerd to retry normal storage."
       )
     } catch {
       storeCheckResult = .failed(
@@ -319,6 +347,8 @@ private enum RecoveryStoreInventoryError: LocalizedError {
 private enum RecoveryStoreProbeError: LocalizedError {
   case missingMainStore
   case invalidMainStore
+  case missingSharedStore
+  case invalidSharedStore
 
   var errorDescription: String? {
     switch self {
@@ -326,6 +356,10 @@ private enum RecoveryStoreProbeError: LocalizedError {
       "The Core Data SQLite store does not exist. No replacement store was created."
     case .invalidMainStore:
       "The Core Data store path is not a regular file. No repair or replacement was attempted."
+    case .missingSharedStore:
+      "The shared Core Data SQLite store is missing, but its journal files remain. No repair or replacement was attempted."
+    case .invalidSharedStore:
+      "The shared Core Data SQLite store path is not a regular file. No repair or replacement was attempted."
     }
   }
 }
