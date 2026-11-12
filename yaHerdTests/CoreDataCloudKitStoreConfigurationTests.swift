@@ -563,16 +563,18 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
             storeURL: harness.storeURL,
             mirroringEnabled: true
         )
+        // Capture Sendable URLs, not the mutable test harness, in the
+        // Core Data context's isolated closure.
+        let privateStoreURL = harness.storeURL
+        let sharedStoreURL = harness.directoryURL.appendingPathComponent(
+            CoreDataPersistentContainer.sharedStoreFileName
+        )
         let context = mirrored.contextFactory.makeReadContext()
         try context.performAndWait {
             let stores = try XCTUnwrap(context.persistentStoreCoordinator?.persistentStores)
             XCTAssertEqual(stores.count, 2)
-            let privateStore = try XCTUnwrap(stores.first { $0.url == harness.storeURL })
-            let sharedStore = try XCTUnwrap(stores.first {
-                $0.url == harness.directoryURL.appendingPathComponent(
-                    CoreDataPersistentContainer.sharedStoreFileName
-                )
-            })
+            let privateStore = try XCTUnwrap(stores.first { $0.url == privateStoreURL })
+            let sharedStore = try XCTUnwrap(stores.first { $0.url == sharedStoreURL })
             XCTAssertFalse(privateStore === sharedStore)
 
             let lookup = CoreDataLookup()
