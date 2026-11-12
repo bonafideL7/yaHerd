@@ -779,10 +779,14 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
         // Explicit, signed-development acceptance check. Loading a mirrored
         // private store may export local records to this Apple Account; never
         // run automatically in CI or against a user's application database.
-        guard ProcessInfo.processInfo.environment["YAHERD_CLOUDKIT_STORE_ADOPTION"] == "1" else {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["YAHERD_CLOUDKIT_STORE_ADOPTION"] == "1",
+              environment["YAHERD_CLOUDKIT_M04_VERIFIED"] == "1" else {
             throw XCTSkip(
-                "Run M04 first, then opt in with YAHERD_CLOUDKIT_STORE_ADOPTION=1 " +
-                "on a development-signed device using the intended Apple Account."
+                "After the signed M04 dry-run passes, explicitly set " +
+                "YAHERD_CLOUDKIT_M04_VERIFIED=1 and " +
+                "YAHERD_CLOUDKIT_STORE_ADOPTION=1 on a development-signed " +
+                "device using the intended Apple Account."
             )
         }
 
