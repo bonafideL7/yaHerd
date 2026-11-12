@@ -59,6 +59,54 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
         ))
     }
 
+    @MainActor
+    func testRecoveryInventoryIncludesBothCloudKitStoresAndTheirJournals() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("yaHerd-recovery-\(UUID().uuidString)", isDirectory: true)
+        let directory = root.appendingPathComponent("yaHerd", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory, withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let storeNames = [
+            CoreDataPersistentContainer.storeFileName,
+            CoreDataPersistentContainer.storeFileName + "-wal",
+            CoreDataPersistentContainer.sharedStoreFileName,
+            CoreDataPersistentContainer.sharedStoreFileName + "-wal",
+            CoreDataPersistentContainer.sharedStoreFileName + "-shm",
+            CoreDataPersistentContainer.sharedStoreFileName + "-journal"
+        ]
+        for name in storeNames {
+            try Data("preserve \(name)".utf8)
+                .write(to: directory.appendingPathComponent(name))
+        }
+        try Data("unrelated".utf8)
+            .write(to: directory.appendingPathComponent("unrelated.sqlite"))
+
+        let controller = RecoveryModeController(
+            context: RecoveryModeContext(startupError: "Simulated store failure"),
+            applicationSupportURL: root,
+            automaticallyRefreshDiagnostics: false
+        )
+        controller.refreshDiagnostics()
+
+        XCTAssertNil(controller.diagnosticsErrorMessage)
+        XCTAssertEqual(
+            Set(controller.diagnostics.recoverableStoreFiles.map(\\.archiveName)),
+            Set(storeNames)
+        )
+        controller.prepareExport()
+        XCTAssertNil(controller.exportErrorMessage)
+        XCTAssertNotNil(controller.exportDocument)
+        XCTAssertEqual(
+            try Data(contentsOf: directory.appendingPathComponent(
+                CoreDataPersistentContainer.sharedStoreFileName
+            )),
+            Data("preserve \(CoreDataPersistentContainer.sharedStoreFileName)".utf8)
+        )
+    }
+
     func testTwoStoreLoaderPreservesExistingPrivateHerdAndStoresSharedRecordsSeparately() async throws {
         let harness = try CoreDataPersistenceHarness()
         let localAssembly = try await harness.makeAssembly()
