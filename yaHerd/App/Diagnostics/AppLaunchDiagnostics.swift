@@ -8,6 +8,7 @@ import Foundation
 enum AppLaunchStorageMode: String {
     case local
     case cloudKitDevelopment
+    case cloudKitDevelopmentBlocked
     case recovery
     case unavailable
 
@@ -17,6 +18,8 @@ enum AppLaunchStorageMode: String {
             "Local"
         case .cloudKitDevelopment:
             "iCloud Development"
+        case .cloudKitDevelopmentBlocked:
+            "iCloud Development Unavailable"
         case .recovery:
             "Recovery Mode"
         case .unavailable:
