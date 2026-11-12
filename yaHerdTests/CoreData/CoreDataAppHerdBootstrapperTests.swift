@@ -409,6 +409,144 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     }
 
     @MainActor
+    func testDevelopmentCloudKitActivationRequiresExplicitVerifiedSchemaOptIn() throws {
+        XCTAssertEqual(
+            try CloudKitDevelopmentLaunch.resolve(environment: [:]),
+            .disabled
+        )
+        XCTAssertEqual(
+            try CloudKitDevelopmentLaunch.resolve(environment: [
+                "YAHERD_CLOUDKIT_M04_VERIFIED": "1"
+            ]),
+            .disabled
+        )
+        XCTAssertThrowsError(try CloudKitDevelopmentLaunch.resolve(environment: [
+            "YAHERD_CLOUDKIT_DEV_MIRRORING": "1"
+        ])) { error in
+            XCTAssertEqual(
+                error as? CloudKitDevelopmentLaunchError,
+                .schemaDryRunRequired
+            )
+        }
+        XCTAssertEqual(
+            try CloudKitDevelopmentLaunch.resolve(environment: [
+                "YAHERD_CLOUDKIT_DEV_MIRRORING": "1",
+                "YAHERD_CLOUDKIT_M04_VERIFIED": "1"
+            ]),
+            .mirrored
+        )
+        XCTAssertEqual(AppLaunchStorageMode.cloudKitDevelopment.displayName, "CloudKit Development")
+    }
+
+    @MainActor
+    func testDevelopmentTwoStoreStartupSelectsExistingPrivateHerdNotSharedHerd() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let local = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
+        let originalID = try local.makeDependencies(dataAccessMode: .readWrite)
+            .herdRepository.fetchCurrentHerd().id
+
+        let dualStore = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let sharedHerdID = UUID()
+        let sharedURL = harness.directoryURL.appendingPathComponent(
+            CoreDataPersistentContainer.sharedStoreFileName
+        )
+        let writer = try dualStore.contextFactory.makeWriteContext()
+        try writer.performAndWait {
+            let sharedStore = try XCTUnwrap(writer.persistentStoreCoordinator?
+                .persistentStores.first { $0.url == sharedURL })
+            let sharedHerd = CDHerd(context: writer)
+            sharedHerd.id = sharedHerdID
+            sharedHerd.name = "Imported Shared"
+            sharedHerd.createdAt = Date(timeIntervalSince1970: 100)
+            sharedHerd.updatedAt = Date(timeIntervalSince1970: 100)
+            writer.assign(sharedHerd, to: sharedStore)
+            try writer.save()
+        }
+
+        let reopened = try await CoreDataAppPersistenceAssembly.loadCloudKit(
+            at: harness.storeURL, mirroringEnabled: false
+        )
+        XCTAssertEqual(
+            try reopened.makeDependencies(dataAccessMode: .readWrite)
+                .herdRepository.fetchCurrentHerd().id,
+            originalID
+        )
+
+        let reader = dualStore.contextFactory.makeReadContext()
+        try reader.performAndWait {
+            let herds = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            XCTAssertEqual(try reader.fetch(herds).count, 2)
+            XCTAssertNotNil(try CoreDataLookup().herd(id: sharedHerdID, in: reader))
+        }
+    }
+
+    @MainActor
+    func testDevelopmentTwoStoreStartupDoesNotCreatePrivateHerdWhileImportPending() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let dualStore = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let sharedURL = harness.directoryURL.appendingPathComponent(
+            CoreDataPersistentContainer.sharedStoreFileName
+        )
+        let writer = try dualStore.contextFactory.makeWriteContext()
+        try writer.performAndWait {
+            let sharedStore = try XCTUnwrap(writer.persistentStoreCoordinator?
+                .persistentStores.first { $0.url == sharedURL })
+            let imported = CDHerd(context: writer)
+            imported.id = UUID()
+            imported.name = "Shared Only"
+            imported.createdAt = Date(timeIntervalSince1970: 100)
+            imported.updatedAt = Date(timeIntervalSince1970: 100)
+            writer.assign(imported, to: sharedStore)
+            try writer.save()
+        }
+
+        do {
+            _ = try await CoreDataAppPersistenceAssembly.loadCloudKit(
+                at: harness.storeURL, mirroringEnabled: false
+            )
+            XCTFail("A shared-only/import-pending store must not synthesize a private Herd.")
+        } catch let error as HerdRepositoryError {
+            XCTAssertEqual(error, .missingHerd)
+        }
+        let reader = dualStore.contextFactory.makeReadContext()
+        try reader.performAndWait {
+            let privateStore = try XCTUnwrap(reader.persistentStoreCoordinator?
+                .persistentStores.first { $0.url == harness.storeURL })
+            let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            request.affectedStores = [privateStore]
+            XCTAssertTrue(try reader.fetch(request).isEmpty)
+        }
+    }
+
+    @MainActor
+    func testDevelopmentTwoStoreStartupRejectsAmbiguousPrivateHerds() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let local = try await harness.makeAssembly()
+        try await local.transactionExecutor.performWrite { context in
+            for index in 0..<2 {
+                let herd = CDHerd(context: context)
+                herd.id = UUID()
+                herd.name = "Owned \(index)"
+                herd.createdAt = Date(timeIntervalSince1970: 100)
+                herd.updatedAt = Date(timeIntervalSince1970: 100)
+            }
+        }
+
+        do {
+            _ = try await CoreDataAppPersistenceAssembly.loadCloudKit(
+                at: harness.storeURL, mirroringEnabled: false
+            )
+            XCTFail("Auto-selection cannot choose among multiple owned Herds.")
+        } catch let error as CoreDataAppHerdBootstrapError {
+            XCTAssertEqual(error, .multipleLocalHerds(count: 2))
+        }
+    }
+
+    @MainActor
     func testAppCutoverReopensDurableCoreDataHerdAndPastures() async throws {
         let harness = try CoreDataPersistenceHarness()
         let first = try await CoreDataAppPersistenceAssembly.load(
