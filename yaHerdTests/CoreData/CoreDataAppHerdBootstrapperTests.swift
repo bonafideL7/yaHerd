@@ -295,6 +295,77 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     }
 
     @MainActor
+    func testTwoStoreAppLoaderWaitsForAnIncompleteImportedHerdRoot() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL,
+            mirroringEnabled: false
+        )
+        let selectedID = UUID()
+        let sharedURL = harness.directoryURL.appendingPathComponent(
+            CoreDataPersistentContainer.sharedStoreFileName
+        )
+        let writer = try assembly.contextFactory.makeWriteContext()
+        try writer.performAndWait {
+            let sharedStore = try XCTUnwrap(writer.persistentStoreCoordinator?
+                .persistentStores.first { $0.url == sharedURL })
+            let imported = CDHerd(context: writer)
+            imported.id = selectedID
+            // CloudKit can import an identity before the remaining scalar fields.
+            // A selected root is not ready to initialize the app until complete.
+            imported.name = nil
+            imported.createdAt = nil
+            imported.updatedAt = nil
+            writer.assign(imported, to: sharedStore)
+            try writer.save()
+        }
+
+        do {
+            _ = try await CoreDataAppPersistenceAssembly.loadCloudKit(
+                at: harness.storeURL,
+                selectedHerdID: selectedID,
+                mirroringEnabled: false
+            )
+            XCTFail("An incomplete imported Herd must not initialize the app graph.")
+        } catch let error as CoreDataHerdMappingError {
+            XCTAssertEqual(error, .missingName(herdID: selectedID))
+        }
+
+        let read = assembly.contextFactory.makeReadContext()
+        try read.performAndWait {
+            let lookup = CoreDataLookup()
+            XCTAssertNotNil(try lookup.herd(id: selectedID, in: read))
+            let privateStore = try XCTUnwrap(read.persistentStoreCoordinator?
+                .persistentStores.first { $0.url == harness.storeURL })
+            let privateHerds = NSFetchRequest<CDHerd>(
+                entityName: CDHerd.coreDataEntityName
+            )
+            privateHerds.affectedStores = [privateStore]
+            XCTAssertTrue(try read.fetch(privateHerds).isEmpty)
+        }
+
+        try writer.performAndWait {
+            let restored = try XCTUnwrap(
+                CoreDataLookup().herd(id: selectedID, in: writer)
+            )
+            restored.name = "Restored Shared Herd"
+            restored.createdAt = Date(timeIntervalSince1970: 100)
+            restored.updatedAt = Date(timeIntervalSince1970: 200)
+            try writer.save()
+        }
+
+        let app = try await CoreDataAppPersistenceAssembly.loadCloudKit(
+            at: harness.storeURL,
+            selectedHerdID: selectedID,
+            mirroringEnabled: false
+        )
+        let summary = try app.makeDependencies(dataAccessMode: .readWrite)
+            .herdRepository.fetchCurrentHerd()
+        XCTAssertEqual(summary.id, selectedID)
+        XCTAssertEqual(summary.name, "Restored Shared Herd")
+    }
+
+    @MainActor
     func testTwoStoreAppLoaderRejectsDuplicateSelectedHerdAcrossStores() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
