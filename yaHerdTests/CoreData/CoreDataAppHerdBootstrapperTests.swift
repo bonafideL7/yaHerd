@@ -439,6 +439,37 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertEqual(AppLaunchStorageMode.cloudKitDevelopment.displayName, "iCloud Development")
     }
 
+    @MainActor
+    func testDevelopmentImportAndConfigurationFailuresAreNotClassifiedAsStoreCorruption() {
+        let missing = CloudKitDevelopmentLaunch.nonStorageStartupMessage(
+            for: HerdRepositoryError.missingHerd
+        )
+        XCTAssertNotNil(missing)
+        XCTAssertTrue(missing?.contains("No replacement Herd") == true)
+
+        let partial = CloudKitDevelopmentLaunch.nonStorageStartupMessage(
+            for: CoreDataHerdMappingError.missingName(herdID: UUID())
+        )
+        XCTAssertNotNil(partial)
+
+        let ambiguous = CloudKitDevelopmentLaunch.nonStorageStartupMessage(
+            for: CoreDataAppHerdBootstrapError.multipleLocalHerds(count: 2)
+        )
+        XCTAssertNotNil(ambiguous)
+
+        let configuration = CloudKitDevelopmentLaunch.nonStorageStartupMessage(
+            for: CloudKitDevelopmentLaunchError.schemaDryRunRequired
+        )
+        XCTAssertTrue(configuration?.contains("M04") == true)
+
+        let corruptedStore = CoreDataPersistenceError.storeLoadFailed(
+            url: nil, description: "SQLite could not be opened"
+        )
+        XCTAssertNil(CloudKitDevelopmentLaunch.nonStorageStartupMessage(
+            for: corruptedStore
+        ))
+    }
+
     #endif
 
     @MainActor
