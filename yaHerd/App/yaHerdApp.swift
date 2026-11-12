@@ -389,7 +389,7 @@ enum CloudKitDevelopmentLaunchError: LocalizedError, Equatable {
         switch self {
         case .schemaDryRunRequired:
             return """
-            Development CloudKit mirroring is not enabled. First run and verify \
+            Development iCloud mirroring is not enabled. First run and verify \
             the signed M04 schema dry-run, then set YAHERD_CLOUDKIT_M04_VERIFIED=1 \
             with YAHERD_CLOUDKIT_DEV_MIRRORING=1 in the development app scheme. \
             Mirroring can upload this device's Herd data to the development Apple Account.
