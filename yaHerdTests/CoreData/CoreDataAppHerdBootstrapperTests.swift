@@ -436,7 +436,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             ]),
             .mirrored
         )
-        XCTAssertEqual(AppLaunchStorageMode.cloudKitDevelopment.displayName, "CloudKit Development")
+        XCTAssertEqual(AppLaunchStorageMode.cloudKitDevelopment.displayName, "iCloud Development")
     }
 
     #endif
