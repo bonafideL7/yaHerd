@@ -93,7 +93,7 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
 
         XCTAssertNil(controller.diagnosticsErrorMessage)
         XCTAssertEqual(
-            Set(controller.diagnostics.recoverableStoreFiles.map(\\.archiveName)),
+            Set(controller.diagnostics.recoverableStoreFiles.map(\.archiveName)),
             Set(storeNames)
         )
         controller.prepareExport()
