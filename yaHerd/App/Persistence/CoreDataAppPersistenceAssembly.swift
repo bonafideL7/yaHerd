@@ -25,10 +25,11 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         )
     }
 
-    /// Stage 2 selected-Herd application path. The caller must provide an
-    /// existing root: a mirrored store may still be importing records, so an
-    /// empty fetch must not create a replacement Herd or upload synthetic data.
-    /// Normal app startup remains local-only until signed CloudKit validation
+    /// Stage 2 application path. An explicit ID selects an existing private
+    /// or shared Herd; otherwise use the one existing complete owned Herd.
+    /// A mirrored store may still be importing: never create replacement
+    /// Herd records or upload synthetic data during that interval.
+    /// Normal startup remains local-only until signed schema validation
     /// and the Herd-selection lifecycle are ready.
     static func loadCloudKit(
         at storeURL: URL,
