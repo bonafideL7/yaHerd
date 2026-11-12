@@ -123,7 +123,15 @@ final class RecoveryModeController: ObservableObject {
           entityName: CDHerd.coreDataEntityName
         ))
       }
-      guard herdCount == 1 else {
+      // The legacy local-only startup expects one Herd, but the two-store
+      // topology can legitimately have no owned Herd (shared-only participant)
+      // or several owned Herds. A recovery health check must not mistake
+      // those valid store contents for corruption.
+      let sharedURL = storeURL.deletingLastPathComponent().appendingPathComponent(
+        CoreDataPersistentContainer.sharedStoreFileName
+      )
+      let sharedExists = fileManager.fileExists(atPath: sharedURL.path)
+      if !sharedExists && herdCount != 1 {
         if herdCount == 0 {
           throw HerdRepositoryError.missingHerd
         }
@@ -133,10 +141,6 @@ final class RecoveryModeController: ObservableObject {
       // A healthy private store alone cannot establish that a failed
       // private/shared startup is safe to retry. Probe the shared store too,
       // without creating a missing shared store or starting CloudKit mirroring.
-      let sharedURL = storeURL.deletingLastPathComponent().appendingPathComponent(
-        CoreDataPersistentContainer.sharedStoreFileName
-      )
-      let sharedExists = fileManager.fileExists(atPath: sharedURL.path)
       if sharedExists {
         let values = try sharedURL.resourceValues(forKeys: [.isRegularFileKey])
         guard values.isRegularFile == true else {
