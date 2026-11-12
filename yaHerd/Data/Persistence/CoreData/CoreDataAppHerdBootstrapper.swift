@@ -38,6 +38,46 @@ enum CoreDataAppHerdBootstrapper {
         }
     }
 
+    /// During two-store CloudKit startup, an empty private store may still be
+    /// awaiting import. Select an existing owned root only; never create one
+    /// while mirroring is active or accidentally select a shared participant Herd.
+    static func resolveExistingPrivateHerdID(
+        assembly: CoreDataPersistenceAssembly,
+        privateStoreURL: URL
+    ) throws -> UUID {
+        let context = assembly.contextFactory.makeReadContext()
+        return try context.performAndWait {
+            let targetURL = privateStoreURL.standardizedFileURL.resolvingSymlinksInPath()
+            guard let privateStore = context.persistentStoreCoordinator?
+                .persistentStores.first(where: {
+                    $0.url?.standardizedFileURL.resolvingSymlinksInPath() == targetURL
+                }) else {
+                throw CoreDataPersistenceError.storeLoadFailed(
+                    url: privateStoreURL,
+                    description: "The owned Herd SQLite store is not loaded."
+                )
+            }
+
+            let request = NSFetchRequest<CDHerd>(
+                entityName: CDHerd.coreDataEntityName
+            )
+            request.affectedStores = [privateStore]
+            let roots = try context.fetch(request)
+            switch roots.count {
+            case 0:
+                throw HerdRepositoryError.missingHerd
+            case 1:
+                // An import can expose a UUID before its required fields.
+                // Never expose an incomplete root as the selected Herd.
+                return try roots[0].toSummary().id
+            default:
+                throw CoreDataAppHerdBootstrapError.multipleLocalHerds(
+                    count: roots.count
+                )
+            }
+        }
+    }
+
     private static func fetchHerdIDs(
         using contextFactory: CoreDataContextFactory
     ) throws -> [UUID] {
