@@ -107,6 +107,110 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testRecoveryReadOnlyProbeRejectsCorruptedSharedSQLiteWithoutModifyingStore() async throws {
+        let recoveryRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("yaHerd-probe-\(UUID())", isDirectory: true)
+        let recoveryDirectory = recoveryRoot.appendingPathComponent("yaHerd", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: recoveryDirectory, withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: recoveryRoot) }
+
+        // Use an actual populated private store at the recovery path, rather
+        // than copying only the SQLite main file and losing pending WAL data.
+        let recoveryAssembly = try await CoreDataPersistenceAssembly.load(
+            storeURL: recoveryDirectory.appendingPathComponent(
+                CoreDataPersistentContainer.storeFileName
+            )
+        )
+        try await recoveryAssembly.transactionExecutor.performWrite { context in
+            let herd = CDHerd(context: context)
+            herd.id = originalHerdID
+            herd.name = "Preserved Private Herd"
+            herd.createdAt = Date(timeIntervalSince1970: 100)
+            herd.updatedAt = Date(timeIntervalSince1970: 100)
+        }
+        let corruptShared = recoveryDirectory.appendingPathComponent(
+            CoreDataPersistentContainer.sharedStoreFileName
+        )
+        try corruptBytes.write(to: corruptShared)
+
+        let recovery = RecoveryModeController(
+            context: RecoveryModeContext(startupError: "Shared store failed to open"),
+            applicationSupportURL: recoveryRoot,
+            automaticallyRefreshDiagnostics: false
+        )
+        await recovery.checkPersistentStoreReadOnly()
+        guard case .failed(let message) = recovery.storeCheckResult else {
+            return XCTFail("Corrupt shared SQLite must fail the read-only recovery check.")
+        }
+        XCTAssertTrue(message.contains(CoreDataPersistentContainer.sharedStoreFileName))
+        XCTAssertEqual(try Data(contentsOf: corruptShared), corruptBytes)
+
+        let readContext = recoveryAssembly.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            XCTAssertEqual(
+                try CoreDataLookup().herd(id: originalHerdID, in: readContext)?.name,
+                "Preserved Private Herd"
+            )
+        }
+    }
+
+    @MainActor
+    func testRecoveryReadOnlyProbeChecksValidPrivateAndSharedSQLite() async throws {
+        let recoveryRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("yaHerd-probe-\(UUID())", isDirectory: true)
+        let recoveryDirectory = recoveryRoot.appendingPathComponent("yaHerd", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: recoveryDirectory, withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: recoveryRoot) }
+        let privateURL = recoveryDirectory.appendingPathComponent(
+            CoreDataPersistentContainer.storeFileName
+        )
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: privateURL,
+            mirroringEnabled: false
+        )
+        let privateHerdID = UUID()
+        let sharedHerdID = UUID()
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let stores = try XCTUnwrap(context.persistentStoreCoordinator?.persistentStores)
+            let privateStore = try XCTUnwrap(stores.first { $0.url == privateURL })
+            let sharedStore = try XCTUnwrap(stores.first {
+                $0.url?.lastPathComponent == CoreDataPersistentContainer.sharedStoreFileName
+            })
+            for (id, name, store) in [
+                (privateHerdID, "Private Herd", privateStore),
+                (sharedHerdID, "Shared Herd", sharedStore)
+            ] {
+                let herd = CDHerd(context: context)
+                herd.id = id
+                herd.name = name
+                herd.createdAt = Date(timeIntervalSince1970: 100)
+                herd.updatedAt = Date(timeIntervalSince1970: 100)
+                context.assign(herd, to: store)
+            }
+            try context.save()
+        }
+        let recovery = RecoveryModeController(
+            context: RecoveryModeContext(startupError: "Simulated load error"),
+            applicationSupportURL: recoveryRoot,
+            automaticallyRefreshDiagnostics: false
+        )
+        await recovery.checkPersistentStoreReadOnly()
+        guard case .succeeded = recovery.storeCheckResult else {
+            return XCTFail("Valid private and shared SQLite must pass: \(String(describing: recovery.storeCheckResult))")
+        }
+        let readContext = assembly.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            XCTAssertNotNil(try CoreDataLookup().herd(id: privateHerdID, in: readContext))
+            XCTAssertNotNil(try CoreDataLookup().herd(id: sharedHerdID, in: readContext))
+        }
+    }
+
     func testTwoStoreLoaderPreservesExistingPrivateHerdAndStoresSharedRecordsSeparately() async throws {
         let harness = try CoreDataPersistenceHarness()
         let localAssembly = try await harness.makeAssembly()
