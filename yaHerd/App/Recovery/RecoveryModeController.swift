@@ -253,10 +253,13 @@ final class RecoveryModeController: ObservableObject {
     // This path mirrors CoreDataPersistentContainer.defaultStoreURL without
     // creating a directory merely to prepare diagnostics.
     let directory = appSupportURL.appendingPathComponent("yaHerd", isDirectory: true)
-    let storeName = CoreDataPersistentContainer.storeFileName
-    let allowedNames = Set(
-      ["", "-wal", "-shm", "-journal"].map { storeName + $0 }
-    )
+    let storeNames = [
+      CoreDataPersistentContainer.storeFileName,
+      CoreDataPersistentContainer.sharedStoreFileName
+    ]
+    let allowedNames = Set(storeNames.flatMap { name in
+      ["", "-wal", "-shm", "-journal"].map { name + $0 }
+    })
     let keys: Set<URLResourceKey> = [
       .isRegularFileKey,
       .fileSizeKey,
