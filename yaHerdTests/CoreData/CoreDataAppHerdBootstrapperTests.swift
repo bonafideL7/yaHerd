@@ -516,9 +516,10 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             XCTAssertEqual(error, .missingHerd)
         }
         let reader = dualStore.contextFactory.makeReadContext()
+        let privateURL = harness.storeURL
         try reader.performAndWait {
             let privateStore = try XCTUnwrap(reader.persistentStoreCoordinator?
-                .persistentStores.first { $0.url == harness.storeURL })
+                .persistentStores.first { $0.url == privateURL })
             let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
             request.affectedStores = [privateStore]
             XCTAssertTrue(try reader.fetch(request).isEmpty)
