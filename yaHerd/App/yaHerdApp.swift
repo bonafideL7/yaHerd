@@ -33,6 +33,13 @@ struct yaHerdApp: App {
 
                 case .storageUnavailable(let message):
                     StartupStorageFailureView(message: message)
+
+                case .developmentMirroringBlocked(let message):
+                    ContentUnavailableView {
+                        Label("iCloud Development Unavailable", systemImage: "icloud.slash")
+                    } description: {
+                        Text(message)
+                    }
                 }
             }
             .task {
@@ -45,6 +52,10 @@ struct yaHerdApp: App {
 
     @MainActor
     private static func bootstrap() async -> AppBootstrapState {
+        #if DEBUG
+        let developmentMirroringRequested =
+            ProcessInfo.processInfo.environment["YAHERD_CLOUDKIT_DEV_MIRRORING"] == "1"
+        #endif
         do {
             let storeURL = try CoreDataPersistentContainer.defaultStoreURL()
             let persistence: CoreDataAppPersistenceAssembly
@@ -89,6 +100,18 @@ struct yaHerdApp: App {
                 )
             )
         } catch {
+            #if DEBUG
+            // An incomplete import or invalid developer activation is not
+            // a SQLite load failure. Do not create a placeholder recovery Herd.
+            if developmentMirroringRequested,
+               let message = CloudKitDevelopmentLaunch.nonStorageStartupMessage(for: error) {
+                AppLaunchDiagnostics.record(
+                    actualStorageMode: .cloudKitDevelopmentBlocked,
+                    startupError: message
+                )
+                return .developmentMirroringBlocked(message)
+            }
+            #endif
             let primaryError = error
             do {
                 let persistence = try await CoreDataAppPersistenceAssembly.inMemoryRecovery()
@@ -136,6 +159,7 @@ private enum AppBootstrapState {
     case loading
     case ready(AppRuntime)
     case storageUnavailable(String)
+    case developmentMirroringBlocked(String)
 }
 
 private struct AppRuntime {
