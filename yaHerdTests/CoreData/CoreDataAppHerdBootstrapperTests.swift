@@ -408,6 +408,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         }
     }
 
+    #if DEBUG
     @MainActor
     func testDevelopmentCloudKitActivationRequiresExplicitVerifiedSchemaOptIn() throws {
         XCTAssertEqual(
@@ -437,6 +438,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         )
         XCTAssertEqual(AppLaunchStorageMode.cloudKitDevelopment.displayName, "CloudKit Development")
     }
+
+    #endif
 
     @MainActor
     func testDevelopmentTwoStoreStartupSelectsExistingPrivateHerdNotSharedHerd() async throws {
