@@ -25,6 +25,33 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         )
     }
 
+    /// Stage 2 selected-Herd application path. The caller must provide an
+    /// existing root: a mirrored store may still be importing records, so an
+    /// empty fetch must not create a replacement Herd or upload synthetic data.
+    /// Normal app startup remains local-only until signed CloudKit validation
+    /// and the Herd-selection lifecycle are ready.
+    static func loadCloudKit(
+        at storeURL: URL,
+        selectedHerdID: UUID,
+        mirroringEnabled: Bool
+    ) async throws -> CoreDataAppPersistenceAssembly {
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: storeURL,
+            mirroringEnabled: mirroringEnabled
+        )
+        let context = assembly.contextFactory.makeReadContext()
+        let lookup = assembly.lookup
+        try context.performAndWait {
+            guard try lookup.store(forHerdID: selectedHerdID, in: context) != nil else {
+                throw HerdRepositoryError.missingHerd
+            }
+        }
+        return CoreDataAppPersistenceAssembly(
+            assembly: assembly,
+            currentHerdID: selectedHerdID
+        )
+    }
+
     /// A failed disk open must never trigger a SwiftData fallback or write to
     /// the failed store. Bootstrap this temporary Herd before enabling read-only
     /// application policy so all UI dependencies can still render safely.
