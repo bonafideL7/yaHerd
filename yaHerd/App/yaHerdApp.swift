@@ -47,14 +47,37 @@ struct yaHerdApp: App {
     private static func bootstrap() async -> AppBootstrapState {
         do {
             let storeURL = try CoreDataPersistentContainer.defaultStoreURL()
-            let persistence = try await CoreDataAppPersistenceAssembly.load(
+            let persistence: CoreDataAppPersistenceAssembly
+            let storageMode: AppLaunchStorageMode
+            #if DEBUG
+            // Stage 2 physical-device acceptance only. Normal app launch is
+            // local until signed schema validation and the full release gates.
+            switch try CloudKitDevelopmentLaunch.resolve(
+                environment: ProcessInfo.processInfo.environment
+            ) {
+            case .disabled:
+                persistence = try await CoreDataAppPersistenceAssembly.load(
+                    at: storeURL
+                )
+                storageMode = .local
+            case .mirrored:
+                persistence = try await CoreDataAppPersistenceAssembly.loadCloudKit(
+                    at: storeURL,
+                    mirroringEnabled: true
+                )
+                storageMode = .cloudKitDevelopment
+            }
+            #else
+            persistence = try await CoreDataAppPersistenceAssembly.load(
                 at: storeURL
             )
+            storageMode = .local
+            #endif
             let dependencies = persistence.makeDependencies(
                 dataAccessMode: .readWrite
             )
 
-            AppLaunchDiagnostics.record(actualStorageMode: .local)
+            AppLaunchDiagnostics.record(actualStorageMode: storageMode)
 
             return .ready(
                 AppRuntime(
@@ -339,3 +362,39 @@ private struct StartupStorageFailureView: View {
         }
     }
 }
+
+#if DEBUG
+/// Deliberately opt-in developer path to exercise a real signed app graph
+/// against private/shared CloudKit stores after M04 development schema checks.
+/// This is not a release feature flag or proof that CloudKit has synchronized.
+enum CloudKitDevelopmentLaunch: Equatable {
+    case disabled
+    case mirrored
+
+    static func resolve(environment: [String: String]) throws -> Self {
+        guard environment["YAHERD_CLOUDKIT_DEV_MIRRORING"] == "1" else {
+            return .disabled
+        }
+        guard environment["YAHERD_CLOUDKIT_M04_VERIFIED"] == "1" else {
+            throw CloudKitDevelopmentLaunchError.schemaDryRunRequired
+        }
+        return .mirrored
+    }
+}
+
+enum CloudKitDevelopmentLaunchError: LocalizedError, Equatable {
+    case schemaDryRunRequired
+
+    var errorDescription: String? {
+        switch self {
+        case .schemaDryRunRequired:
+            return """
+            Development CloudKit mirroring is not enabled. First run and verify \
+            the signed M04 schema dry-run, then set YAHERD_CLOUDKIT_M04_VERIFIED=1 \
+            with YAHERD_CLOUDKIT_DEV_MIRRORING=1 in the development app scheme. \
+            Mirroring can upload this device's Herd data to the development Apple Account.
+            """
+        }
+    }
+}
+#endif
