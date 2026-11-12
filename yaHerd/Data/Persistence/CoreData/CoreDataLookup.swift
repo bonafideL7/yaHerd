@@ -156,13 +156,15 @@ struct CoreDataLookup: Sendable {
                 }
             }
 
-            // Core Data can cascade-delete children when a parent is removed,
-            // even if those children were not explicitly changed by the caller.
-            // Inspect the committed cascade graph before saving so an imported
-            // cross-Herd relationship cannot delete another Herd's records.
+            // Deleting a parent can cascade-delete or nullify relationships
+            // to children that were not explicitly changed by the caller.
+            // Inspect only deleted objects' committed to-many relationships
+            // to prevent either action from mutating another Herd's records.
             if object.isDeleted {
                 for relationship in object.entity.relationshipsByName.values
-                where relationship.isToMany && relationship.deleteRule == .cascadeDeleteRule {
+                where relationship.isToMany
+                    && (relationship.deleteRule == .cascadeDeleteRule
+                        || relationship.deleteRule == .nullifyDeleteRule) {
                     let related = object.committedValues(
                         forKeys: [relationship.name]
                     )[relationship.name] as? NSSet
