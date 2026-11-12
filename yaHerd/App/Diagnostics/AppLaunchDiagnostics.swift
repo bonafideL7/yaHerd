@@ -7,6 +7,7 @@ import Foundation
 
 enum AppLaunchStorageMode: String {
     case local
+    case cloudKitDevelopment
     case recovery
     case unavailable
 
@@ -14,6 +15,8 @@ enum AppLaunchStorageMode: String {
         switch self {
         case .local:
             "Local"
+        case .cloudKitDevelopment:
+            "CloudKit Development"
         case .recovery:
             "Recovery Mode"
         case .unavailable:
