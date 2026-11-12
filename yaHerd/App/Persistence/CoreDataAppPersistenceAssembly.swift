@@ -32,30 +32,43 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
     /// and the Herd-selection lifecycle are ready.
     static func loadCloudKit(
         at storeURL: URL,
-        selectedHerdID: UUID,
+        selectedHerdID: UUID? = nil,
         mirroringEnabled: Bool
     ) async throws -> CoreDataAppPersistenceAssembly {
         let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
             storeURL: storeURL,
             mirroringEnabled: mirroringEnabled
         )
+        // The development activation path may select the one existing owned
+        // root. An explicit selection can target either private or shared.
+        // Neither path creates replacement Herds while import is in progress.
+        let herdID: UUID
+        if let selectedHerdID {
+            herdID = selectedHerdID
+        } else {
+            herdID = try CoreDataAppHerdBootstrapper.resolveExistingPrivateHerdID(
+                assembly: assembly,
+                privateStoreURL: storeURL
+            )
+        }
+
         let context = assembly.contextFactory.makeReadContext()
         let lookup = assembly.lookup
         try context.performAndWait {
-            guard let herd = try lookup.herd(id: selectedHerdID, in: context) else {
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
             // A CloudKit import can expose the root UUID before its required
             // fields. Defer the app graph rather than treating a partial Herd
             // as ready or creating a replacement starter Herd.
             _ = try herd.toSummary()
-            guard try lookup.store(forHerdID: selectedHerdID, in: context) != nil else {
+            guard try lookup.store(forHerdID: herdID, in: context) != nil else {
                 throw HerdRepositoryError.missingHerd
             }
         }
         return CoreDataAppPersistenceAssembly(
             assembly: assembly,
-            currentHerdID: selectedHerdID
+            currentHerdID: herdID
         )
     }
 
