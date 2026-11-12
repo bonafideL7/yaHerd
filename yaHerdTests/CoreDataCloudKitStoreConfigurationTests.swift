@@ -161,6 +161,45 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
     }
 
     @MainActor
+    func testRecoveryReadOnlyProbeRefusesOrphanedSharedJournalWithoutCreatingStore() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("yaHerd-probe-\(UUID())", isDirectory: true)
+        let directory = root.appendingPathComponent("yaHerd", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let privateURL = directory.appendingPathComponent(CoreDataPersistentContainer.storeFileName)
+        let assembly = try await CoreDataPersistenceAssembly.load(storeURL: privateURL)
+        try await assembly.transactionExecutor.performWrite { context in
+            let herd = CDHerd(context: context)
+            herd.id = UUID()
+            herd.name = "Private Herd"
+            herd.createdAt = Date(timeIntervalSince1970: 100)
+            herd.updatedAt = Date(timeIntervalSince1970: 100)
+        }
+
+        let missingSharedURL = directory.appendingPathComponent(
+            CoreDataPersistentContainer.sharedStoreFileName
+        )
+        let orphan = URL(fileURLWithPath: missingSharedURL.path + "-wal")
+        let originalJournal = Data("orphaned shared journal".utf8)
+        try originalJournal.write(to: orphan)
+
+        let controller = RecoveryModeController(
+            context: RecoveryModeContext(startupError: "Shared store is missing"),
+            applicationSupportURL: root,
+            automaticallyRefreshDiagnostics: false
+        )
+        await controller.checkPersistentStoreReadOnly()
+        guard case .failed(let message) = controller.storeCheckResult else {
+            return XCTFail("A missing shared SQLite with an orphan journal must fail recovery.")
+        }
+        XCTAssertTrue(message.contains("shared Core Data SQLite store"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: missingSharedURL.path))
+        XCTAssertEqual(try Data(contentsOf: orphan), originalJournal)
+    }
+
+    @MainActor
     func testRecoveryReadOnlyProbeChecksValidPrivateAndSharedSQLite() async throws {
         let recoveryRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("yaHerd-probe-\(UUID())", isDirectory: true)
