@@ -702,6 +702,79 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         }
     }
 
+    func testDeletingSelectedGroupCannotNullifyForeignHerdPastureMembership() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let selectedHerdID = UUID()
+        let foreignHerdID = UUID()
+        let selectedGroupID = UUID()
+        let foreignPastureID = UUID()
+
+        // A CloudKit relationship import can transiently associate records
+        // across Herds. Save the inconsistent graph before the scoped write.
+        let seed = try assembly.contextFactory.makeWriteContext()
+        try seed.performAndWait {
+            let selected = CDHerd(context: seed)
+            selected.id = selectedHerdID
+            selected.name = "Selected"
+            selected.createdAt = Date(timeIntervalSince1970: 100)
+            selected.updatedAt = Date(timeIntervalSince1970: 100)
+
+            let foreign = CDHerd(context: seed)
+            foreign.id = foreignHerdID
+            foreign.name = "Foreign"
+            foreign.createdAt = Date(timeIntervalSince1970: 100)
+            foreign.updatedAt = Date(timeIntervalSince1970: 100)
+
+            let group = CDPastureGroup(context: seed)
+            group.id = selectedGroupID
+            group.name = "Selected Group"
+            group.herd = selected
+
+            let pasture = CDPasture(context: seed)
+            pasture.id = foreignPastureID
+            pasture.name = "Foreign Pasture"
+            pasture.herd = foreign
+            pasture.group = group
+            try seed.save()
+        }
+
+        // Group.pastures uses a nullify delete rule. Deleting the selected
+        // group must not silently clear the foreign Pasture's group link.
+        do {
+            try await assembly.transactionExecutor.performWrite(herdID: selectedHerdID) { context in
+                let group = try XCTUnwrap(CoreDataLookup().herdOwned(
+                    CDPastureGroup.self,
+                    id: selectedGroupID,
+                    herdID: selectedHerdID,
+                    in: context
+                ))
+                context.delete(group)
+            }
+            XCTFail("Deleting a selected group must not modify a foreign Herd's pasture.")
+        } catch let error as CoreDataPersistenceError {
+            guard case .wrongHerdMutation = error else {
+                return XCTFail("Expected wrongHerdMutation, got \(error).")
+            }
+        }
+
+        let read = assembly.contextFactory.makeReadContext()
+        try read.performAndWait {
+            XCTAssertNotNil(try CoreDataLookup().herdOwned(
+                CDPastureGroup.self,
+                id: selectedGroupID,
+                herdID: selectedHerdID,
+                in: read
+            ))
+            let pasture = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDPasture.self,
+                id: foreignPastureID,
+                herdID: foreignHerdID,
+                in: read
+            ))
+            XCTAssertEqual(pasture.group?.id, selectedGroupID)
+        }
+    }
+
     func testSelectedHerdDeleteStillRejectsForeignOwnedRecord() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let selectedHerdID = UUID()
