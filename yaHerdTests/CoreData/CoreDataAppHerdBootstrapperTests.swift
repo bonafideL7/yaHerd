@@ -331,12 +331,13 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             XCTAssertEqual(error, .missingName(herdID: selectedID))
         }
 
+        let privateURL = harness.storeURL
         let read = assembly.contextFactory.makeReadContext()
         try read.performAndWait {
             let lookup = CoreDataLookup()
             XCTAssertNotNil(try lookup.herd(id: selectedID, in: read))
             let privateStore = try XCTUnwrap(read.persistentStoreCoordinator?
-                .persistentStores.first { $0.url == harness.storeURL })
+                .persistentStores.first { $0.url == privateURL })
             let privateHerds = NSFetchRequest<CDHerd>(
                 entityName: CDHerd.coreDataEntityName
             )
