@@ -512,6 +512,124 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
         }
     }
 
+    func testSignedDevelopmentExistingLocalStoreAdoptsPrivateMirroringWithoutChangingRecords() async throws {
+        // Explicit, signed-development acceptance check. Loading a mirrored
+        // private store may export local records to this Apple Account; never
+        // run automatically in CI or against a user's application database.
+        guard ProcessInfo.processInfo.environment["YAHERD_CLOUDKIT_STORE_ADOPTION"] == "1" else {
+            throw XCTSkip(
+                "Run M04 first, then opt in with YAHERD_CLOUDKIT_STORE_ADOPTION=1 " +
+                "on a development-signed device using the intended Apple Account."
+            )
+        }
+
+        let harness = try CoreDataPersistenceHarness()
+        let original = try await harness.makeAssembly()
+        let herdID = UUID()
+        let animalID = UUID()
+        let tagID = UUID()
+        let pastureID = UUID()
+
+        // Populate a real local-only SQLite store before enabling mirroring.
+        try await original.transactionExecutor.performWrite { context in
+            let herd = CDHerd(context: context)
+            herd.id = herdID
+            herd.name = "Existing Local Herd"
+            herd.createdAt = Date(timeIntervalSince1970: 100)
+            herd.updatedAt = Date(timeIntervalSince1970: 100)
+
+            let pasture = CDPasture(context: context)
+            pasture.id = pastureID
+            pasture.name = "Existing Pasture"
+            pasture.herd = herd
+
+            let animal = CDAnimal(context: context)
+            animal.id = animalID
+            animal.name = "Existing Cow"
+            animal.birthDate = Date(timeIntervalSince1970: 100)
+            animal.herd = herd
+            animal.currentPasture = pasture
+
+            let tag = CDAnimalTag(context: context)
+            tag.id = tagID
+            tag.number = "001"
+            tag.herd = herd
+            tag.animal = animal
+        }
+
+        // Unlike unsigned two-store tests, this loads the actual mirrored
+        // private/shared CloudKit configuration against the populated store.
+        let mirrored = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL,
+            mirroringEnabled: true
+        )
+        let context = mirrored.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let stores = try XCTUnwrap(context.persistentStoreCoordinator?.persistentStores)
+            XCTAssertEqual(stores.count, 2)
+            let privateStore = try XCTUnwrap(stores.first { $0.url == harness.storeURL })
+            let sharedStore = try XCTUnwrap(stores.first {
+                $0.url == harness.directoryURL.appendingPathComponent(
+                    CoreDataPersistentContainer.sharedStoreFileName
+                )
+            })
+            XCTAssertFalse(privateStore === sharedStore)
+
+            let lookup = CoreDataLookup()
+            let herd = try XCTUnwrap(lookup.herd(id: herdID, in: context))
+            XCTAssertEqual(herd.name, "Existing Local Herd")
+            XCTAssertTrue(herd.objectID.persistentStore === privateStore)
+
+            let pasture = try XCTUnwrap(lookup.herdOwned(
+                CDPasture.self, id: pastureID, herdID: herdID, in: context
+            ))
+            let animal = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animalID, herdID: herdID, in: context
+            ))
+            let tag = try XCTUnwrap(lookup.herdOwned(
+                CDAnimalTag.self, id: tagID, herdID: herdID, in: context
+            ))
+            XCTAssertTrue(pasture.objectID.persistentStore === privateStore)
+            XCTAssertTrue(animal.objectID.persistentStore === privateStore)
+            XCTAssertTrue(tag.objectID.persistentStore === privateStore)
+            XCTAssertEqual(animal.currentPasture?.id, pastureID)
+            XCTAssertEqual(tag.animal?.id, animalID)
+
+            let wrongStoreRequest = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            wrongStoreRequest.predicate = NSPredicate(format: "id == %@", herdID as NSUUID)
+            wrongStoreRequest.affectedStores = [sharedStore]
+            XCTAssertTrue(try context.fetch(wrongStoreRequest).isEmpty)
+        }
+
+        // Exercise the selected-Herd save boundary on the actual mirrored
+        // private store and verify no temporary copy or duplicate root arose.
+        try await mirrored.transactionExecutor.performWrite(herdID: herdID) { context in
+            let pasture = try XCTUnwrap(CoreDataLookup().herdOwned(
+                CDPasture.self, id: pastureID, herdID: herdID, in: context
+            ))
+            pasture.name = "Updated Pasture"
+        }
+
+        let reopened = try await harness.makeAssembly(accessMode: .readOnly)
+        let read = reopened.contextFactory.makeReadContext()
+        try read.performAndWait {
+            let lookup = CoreDataLookup()
+            let herd = try XCTUnwrap(lookup.herd(id: herdID, in: read))
+            XCTAssertEqual(herd.id, herdID)
+            let pasture = try XCTUnwrap(lookup.herdOwned(
+                CDPasture.self, id: pastureID, herdID: herdID, in: read
+            ))
+            let animal = try XCTUnwrap(lookup.herdOwned(
+                CDAnimal.self, id: animalID, herdID: herdID, in: read
+            ))
+            XCTAssertEqual(pasture.name, "Updated Pasture")
+            XCTAssertEqual(animal.currentPasture?.id, pastureID)
+            XCTAssertNotNil(try lookup.herdOwned(
+                CDAnimalTag.self, id: tagID, herdID: herdID, in: read
+            ))
+        }
+    }
+
     func testSignedDevelopmentCloudKitSchemaDryRun() async throws {
         // Run explicitly from a development-signed Xcode test scheme with
         // YAHERD_CLOUDKIT_SCHEMA_DRY_RUN=1 in the test process environment.
