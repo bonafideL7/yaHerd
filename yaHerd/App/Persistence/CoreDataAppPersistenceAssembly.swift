@@ -42,6 +42,13 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         let context = assembly.contextFactory.makeReadContext()
         let lookup = assembly.lookup
         try context.performAndWait {
+            guard let herd = try lookup.herd(id: selectedHerdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+            // A CloudKit import can expose the root UUID before its required
+            // fields. Defer the app graph rather than treating a partial Herd
+            // as ready or creating a replacement starter Herd.
+            _ = try herd.toSummary()
             guard try lookup.store(forHerdID: selectedHerdID, in: context) != nil else {
                 throw HerdRepositoryError.missingHerd
             }
