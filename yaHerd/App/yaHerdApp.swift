@@ -429,6 +429,20 @@ enum CloudKitDevelopmentLaunch: Equatable {
             return "More than one owned Herd exists. Automatic development " +
                 "selection cannot choose one; no Herd data was changed."
         }
+        if let persistenceError = error as? CoreDataPersistenceError {
+            switch persistenceError {
+            case let .duplicateApplicationID(entity, _, _)
+                where entity == CDHerd.coreDataEntityName:
+                return "More than one Herd record has the same ID. " +
+                    "No Herd was selected or modified. Resolve the duplicate " +
+                    "identity before using development iCloud mirroring."
+            case .unresolvedHerdStore:
+                return "The selected Herd's owning persistent store could not " +
+                    "be resolved. No Herd was selected or modified."
+            default:
+                break
+            }
+        }
         return nil
     }
 }
