@@ -431,9 +431,8 @@ enum CloudKitDevelopmentLaunch: Equatable {
         }
         if let persistenceError = error as? CoreDataPersistenceError {
             switch persistenceError {
-            case let .duplicateApplicationID(entity, _, _)
-                where entity == CDHerd.coreDataEntityName:
-                return "More than one Herd record has the same ID. " +
+            case .duplicateApplicationID:
+                return "Duplicate application IDs prevent safe Herd selection. " +
                     "No Herd was selected or modified. Resolve the duplicate " +
                     "identity before using development iCloud mirroring."
             case .unresolvedHerdStore:
