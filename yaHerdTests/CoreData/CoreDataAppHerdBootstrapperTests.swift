@@ -498,7 +498,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
                 herdID: nil
             )
         )
-        XCTAssertTrue(duplicate?.contains("same ID") == true)
+        XCTAssertTrue(duplicate?.contains("Duplicate application IDs") == true)
         XCTAssertTrue(duplicate?.contains("No Herd was selected") == true)
 
         let unresolved = CloudKitDevelopmentLaunch.nonStorageStartupMessage(
