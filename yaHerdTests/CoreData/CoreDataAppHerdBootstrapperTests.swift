@@ -488,6 +488,25 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         )
         XCTAssertTrue(configuration?.contains("M04") == true)
 
+        // Both stores opened successfully; an ambiguous Herd identity must
+        // block selection rather than incorrectly launching disk recovery.
+        let duplicateHerdID = UUID()
+        let duplicate = CloudKitDevelopmentLaunch.nonStorageStartupMessage(
+            for: CoreDataPersistenceError.duplicateApplicationID(
+                entity: CDHerd.coreDataEntityName,
+                id: duplicateHerdID,
+                herdID: nil
+            )
+        )
+        XCTAssertTrue(duplicate?.contains("same ID") == true)
+        XCTAssertTrue(duplicate?.contains("No Herd was selected") == true)
+
+        let unresolved = CloudKitDevelopmentLaunch.nonStorageStartupMessage(
+            for: CoreDataPersistenceError.unresolvedHerdStore(id: UUID())
+        )
+        XCTAssertTrue(unresolved?.contains("owning persistent store") == true)
+
+        // Only actual store-loading failures should enter disk recovery.
         let corruptedStore = CoreDataPersistenceError.storeLoadFailed(
             url: nil, description: "SQLite could not be opened"
         )
