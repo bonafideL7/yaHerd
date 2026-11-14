@@ -780,12 +780,12 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
         // private store may export local records to this Apple Account; never
         // run automatically in CI or against a user's application database.
         let environment = ProcessInfo.processInfo.environment
-        guard environment["YAHERD_CLOUDKIT_STORE_ADOPTION"] == "1",
-              environment["YAHERD_CLOUDKIT_M04_VERIFIED"] == "1" else {
+        guard environment["YAHERD_TEST_EXISTING_DATA_SYNC"] == "1",
+              environment["YAHERD_ICLOUD_SCHEMA_VALIDATED"] == "1" else {
             throw XCTSkip(
                 "After the signed M04 dry-run passes, explicitly set " +
-                "YAHERD_CLOUDKIT_M04_VERIFIED=1 and " +
-                "YAHERD_CLOUDKIT_STORE_ADOPTION=1 on a development-signed " +
+                "YAHERD_ICLOUD_SCHEMA_VALIDATED=1 and " +
+                "YAHERD_TEST_EXISTING_DATA_SYNC=1 on a development-signed " +
                 "device using the intended Apple Account."
             )
         }
@@ -901,12 +901,12 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
 
     func testSignedDevelopmentCloudKitSchemaDryRun() async throws {
         // Run explicitly from a development-signed Xcode test scheme with
-        // YAHERD_CLOUDKIT_SCHEMA_DRY_RUN=1 in the test process environment.
+        // YAHERD_VALIDATE_ICLOUD_SCHEMA=1 in the test process environment.
         // CI deliberately uses unsigned simulator builds and skips this test.
-        guard ProcessInfo.processInfo.environment["YAHERD_CLOUDKIT_SCHEMA_DRY_RUN"] == "1" else {
+        guard ProcessInfo.processInfo.environment["YAHERD_VALIDATE_ICLOUD_SCHEMA"] == "1" else {
             throw XCTSkip(
                 "Signed CloudKit schema validation requires explicit opt-in: " +
-                "set YAHERD_CLOUDKIT_SCHEMA_DRY_RUN=1 in the signed development test scheme."
+                "set YAHERD_VALIDATE_ICLOUD_SCHEMA=1 in the signed development test scheme."
             )
         }
 
@@ -927,12 +927,12 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
     func testSignedDevelopmentCloudKitSchemaInitialization() async throws {
         // This test uploads representative records to the DEVELOPMENT
         // CloudKit environment. Run only with a development-provisioned
-        // test host and YAHERD_CLOUDKIT_SCHEMA_INITIALIZE=1 explicitly set.
+        // test host and YAHERD_CREATE_ICLOUD_DEV_SCHEMA=1 explicitly set.
         // It must never run during ordinary app launch or unsigned CI.
-        guard ProcessInfo.processInfo.environment["YAHERD_CLOUDKIT_SCHEMA_INITIALIZE"] == "1" else {
+        guard ProcessInfo.processInfo.environment["YAHERD_CREATE_ICLOUD_DEV_SCHEMA"] == "1" else {
             throw XCTSkip(
                 "Development CloudKit schema initialization requires explicit opt-in: " +
-                "set YAHERD_CLOUDKIT_SCHEMA_INITIALIZE=1 in a development-signed test scheme."
+                "set YAHERD_CREATE_ICLOUD_DEV_SCHEMA=1 in a development-signed test scheme."
             )
         }
 
