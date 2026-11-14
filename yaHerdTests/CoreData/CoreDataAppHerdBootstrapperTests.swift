@@ -471,6 +471,19 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertTrue(CloudKitDevelopmentLaunch.isImportPending(
             CoreDataHerdMappingError.missingName(herdID: UUID())
         ))
+        let missingOwnership = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDPasture.coreDataEntityName, id: UUID(),
+            expectedHerdID: UUID(), actualHerdID: nil
+        )
+        XCTAssertTrue(CloudKitDevelopmentLaunch.isImportPending(missingOwnership))
+        let mismatchedOwnership = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDPasture.coreDataEntityName, id: UUID(),
+            expectedHerdID: UUID(), actualHerdID: UUID()
+        )
+        XCTAssertFalse(CloudKitDevelopmentLaunch.isImportPending(mismatchedOwnership))
+        XCTAssertNotNil(
+            CloudKitDevelopmentLaunch.nonStorageStartupMessage(for: mismatchedOwnership)
+        )
         XCTAssertFalse(CloudKitDevelopmentLaunch.isImportPending(
             CoreDataAppHerdBootstrapError.multipleLocalHerds(count: 2)
         ))
@@ -682,6 +695,71 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         try read.performAndWait {
             let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
             XCTAssertEqual(try read.fetch(request).map(\.id), [expectedID])
+        }
+    }
+
+    @MainActor
+    func testDevelopmentHomeWaitsForIncompleteImportedPastureWithoutReplacingHerd() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let storeURL = harness.storeURL
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: storeURL, mirroringEnabled: false
+        )
+        let herdID = UUID()
+        let pastureID = UUID()
+        let writer = try assembly.contextFactory.makeWriteContext()
+        try writer.performAndWait {
+            let privateStore = try XCTUnwrap(writer.persistentStoreCoordinator?
+                .persistentStores.first { $0.url == storeURL })
+            let herd = CDHerd(context: writer)
+            herd.id = herdID
+            herd.name = "Imported Herd"
+            herd.createdAt = Date(timeIntervalSince1970: 100)
+            herd.updatedAt = Date(timeIntervalSince1970: 100)
+            writer.assign(herd, to: privateStore)
+
+            // Import order can expose an owned record before its Herd link.
+            let pasture = CDPasture(context: writer)
+            pasture.id = pastureID
+            pasture.name = "Imported Pasture"
+            writer.assign(pasture, to: privateStore)
+            try writer.save()
+        }
+
+        let app = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
+            using: assembly, privateStoreURL: storeURL
+        )
+        do {
+            try await CloudKitDevelopmentLaunch.validateHomeReadiness(app)
+            XCTFail("An ownerless imported Pasture must delay development Home.")
+        } catch {
+            XCTAssertEqual(
+                error as? CoreDataReadModelError,
+                .invalidHerdOwnership(
+                    entity: CDPasture.coreDataEntityName,
+                    id: pastureID,
+                    expectedHerdID: herdID,
+                    actualHerdID: nil
+                )
+            )
+            XCTAssertTrue(CloudKitDevelopmentLaunch.isImportPending(error))
+        }
+
+        try writer.performAndWait {
+            let request = NSFetchRequest<CDPasture>(entityName: CDPasture.coreDataEntityName)
+            request.predicate = NSPredicate(format: "id == %@", pastureID as NSUUID)
+            let pasture = try XCTUnwrap(writer.fetch(request).first)
+            let herd = try XCTUnwrap(CoreDataLookup().herd(id: herdID, in: writer))
+            pasture.herd = herd
+            try writer.save()
+        }
+
+        // The same imported IDs and stores now satisfy the actual Home queries.
+        try await CloudKitDevelopmentLaunch.validateHomeReadiness(app)
+        let reader = assembly.contextFactory.makeReadContext()
+        try reader.performAndWait {
+            let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            XCTAssertEqual(try reader.fetch(request).map(\.id), [herdID])
         }
     }
 
