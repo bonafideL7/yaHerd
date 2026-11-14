@@ -467,6 +467,19 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
 
     @MainActor
     func testDevelopmentImportAndConfigurationFailuresAreNotClassifiedAsStoreCorruption() {
+        XCTAssertTrue(CloudKitDevelopmentLaunch.isImportPending(HerdRepositoryError.missingHerd))
+        XCTAssertTrue(CloudKitDevelopmentLaunch.isImportPending(
+            CoreDataHerdMappingError.missingName(herdID: UUID())
+        ))
+        XCTAssertFalse(CloudKitDevelopmentLaunch.isImportPending(
+            CoreDataAppHerdBootstrapError.multipleLocalHerds(count: 2)
+        ))
+        XCTAssertFalse(CloudKitDevelopmentLaunch.isImportPending(
+            CoreDataPersistenceError.storeLoadFailed(
+                url: nil, description: "SQLite could not be opened"
+            )
+        ))
+
         let missing = CloudKitDevelopmentLaunch.nonStorageStartupMessage(
             for: HerdRepositoryError.missingHerd
         )
