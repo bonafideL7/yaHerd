@@ -40,6 +40,20 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
             storeURL: storeURL,
             mirroringEnabled: mirroringEnabled
         )
+        return try resolveCloudKitHerd(
+            using: assembly, privateStoreURL: storeURL, selectedHerdID: selectedHerdID
+        )
+    }
+
+    /// Resolve a Herd against an already loaded dual-store assembly. Retaining
+    /// this assembly while a newly installed device awaits CloudKit import
+    /// keeps its mirroring engine alive; rechecking must never bootstrap a
+    /// replacement Herd or reopen the persistent stores.
+    static func resolveCloudKitHerd(
+        using assembly: CoreDataPersistenceAssembly,
+        privateStoreURL: URL,
+        selectedHerdID: UUID? = nil
+    ) throws -> CoreDataAppPersistenceAssembly {
         // The development activation path may select the one existing owned
         // root. An explicit selection can target either private or shared.
         // Neither path creates replacement Herds while import is in progress.
@@ -49,7 +63,7 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         } else {
             herdID = try CoreDataAppHerdBootstrapper.resolveExistingPrivateHerdID(
                 assembly: assembly,
-                privateStoreURL: storeURL
+                privateStoreURL: privateStoreURL
             )
         }
 
