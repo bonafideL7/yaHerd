@@ -54,7 +54,7 @@ struct yaHerdApp: App {
                             "creating or replacing any Herd data.")
                     } actions: {
                         Button("Check Again") {
-                            Task { await retryPendingDevelopmentImport() }
+                            Task { @MainActor in await retryPendingDevelopmentImport() }
                         }
                     }
                     .task {
