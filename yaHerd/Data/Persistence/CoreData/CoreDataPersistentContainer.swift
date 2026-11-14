@@ -223,14 +223,13 @@ final class CoreDataPersistentContainer {
             ? CloudKitDevelopmentEventLog.observe(container: container)
             : nil
         var storesLoaded = false
-        #else
-        eventObserver = nil
-        #endif
         defer {
             if !storesLoaded, let eventObserver {
                 NotificationCenter.default.removeObserver(eventObserver)
             }
         }
+        #else
+        eventObserver = nil
         #endif
 
         try await withCheckedThrowingContinuation {
