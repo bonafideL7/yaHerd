@@ -11,6 +11,9 @@ import SwiftUI
 struct yaHerdApp: App {
     @State private var bootstrapState: AppBootstrapState = .loading
     @State private var bootstrapStarted = false
+    #if DEBUG
+    @State private var developmentImportCheckInProgress = false
+    #endif
 
     private let applicationSettings: ApplicationSettings
 
@@ -46,11 +49,12 @@ struct yaHerdApp: App {
                     ContentUnavailableView {
                         Label("Waiting for iCloud Herd", systemImage: "icloud.and.arrow.down")
                     } description: {
-                        Text("No existing Herd is available yet. yaHerd is keeping the iCloud " +
-                            "stores open while your Herd imports. No replacement Herd will be created.")
+                        Text("The Herd or some of its related records have not finished importing. " +
+                            "yaHerd is keeping iCloud active and will check again without " +
+                            "creating or replacing any Herd data.")
                     } actions: {
                         Button("Check Again") {
-                            retryPendingDevelopmentImport()
+                            Task { await retryPendingDevelopmentImport() }
                         }
                     }
                     .task {
@@ -63,7 +67,7 @@ struct yaHerdApp: App {
                             } catch {
                                 break
                             }
-                            retryPendingDevelopmentImport()
+                            await retryPendingDevelopmentImport()
                             guard case .developmentImportPending = bootstrapState else {
                                 break
                             }
@@ -107,11 +111,16 @@ struct yaHerdApp: App {
                     mirroringEnabled: true
                 )
                 do {
-                    persistence = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
+                    let candidate = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
                         using: cloudKitAssembly,
                         privateStoreURL: storeURL,
                         selectedHerdID: selectedHerdID
                     )
+                    // An imported root can arrive before its owned records
+                    // and relationships. Preserve the mirroring engine and
+                    // defer Home instead of presenting partial data as corrupt.
+                    try await CloudKitDevelopmentLaunch.validateHomeReadiness(candidate)
+                    persistence = candidate
                 } catch {
                     if CloudKitDevelopmentLaunch.isImportPending(error) {
                         AppLaunchDiagnostics.record(
@@ -213,16 +222,21 @@ struct yaHerdApp: App {
 
     #if DEBUG
     @MainActor
-    private func retryPendingDevelopmentImport() {
-        guard case .developmentImportPending(let pending) = bootstrapState else {
+    private func retryPendingDevelopmentImport() async {
+        guard !developmentImportCheckInProgress,
+              case .developmentImportPending(let pending) = bootstrapState else {
             return
         }
+        developmentImportCheckInProgress = true
+        defer { developmentImportCheckInProgress = false }
+
         do {
             let persistence = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
                 using: pending.assembly,
                 privateStoreURL: pending.privateStoreURL,
                 selectedHerdID: pending.selectedHerdID
             )
+            try await CloudKitDevelopmentLaunch.validateHomeReadiness(persistence)
             bootstrapState = .ready(Self.makeRuntime(
                 persistence: persistence,
                 storageMode: .cloudKitDevelopment
@@ -511,9 +525,32 @@ enum CloudKitDevelopmentLaunch: Equatable {
         return .mirrored(selectedHerdID: nil)
     }
 
+    @MainActor
+    static func validateHomeReadiness(
+        _ persistence: CoreDataAppPersistenceAssembly
+    ) async throws {
+        let home = persistence.makeDependencies(
+            dataAccessMode: .readWrite
+        ).homeFeatureDependencies
+        _ = try await LoadHomeUseCase(
+            dashboardRepository: home.dashboardQueryReader,
+            fieldCheckRepository: home.homeFieldCheckQueryReader,
+            workingRepository: home.homeWorkingQueryReader
+        ).execute(configuration: DashboardConfiguration())
+    }
+
     static func isImportPending(_ error: Error) -> Bool {
-        (error as? HerdRepositoryError) == .missingHerd
-            || error is CoreDataHerdMappingError
+        if (error as? HerdRepositoryError) == .missingHerd
+            || error is CoreDataHerdMappingError {
+            return true
+        }
+        // Only a missing Herd link is an expected partially imported graph.
+        // An explicit other-Herd link is a real isolation violation.
+        if let readError = error as? CoreDataReadModelError,
+           case .invalidHerdOwnership(_, _, _, let actualHerdID) = readError {
+            return actualHerdID == nil
+        }
+        return false
     }
 
     static func nonStorageStartupMessage(for error: Error) -> String? {
@@ -532,6 +569,10 @@ enum CloudKitDevelopmentLaunch: Equatable {
         if error is CoreDataAppHerdBootstrapError {
             return "More than one owned Herd exists. Automatic development " +
                 "selection cannot choose one; no Herd data was changed."
+        }
+        if let readError = error as? CoreDataReadModelError {
+            return "The imported Herd cannot safely open: \(readError.localizedDescription) " +
+                "No data was changed. Check the development CloudKit records and ownership."
         }
         if let persistenceError = error as? CoreDataPersistenceError {
             switch persistenceError {
