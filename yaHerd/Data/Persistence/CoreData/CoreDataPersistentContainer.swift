@@ -263,10 +263,12 @@ final class CoreDataPersistentContainer {
 
         #if DEBUG
         storesLoaded = true
-        ReliabilityLog.persistenceEvent(
-            "icloud-mirroring-active",
-            detail: "private-and-shared-stores; watch icloud_transfer events"
-        )
+        if cloudKitConfigured {
+            ReliabilityLog.persistenceEvent(
+                "icloud-mirroring-active",
+                detail: "private-and-shared-stores; watch icloud_transfer events"
+            )
+        }
         #endif
         return CoreDataPersistentContainer(
             container: container,
