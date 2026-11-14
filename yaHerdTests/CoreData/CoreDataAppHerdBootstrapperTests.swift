@@ -480,6 +480,20 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             entity: CDPasture.coreDataEntityName, id: UUID(),
             expectedHerdID: UUID(), actualHerdID: UUID()
         )
+        let missingFindingSession = CoreDataFieldCheckMappingError.missingFindingSession(
+            findingID: UUID()
+        )
+        let missingCheckSession = CoreDataFieldCheckMappingError.missingAnimalCheckSession(
+            checkID: UUID()
+        )
+        XCTAssertTrue(CloudKitDevelopmentLaunch.isImportPending(missingFindingSession))
+        XCTAssertTrue(CloudKitDevelopmentLaunch.isImportPending(missingCheckSession))
+        XCTAssertFalse(CloudKitDevelopmentLaunch.isImportPending(
+            CoreDataFieldCheckMappingError.invalidFindingType(
+                findingID: UUID(), value: "unknown"
+            )
+        ))
+
         XCTAssertFalse(CloudKitDevelopmentLaunch.isImportPending(mismatchedOwnership))
         XCTAssertNotNil(
             CloudKitDevelopmentLaunch.nonStorageStartupMessage(for: mismatchedOwnership)
