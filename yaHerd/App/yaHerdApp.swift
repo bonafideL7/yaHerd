@@ -571,6 +571,13 @@ enum CloudKitDevelopmentLaunch: Equatable {
                 "selection cannot choose one; no Herd data was changed."
         }
         if let readError = error as? CoreDataReadModelError {
+            if case .invalidHerdOwnership(
+                let entity, let id, let expected, let actual
+            ) = readError {
+                return "Cannot open imported \(entity) \(id): Herd link is " +
+                    "\(actual?.uuidString ?? "missing"), expected \(expected.uuidString). " +
+                    "No records were changed."
+            }
             return "The imported Herd cannot safely open: \(readError.localizedDescription) " +
                 "No data was changed. Check the development CloudKit records and ownership."
         }
