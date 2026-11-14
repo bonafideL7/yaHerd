@@ -5,6 +5,32 @@ import XCTest
 @testable import yaHerd
 
 final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
+    #if DEBUG
+    func testDevelopmentICloudTransferDiagnosticsLabelsOperationsAndCompletion() {
+        XCTAssertEqual(
+            CloudKitDevelopmentEventLog.operationName(for: .setup), "setup"
+        )
+        XCTAssertEqual(
+            CloudKitDevelopmentEventLog.operationName(for: .export), "upload"
+        )
+        XCTAssertEqual(
+            CloudKitDevelopmentEventLog.operationName(for: .import), "download"
+        )
+        XCTAssertEqual(
+            CloudKitDevelopmentEventLog.status(endDate: nil, succeeded: false),
+            "started"
+        )
+        XCTAssertEqual(
+            CloudKitDevelopmentEventLog.status(endDate: Date(), succeeded: true),
+            "succeeded"
+        )
+        XCTAssertEqual(
+            CloudKitDevelopmentEventLog.status(endDate: Date(), succeeded: false),
+            "failed"
+        )
+    }
+    #endif
+
     func testCloudKitStoresReuseExistingSQLiteAsPrivateAndSeparateSharedURL() {
         let originalStore = URL(fileURLWithPath: "/tmp/yaHerd-existing/yaHerd.sqlite")
         let descriptions = CoreDataPersistentContainer.cloudKitStoreDescriptions(
