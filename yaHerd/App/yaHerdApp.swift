@@ -579,7 +579,7 @@ enum CloudKitDevelopmentLaunch: Equatable {
                     "No records were changed."
             }
             return "The imported Herd cannot safely open: \(readError.localizedDescription) " +
-                "No data was changed. Check the development CloudKit records and ownership."
+                "No data was changed. Check the development iCloud records and ownership."
         }
         if let persistenceError = error as? CoreDataPersistenceError {
             switch persistenceError {
