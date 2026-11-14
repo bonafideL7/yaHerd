@@ -653,10 +653,11 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         }
 
         let expectedID = UUID()
+        let privateStoreURL = harness.storeURL
         let writer = try assembly.contextFactory.makeWriteContext()
         try writer.performAndWait {
             let privateStore = try XCTUnwrap(writer.persistentStoreCoordinator?
-                .persistentStores.first { $0.url == harness.storeURL })
+                .persistentStores.first { $0.url == privateStoreURL })
             let arrivingHerd = CDHerd(context: writer)
             arrivingHerd.id = expectedID
             arrivingHerd.name = "Imported Owned Herd"
