@@ -417,12 +417,12 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         )
         XCTAssertEqual(
             try CloudKitDevelopmentLaunch.resolve(environment: [
-                "YAHERD_CLOUDKIT_M04_VERIFIED": "1"
+                "YAHERD_ICLOUD_SCHEMA_VALIDATED": "1"
             ]),
             .disabled
         )
         XCTAssertThrowsError(try CloudKitDevelopmentLaunch.resolve(environment: [
-            "YAHERD_CLOUDKIT_DEV_MIRRORING": "1"
+            "YAHERD_ENABLE_ICLOUD_SYNC": "1"
         ])) { error in
             XCTAssertEqual(
                 error as? CloudKitDevelopmentLaunchError,
@@ -431,8 +431,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         }
         XCTAssertEqual(
             try CloudKitDevelopmentLaunch.resolve(environment: [
-                "YAHERD_CLOUDKIT_DEV_MIRRORING": "1",
-                "YAHERD_CLOUDKIT_M04_VERIFIED": "1"
+                "YAHERD_ENABLE_ICLOUD_SYNC": "1",
+                "YAHERD_ICLOUD_SCHEMA_VALIDATED": "1"
             ]),
             .mirrored(selectedHerdID: nil)
         )
@@ -440,16 +440,16 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let selectedSharedHerdID = UUID()
         XCTAssertEqual(
             try CloudKitDevelopmentLaunch.resolve(environment: [
-                "YAHERD_CLOUDKIT_DEV_MIRRORING": "1",
-                "YAHERD_CLOUDKIT_M04_VERIFIED": "1",
-                "YAHERD_CLOUDKIT_DEV_SELECTED_HERD_ID": selectedSharedHerdID.uuidString
+                "YAHERD_ENABLE_ICLOUD_SYNC": "1",
+                "YAHERD_ICLOUD_SCHEMA_VALIDATED": "1",
+                "YAHERD_SELECTED_ICLOUD_HERD_ID": selectedSharedHerdID.uuidString
             ]),
             .mirrored(selectedHerdID: selectedSharedHerdID)
         )
         XCTAssertThrowsError(try CloudKitDevelopmentLaunch.resolve(environment: [
-            "YAHERD_CLOUDKIT_DEV_MIRRORING": "1",
-            "YAHERD_CLOUDKIT_M04_VERIFIED": "1",
-            "YAHERD_CLOUDKIT_DEV_SELECTED_HERD_ID": "not-a-uuid"
+            "YAHERD_ENABLE_ICLOUD_SYNC": "1",
+            "YAHERD_ICLOUD_SCHEMA_VALIDATED": "1",
+            "YAHERD_SELECTED_ICLOUD_HERD_ID": "not-a-uuid"
         ])) { error in
             XCTAssertEqual(
                 error as? CloudKitDevelopmentLaunchError,
@@ -458,7 +458,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         }
         XCTAssertEqual(
             try CloudKitDevelopmentLaunch.resolve(environment: [
-                "YAHERD_CLOUDKIT_DEV_SELECTED_HERD_ID": "not-a-uuid"
+                "YAHERD_SELECTED_ICLOUD_HERD_ID": "not-a-uuid"
             ]),
             .disabled
         )
@@ -526,7 +526,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let configuration = CloudKitDevelopmentLaunch.nonStorageStartupMessage(
             for: CloudKitDevelopmentLaunchError.schemaDryRunRequired
         )
-        XCTAssertTrue(configuration?.contains("M04") == true)
+        XCTAssertTrue(configuration?.contains("schema validation") == true)
 
         // Both stores opened successfully; an ambiguous Herd identity must
         // block selection rather than incorrectly launching disk recovery.
