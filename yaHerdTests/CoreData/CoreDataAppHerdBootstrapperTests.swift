@@ -624,6 +624,54 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     }
 
     @MainActor
+    func testPendingCloudKitImportCanResolveAnArrivingOwnedHerdWithoutReopeningStores() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        // This is the same durable two-store assembly the development launch
+        // must retain while a new installation awaits a CloudKit import.
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL,
+            mirroringEnabled: false
+        )
+
+        XCTAssertThrowsError(try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
+            using: assembly, privateStoreURL: harness.storeURL
+        )) { error in
+            XCTAssertEqual(error as? HerdRepositoryError, .missingHerd)
+        }
+
+        let expectedID = UUID()
+        let writer = try assembly.contextFactory.makeWriteContext()
+        try writer.performAndWait {
+            let privateStore = try XCTUnwrap(writer.persistentStoreCoordinator?
+                .persistentStores.first { $0.url == harness.storeURL })
+            let arrivingHerd = CDHerd(context: writer)
+            arrivingHerd.id = expectedID
+            arrivingHerd.name = "Imported Owned Herd"
+            arrivingHerd.createdAt = Date(timeIntervalSince1970: 100)
+            arrivingHerd.updatedAt = Date(timeIntervalSince1970: 100)
+            writer.assign(arrivingHerd, to: privateStore)
+            try writer.save()
+        }
+
+        // The same assembly now resolves the imported Herd. It must not create
+        // a replacement root, swap stores, or require a new loader instance.
+        let app = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
+            using: assembly, privateStoreURL: harness.storeURL
+        )
+        XCTAssertEqual(
+            try app.makeDependencies(dataAccessMode: .readWrite)
+                .herdRepository.fetchCurrentHerd().id,
+            expectedID
+        )
+
+        let read = assembly.contextFactory.makeReadContext()
+        try read.performAndWait {
+            let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            XCTAssertEqual(try read.fetch(request).map(\.id), [expectedID])
+        }
+    }
+
+    @MainActor
     func testDevelopmentTwoStoreStartupDoesNotCreatePrivateHerdWhileImportPending() async throws {
         let harness = try CoreDataPersistenceHarness()
         let dualStore = try await CoreDataPersistenceAssembly.loadCloudKit(
