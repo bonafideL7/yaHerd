@@ -24,15 +24,24 @@ final class CoreDataPersistentContainer {
     private let container: NSPersistentContainer
     let accessMode: CoreDataStoreAccessMode
     let storeURL: URL?
+    private let cloudKitEventObserver: (any NSObjectProtocol)?
 
     private init(
         container: NSPersistentContainer,
         accessMode: CoreDataStoreAccessMode,
-        storeURL: URL?
+        storeURL: URL?,
+        cloudKitEventObserver: (any NSObjectProtocol)? = nil
     ) {
         self.container = container
         self.accessMode = accessMode
         self.storeURL = storeURL
+        self.cloudKitEventObserver = cloudKitEventObserver
+    }
+
+    deinit {
+        if let cloudKitEventObserver {
+            NotificationCenter.default.removeObserver(cloudKitEventObserver)
+        }
     }
 
     static func load(
@@ -205,6 +214,21 @@ final class CoreDataPersistentContainer {
         )
         container.persistentStoreDescriptions = storeDescriptions
 
+        #if DEBUG
+        // Observe real Core Data / iCloud setup, upload and download events.
+        // This is diagnostic-only; it does not merge remote records or claim
+        // that a particular update has reached another device.
+        let eventObserver = cloudKitConfigured
+            ? CloudKitDevelopmentEventLog.observe(container: container)
+            : nil
+        var storesLoaded = false
+        defer {
+            if !storesLoaded, let eventObserver {
+                NotificationCenter.default.removeObserver(eventObserver)
+            }
+        }
+        #endif
+
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, Error>) in
             let progress = Mutex(StoreLoadProgress(
@@ -233,10 +257,20 @@ final class CoreDataPersistentContainer {
             }
         }
 
+        #if DEBUG
+        storesLoaded = true
+        ReliabilityLog.persistenceEvent(
+            "icloud-mirroring-active",
+            detail: "private-and-shared-stores; watch icloud_transfer events"
+        )
+        #endif
         return CoreDataPersistentContainer(
             container: container,
             accessMode: .readWrite,
             storeURL: storeDescriptions[0].url
+            #if DEBUG
+            , cloudKitEventObserver: eventObserver
+            #endif
         )
     }
 
@@ -335,3 +369,64 @@ final class CoreDataPersistentContainer {
         return model
     }
 }
+
+#if DEBUG
+/// Development-only event visibility for diagnosing whether a local save was
+/// exported and whether another installation imported from iCloud. No records,
+/// account identifiers, or event payloads are logged.
+enum CloudKitDevelopmentEventLog {
+    static func operationName(
+        for type: NSPersistentCloudKitContainer.EventType
+    ) -> String {
+        switch type {
+        case .setup: "setup"
+        case .export: "upload"
+        case .import: "download"
+        @unknown default: "unknown"
+        }
+    }
+
+    static func status(endDate: Date?, succeeded: Bool) -> String {
+        guard endDate != nil else { return "started" }
+        return succeeded ? "succeeded" : "failed"
+    }
+
+    static func observe(container: NSPersistentCloudKitContainer) -> any NSObjectProtocol {
+        NotificationCenter.default.addObserver(
+            forName: NSPersistentCloudKitContainer.eventChangedNotification,
+            object: container,
+            queue: nil
+        ) { notification in
+            guard let event = notification.userInfo?[
+                NSPersistentCloudKitContainer.eventNotificationUserInfoKey
+            ] as? NSPersistentCloudKitContainer.Event else {
+                return
+            }
+
+            let action = operationName(for: event.type)
+            let state = status(endDate: event.endDate, succeeded: event.succeeded)
+            let store = event.storeIdentifier
+            let eventID = event.identifier.uuidString
+
+            if let error = event.error, event.endDate != nil {
+                let failure = error as NSError
+                ReliabilityLog.persistence.error(
+                    "icloud_transfer action=\(action, privacy: .public) " +
+                    "state=failed store=\(store, privacy: .public) " +
+                    "event=\(eventID, privacy: .public) " +
+                    "error_domain=\(failure.domain, privacy: .public) " +
+                    "error_code=\(failure.code) " +
+                    "error_description=\(failure.localizedDescription, privacy: .private)"
+                )
+            } else {
+                ReliabilityLog.persistence.notice(
+                    "icloud_transfer action=\(action, privacy: .public) " +
+                    "state=\(state, privacy: .public) " +
+                    "store=\(store, privacy: .public) " +
+                    "event=\(eventID, privacy: .public)"
+                )
+            }
+        }
+    }
+}
+#endif
