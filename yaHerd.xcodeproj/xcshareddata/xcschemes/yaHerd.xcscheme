@@ -58,17 +58,22 @@
       </Testables>
       <EnvironmentVariables>
          <EnvironmentVariable
-            key = "YAHERD_CLOUDKIT_SCHEMA_DRY_RUN"
+            key = "YAHERD_VALIDATE_ICLOUD_SCHEMA"
             value = "1"
             isEnabled = "NO">
          </EnvironmentVariable>
          <EnvironmentVariable
-            key = "YAHERD_CLOUDKIT_SCHEMA_INITIALIZE"
+            key = "YAHERD_CREATE_ICLOUD_DEV_SCHEMA"
             value = "1"
             isEnabled = "NO">
          </EnvironmentVariable>
          <EnvironmentVariable
-            key = "YAHERD_CLOUDKIT_STORE_ADOPTION"
+            key = "YAHERD_TEST_EXISTING_DATA_SYNC"
+            value = "1"
+            isEnabled = "NO">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "YAHERD_ICLOUD_SCHEMA_VALIDATED"
             value = "1"
             isEnabled = "NO">
          </EnvironmentVariable>
@@ -96,27 +101,12 @@
       </BuildableProductRunnable>
       <EnvironmentVariables>
          <EnvironmentVariable
-            key = "YAHERD_CLOUDKIT_SCHEMA_DRY_RUN"
-            value = "1"
-            isEnabled = "NO">
-         </EnvironmentVariable>
-         <EnvironmentVariable
-            key = "YAHERD_CLOUDKIT_SCHEMA_INITIALIZE"
-            value = "1"
-            isEnabled = "NO">
-         </EnvironmentVariable>
-         <EnvironmentVariable
-            key = "YAHERD_CLOUDKIT_STORE_ADOPTION"
-            value = "1"
-            isEnabled = "NO">
-         </EnvironmentVariable>
-         <EnvironmentVariable
-            key = "YAHERD_CLOUDKIT_M04_VERIFIED"
+            key = "YAHERD_ICLOUD_SCHEMA_VALIDATED"
             value = "1"
             isEnabled = "YES">
          </EnvironmentVariable>
          <EnvironmentVariable
-            key = "YAHERD_CLOUDKIT_DEV_MIRRORING"
+            key = "YAHERD_ENABLE_ICLOUD_SYNC"
             value = "1"
             isEnabled = "YES">
          </EnvironmentVariable>
