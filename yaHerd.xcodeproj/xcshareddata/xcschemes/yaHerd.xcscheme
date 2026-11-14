@@ -81,27 +81,27 @@
          <EnvironmentVariable
             key = "YAHERD_CLOUDKIT_SCHEMA_DRY_RUN"
             value = "1"
-            isEnabled = "YES">
+            isEnabled = "NO">
          </EnvironmentVariable>
          <EnvironmentVariable
             key = "YAHERD_CLOUDKIT_SCHEMA_INITIALIZE"
             value = "1"
-            isEnabled = "YES">
+            isEnabled = "NO">
          </EnvironmentVariable>
          <EnvironmentVariable
             key = "YAHERD_CLOUDKIT_STORE_ADOPTION"
             value = "1"
-            isEnabled = "YES">
+            isEnabled = "NO">
          </EnvironmentVariable>
          <EnvironmentVariable
             key = "YAHERD_CLOUDKIT_M04_VERIFIED"
             value = "1"
-            isEnabled = "YES">
+            isEnabled = "NO">
          </EnvironmentVariable>
          <EnvironmentVariable
             key = "YAHERD_CLOUDKIT_DEV_MIRRORING"
             value = "1"
-            isEnabled = "YES">
+            isEnabled = "NO">
          </EnvironmentVariable>
       </EnvironmentVariables>
    </LaunchAction>
