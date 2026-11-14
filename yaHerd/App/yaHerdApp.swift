@@ -134,7 +134,16 @@ struct yaHerdApp: App {
                             )
                         )
                     }
-                    throw error
+                    // Both stores opened successfully. A rejected import graph
+                    // is not a SQLite failure and must not start recovery.
+                    let message = CloudKitDevelopmentLaunch.nonStorageStartupMessage(
+                        for: error
+                    ) ?? error.localizedDescription
+                    AppLaunchDiagnostics.record(
+                        actualStorageMode: .cloudKitDevelopmentBlocked,
+                        startupError: message
+                    )
+                    return .developmentMirroringBlocked(message)
                 }
                 storageMode = .cloudKitDevelopment
             }
@@ -549,6 +558,14 @@ enum CloudKitDevelopmentLaunch: Equatable {
         if let readError = error as? CoreDataReadModelError,
            case .invalidHerdOwnership(_, _, _, let actualHerdID) = readError {
             return actualHerdID == nil
+        }
+        if let fieldCheckError = error as? CoreDataFieldCheckMappingError {
+            switch fieldCheckError {
+            case .missingFindingSession, .missingAnimalCheckSession:
+                return true
+            default:
+                return false
+            }
         }
         return false
     }
