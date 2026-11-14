@@ -88,7 +88,7 @@ struct yaHerdApp: App {
     private static func bootstrap() async -> AppBootstrapState {
         #if DEBUG
         let developmentMirroringRequested =
-            ProcessInfo.processInfo.environment["YAHERD_CLOUDKIT_DEV_MIRRORING"] == "1"
+            ProcessInfo.processInfo.environment["YAHERD_ENABLE_ICLOUD_SYNC"] == "1"
         #endif
         do {
             let storeURL = try CoreDataPersistentContainer.defaultStoreURL()
@@ -519,13 +519,13 @@ enum CloudKitDevelopmentLaunch: Equatable {
     case mirrored(selectedHerdID: UUID?)
 
     static func resolve(environment: [String: String]) throws -> Self {
-        guard environment["YAHERD_CLOUDKIT_DEV_MIRRORING"] == "1" else {
+        guard environment["YAHERD_ENABLE_ICLOUD_SYNC"] == "1" else {
             return .disabled
         }
-        guard environment["YAHERD_CLOUDKIT_M04_VERIFIED"] == "1" else {
+        guard environment["YAHERD_ICLOUD_SCHEMA_VALIDATED"] == "1" else {
             throw CloudKitDevelopmentLaunchError.schemaDryRunRequired
         }
-        if let rawHerdID = environment["YAHERD_CLOUDKIT_DEV_SELECTED_HERD_ID"] {
+        if let rawHerdID = environment["YAHERD_SELECTED_ICLOUD_HERD_ID"] {
             guard let selectedHerdID = UUID(uuidString: rawHerdID) else {
                 throw CloudKitDevelopmentLaunchError.invalidSelectedHerdID
             }
@@ -623,13 +623,13 @@ enum CloudKitDevelopmentLaunchError: LocalizedError, Equatable {
         switch self {
         case .schemaDryRunRequired:
             return """
-            Development iCloud mirroring is not enabled. First run and verify \
-            the signed M04 schema dry-run, then set YAHERD_CLOUDKIT_M04_VERIFIED=1 \
-            with YAHERD_CLOUDKIT_DEV_MIRRORING=1 in the development app scheme. \
-            Mirroring can upload this device's Herd data to the development Apple Account.
+            To enable iCloud sync for development, first complete the signed \
+            iCloud schema validation, then enable YAHERD_ICLOUD_SCHEMA_VALIDATED=1 \
+            and YAHERD_ENABLE_ICLOUD_SYNC=1 in Xcode's Run settings. \
+            This can upload existing Herd data to the development iCloud account.
             """
         case .invalidSelectedHerdID:
-            return "YAHERD_CLOUDKIT_DEV_SELECTED_HERD_ID must be an existing Herd UUID. " +
+            return "YAHERD_SELECTED_ICLOUD_HERD_ID must be an existing Herd UUID. " +
                 "Use it only with the signed development mirroring scheme to select a " +
                 "specific owned or shared Herd. No Herd records were changed."
         }
