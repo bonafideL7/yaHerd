@@ -8,6 +8,9 @@ final class ApplicationSettingsTests: XCTestCase {
 
         XCTAssertFalse(settings.isDashboardEnabled)
         XCTAssertFalse(settings.hardDeleteAnimals)
+        #if DEBUG
+        XCTAssertFalse(settings.developmentICloudSyncEnabled)
+        #endif
         XCTAssertEqual(settings.targetAcresPerHeadDefault, 3.0)
         XCTAssertEqual(settings.usableAcreagePercentDefault, 100)
         XCTAssertEqual(settings.recentPastureIDs, [])
@@ -94,7 +97,8 @@ final class ApplicationSettingsTests: XCTestCase {
     }
 
     func testResetToDefaultsRestoresLocalPreferences() {
-        let settings = ApplicationSettings(store: InMemoryApplicationSettingsStore())
+        let store = InMemoryApplicationSettingsStore()
+        let settings = ApplicationSettings(store: store)
         settings.isDashboardEnabled = true
         settings.hardDeleteAnimals = false
         settings.targetAcresPerHeadDefault = 8.0
@@ -102,6 +106,13 @@ final class ApplicationSettingsTests: XCTestCase {
         settings.recentPastureIDs = [UUID()]
         settings.homeDismissedSetupSuggestionIDs = ["addFirstPasture"]
         settings.isHomeSetupSuggestionsExpanded = false
+        #if DEBUG
+        settings.developmentICloudSyncEnabled = true
+        XCTAssertEqual(
+            store.snapshot()[ApplicationSettingKey.developmentICloudSyncEnabled.rawValue] as? Bool,
+            true
+        )
+        #endif
 
         settings.resetToDefaults()
 
@@ -112,6 +123,13 @@ final class ApplicationSettingsTests: XCTestCase {
         XCTAssertEqual(settings.recentPastureIDs, [])
         XCTAssertEqual(settings.homeDismissedSetupSuggestionIDs, [])
         XCTAssertTrue(settings.isHomeSetupSuggestionsExpanded)
+        #if DEBUG
+        XCTAssertFalse(settings.developmentICloudSyncEnabled)
+        XCTAssertEqual(
+            store.snapshot()[ApplicationSettingKey.developmentICloudSyncEnabled.rawValue] as? Bool,
+            false
+        )
+        #endif
     }
 }
 
