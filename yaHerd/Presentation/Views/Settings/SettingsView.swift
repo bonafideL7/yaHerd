@@ -10,7 +10,7 @@ struct SettingsView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(\.recoveryModeController) private var recoveryModeController
     #if DEBUG
-    @AppStorage(CloudKitDevelopmentLaunch.settingsKey) private var iCloudDevelopmentEnabled = false
+    @Environment(ApplicationSettings.self) private var applicationSettings
     @State private var isConfirmingEnableICloud = false
     #endif
 
@@ -42,15 +42,15 @@ struct SettingsView: View {
                 )
                 LabeledContent(
                     "Next Launch",
-                    value: iCloudDevelopmentEnabled ? "iCloud Development" : "Local"
+                    value: applicationSettings.developmentICloudSyncEnabled ? "iCloud Development" : "Local"
                 )
 
-                Button(iCloudDevelopmentEnabled
+                Button(applicationSettings.developmentICloudSyncEnabled
                     ? "Use Local Storage on Next Launch"
                     : "Enable iCloud Development on Next Launch"
                 ) {
-                    if iCloudDevelopmentEnabled {
-                        iCloudDevelopmentEnabled = false
+                    if applicationSettings.developmentICloudSyncEnabled {
+                        applicationSettings.developmentICloudSyncEnabled = false
                     } else {
                         isConfirmingEnableICloud = true
                     }
@@ -116,7 +116,7 @@ struct SettingsView: View {
             isPresented: $isConfirmingEnableICloud
         ) {
             Button("Enable for Next Launch") {
-                iCloudDevelopmentEnabled = true
+                applicationSettings.developmentICloudSyncEnabled = true
             }
         } message: {
             Text("Only enable after validating the signed development CloudKit schema. " +
