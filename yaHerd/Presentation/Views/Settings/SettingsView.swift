@@ -9,10 +9,6 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(\.recoveryModeController) private var recoveryModeController
-    #if DEBUG
-    @Environment(ApplicationSettings.self) private var applicationSettings
-    @State private var isConfirmingEnableICloud = false
-    #endif
 
     var body: some View {
         List {
@@ -33,36 +29,6 @@ struct SettingsView: View {
                         .foregroundStyle(.red)
                 }
             }
-
-            #if DEBUG
-            Section("Development Storage") {
-                LabeledContent(
-                    "Active Mode",
-                    value: AppLaunchDiagnostics.snapshot().actualStorageMode.displayName
-                )
-                LabeledContent(
-                    "Next Launch",
-                    value: applicationSettings.developmentICloudSyncEnabled ? "iCloud Development" : "Local"
-                )
-
-                Button(applicationSettings.developmentICloudSyncEnabled
-                    ? "Use Local Storage on Next Launch"
-                    : "Enable iCloud Development on Next Launch"
-                ) {
-                    if applicationSettings.developmentICloudSyncEnabled {
-                        applicationSettings.developmentICloudSyncEnabled = false
-                    } else {
-                        isConfirmingEnableICloud = true
-                    }
-                }
-
-                Text("Restart yaHerd from Xcode after changing this setting. " +
-                     "This is a development-only mode; it does not guarantee " +
-                     "that changes have reached another device.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            #endif
 
             Section("Setup") {
                 NavigationLink {
@@ -110,20 +76,6 @@ struct SettingsView: View {
         }
         .navigationTitle("Settings")
         .settingsSaveAndCloseToolbar()
-        #if DEBUG
-        .confirmationDialog(
-            "Enable iCloud Development?",
-            isPresented: $isConfirmingEnableICloud
-        ) {
-            Button("Enable for Next Launch") {
-                applicationSettings.developmentICloudSyncEnabled = true
-            }
-        } message: {
-            Text("Only enable after validating the signed development iCloud schema. " +
-                 "This can upload existing Herd records to your iCloud development account. " +
-                 "The change takes effect after restarting yaHerd.")
-        }
-        #endif
     }
 }
 
