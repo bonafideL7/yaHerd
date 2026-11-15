@@ -9,6 +9,9 @@ nonisolated enum ApplicationSettingKey: String, CaseIterable, Sendable {
     case homeDismissedSetupSuggestionIDs = "settings.homeDismissedSetupSuggestionIDs"
     case homeSetupSuggestionsExpanded = "settings.homeSetupSuggestionsExpanded"
     case legacyRecentPastureNames = "settings.legacy.recentPastureNames"
+    #if DEBUG
+    case developmentICloudSyncEnabled = "settings.developmentICloudSyncEnabled"
+    #endif
 
     var legacyKeys: [String] {
         switch self {
@@ -32,6 +35,10 @@ nonisolated enum ApplicationSettingKey: String, CaseIterable, Sendable {
             ["homeSetupSuggestionsExpanded"]
         case .legacyRecentPastureNames:
             ["recentPastureNames"]
+        #if DEBUG
+        case .developmentICloudSyncEnabled:
+            []
+        #endif
         }
     }
 }
