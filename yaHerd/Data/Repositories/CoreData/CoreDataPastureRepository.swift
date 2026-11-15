@@ -391,6 +391,7 @@ final class CoreDataPastureRepository:
                     do {
                         try context.save()
                     } catch {
+                        ReliabilityLog.persistenceSaveFailure("pasture-save", error: error)
                         context.rollback()
                         throw CoreDataPersistenceError.saveFailed(
                             description: error.localizedDescription
