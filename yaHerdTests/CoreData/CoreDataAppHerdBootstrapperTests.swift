@@ -447,7 +447,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             )
         }
         XCTAssertEqual(
-            CloudKitDevelopmentLaunch.settingsKey, "development.iCloudSyncEnabled"
+            CloudKitDevelopmentLaunch.settingsKey, "settings.developmentICloudSyncEnabled"
         )
         XCTAssertEqual(AppLaunchStorageMode.cloudKitDevelopment.displayName, "iCloud Development")
     }
