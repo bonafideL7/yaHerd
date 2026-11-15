@@ -371,8 +371,40 @@ if not release_settings or 'CODE_SIGN_IDENTITY = "Apple Development";' in releas
         "yaHerd.xcodeproj: Release must not force an Apple Development signing identity"
     )
 
-if project_text.count("CODE_SIGN_ENTITLEMENTS = yaHerd/yaHerd.entitlements;") != 2:
-    failures.append("yaHerd.xcodeproj: Debug and Release app builds must use CloudKit entitlements")
+if project_text.count("CODE_SIGN_ENTITLEMENTS = yaHerd/yaHerd.entitlements;") != 3:
+    failures.append(
+        "yaHerd.xcodeproj: Debug, iCloudDevelopment and Release app builds must use iCloud entitlements"
+    )
+
+# Stage 2 iCloud verification must be selected through an explicit Xcode
+# build configuration, never an invisible scheme environment variable or
+# presentation toggle. Ordinary Debug and unsigned CI remain local-only.
+icloud_configuration = re.search(
+    r"F00000000000000000000001 /\\* iCloudDevelopment \\*/ = \\{.*?buildSettings = \\{(.*?)\\n\\s*\\};",
+    project_text,
+    re.S,
+)
+debug_configuration = re.search(
+    r"8D40A2952EDAA2A200C89DD2 /\\* Debug \\*/ = \\{.*?buildSettings = \\{(.*?)\\n\\s*\\};",
+    project_text,
+    re.S,
+)
+if not icloud_configuration or 'YAHERD_ICLOUD_DEVELOPMENT' not in icloud_configuration.group(1):
+    failures.append("yaHerd.xcodeproj: iCloudDevelopment configuration must enable compilation flag")
+if not debug_configuration or 'YAHERD_ICLOUD_DEVELOPMENT' in debug_configuration.group(1):
+    failures.append("yaHerd.xcodeproj: ordinary Debug must not activate iCloud mirroring")
+icloud_scheme = Path("yaHerd.xcodeproj/xcshareddata/xcschemes/yaHerd iCloud Development.xcscheme")
+default_scheme = Path("yaHerd.xcodeproj/xcshareddata/xcschemes/yaHerd.xcscheme")
+for scheme, run_configuration in ((icloud_scheme, "iCloudDevelopment"), (default_scheme, "Debug")):
+    if not scheme.exists():
+        failures.append(f"{scheme}: missing Xcode scheme")
+        continue
+    content = scheme.read_text()
+    run_action = re.search(r"<LaunchAction\\b(.*?)</LaunchAction>", content, re.S)
+    if not run_action or f'buildConfiguration = "{run_configuration}"' not in run_action.group(1):
+        failures.append(f"{scheme}: unexpected Run build configuration")
+    if run_action and "<EnvironmentVariables>" in run_action.group(1):
+        failures.append(f"{scheme}: Run must not contain hidden iCloud activation variables")
 
 # Signed development CloudKit tests run inside the iOS app on a device.
 # Keep unsigned simulator CI, but allow the test bundle to be signed for
