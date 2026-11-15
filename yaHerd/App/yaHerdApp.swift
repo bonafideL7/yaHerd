@@ -107,7 +107,7 @@ struct yaHerdApp: App {
                             Task { @MainActor in await chooseInitialStorageMode(enableICloud: true) }
                         }
                     } message: {
-                        Text("Only enable after validating the signed development CloudKit " +
+                        Text("Only enable after validating the signed development iCloud " +
                              "schema. Existing Herd data may be uploaded to the development " +
                              "iCloud account. No replacement Herd will be created while importing.")
                     }
@@ -158,7 +158,7 @@ struct yaHerdApp: App {
     @MainActor
     private func disableDevelopmentICloud() {
         applicationSettings.developmentICloudSyncEnabled = false
-        // The existing CloudKit store assembly must be released before a
+        // The existing iCloud store assembly must be released before a
         // later local-only launch, so never open another store in this process.
         bootstrapState = .developmentRestartRequired
     }
@@ -599,8 +599,8 @@ private struct StartupStorageFailureView: View {
 #if DEBUG
 /// Explicit, device-local development opt-in. The setting is configured
 /// in yaHerd Settings, not an invisible Xcode Run environment variable.
-/// The user must validate the development CloudKit schema before enabling it.
-/// Release builds remain local until CloudKit's release acceptance criteria pass.
+/// The user must validate the development iCloud schema before enabling it.
+/// Release builds remain local until iCloud's release acceptance criteria pass.
 enum CloudKitDevelopmentLaunch: Equatable {
     case disabled
     case mirrored(selectedHerdID: UUID?)
