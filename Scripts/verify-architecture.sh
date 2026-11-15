@@ -380,12 +380,12 @@ if project_text.count("CODE_SIGN_ENTITLEMENTS = yaHerd/yaHerd.entitlements;") !=
 # build configuration, never an invisible scheme environment variable or
 # presentation toggle. Ordinary Debug and unsigned CI remain local-only.
 icloud_configuration = re.search(
-    r"F00000000000000000000001 /\\* iCloudDevelopment \\*/ = \\{.*?buildSettings = \\{(.*?)\\n\\s*\\};",
+    r"F00000000000000000000001 /[*] iCloudDevelopment [*]/ = [{].*?buildSettings = [{](.*?)[\r\n][ \t]*[}];",
     project_text,
     re.S,
 )
 debug_configuration = re.search(
-    r"8D40A2952EDAA2A200C89DD2 /\\* Debug \\*/ = \\{.*?buildSettings = \\{(.*?)\\n\\s*\\};",
+    r"8D40A2952EDAA2A200C89DD2 /[*] Debug [*]/ = [{].*?buildSettings = [{](.*?)[\r\n][ \t]*[}];",
     project_text,
     re.S,
 )
@@ -400,7 +400,7 @@ for scheme, run_configuration in ((icloud_scheme, "iCloudDevelopment"), (default
         failures.append(f"{scheme}: missing Xcode scheme")
         continue
     content = scheme.read_text()
-    run_action = re.search(r"<LaunchAction\\b(.*?)</LaunchAction>", content, re.S)
+    run_action = re.search(r"<LaunchAction[ \t\r\n](.*?)</LaunchAction>", content, re.S)
     if not run_action or f'buildConfiguration = "{run_configuration}"' not in run_action.group(1):
         failures.append(f"{scheme}: unexpected Run build configuration")
     if run_action and "<EnvironmentVariables>" in run_action.group(1):
