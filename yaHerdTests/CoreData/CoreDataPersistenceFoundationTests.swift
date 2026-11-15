@@ -70,6 +70,85 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
                 false,
                 "Core Data must not infer old-to-new schema mappings."
             )
+            XCTAssertEqual(
+                (options[NSPersistentHistoryTrackingKey] as? NSNumber)?.boolValue,
+                true,
+                "The same private SQLite store may previously have been opened with CloudKit."
+            )
+            XCTAssertEqual(
+                (options[NSPersistentStoreRemoteChangeNotificationPostOptionKey] as? NSNumber)?.boolValue,
+                true
+            )
+        }
+    }
+
+    func testLocalStoreRemainsWritableAfterOpeningWithCloudKitHistory() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let storeURL = harness.storeURL
+        let herdID = UUID()
+        let pastureID = UUID()
+
+        // Same physical private SQLite file, but with the mirrored two-store
+        // history configuration used by the development iCloud launch.
+        do {
+            let mirrored = try await CoreDataPersistenceAssembly.loadCloudKit(
+                storeURL: storeURL,
+                mirroringEnabled: false
+            )
+            let write = try mirrored.contextFactory.makeWriteContext()
+            try write.performAndWait {
+                let privateStore = try XCTUnwrap(
+                    write.persistentStoreCoordinator?.persistentStores.first {
+                        $0.url == storeURL
+                    }
+                )
+                let herd = CDHerd(context: write)
+                herd.id = herdID
+                herd.name = "Existing Herd"
+                herd.createdAt = Date(timeIntervalSince1970: 100)
+                herd.updatedAt = Date(timeIntervalSince1970: 100)
+                write.assign(herd, to: privateStore)
+
+                let pasture = CDPasture(context: write)
+                pasture.id = pastureID
+                pasture.name = "Holding Pasture"
+                pasture.herd = herd
+                write.assign(pasture, to: privateStore)
+                try write.save()
+            }
+        }
+
+        // The normal local-only app reopens the same database. Disabling
+        // persistent history here would silently make SQLite read-only.
+        do {
+            let local = try await CoreDataPersistenceAssembly.load(storeURL: storeURL)
+            let write = try local.contextFactory.makeWriteContext()
+            try write.performAndWait {
+                let pasture = try XCTUnwrap(
+                    CoreDataLookup().herdOwned(
+                        CDPasture.self, id: pastureID, herdID: herdID, in: write
+                    )
+                )
+                pasture.name = "Holding Pasture Updated"
+                try write.save()
+            }
+        }
+
+        // Switching back to the mirrored topology must preserve the exact IDs
+        // and the edit without creating a second Herd or SQLite file.
+        let mirroredAgain = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: storeURL,
+            mirroringEnabled: false
+        )
+        let read = mirroredAgain.contextFactory.makeReadContext()
+        try read.performAndWait {
+            let lookup = CoreDataLookup()
+            let herd = try XCTUnwrap(lookup.herd(id: herdID, in: read))
+            XCTAssertEqual(herd.name, "Existing Herd")
+            let pasture = try XCTUnwrap(
+                lookup.herdOwned(CDPasture.self, id: pastureID, herdID: herdID, in: read)
+            )
+            XCTAssertEqual(pasture.name, "Holding Pasture Updated")
         }
     }
 
