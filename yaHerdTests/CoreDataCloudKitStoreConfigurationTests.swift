@@ -925,6 +925,18 @@ final class CoreDataCloudKitStoreConfigurationTests: XCTestCase {
         }
     }
 
+    func testCloudKitSchemaDryRunCanValidateModelWithoutSignedCloudAccess() async throws {
+        // A dry run generates model records but does not upload them.
+        // Check whether Apple's local validation can run in unsigned CI
+        // before requiring signed test execution on a developer device.
+        let harness = try CoreDataPersistenceHarness()
+        let container = try await CoreDataPersistentContainer.loadCloudKit(
+            storeURL: harness.storeURL,
+            mirroringEnabled: true
+        )
+        try container.validateCloudKitSchemaDryRun()
+    }
+
     func testSignedDevelopmentCloudKitSchemaDryRun() async throws {
         // Run explicitly from a development-signed Xcode test scheme with
         // YAHERD_VALIDATE_ICLOUD_SCHEMA=1 in the test process environment.
