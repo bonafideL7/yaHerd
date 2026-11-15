@@ -411,6 +411,21 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     #if DEBUG
     @MainActor
     func testDevelopmentCloudKitActivationUsesVisibleDevicePreference() throws {
+        // Offer iCloud import before creating any Herd on a new simulator,
+        // but never interrupt launch when either persistent store exists.
+        XCTAssertTrue(CloudKitDevelopmentLaunch.requiresInitialChoice(
+            privateStoreExists: false, sharedStoreExists: false, enabled: false
+        ))
+        XCTAssertFalse(CloudKitDevelopmentLaunch.requiresInitialChoice(
+            privateStoreExists: true, sharedStoreExists: false, enabled: false
+        ))
+        XCTAssertFalse(CloudKitDevelopmentLaunch.requiresInitialChoice(
+            privateStoreExists: false, sharedStoreExists: true, enabled: false
+        ))
+        XCTAssertFalse(CloudKitDevelopmentLaunch.requiresInitialChoice(
+            privateStoreExists: false, sharedStoreExists: false, enabled: true
+        ))
+
         // The unsigned CI and a newly installed app remain local until
         // the user explicitly enables iCloud in development Settings.
         XCTAssertEqual(
