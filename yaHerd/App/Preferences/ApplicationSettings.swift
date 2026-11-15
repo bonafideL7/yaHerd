@@ -22,9 +22,6 @@ final class ApplicationSettings {
     private var homeDismissedSetupSuggestionIDsValue: Set<String>
     private var homeSetupSuggestionsExpandedValue: Bool
     private var legacyRecentPastureNamesValue: [String]
-    #if DEBUG
-    private var developmentICloudSyncEnabledValue: Bool
-    #endif
 
     convenience init() {
         self.init(store: UserDefaultsApplicationSettingsStore())
@@ -82,12 +79,6 @@ final class ApplicationSettings {
             store.object(forKey: ApplicationSettingKey.legacyRecentPastureNames.rawValue),
             legacySeparator: "|"
         )
-        #if DEBUG
-        self.developmentICloudSyncEnabledValue = Self.decodeBool(
-            store.object(forKey: ApplicationSettingKey.developmentICloudSyncEnabled.rawValue),
-            defaultValue: false
-        )
-        #endif
 
         persistNormalizedValues()
     }
@@ -203,17 +194,6 @@ final class ApplicationSettings {
         legacyRecentPastureNamesValue
     }
 
-    #if DEBUG
-    var developmentICloudSyncEnabled: Bool {
-        get { developmentICloudSyncEnabledValue }
-        set {
-            guard developmentICloudSyncEnabledValue != newValue else { return }
-            developmentICloudSyncEnabledValue = newValue
-            persistChange(key: .developmentICloudSyncEnabled, encodedValue: newValue)
-        }
-    }
-    #endif
-
     func clearLegacyRecentPastureNames() {
         guard !legacyRecentPastureNamesValue.isEmpty else { return }
         legacyRecentPastureNamesValue = []
@@ -230,9 +210,6 @@ final class ApplicationSettings {
         recentPastureIDs = []
         homeDismissedSetupSuggestionIDs = []
         isHomeSetupSuggestionsExpanded = true
-        #if DEBUG
-        developmentICloudSyncEnabled = false
-        #endif
         clearLegacyRecentPastureNames()
     }
 
@@ -272,10 +249,6 @@ final class ApplicationSettings {
             isHomeSetupSuggestionsExpanded
         case .legacyRecentPastureNames:
             legacyRecentPastureNames
-        #if DEBUG
-        case .developmentICloudSyncEnabled:
-            developmentICloudSyncEnabled
-        #endif
         }
     }
 
