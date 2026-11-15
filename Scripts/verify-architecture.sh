@@ -376,9 +376,9 @@ if project_text.count("CODE_SIGN_ENTITLEMENTS = yaHerd/yaHerd.entitlements;") !=
         "yaHerd.xcodeproj: Debug, iCloudDevelopment and Release app builds must use iCloud entitlements"
     )
 
-# Stage 2 iCloud verification must be selected through an explicit Xcode
-# build configuration, never an invisible scheme environment variable or
-# presentation toggle. Ordinary Debug and unsigned CI remain local-only.
+# The one yaHerd scheme uses iCloudDevelopment for Run while Debug tests
+# and Release archives remain local-only. Do not enable CloudKit through
+# hidden launch variables or in-app configuration toggles.
 icloud_configuration = re.search(
     r"F00000000000000000000001 /[*] iCloudDevelopment [*]/ = [{].*?buildSettings = [{](.*?)[\r\n][ \t]*[}];",
     project_text,
@@ -393,18 +393,25 @@ if not icloud_configuration or 'YAHERD_ICLOUD_DEVELOPMENT' not in icloud_configu
     failures.append("yaHerd.xcodeproj: iCloudDevelopment configuration must enable compilation flag")
 if not debug_configuration or 'YAHERD_ICLOUD_DEVELOPMENT' in debug_configuration.group(1):
     failures.append("yaHerd.xcodeproj: ordinary Debug must not activate iCloud mirroring")
-icloud_scheme = Path("yaHerd.xcodeproj/xcshareddata/xcschemes/yaHerd iCloud Development.xcscheme")
-default_scheme = Path("yaHerd.xcodeproj/xcshareddata/xcschemes/yaHerd.xcscheme")
-for scheme, run_configuration in ((icloud_scheme, "iCloudDevelopment"), (default_scheme, "Debug")):
-    if not scheme.exists():
-        failures.append(f"{scheme}: missing Xcode scheme")
-        continue
+scheme = Path("yaHerd.xcodeproj/xcshareddata/xcschemes/yaHerd.xcscheme")
+obsolete_scheme = Path("yaHerd.xcodeproj/xcshareddata/xcschemes/yaHerd iCloud Development.xcscheme")
+if obsolete_scheme.exists():
+    failures.append(f"{obsolete_scheme}: duplicate development scheme must be removed")
+if not scheme.exists():
+    failures.append(f"{scheme}: missing Xcode scheme")
+else:
     content = scheme.read_text()
-    run_action = re.search(r"<LaunchAction[ \t\r\n](.*?)</LaunchAction>", content, re.S)
-    if not run_action or f'buildConfiguration = "{run_configuration}"' not in run_action.group(1):
-        failures.append(f"{scheme}: unexpected Run build configuration")
-    if run_action and "<EnvironmentVariables>" in run_action.group(1):
-        failures.append(f"{scheme}: Run must not contain hidden iCloud activation variables")
+    for action, expected_configuration in (
+        ("LaunchAction", "iCloudDevelopment"),
+        ("TestAction", "Debug"),
+        ("ProfileAction", "Release"),
+        ("ArchiveAction", "Release"),
+    ):
+        action_match = re.search(rf"<{action}[ \t\r\n](.*?)</{action}>", content, re.S)
+        if not action_match or f'buildConfiguration = "{expected_configuration}"' not in action_match.group(1):
+            failures.append(f"{scheme}: {action} must use {expected_configuration}")
+        if action == "LaunchAction" and action_match and "<EnvironmentVariables>" in action_match.group(1):
+            failures.append(f"{scheme}: Run must not contain hidden iCloud activation variables")
 
 # Signed development CloudKit tests run inside the iOS app on a device.
 # Keep unsigned simulator CI, but allow the test bundle to be signed for

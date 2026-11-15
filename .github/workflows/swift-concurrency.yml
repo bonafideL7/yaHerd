@@ -111,16 +111,16 @@ jobs:
           set -euo pipefail
           bash Scripts/verify-concurrency.sh
 
-      - name: Build dedicated iCloud Development configuration
+      - name: Build iCloud Development configuration
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_concurrency }}
         shell: bash
         run: |
           set -euo pipefail
-          # Compile the code path selected by the signed development scheme.
-          # Do not launch mirroring on unsigned CI simulators.
+          # Compile the iCloud Run configuration without launching mirroring
+          # on unsigned CI simulators.
           xcodebuild \
             -project yaHerd.xcodeproj \
-            -scheme "yaHerd iCloud Development" \
+            -scheme yaHerd \
             -configuration iCloudDevelopment \
             -destination "generic/platform=iOS Simulator" \
             -derivedDataPath "$GITHUB_WORKSPACE/.build/ConcurrencyDerivedData" \
