@@ -48,6 +48,7 @@ final class CoreDataTransactionExecutor {
                     try context.save()
                     return result
                 } catch {
+                    ReliabilityLog.persistenceSaveFailure("transaction-save", error: error)
                     context.rollback()
                     throw CoreDataPersistenceError.saveFailed(
                         description: error.localizedDescription
