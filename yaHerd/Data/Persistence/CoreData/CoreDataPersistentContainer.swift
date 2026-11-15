@@ -325,6 +325,16 @@ final class CoreDataPersistentContainer {
         description.shouldAddStoreAsynchronously = true
         description.shouldMigrateStoreAutomatically = false
         description.shouldInferMappingModelAutomatically = false
+        if storeType == NSSQLiteStoreType {
+            // This is the same physical private SQLite store used by CloudKit.
+            // Once opened with persistent history, later local-only launches
+            // must retain this option or Core Data forces it read-only.
+            description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
+            description.setOption(
+                true as NSNumber,
+                forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey
+            )
+        }
         if accessMode == .readOnly {
             description.setOption(true as NSNumber, forKey: NSReadOnlyPersistentStoreOption)
         }
