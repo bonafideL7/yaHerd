@@ -119,7 +119,7 @@ struct SettingsView: View {
                 applicationSettings.developmentICloudSyncEnabled = true
             }
         } message: {
-            Text("Only enable after validating the signed development CloudKit schema. " +
+            Text("Only enable after validating the signed development iCloud schema. " +
                  "This can upload existing Herd records to your iCloud development account. " +
                  "The change takes effect after restarting yaHerd.")
         }
