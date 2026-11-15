@@ -13,7 +13,6 @@ struct yaHerdApp: App {
     @State private var bootstrapStarted = false
     #if DEBUG
     @State private var developmentImportCheckInProgress = false
-    @State private var isConfirmingInitialICloud = false
     #endif
 
     private let applicationSettings: ApplicationSettings
@@ -43,12 +42,6 @@ struct yaHerdApp: App {
                         Label("iCloud Development Unavailable", systemImage: "icloud.slash")
                     } description: {
                         Text(message)
-                    } actions: {
-                        #if DEBUG
-                        Button("Use Local Storage Next Launch") {
-                            disableDevelopmentICloud()
-                        }
-                        #endif
                     }
 
                 #if DEBUG
@@ -62,9 +55,6 @@ struct yaHerdApp: App {
                     } actions: {
                         Button("Check Again") {
                             Task { @MainActor in await retryPendingDevelopmentImport() }
-                        }
-                        Button("Use Local Storage Next Launch") {
-                            disableDevelopmentICloud()
                         }
                     }
                     .task {
@@ -83,100 +73,35 @@ struct yaHerdApp: App {
                             }
                         }
                     }
-
-                case .developmentModeSelection:
-                    ContentUnavailableView {
-                        Label("Choose Simulator Storage", systemImage: "externaldrive")
-                    } description: {
-                        Text("This simulator has no Herd database. Choose iCloud to import " +
-                             "your existing Herd without creating an unrelated local Herd. " +
-                             "Local mode creates a separate Herd on this device.")
-                    } actions: {
-                        Button("Use iCloud Development") {
-                            isConfirmingInitialICloud = true
-                        }
-                        Button("Create Local Herd") {
-                            Task { @MainActor in await chooseInitialStorageMode(enableICloud: false) }
-                        }
-                    }
-                    .confirmationDialog(
-                        "Import Existing iCloud Herd?",
-                        isPresented: $isConfirmingInitialICloud
-                    ) {
-                        Button("Enable iCloud Development") {
-                            Task { @MainActor in await chooseInitialStorageMode(enableICloud: true) }
-                        }
-                    } message: {
-                        Text("Only enable after validating the signed development iCloud " +
-                             "schema. Existing Herd data may be uploaded to the development " +
-                             "iCloud account. No replacement Herd will be created while importing.")
-                    }
-
-                case .developmentRestartRequired:
-                    ContentUnavailableView {
-                        Label("Restart yaHerd", systemImage: "arrow.clockwise")
-                    } description: {
-                        Text("iCloud development is disabled for the next launch. Stop and " +
-                             "relaunch yaHerd from Xcode to use local storage. Your Herd " +
-                             "records were not deleted.")
-                    }
                 #endif
                 }
             }
             .task {
                 guard !bootstrapStarted else { return }
                 bootstrapStarted = true
-                #if DEBUG
-                do {
-                    let url = try CoreDataPersistentContainer.defaultStoreURL()
-                    let sharedURL = url.deletingLastPathComponent()
-                        .appendingPathComponent(CoreDataPersistentContainer.sharedStoreFileName)
-                    if CloudKitDevelopmentLaunch.requiresInitialChoice(
-                        privateStoreExists: FileManager.default.fileExists(atPath: url.path),
-                        sharedStoreExists: FileManager.default.fileExists(atPath: sharedURL.path),
-                        enabled: applicationSettings.developmentICloudSyncEnabled
-                    ) {
-                        bootstrapState = .developmentModeSelection
-                        return
-                    }
-                } catch {
-                    // The normal bootstrap reports storage failures and recovery.
-                }
-                #endif
                 bootstrapState = await Self.bootstrap()
             }
         }
     }
 
-    #if DEBUG
-    @MainActor
-    private func chooseInitialStorageMode(enableICloud: Bool) async {
-        applicationSettings.developmentICloudSyncEnabled = enableICloud
-        bootstrapState = await Self.bootstrap()
-    }
-
-    @MainActor
-    private func disableDevelopmentICloud() {
-        applicationSettings.developmentICloudSyncEnabled = false
-        // The existing iCloud store assembly must be released before a
-        // later local-only launch, so never open another store in this process.
-        bootstrapState = .developmentRestartRequired
-    }
-    #endif
-
     @MainActor
     private static func bootstrap() async -> AppBootstrapState {
         #if DEBUG
-        let developmentMirroringRequested =
-            UserDefaults.standard.bool(forKey: CloudKitDevelopmentLaunch.settingsKey)
+        // Only the explicitly named iCloud Development Xcode scheme enables
+        // mirroring. No runtime variables or in-app preferences select a store.
+        #if YAHERD_ICLOUD_DEVELOPMENT
+        let developmentMirroringRequested = true
+        #else
+        let developmentMirroringRequested = false
+        #endif
         #endif
         do {
             let storeURL = try CoreDataPersistentContainer.defaultStoreURL()
             let persistence: CoreDataAppPersistenceAssembly
             let storageMode: AppLaunchStorageMode
             #if DEBUG
-            // Stage 2 explicitly opted-in device testing. The active mode
-            // is visible in Settings; disabled always uses the local loader.
+            // Stage 2 mirroring is enabled only for the dedicated signed
+            // iCloud Development scheme; normal Debug and Release stay local.
             switch try CloudKitDevelopmentLaunch.resolve(
                 enabled: developmentMirroringRequested,
                 environment: ProcessInfo.processInfo.environment
@@ -357,8 +282,6 @@ private enum AppBootstrapState {
     case developmentMirroringBlocked(String)
     #if DEBUG
     case developmentImportPending(CloudKitDevelopmentPendingImport)
-    case developmentModeSelection
-    case developmentRestartRequired
     #endif
 }
 
@@ -597,23 +520,11 @@ private struct StartupStorageFailureView: View {
 }
 
 #if DEBUG
-/// Explicit, device-local development opt-in. The setting is configured
-/// in yaHerd Settings, not an invisible Xcode Run environment variable.
-/// The user must validate the development iCloud schema before enabling it.
-/// Release builds remain local until iCloud's release acceptance criteria pass.
+/// Dedicated development build config enables the mirrored store topology.
+/// No UI preferences or Xcode Run arguments can silently switch modes.
 enum CloudKitDevelopmentLaunch: Equatable {
     case disabled
     case mirrored(selectedHerdID: UUID?)
-
-    static let settingsKey = ApplicationSettingKey.developmentICloudSyncEnabled.rawValue
-
-    static func requiresInitialChoice(
-        privateStoreExists: Bool,
-        sharedStoreExists: Bool,
-        enabled: Bool
-    ) -> Bool {
-        !privateStoreExists && !sharedStoreExists && !enabled
-    }
 
     static func resolve(enabled: Bool, environment: [String: String]) throws -> Self {
         guard enabled else { return .disabled }
