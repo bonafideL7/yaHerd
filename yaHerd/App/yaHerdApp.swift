@@ -523,7 +523,7 @@ enum CloudKitDevelopmentLaunch: Equatable {
     case disabled
     case mirrored(selectedHerdID: UUID?)
 
-    static let settingsKey = "development.iCloudSyncEnabled"
+    static let settingsKey = ApplicationSettingKey.developmentICloudSyncEnabled.rawValue
 
     static func resolve(enabled: Bool, environment: [String: String]) throws -> Self {
         guard enabled else { return .disabled }
