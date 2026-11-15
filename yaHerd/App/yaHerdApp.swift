@@ -164,11 +164,10 @@ struct yaHerdApp: App {
                 storageMode: storageMode
             ))
         } catch {
-            #if DEBUG
-            // An incomplete import or invalid developer activation is not
-            // a SQLite load failure. Do not create a placeholder recovery Herd.
-            if developmentMirroringRequested,
-               let message = CloudKitDevelopmentLaunch.nonStorageStartupMessage(for: error) {
+            #if DEBUG && YAHERD_ICLOUD_DEVELOPMENT
+            // Only the dedicated mirrored build treats an import or activation
+            // failure as an iCloud problem rather than a SQLite load failure.
+            if let message = CloudKitDevelopmentLaunch.nonStorageStartupMessage(for: error) {
                 AppLaunchDiagnostics.record(
                     actualStorageMode: .cloudKitDevelopmentBlocked,
                     startupError: message
