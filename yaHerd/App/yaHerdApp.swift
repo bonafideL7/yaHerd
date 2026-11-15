@@ -13,6 +13,7 @@ struct yaHerdApp: App {
     @State private var bootstrapStarted = false
     #if DEBUG
     @State private var developmentImportCheckInProgress = false
+    @State private var isConfirmingInitialICloud = false
     #endif
 
     private let applicationSettings: ApplicationSettings
@@ -42,6 +43,12 @@ struct yaHerdApp: App {
                         Label("iCloud Development Unavailable", systemImage: "icloud.slash")
                     } description: {
                         Text(message)
+                    } actions: {
+                        #if DEBUG
+                        Button("Use Local Storage Next Launch") {
+                            disableDevelopmentICloud()
+                        }
+                        #endif
                     }
 
                 #if DEBUG
@@ -55,6 +62,9 @@ struct yaHerdApp: App {
                     } actions: {
                         Button("Check Again") {
                             Task { @MainActor in await retryPendingDevelopmentImport() }
+                        }
+                        Button("Use Local Storage Next Launch") {
+                            disableDevelopmentICloud()
                         }
                     }
                     .task {
@@ -73,16 +83,86 @@ struct yaHerdApp: App {
                             }
                         }
                     }
+
+                case .developmentModeSelection:
+                    ContentUnavailableView {
+                        Label("Choose Simulator Storage", systemImage: "externaldrive")
+                    } description: {
+                        Text("This simulator has no Herd database. Choose iCloud to import " +
+                             "your existing Herd without creating an unrelated local Herd. " +
+                             "Local mode creates a separate Herd on this device.")
+                    } actions: {
+                        Button("Use iCloud Development") {
+                            isConfirmingInitialICloud = true
+                        }
+                        Button("Create Local Herd") {
+                            Task { @MainActor in await chooseInitialStorageMode(enableICloud: false) }
+                        }
+                    }
+                    .confirmationDialog(
+                        "Import Existing iCloud Herd?",
+                        isPresented: $isConfirmingInitialICloud
+                    ) {
+                        Button("Enable iCloud Development") {
+                            Task { @MainActor in await chooseInitialStorageMode(enableICloud: true) }
+                        }
+                    } message: {
+                        Text("Only enable after validating the signed development CloudKit " +
+                             "schema. Existing Herd data may be uploaded to the development " +
+                             "iCloud account. No replacement Herd will be created while importing.")
+                    }
+
+                case .developmentRestartRequired:
+                    ContentUnavailableView {
+                        Label("Restart yaHerd", systemImage: "arrow.clockwise")
+                    } description: {
+                        Text("iCloud development is disabled for the next launch. Stop and " +
+                             "relaunch yaHerd from Xcode to use local storage. Your Herd " +
+                             "records were not deleted.")
+                    }
                 #endif
                 }
             }
             .task {
                 guard !bootstrapStarted else { return }
                 bootstrapStarted = true
+                #if DEBUG
+                do {
+                    let url = try CoreDataPersistentContainer.defaultStoreURL()
+                    let sharedURL = url.deletingLastPathComponent()
+                        .appendingPathComponent(CoreDataPersistentContainer.sharedStoreFileName)
+                    if CloudKitDevelopmentLaunch.requiresInitialChoice(
+                        privateStoreExists: FileManager.default.fileExists(atPath: url.path),
+                        sharedStoreExists: FileManager.default.fileExists(atPath: sharedURL.path),
+                        enabled: applicationSettings.developmentICloudSyncEnabled
+                    ) {
+                        bootstrapState = .developmentModeSelection
+                        return
+                    }
+                } catch {
+                    // The normal bootstrap reports storage failures and recovery.
+                }
+                #endif
                 bootstrapState = await Self.bootstrap()
             }
         }
     }
+
+    #if DEBUG
+    @MainActor
+    private func chooseInitialStorageMode(enableICloud: Bool) async {
+        applicationSettings.developmentICloudSyncEnabled = enableICloud
+        bootstrapState = await Self.bootstrap()
+    }
+
+    @MainActor
+    private func disableDevelopmentICloud() {
+        applicationSettings.developmentICloudSyncEnabled = false
+        // The existing CloudKit store assembly must be released before a
+        // later local-only launch, so never open another store in this process.
+        bootstrapState = .developmentRestartRequired
+    }
+    #endif
 
     @MainActor
     private static func bootstrap() async -> AppBootstrapState {
@@ -277,6 +357,8 @@ private enum AppBootstrapState {
     case developmentMirroringBlocked(String)
     #if DEBUG
     case developmentImportPending(CloudKitDevelopmentPendingImport)
+    case developmentModeSelection
+    case developmentRestartRequired
     #endif
 }
 
@@ -524,6 +606,14 @@ enum CloudKitDevelopmentLaunch: Equatable {
     case mirrored(selectedHerdID: UUID?)
 
     static let settingsKey = ApplicationSettingKey.developmentICloudSyncEnabled.rawValue
+
+    static func requiresInitialChoice(
+        privateStoreExists: Bool,
+        sharedStoreExists: Bool,
+        enabled: Bool
+    ) -> Bool {
+        !privateStoreExists && !sharedStoreExists && !enabled
+    }
 
     static func resolve(enabled: Bool, environment: [String: String]) throws -> Self {
         guard enabled else { return .disabled }
