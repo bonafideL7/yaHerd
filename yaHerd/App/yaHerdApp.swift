@@ -88,16 +88,17 @@ struct yaHerdApp: App {
     private static func bootstrap() async -> AppBootstrapState {
         #if DEBUG
         let developmentMirroringRequested =
-            ProcessInfo.processInfo.environment["YAHERD_ENABLE_ICLOUD_SYNC"] == "1"
+            UserDefaults.standard.bool(forKey: CloudKitDevelopmentLaunch.settingsKey)
         #endif
         do {
             let storeURL = try CoreDataPersistentContainer.defaultStoreURL()
             let persistence: CoreDataAppPersistenceAssembly
             let storageMode: AppLaunchStorageMode
             #if DEBUG
-            // Stage 2 physical-device acceptance only. Normal app launch is
-            // local until signed schema validation and the full release gates.
+            // Stage 2 explicitly opted-in device testing. The active mode
+            // is visible in Settings; disabled always uses the local loader.
             switch try CloudKitDevelopmentLaunch.resolve(
+                enabled: developmentMirroringRequested,
                 environment: ProcessInfo.processInfo.environment
             ) {
             case .disabled:
@@ -220,6 +221,9 @@ struct yaHerdApp: App {
     ) -> AppRuntime {
         let dependencies = persistence.makeDependencies(dataAccessMode: .readWrite)
         AppLaunchDiagnostics.record(actualStorageMode: storageMode)
+        #if DEBUG
+        NSLog("yaHerd active storage mode: %@", storageMode.displayName)
+        #endif
         return AppRuntime(
             persistenceLifetime: persistence,
             dependencies: dependencies,
@@ -511,20 +515,18 @@ private struct StartupStorageFailureView: View {
 }
 
 #if DEBUG
-/// Deliberately opt-in developer path to exercise a real signed app graph
-/// against private/shared CloudKit stores after M04 development schema checks.
-/// This is not a release feature flag or proof that CloudKit has synchronized.
+/// Explicit, device-local development opt-in. The setting is configured
+/// in yaHerd Settings, not an invisible Xcode Run environment variable.
+/// The user must validate the development CloudKit schema before enabling it.
+/// Release builds remain local until CloudKit's release acceptance criteria pass.
 enum CloudKitDevelopmentLaunch: Equatable {
     case disabled
     case mirrored(selectedHerdID: UUID?)
 
-    static func resolve(environment: [String: String]) throws -> Self {
-        guard environment["YAHERD_ENABLE_ICLOUD_SYNC"] == "1" else {
-            return .disabled
-        }
-        guard environment["YAHERD_ICLOUD_SCHEMA_VALIDATED"] == "1" else {
-            throw CloudKitDevelopmentLaunchError.schemaDryRunRequired
-        }
+    static let settingsKey = "development.iCloudSyncEnabled"
+
+    static func resolve(enabled: Bool, environment: [String: String]) throws -> Self {
+        guard enabled else { return .disabled }
         if let rawHerdID = environment["YAHERD_SELECTED_ICLOUD_HERD_ID"] {
             guard let selectedHerdID = UUID(uuidString: rawHerdID) else {
                 throw CloudKitDevelopmentLaunchError.invalidSelectedHerdID
@@ -616,18 +618,10 @@ enum CloudKitDevelopmentLaunch: Equatable {
 }
 
 enum CloudKitDevelopmentLaunchError: LocalizedError, Equatable {
-    case schemaDryRunRequired
     case invalidSelectedHerdID
 
     var errorDescription: String? {
         switch self {
-        case .schemaDryRunRequired:
-            return """
-            To enable iCloud sync for development, first complete the signed \
-            iCloud schema validation, then enable YAHERD_ICLOUD_SCHEMA_VALIDATED=1 \
-            and YAHERD_ENABLE_ICLOUD_SYNC=1 in Xcode's Run settings. \
-            This can upload existing Herd data to the development iCloud account.
-            """
         case .invalidSelectedHerdID:
             return "YAHERD_SELECTED_ICLOUD_HERD_ID must be an existing Herd UUID. " +
                 "Use it only with the signed development mirroring scheme to select a " +
