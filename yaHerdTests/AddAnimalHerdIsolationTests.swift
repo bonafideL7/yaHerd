@@ -25,6 +25,27 @@ final class AddAnimalHerdIsolationTests: XCTestCase {
         XCTAssertEqual(repository.createCount, 0)
     }
 
+    func testRevokedSelectionDoesNotCreateAnimal() {
+        let origin = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: origin)
+        let repository = CreationProbe()
+        let model = AddAnimalViewModel()
+
+        selection.select(nil)
+
+        XCTAssertThrowsError(
+            try model.save(
+                defaultTagColorID: nil,
+                using: repository,
+                expectedHerdID: origin,
+                selection: selection
+            )
+        ) { error in
+            XCTAssertTrue(error is CancellationError)
+        }
+        XCTAssertEqual(repository.createCount, 0)
+    }
+
     func testSaveStillCallsRepositoryWhenHerdHasNotChanged() {
         let origin = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: origin)
@@ -44,6 +65,7 @@ final class AddAnimalHerdIsolationTests: XCTestCase {
         XCTAssertEqual(repository.createCount, 1)
     }
 
+    @MainActor
     private final class CreationProbe: AnimalEditorRepository {
         enum ProbeError: Error {
             case created
