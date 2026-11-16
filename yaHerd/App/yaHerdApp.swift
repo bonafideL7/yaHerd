@@ -374,6 +374,9 @@ private struct RunningAppView: View {
                 \.workingSessionFeatureDependencies,
                 runtime.dependencies.workingSessionFeatureDependencies
             )
+            .onChange(of: runtime.herdSelection.currentHerdID) { _, _ in
+                tagColorLibrary.resetForHerdChange()
+            }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     tagColorLibrary.refresh()
