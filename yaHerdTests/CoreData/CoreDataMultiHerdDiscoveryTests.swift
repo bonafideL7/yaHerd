@@ -139,4 +139,55 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         )
         XCTAssertEqual(try repository.fetchAccessibleHerds().map(\.id), [validID])
     }
+
+    func testSelectionSwitchesRepositoriesWithoutChangingStoredHerds() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let firstID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+            assembly: assembly
+        )
+        let app = CoreDataAppPersistenceAssembly(
+            assembly: assembly, currentHerdID: firstID
+        )
+        let repository = app.makeDependencies(dataAccessMode: .readWrite).herdRepository
+        let second = try await repository.createOwnedHerd(named: "Second")
+        XCTAssertEqual(try repository.fetchCurrentHerd().id, firstID)
+
+        try app.selectAccessibleHerd(id: second.id)
+        XCTAssertEqual(try repository.fetchCurrentHerd().id, second.id)
+
+        XCTAssertThrowsError(try app.selectAccessibleHerd(id: UUID())) {
+            XCTAssertEqual($0 as? HerdRepositoryError, .missingHerd)
+        }
+        XCTAssertEqual(try repository.fetchCurrentHerd().id, second.id)
+
+        try app.selectAccessibleHerd(id: firstID)
+        XCTAssertEqual(try repository.fetchCurrentHerd().id, firstID)
+        XCTAssertEqual(try repository.fetchAccessibleHerds().count, 2)
+    }
+
+    func testSelectionRejectsIncompleteImportedHerdWithoutLosingCurrentSelection() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let firstID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+            assembly: assembly
+        )
+        let incompleteID = UUID()
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let incomplete = CDHerd(context: context)
+            incomplete.id = incompleteID
+            incomplete.name = nil
+            incomplete.createdAt = nil
+            incomplete.updatedAt = nil
+            try context.save()
+        }
+
+        let app = CoreDataAppPersistenceAssembly(
+            assembly: assembly, currentHerdID: firstID
+        )
+        let repository = app.makeDependencies(dataAccessMode: .readWrite).herdRepository
+        XCTAssertThrowsError(try app.selectAccessibleHerd(id: incompleteID)) {
+            XCTAssertEqual($0 as? HerdRepositoryError, .missingHerd)
+        }
+        XCTAssertEqual(try repository.fetchCurrentHerd().id, firstID)
+    }
 }
