@@ -45,6 +45,16 @@ struct yaHerdApp: App {
                     }
 
                 #if DEBUG
+                case .herdSelection(let directory):
+                    CloudKitDevelopmentHerdSelectionView(
+                        directory: directory,
+                        selectHerd: { herdID in
+                            try await selectDevelopmentHerd(
+                                herdID, directory: directory
+                            )
+                        }
+                    )
+
                 case .developmentImportPending:
                     ContentUnavailableView {
                         Label("Waiting for iCloud Herd", systemImage: "icloud.and.arrow.down")
@@ -116,6 +126,15 @@ struct yaHerdApp: App {
                     storeURL: storeURL,
                     mirroringEnabled: true
                 )
+                // A new device may have no imported roots or several owned
+                // and joined Herds. Require a selection instead of guessing
+                // or creating a replacement during CloudKit import.
+                guard let selectedHerdID else {
+                    return .herdSelection(CloudKitDevelopmentHerdDirectory(
+                        assembly: cloudKitAssembly,
+                        privateStoreURL: storeURL
+                    ))
+                }
                 do {
                     let candidate = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
                         using: cloudKitAssembly,
@@ -239,6 +258,44 @@ struct yaHerdApp: App {
 
     #if DEBUG
     @MainActor
+    private func selectDevelopmentHerd(
+        _ herdID: UUID,
+        directory: CloudKitDevelopmentHerdDirectory
+    ) async throws {
+        guard case .herdSelection(let activeDirectory) = bootstrapState,
+              activeDirectory.assembly === directory.assembly else {
+            return
+        }
+        do {
+            let persistence = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
+                using: directory.assembly,
+                privateStoreURL: directory.privateStoreURL,
+                selectedHerdID: herdID
+            )
+            try await CloudKitDevelopmentLaunch.validateHomeReadiness(persistence)
+            bootstrapState = .ready(Self.makeRuntime(
+                persistence: persistence,
+                storageMode: .cloudKitDevelopment
+            ))
+        } catch {
+            if CloudKitDevelopmentLaunch.isImportPending(error) {
+                bootstrapState = .developmentImportPending(
+                    CloudKitDevelopmentPendingImport(
+                        assembly: directory.assembly,
+                        privateStoreURL: directory.privateStoreURL,
+                        selectedHerdID: herdID
+                    )
+                )
+            } else {
+                // An unavailable/corrupt candidate must not force a different
+                // Herd to be selected. Keep the directory so another Herd can
+                // be opened without closing the persistent stores.
+                throw error
+            }
+        }
+    }
+
+    @MainActor
     private func retryPendingDevelopmentImport() async {
         guard !developmentImportCheckInProgress,
               case .developmentImportPending(let pending) = bootstrapState else {
@@ -280,6 +337,7 @@ private enum AppBootstrapState {
     case storageUnavailable(String)
     case developmentMirroringBlocked(String)
     #if DEBUG
+    case herdSelection(CloudKitDevelopmentHerdDirectory)
     case developmentImportPending(CloudKitDevelopmentPendingImport)
     #endif
 }
@@ -517,6 +575,151 @@ private struct StartupStorageFailureView: View {
         }
     }
 }
+
+
+#if DEBUG
+/// Retains both loaded stores while the user chooses a complete Herd root.
+/// Discovery never creates a default Herd, even before iCloud import finishes.
+@MainActor
+struct CloudKitDevelopmentHerdDirectory {
+    let assembly: CoreDataPersistenceAssembly
+    let privateStoreURL: URL
+
+    func fetchHerds() throws -> [AccessibleHerd] {
+        try CoreDataHerdRepository(
+            selection: AppCurrentHerdSelection(),
+            assembly: assembly
+        ).fetchAccessibleHerds()
+    }
+
+    func createHerd(named name: String) async throws -> HerdSummary {
+        try await CoreDataHerdRepository(
+            selection: AppCurrentHerdSelection(),
+            assembly: assembly
+        ).createOwnedHerd(named: name)
+    }
+}
+
+/// Stage 3 selection entry for the signed development configuration. Normal
+/// local-only launch is unchanged. Share invitation acceptance is Stage 5.
+private struct CloudKitDevelopmentHerdSelectionView: View {
+    let directory: CloudKitDevelopmentHerdDirectory
+    let selectHerd: @MainActor (UUID) async throws -> Void
+
+    @State private var herds: [AccessibleHerd] = []
+    @State private var newHerdName = ""
+    @State private var isBusy = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Available Herds") {
+                    if herds.isEmpty {
+                        Text("No complete Herds are available yet. iCloud may still be importing.")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(herds) { herd in
+                        Button {
+                            Task { await open(herd.id) }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(herd.name)
+                                    .foregroundStyle(.primary)
+                                Text(herd.category == .owned ? "Owned Herd" : "Shared Herd")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .disabled(isBusy)
+                    }
+                    Button("Refresh Herds", systemImage: "arrow.clockwise") {
+                        refresh()
+                    }
+                    .disabled(isBusy)
+                }
+
+                Section("Create Herd") {
+                    TextField("Herd name", text: $newHerdName)
+                        .disabled(isBusy)
+                    Button("Create Herd") {
+                        Task { await create() }
+                    }
+                    .disabled(isBusy || newHerdName.trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    ).isEmpty)
+                    Text("Creating a Herd is an explicit action. An empty list does not mean iCloud is empty.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Join Herd") {
+                    Text("An invitation is required to join another owner's Herd. Invitation acceptance is not yet implemented.")
+                        .foregroundStyle(.secondary)
+                }
+
+                if let errorMessage {
+                    Section("Herd Unavailable") {
+                        Text(errorMessage)
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("Choose Herd")
+            .refreshable { refresh() }
+            .task {
+                refresh()
+                // Poll the retained stores for roots imported after launch.
+                // Stage 4 will provide remote-event-based invalidation.
+                while !Task.isCancelled {
+                    do {
+                        try await Task.sleep(for: .seconds(3))
+                    } catch {
+                        break
+                    }
+                    guard !isBusy else { continue }
+                    refresh()
+                }
+            }
+        }
+    }
+
+    private func refresh() {
+        do {
+            herds = try directory.fetchHerds()
+            errorMessage = nil
+        } catch {
+            // Preserve the last known complete list if a refresh fails.
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func open(_ herdID: UUID) async {
+        guard !isBusy else { return }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            try await selectHerd(herdID)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func create() async {
+        guard !isBusy else { return }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            let created = try await directory.createHerd(named: newHerdName)
+            newHerdName = ""
+            refresh()
+            try await selectHerd(created.id)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+#endif
 
 #if DEBUG
 /// Dedicated development build config enables the mirrored store topology.
