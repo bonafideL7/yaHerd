@@ -140,8 +140,8 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
 
         let creation = Task { try await directory.createOwnedHerd(named: "New Herd") }
         await repository.waitForPendingCreation()
-        selection.select(otherID)
-        selection.select(originalID)
+        try directory.selectHerd(id: otherID)
+        try directory.selectHerd(id: originalID)
         repository.completeCreation()
 
         let created = try await creation.value
@@ -171,8 +171,8 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         while pendingReadiness == nil {
             await Task.yield()
         }
-        selection.select(otherID)
-        selection.select(originalID)
+        try directory.selectHerd(id: otherID)
+        try directory.selectHerd(id: originalID)
         pendingReadiness?.resume()
 
         do {
