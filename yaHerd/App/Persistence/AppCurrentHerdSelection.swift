@@ -52,6 +52,13 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
         }
     }
 
+    /// A remembered Herd may have an imported root before its related records
+    /// are ready. Show the chooser without erasing the user's saved preference.
+    /// The next activation must pass Herd-directory readiness validation.
+    func deferCurrentHerdUntilImportReady() {
+        currentHerdID = nil
+    }
+
     /// Only an accessible, unambiguous root can become the current Herd.
     func selectAccessibleHerd(_ id: UUID, from accessibleHerds: [AccessibleHerd]) throws {
         guard accessibleHerds.filter({ $0.id == id }).count == 1 else {
