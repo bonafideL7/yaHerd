@@ -31,7 +31,15 @@ struct yaHerdApp: App {
                 case .ready(let runtime):
                     RunningAppView(
                         runtime: runtime,
-                        applicationSettings: applicationSettings
+                        applicationSettings: applicationSettings,
+                        canChooseHerd: runtime.cloudKitHerdContext != nil,
+                        onChooseHerd: {
+                            #if DEBUG
+                            if let context = runtime.cloudKitHerdContext {
+                                bootstrapState = .developmentHerdSelection(context)
+                            }
+                            #endif
+                        }
                     )
 
                 case .storageUnavailable(let message):
@@ -45,6 +53,11 @@ struct yaHerdApp: App {
                     }
 
                 #if DEBUG
+                case .developmentHerdSelection(let context):
+                    CloudKitHerdChooserView(context: context) { id in
+                        try await openDevelopmentHerd(id, in: context)
+                    }
+
                 case .developmentImportPending:
                     ContentUnavailableView {
                         Label("Waiting for iCloud Herd", systemImage: "icloud.and.arrow.down")
@@ -112,36 +125,19 @@ struct yaHerdApp: App {
                 )
                 storageMode = .local
             case .mirrored(let selectedHerdID):
+                // Keep the same two stores alive while choosing, waiting for
+                // imports, or opening a different owned or joined Herd.
                 let cloudKitAssembly = try await CoreDataPersistenceAssembly.loadCloudKit(
                     storeURL: storeURL,
                     mirroringEnabled: true
                 )
+                let context = CloudKitHerdSelectionContext(
+                    assembly: cloudKitAssembly, privateStoreURL: storeURL
+                )
+                let available: [AccessibleHerd]
                 do {
-                    let candidate = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
-                        using: cloudKitAssembly,
-                        privateStoreURL: storeURL,
-                        selectedHerdID: selectedHerdID
-                    )
-                    // An imported root can arrive before its owned records
-                    // and relationships. Preserve the mirroring engine and
-                    // defer Home instead of presenting partial data as corrupt.
-                    try await CloudKitDevelopmentLaunch.validateHomeReadiness(candidate)
-                    persistence = candidate
+                    available = try context.fetchHerds()
                 } catch {
-                    if CloudKitDevelopmentLaunch.isImportPending(error) {
-                        AppLaunchDiagnostics.record(
-                            actualStorageMode: .cloudKitDevelopmentBlocked
-                        )
-                        return .developmentImportPending(
-                            CloudKitDevelopmentPendingImport(
-                                assembly: cloudKitAssembly,
-                                privateStoreURL: storeURL,
-                                selectedHerdID: selectedHerdID
-                            )
-                        )
-                    }
-                    // Both stores opened successfully. A rejected import graph
-                    // is not a SQLite failure and must not start recovery.
                     let message = CloudKitDevelopmentLaunch.nonStorageStartupMessage(
                         for: error
                     ) ?? error.localizedDescription
@@ -151,7 +147,59 @@ struct yaHerdApp: App {
                     )
                     return .developmentMirroringBlocked(message)
                 }
-                storageMode = .cloudKitDevelopment
+                switch CloudKitHerdSelectionDecision.resolve(
+                    available: available,
+                    explicit: selectedHerdID,
+                    remembered: CloudKitSelectedHerdPreference.load()
+                ) {
+                case .choose:
+                    return .developmentHerdSelection(context)
+
+                case .waitForImport(let id):
+                    AppLaunchDiagnostics.record(
+                        actualStorageMode: .cloudKitDevelopmentBlocked
+                    )
+                    return .developmentImportPending(
+                        CloudKitDevelopmentPendingImport(
+                            context: context, selectedHerdID: id
+                        )
+                    )
+
+                case .open(let id):
+                    do {
+                        let candidate = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
+                            using: cloudKitAssembly,
+                            privateStoreURL: storeURL,
+                            selectedHerdID: id
+                        )
+                        try await CloudKitDevelopmentLaunch.validateHomeReadiness(candidate)
+                        CloudKitSelectedHerdPreference.save(id)
+                        return .ready(Self.makeRuntime(
+                            persistence: candidate,
+                            storageMode: .cloudKitDevelopment,
+                            cloudKitHerdContext: context
+                        ))
+                    } catch {
+                        if CloudKitDevelopmentLaunch.isImportPending(error) {
+                            AppLaunchDiagnostics.record(
+                                actualStorageMode: .cloudKitDevelopmentBlocked
+                            )
+                            return .developmentImportPending(
+                                CloudKitDevelopmentPendingImport(
+                                    context: context, selectedHerdID: id
+                                )
+                            )
+                        }
+                        let message = CloudKitDevelopmentLaunch.nonStorageStartupMessage(
+                            for: error
+                        ) ?? error.localizedDescription
+                        AppLaunchDiagnostics.record(
+                            actualStorageMode: .cloudKitDevelopmentBlocked,
+                            startupError: message
+                        )
+                        return .developmentMirroringBlocked(message)
+                    }
+                }
             }
             #else
             persistence = try await CoreDataAppPersistenceAssembly.load(
@@ -198,7 +246,8 @@ struct yaHerdApp: App {
                         recoveryContext: RecoveryModeContext(
                             startupError: startupMessage
                         ),
-                        storageError: startupMessage
+                        storageError: startupMessage,
+                        cloudKitHerdContext: nil
                     )
                 )
             } catch {
@@ -221,7 +270,8 @@ struct yaHerdApp: App {
     @MainActor
     private static func makeRuntime(
         persistence: CoreDataAppPersistenceAssembly,
-        storageMode: AppLaunchStorageMode
+        storageMode: AppLaunchStorageMode,
+        cloudKitHerdContext: CloudKitHerdSelectionContext? = nil
     ) -> AppRuntime {
         let dependencies = persistence.makeDependencies(dataAccessMode: .readWrite)
         AppLaunchDiagnostics.record(actualStorageMode: storageMode)
@@ -233,11 +283,31 @@ struct yaHerdApp: App {
             dependencies: dependencies,
             dataAccessMode: .readWrite,
             recoveryContext: nil,
-            storageError: nil
+            storageError: nil,
+            cloudKitHerdContext: cloudKitHerdContext
         )
     }
 
     #if DEBUG
+    @MainActor
+    private func openDevelopmentHerd(
+        _ id: UUID,
+        in context: CloudKitHerdSelectionContext
+    ) async throws {
+        let persistence = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
+            using: context.assembly,
+            privateStoreURL: context.privateStoreURL,
+            selectedHerdID: id
+        )
+        try await CloudKitDevelopmentLaunch.validateHomeReadiness(persistence)
+        CloudKitSelectedHerdPreference.save(id)
+        bootstrapState = .ready(Self.makeRuntime(
+            persistence: persistence,
+            storageMode: .cloudKitDevelopment,
+            cloudKitHerdContext: context
+        ))
+    }
+
     @MainActor
     private func retryPendingDevelopmentImport() async {
         guard !developmentImportCheckInProgress,
@@ -248,16 +318,9 @@ struct yaHerdApp: App {
         defer { developmentImportCheckInProgress = false }
 
         do {
-            let persistence = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
-                using: pending.assembly,
-                privateStoreURL: pending.privateStoreURL,
-                selectedHerdID: pending.selectedHerdID
+            try await openDevelopmentHerd(
+                pending.selectedHerdID, in: pending.context
             )
-            try await CloudKitDevelopmentLaunch.validateHomeReadiness(persistence)
-            bootstrapState = .ready(Self.makeRuntime(
-                persistence: persistence,
-                storageMode: .cloudKitDevelopment
-            ))
         } catch {
             guard !CloudKitDevelopmentLaunch.isImportPending(error) else {
                 return
@@ -280,6 +343,7 @@ private enum AppBootstrapState {
     case storageUnavailable(String)
     case developmentMirroringBlocked(String)
     #if DEBUG
+    case developmentHerdSelection(CloudKitHerdSelectionContext)
     case developmentImportPending(CloudKitDevelopmentPendingImport)
     #endif
 }
@@ -287,9 +351,8 @@ private enum AppBootstrapState {
 #if DEBUG
 @MainActor
 private struct CloudKitDevelopmentPendingImport {
-    let assembly: CoreDataPersistenceAssembly
-    let privateStoreURL: URL
-    let selectedHerdID: UUID?
+    let context: CloudKitHerdSelectionContext
+    let selectedHerdID: UUID
 }
 #endif
 
@@ -301,6 +364,7 @@ private struct AppRuntime {
     let dataAccessMode: AppDataAccessMode
     let recoveryContext: RecoveryModeContext?
     let storageError: String?
+    let cloudKitHerdContext: CloudKitHerdSelectionContext?
 }
 
 private struct RunningAppView: View {
@@ -310,13 +374,19 @@ private struct RunningAppView: View {
 
     private let runtime: AppRuntime
     private let applicationSettings: ApplicationSettings
+    private let canChooseHerd: Bool
+    private let onChooseHerd: () -> Void
 
     init(
         runtime: AppRuntime,
-        applicationSettings: ApplicationSettings
+        applicationSettings: ApplicationSettings,
+        canChooseHerd: Bool,
+        onChooseHerd: @escaping () -> Void
     ) {
         self.runtime = runtime
         self.applicationSettings = applicationSettings
+        self.canChooseHerd = canChooseHerd
+        self.onChooseHerd = onChooseHerd
         self._tagColorLibrary = StateObject(
             wrappedValue: TagColorLibraryStore(
                 repository: runtime.dependencies.tagColorRepository
@@ -350,6 +420,7 @@ private struct RunningAppView: View {
             navigationMutationRevision: runtime.dependencies.applicationMutationCenter.currentSequence
         )
             .environment(applicationSettings)
+            .environment(\.openHerdChooser, canChooseHerd ? onChooseHerd : nil)
             .environmentObject(tagColorLibrary)
             .environment(\.appDataAccessMode, runtime.dataAccessMode)
             .environment(
