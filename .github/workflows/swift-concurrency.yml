@@ -74,6 +74,24 @@ jobs:
             exit 1
           fi
 
+      - name: Check for automated test sources
+        id: test_sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -d yaHerdTests ]] && find yaHerdTests -type f -name '*.swift' -print -quit | grep -q .; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+            echo 'XCTest sources found; the simulator test suite is required.'
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo '::notice title=Automated tests not executed::No yaHerdTests sources exist on this branch. Run a Debug app build instead of launching an empty simulator test suite.'
+            echo 'Automated tests: NOT EXECUTED (no test sources in this branch).' >> "$GITHUB_STEP_SUMMARY"
+            if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && "${{ inputs.run_tests }}" == "true" && "${{ inputs.run_concurrency }}" != "true" && "${{ inputs.run_architecture }}" != "true" ]]; then
+              echo 'Requested only simulator tests, but no test sources exist.' >&2
+              exit 1
+            fi
+          fi
+
       - name: Verify privacy manifest
         shell: bash
         run: |
@@ -106,13 +124,14 @@ jobs:
         shell: bash
         env:
           YAHERD_FULL_VERIFY: ${{ github.event_name == 'workflow_dispatch' && inputs.full_verification && '1' || '0' }}
-          YAHERD_TESTS_BUILD_APP: ${{ (github.event_name != 'workflow_dispatch' || inputs.run_tests) && '1' || '0' }}
+          YAHERD_TESTS_BUILD_APP: ${{ (github.event_name != 'workflow_dispatch' || inputs.run_tests) && steps.test_sources.outputs.available == 'true' && '1' || '0' }}
         run: |
           set -euo pipefail
           bash Scripts/verify-concurrency.sh
 
-      # Debug simulator tests already compile the application. Only compile the
-      # separate iCloud Development configuration when its app/persistence
+      # When test sources exist, the Debug simulator tests compile the app.
+      # Otherwise, Swift 6 verification compiles Debug directly. Only compile
+      # the separate iCloud Development configuration when its app/persistence
       # execution paths or project configuration are affected by this PR.
       - name: Detect iCloud Development build scope
         if: ${{ github.event_name == 'pull_request' }}
@@ -130,7 +149,7 @@ jobs:
             echo 'iCloud Development build required by affected source or configuration.'
           else
             echo 'required=false' >> "$GITHUB_OUTPUT"
-            echo 'No iCloud Development build required; Debug simulator tests still run.'
+            echo 'No iCloud Development build required. The Debug app still compiles (or its tests run) as selected.'
           fi
 
       - name: Build dedicated iCloud Development configuration
@@ -150,7 +169,7 @@ jobs:
             build
 
       - name: Run iOS Simulator tests
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_tests }}
+        if: ${{ (github.event_name != 'workflow_dispatch' || inputs.run_tests) && steps.test_sources.outputs.available == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
