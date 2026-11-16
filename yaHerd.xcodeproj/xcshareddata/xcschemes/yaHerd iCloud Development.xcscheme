@@ -43,19 +43,6 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "NO"
       shouldAutocreateTestPlan = "YES">
-      <Testables>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A1B2C3D42F00111100000006"
-               BuildableName = "yaHerdTests.xctest"
-               BlueprintName = "yaHerdTests"
-               ReferencedContainer = "container:yaHerd.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-      </Testables>
       <EnvironmentVariables>
          <EnvironmentVariable
             key = "YAHERD_VALIDATE_ICLOUD_SCHEMA"
@@ -78,6 +65,19 @@
             isEnabled = "NO">
          </EnvironmentVariable>
       </EnvironmentVariables>
+      <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "A1B2C3D42F00111100000006"
+               BuildableName = "yaHerdTests.xctest"
+               BlueprintName = "yaHerdTests"
+               ReferencedContainer = "container:yaHerd.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "iCloudDevelopment"
@@ -99,7 +99,6 @@
             ReferencedContainer = "container:yaHerd.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
