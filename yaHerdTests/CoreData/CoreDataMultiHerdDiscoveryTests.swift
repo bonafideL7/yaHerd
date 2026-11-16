@@ -4,6 +4,51 @@ import XCTest
 
 @MainActor
 final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
+    func testStage3AppLaunchWithMultipleOwnedHerdsShowsSelectionWithoutWriting() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let foundation = try await CoreDataPersistenceAssembly.load(storeURL: harness.storeURL)
+        let firstID = UUID()
+        let secondID = UUID()
+        try await foundation.transactionExecutor.performWrite { context in
+            for (id, name) in [(firstID, "First"), (secondID, "Second")] {
+                let herd = CDHerd(context: context)
+                herd.id = id
+                herd.name = name
+                herd.createdAt = Date(timeIntervalSince1970: 100)
+                herd.updatedAt = Date(timeIntervalSince1970: 100)
+            }
+        }
+
+        let app = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
+        let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
+        XCTAssertNil(dependencies.herdSelection.currentHerdID)
+        XCTAssertEqual(
+            Set(try dependencies.herdRepository.fetchAccessibleHerds().map(\.id)),
+            Set([firstID, secondID])
+        )
+    }
+
+    func testStage3SelectingAvailableHerdUpdatesActiveRepositories() async throws {
+        let foundation = try await CoreDataPersistenceAssembly.inMemory()
+        let firstID = UUID()
+        let secondID = UUID()
+        try await foundation.transactionExecutor.performWrite { context in
+            for (id, name) in [(firstID, "First"), (secondID, "Second")] {
+                let herd = CDHerd(context: context)
+                herd.id = id
+                herd.name = name
+                herd.createdAt = Date(timeIntervalSince1970: 100)
+                herd.updatedAt = Date(timeIntervalSince1970: 100)
+            }
+        }
+        let app = CoreDataAppPersistenceAssembly(assembly: foundation, currentHerdID: nil)
+        let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
+        dependencies.herdSelection.select(firstID)
+        XCTAssertEqual(try dependencies.herdRepository.fetchCurrentHerd().id, firstID)
+        dependencies.herdSelection.select(secondID)
+        XCTAssertEqual(try dependencies.herdRepository.fetchCurrentHerd().id, secondID)
+    }
+
     func testDiscoveryIncludesOwnedAndSharedHerdsWithoutChangingSelection() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
