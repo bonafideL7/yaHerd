@@ -38,7 +38,7 @@ final class TagColorLibraryHistoricalLookupTests: XCTestCase {
         let library = TagColorLibraryStore(repository: repository)
         XCTAssertEqual(library.colors.map(\.id), [previousColor.id])
 
-        repository.persistedColors = [nextColor]
+        repository.simulateHerdColors([nextColor])
         library.resetForHerdChange()
 
         XCTAssertEqual(library.colors.map(\.id), [nextColor.id])
@@ -258,6 +258,10 @@ private final class TagColorWriteResultRepository: TagColorRepository {
     var failWrite = false
 
     init(colors: [TagColorSnapshot]) {
+        persistedColors = colors
+    }
+
+    func simulateHerdColors(_ colors: [TagColorSnapshot]) {
         persistedColors = colors
     }
 
