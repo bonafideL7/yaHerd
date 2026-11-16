@@ -36,17 +36,17 @@ final class CoreDataSampleDataSeeder: SampleDataSeeding {
         }
     }
 
-    func seedSampleDataIfNeeded() async throws -> Bool {
-        try await seed(size: .compact)
+    func seedSampleDataIfNeeded(for herdID: UUID) async throws -> Bool {
+        try await seed(size: .compact, for: herdID)
     }
 
-    func seedLargeSampleDataIfNeeded() async throws -> Bool {
-        try await seed(size: .large)
+    func seedLargeSampleDataIfNeeded(for herdID: UUID) async throws -> Bool {
+        try await seed(size: .large, for: herdID)
     }
 
-    private func seed(size: CoreDataSampleHerdFactory.Size) async throws -> Bool {
+    private func seed(size: CoreDataSampleHerdFactory.Size, for herdID: UUID) async throws -> Bool {
         try writePolicy.validateCanWrite()
-        guard let herdID = selection.currentHerdID else {
+        guard selection.currentHerdID == herdID else {
             throw HerdRepositoryError.missingHerd
         }
         // Working template CRUD is synchronous on the MainActor, so reserve
@@ -62,6 +62,11 @@ final class CoreDataSampleDataSeeder: SampleDataSeeding {
         defer { assembly.pastureResidentWriteCoordinator.releasePastureDeletion() }
         await assembly.animalWriteBoundary.beginAnimalWrite()
         defer { assembly.animalWriteBoundary.endAnimalWrite() }
+        // Selection may change while waiting for either write gate.
+        // Never retarget an action that originated in a different Herd.
+        guard selection.currentHerdID == herdID else {
+            throw HerdRepositoryError.missingHerd
+        }
         // Also exclude concurrent materialization of canonical Tag Color IDs.
 
         let reserved = try CoreDataTagColorMaterializationCoordinator.shared.reserve(
