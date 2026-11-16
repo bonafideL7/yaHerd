@@ -41,6 +41,82 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         XCTAssertEqual(viewModel.items, [freshAnimal])
     }
 
+    func testSwitchingHerdWhileReadIsSuspendedDiscardsPriorHerdResult() async {
+        let staleAnimal = makeAnimal(name: "Old Herd", tagNumber: "100")
+        let currentAnimal = makeAnimal(name: "New Herd", tagNumber: "200")
+        let reader = ControlledAnimalListQueryReader(
+            staleAnimal: staleAnimal, freshAnimal: currentAnimal
+        )
+        let repository = BackgroundQueryingAnimalListRepository(
+            base: StubAnimalListRepository(), queryReader: reader
+        )
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let model = AnimalListViewModel()
+        model.configure(selection: selection)
+
+        model.load(using: repository, pastureRepository: EmptyPastureReferenceDataReader())
+        XCTAssertTrue(await waitForRequestCount(1, reader: reader))
+
+        // Even before SwiftUI's new-Herd task runs, the old request cannot
+        // publish a result when its uncooperative reader eventually returns.
+        selection.select(UUID())
+        await reader.releaseFirstRequest()
+        try? await Task.sleep(for: .milliseconds(50))
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertTrue(model.items.isEmpty)
+        XCTAssertTrue(model.pastureOptions.isEmpty)
+
+        model.configure(selection: selection)
+        model.load(using: repository, pastureRepository: EmptyPastureReferenceDataReader())
+        XCTAssertTrue(await waitForAnimal(currentAnimal.id, in: model))
+        XCTAssertEqual(model.items, [currentAnimal])
+    }
+
+    func testSwitchingHerdClearsLoadedAndDerivedAnimalState() async {
+        let oldAnimal = makeAnimal(name: "Old Herd", tagNumber: "301")
+        let newAnimal = makeAnimal(name: "New Herd", tagNumber: "401")
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let model = AnimalListViewModel()
+        model.configure(selection: selection)
+        model.updateDerivedState(
+            searchText: "",
+            sortOrder: .tagAscending,
+            filter: AnimalFilter(),
+            showRemovedStatuses: false,
+            showArchivedRecords: false,
+            formatTag: { number, _ in number }
+        )
+        model.load(
+            using: RecordingAnimalListRepository(animals: [oldAnimal]),
+            pastureRepository: EmptyPastureReferenceDataReader()
+        )
+        for _ in 0..<100 {
+            if model.hasInitialDerivedState { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(model.filteredAndSortedAnimals.map(\.id), [oldAnimal.id])
+
+        selection.select(UUID())
+        model.configure(selection: selection)
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertFalse(model.hasInitialDerivedState)
+        XCTAssertTrue(model.items.isEmpty)
+        XCTAssertTrue(model.pastureOptions.isEmpty)
+        XCTAssertTrue(model.filteredAndSortedAnimals.isEmpty)
+        XCTAssertTrue(model.groupedAnimals.isEmpty)
+
+        model.load(
+            using: RecordingAnimalListRepository(animals: [newAnimal]),
+            pastureRepository: EmptyPastureReferenceDataReader()
+        )
+        for _ in 0..<100 {
+            if model.filteredAndSortedAnimals.map(\.id) == [newAnimal.id] { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(model.items.map(\.id), [newAnimal.id])
+        XCTAssertEqual(model.filteredAndSortedAnimals.map(\.id), [newAnimal.id])
+    }
+
     func testInitialDerivedEmptyResultsAreNotPublishedBeforeFirstLoad() async {
         let animal = makeAnimal(name: "Loaded animal", tagNumber: "201")
         let snapshotReader = CompleteAnimalListSnapshotProbe(animals: [animal])
