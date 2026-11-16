@@ -101,6 +101,20 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         )
     }
 
+    /// Validate accessibility before changing the single selection shared by all
+    /// repository and query dependencies. A failed lookup must retain the
+    /// previous selection rather than exposing stale or unrelated Herd records.
+    func selectAccessibleHerd(id: UUID) throws {
+        let herdRepository = CoreDataHerdRepository(
+            selection: selection,
+            assembly: assembly
+        )
+        guard try herdRepository.fetchAccessibleHerds().contains(where: { $0.id == id }) else {
+            throw HerdRepositoryError.missingHerd
+        }
+        selection.select(id)
+    }
+
     func makeDependencies(dataAccessMode: AppDataAccessMode) -> AppDependencies {
         let mutationCenter = ApplicationMutationCenter()
         let recorder = ApplicationMutationPipeline(center: mutationCenter)
