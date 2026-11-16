@@ -139,4 +139,57 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         )
         XCTAssertEqual(try repository.fetchAccessibleHerds().map(\.id), [validID])
     }
+
+    func testDevelopmentDirectoryDoesNotBootstrapAnEmptyCloudKitStore() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let directory = CloudKitDevelopmentHerdDirectory(
+            assembly: assembly, privateStoreURL: harness.storeURL
+        )
+
+        XCTAssertTrue(try directory.fetchHerds().isEmpty)
+
+        // The choice to create a Herd must remain explicit, including offline.
+        let created = try await directory.createHerd(named: "West Pasture")
+        XCTAssertEqual(try directory.fetchHerds().map(\.id), [created.id])
+        XCTAssertEqual(try directory.fetchHerds().first?.category, .owned)
+
+        let selected = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
+            using: assembly,
+            privateStoreURL: harness.storeURL,
+            selectedHerdID: created.id
+        )
+        XCTAssertEqual(
+            try selected.makeDependencies(dataAccessMode: .readWrite)
+                .herdRepository.fetchCurrentHerd().id,
+            created.id
+        )
+    }
+
+    func testDevelopmentDirectoryListsMultipleHerdsWithoutSelectingArbitrarily() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let directory = CloudKitDevelopmentHerdDirectory(
+            assembly: assembly, privateStoreURL: harness.storeURL
+        )
+        let first = try await directory.createHerd(named: "North")
+        let second = try await directory.createHerd(named: "South")
+
+        XCTAssertEqual(Set(try directory.fetchHerds().map(\.id)), [first.id, second.id])
+        XCTAssertThrowsError(
+            try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
+                using: assembly,
+                privateStoreURL: harness.storeURL
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? CoreDataAppHerdBootstrapError,
+                .multipleLocalHerds(count: 2)
+            )
+        }
+    }
 }
