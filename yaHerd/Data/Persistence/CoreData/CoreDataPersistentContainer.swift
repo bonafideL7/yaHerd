@@ -269,18 +269,33 @@ final class CoreDataPersistentContainer {
             )
         }
         #endif
-        return CoreDataPersistentContainer(
+        let persistence = CoreDataPersistentContainer(
             container: container,
             accessMode: .readWrite,
             storeURL: storeDescriptions[0].url,
             cloudKitEventObserver: eventObserver
         )
+        #if DEBUG && YAHERD_ICLOUD_DEVELOPMENT
+        // Validate the signed development model when the existing iCloud
+        // Development scheme opens its mirrored stores. A dry-run never
+        // uploads schema records or changes an existing CloudKit database.
+        if cloudKitConfigured {
+            do {
+                try persistence.validateCloudKitSchemaDryRun()
+                NSLog("yaHerd iCloud schema dry-run PASSED")
+            } catch {
+                let failure = error as NSError
+                NSLog("yaHerd iCloud schema dry-run FAILED (%@/%ld)",
+                      failure.domain, failure.code)
+            }
+        }
+        #endif
+        return persistence
     }
 
     #if DEBUG
-    /// Explicit, opt-in development validation. Apple's dry-run checks the
-    /// compiled model for both mirrored stores without uploading schema records.
-    /// This is never called by app startup or included in Release builds.
+    /// Validates both mirrored stores' compiled model without uploading
+    /// schema records. Invoked automatically only in iCloud Development.
     func validateCloudKitSchemaDryRun() throws {
         try mirroredCloudKitContainer().initializeCloudKitSchema(options: [.dryRun])
     }
