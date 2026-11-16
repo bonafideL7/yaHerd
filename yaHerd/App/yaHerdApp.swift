@@ -401,7 +401,12 @@ private struct RunningAppView: View {
             }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
-                    tagColorLibrary.refresh()
+                    if !runtime.dataAccessMode.isRecoveryMode {
+                        herdDirectory.refresh(reportErrors: false)
+                    }
+                    if runtime.herdSelection.currentHerdID != nil {
+                        tagColorLibrary.refresh()
+                    }
                 }
             }
     }

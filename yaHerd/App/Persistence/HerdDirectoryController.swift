@@ -27,7 +27,9 @@ final class HerdDirectoryController {
 
     func refresh(reportErrors: Bool = true) {
         do {
-            herds = try repository.fetchAccessibleHerds()
+            let accessible = try repository.fetchAccessibleHerds()
+            selection.revalidateActiveHerd(from: accessible)
+            herds = accessible
             if reportErrors {
                 errorMessage = nil
             }
