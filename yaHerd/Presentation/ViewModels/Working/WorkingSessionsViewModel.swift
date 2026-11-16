@@ -36,6 +36,31 @@ final class WorkingSessionsViewModel: ObservableObject {
         }
     }
 
+    /// A queued delete may not start after the active Herd changes. Once a
+    /// repository write begins, it retains its original Herd; only refresh
+    /// the list when that same Herd remains active after the write completes.
+    @discardableResult
+    func deleteSession(
+        id: UUID,
+        originatingHerdID: UUID,
+        currentHerdSelection: any CurrentHerdSelectionReading
+    ) async throws -> Bool {
+        guard !Task.isCancelled,
+              currentHerdSelection.currentHerdID == originatingHerdID else {
+            return false
+        }
+
+        try await repository.deleteSession(id: id)
+
+        guard !Task.isCancelled,
+              currentHerdSelection.currentHerdID == originatingHerdID else {
+            return false
+        }
+
+        _ = load()
+        return true
+    }
+
     @discardableResult
     func load() -> Bool {
         do {
