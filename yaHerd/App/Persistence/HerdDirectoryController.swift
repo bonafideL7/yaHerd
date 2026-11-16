@@ -19,14 +19,17 @@ final class HerdDirectoryController {
         self.selection = selection
     }
 
-    func refresh() {
+    func refresh(reportErrors: Bool = true) {
         do {
             herds = try repository.fetchAccessibleHerds()
             errorMessage = nil
         } catch {
-            // A transient import or store read failure does not revoke a Herd.
-            // Revalidate each selection rather than trusting the cached list.
-            errorMessage = error.localizedDescription
+            // Background import refresh must not repeatedly present error
+            // dialogs; manual refresh still reports actionable failures.
+            // Preserve the last good list and selection on transient errors.
+            if reportErrors {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
