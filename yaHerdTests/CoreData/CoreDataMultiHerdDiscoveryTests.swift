@@ -117,15 +117,22 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         }
     }
 
-    func testImportedRootWithMissingUUIDWaitsForImportWithoutRecreatingAnything() async throws {
+    func testImportedRootWithoutUUIDDoesNotHideCompleteHerdOrCreateReplacement() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let context = try assembly.contextFactory.makeWriteContext()
+        let completeID = UUID()
         try context.performAndWait {
-            let root = CDHerd(context: context)
-            root.id = nil
-            root.name = "Import pending"
-            root.createdAt = Date()
-            root.updatedAt = Date()
+            let ready = CDHerd(context: context)
+            ready.id = completeID
+            ready.name = "Available"
+            ready.createdAt = Date(timeIntervalSince1970: 100)
+            ready.updatedAt = ready.createdAt
+
+            let importing = CDHerd(context: context)
+            importing.id = nil
+            importing.name = "Import pending"
+            importing.createdAt = Date(timeIntervalSince1970: 200)
+            importing.updatedAt = importing.createdAt
             try context.save()
         }
 
@@ -133,13 +140,13 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         let repository = CoreDataHerdRepository(selection: selection, assembly: assembly)
         let directory = HerdDirectoryController(repository: repository, selection: selection)
         directory.refresh()
-        XCTAssertTrue(directory.herds.isEmpty)
+        XCTAssertEqual(directory.herds.map(\.id), [completeID])
         XCTAssertNil(directory.selectedHerdID)
 
         let read = assembly.contextFactory.makeReadContext()
         try read.performAndWait {
             let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
-            XCTAssertEqual(try read.count(for: request), 1)
+            XCTAssertEqual(try read.count(for: request), 2)
         }
     }
 
