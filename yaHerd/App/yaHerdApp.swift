@@ -414,6 +414,7 @@ enum AppNavigationSceneStorageAccess {
 
 private struct RootAppView: View {
     @Environment(AppCurrentHerdSelection.self) private var herdSelection
+    @Environment(HerdDirectoryController.self) private var herdDirectory
 
     let storageError: String?
     let dataAccessMode: AppDataAccessMode
@@ -447,6 +448,18 @@ private struct RootAppView: View {
                 NavigationStack {
                     HerdDirectoryView()
                 }
+                .task {
+                    // CloudKit may import the first accessible Herd after startup.
+                    // Refresh the same loaded store while the chooser is visible.
+                    while !Task.isCancelled && herdSelection.currentHerdID == nil {
+                        herdDirectory.refresh()
+                        do {
+                            try await Task.sleep(for: .seconds(3))
+                        } catch {
+                            break
+                        }
+                    }
+                }
             } else {
                 MainTabView()
                     // Discard old Herd drafts and view-owned async state.
@@ -456,6 +469,11 @@ private struct RootAppView: View {
             .environment(navigation)
             .task {
                 guard !hasRestoredNavigation else { return }
+                guard dataAccessMode.isRecoveryMode || herdSelection.currentHerdID != nil else {
+                    // An empty selection is intentional. Do not validate stale
+                    // Herd-specific SceneStorage against a chooser.
+                    return
+                }
                 navigation.selectedHerdID = herdSelection.currentHerdID
                 let outcome = AppNavigationSceneStorageAccess.restore(
                     navigation: navigation,

@@ -117,6 +117,33 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         }
     }
 
+    func testImportedRootWithMissingUUIDWaitsForImportWithoutRecreatingAnything() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let root = CDHerd(context: context)
+            root.id = nil
+            root.name = "Import pending"
+            root.createdAt = Date()
+            root.updatedAt = Date()
+            try context.save()
+        }
+
+        let repository = CoreDataHerdRepository(
+            selection: AppCurrentHerdSelection(), assembly: assembly
+        )
+        XCTAssertTrue(try repository.fetchAccessibleHerds().isEmpty)
+        XCTAssertEqual(
+            HerdStartupSelection.resolve(available: try repository.fetchAccessibleHerds(), requestedID: nil),
+            .choose
+        )
+        let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+        let read = assembly.contextFactory.makeReadContext()
+        try read.performAndWait {
+            XCTAssertEqual(try read.count(for: request), 1)
+        }
+    }
+
     func testIncompleteImportedRootIsNotOfferedAsSelectable() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let context = try assembly.contextFactory.makeWriteContext()

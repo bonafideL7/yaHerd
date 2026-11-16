@@ -396,6 +396,33 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertNil(navigation.presentedSheet)
     }
 
+    func testRestoringAnotherHerdDoesNotCarrySearchFiltersOrRecordRoutes() throws {
+        let original = AppNavigationState()
+        original.selectedHerdID = UUID()
+        original.selectedTab = .search
+        original.herdRouter.searchText = "tag from other Herd"
+        original.herdRouter.filter = AnimalFilter(recordIssue: .missingTag)
+        original.herdRouter.pastureFilter = .all
+        original.herdRouter.searchPath = [.animal(UUID())]
+        original.herdRouter.path = [.pasture(UUID())]
+
+        let restored = AppNavigationState()
+        let currentID = UUID()
+        restored.restore(
+            from: try XCTUnwrap(original.restorationPayload()),
+            using: RestorableTestNavigationValidator(herdID: currentID)
+        )
+
+        XCTAssertEqual(restored.selectedHerdID, currentID)
+        XCTAssertEqual(restored.selectedTab, .home)
+        XCTAssertTrue(restored.herdRouter.path.isEmpty)
+        XCTAssertTrue(restored.herdRouter.searchPath.isEmpty)
+        XCTAssertEqual(restored.herdRouter.searchText, "")
+        XCTAssertEqual(restored.herdRouter.filter, AnimalFilter())
+        XCTAssertFalse(restored.herdRouter.isSearchPresented)
+        XCTAssertNil(restored.fullScreenWorkflow)
+    }
+
     func testInvalidRestorationPayloadLeavesDefaultStateUnchanged() {
         let navigation = AppNavigationState()
         navigation.restore(from: "not-base64")
@@ -410,7 +437,8 @@ final class AppNavigationStateTests: XCTestCase {
 
 @MainActor
 private struct RestorableTestNavigationValidator: AppNavigationRestorationValidating {
-    func currentHerdID() throws -> UUID? { nil }
+    var herdID: UUID? = nil
+    func currentHerdID() throws -> UUID? { herdID }
     func animalExists(id: UUID) throws -> Bool { true }
     func pastureExists(id: UUID) throws -> Bool { true }
     func isActiveFieldCheckSession(id: UUID) throws -> Bool { true }
