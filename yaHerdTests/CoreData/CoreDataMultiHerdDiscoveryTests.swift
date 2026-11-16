@@ -139,4 +139,35 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         )
         XCTAssertEqual(try repository.fetchAccessibleHerds().map(\.id), [validID])
     }
+
+    func testIncompleteImportedRootWithoutUUIDDoesNotHideOtherAccessibleHerds() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = try assembly.contextFactory.makeWriteContext()
+        let existingID = UUID()
+        try context.performAndWait {
+            let complete = CDHerd(context: context)
+            complete.id = existingID
+            complete.name = "Existing"
+            complete.createdAt = Date(timeIntervalSince1970: 100)
+            complete.updatedAt = complete.createdAt
+
+            let importing = CDHerd(context: context)
+            importing.id = nil
+            importing.name = "Still importing"
+            importing.createdAt = Date(timeIntervalSince1970: 200)
+            importing.updatedAt = importing.createdAt
+            try context.save()
+        }
+
+        let repository = CoreDataHerdRepository(
+            selection: AppCurrentHerdSelection(), assembly: assembly
+        )
+        XCTAssertEqual(try repository.fetchAccessibleHerds().map(\.id), [existingID])
+
+        let reader = assembly.contextFactory.makeReadContext()
+        try reader.performAndWait {
+            let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            XCTAssertEqual(try reader.count(for: request), 2)
+        }
+    }
 }
