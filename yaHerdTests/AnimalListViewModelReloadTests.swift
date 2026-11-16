@@ -74,6 +74,38 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         XCTAssertEqual(model.items, [currentAnimal])
     }
 
+    func testFailedPriorHerdReadCannotPublishErrorAfterSelectionChanges() async {
+        let staleAnimal = makeAnimal(name: "Old Herd", tagNumber: "101")
+        let freshAnimal = makeAnimal(name: "New Herd", tagNumber: "201")
+        let reader = ControlledAnimalListQueryReader(
+            staleAnimal: staleAnimal,
+            freshAnimal: freshAnimal,
+            failFirstRequest: true
+        )
+        let repository = BackgroundQueryingAnimalListRepository(
+            base: StubAnimalListRepository(), queryReader: reader
+        )
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let model = AnimalListViewModel()
+        model.configure(selection: selection)
+        model.load(using: repository, pastureRepository: EmptyPastureReferenceDataReader())
+        let started = await waitForRequestCount(1, reader: reader)
+        XCTAssertTrue(started)
+
+        selection.select(UUID())
+        await reader.releaseFirstRequest()
+        try? await Task.sleep(for: .milliseconds(50))
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertNil(model.errorMessage)
+        XCTAssertFalse(model.hasInitialLoadFailure)
+
+        model.configure(selection: selection)
+        model.load(using: repository, pastureRepository: EmptyPastureReferenceDataReader())
+        let loadedCurrentAnimal = await waitForAnimal(freshAnimal.id, in: model)
+        XCTAssertTrue(loadedCurrentAnimal)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testSwitchingHerdClearsLoadedAndDerivedAnimalState() async {
         let oldAnimal = makeAnimal(name: "Old Herd", tagNumber: "301")
         let newAnimal = makeAnimal(name: "New Herd", tagNumber: "401")
@@ -353,12 +385,18 @@ final class AnimalListViewModelReloadTests: XCTestCase {
 private actor ControlledAnimalListQueryReader: AnimalListQueryReading {
     private let staleAnimal: AnimalSummary
     private let freshAnimal: AnimalSummary
+    private let failFirstRequest: Bool
     private var requestCount = 0
     private var firstRequestContinuation: CheckedContinuation<Void, Never>?
 
-    init(staleAnimal: AnimalSummary, freshAnimal: AnimalSummary) {
+    init(
+        staleAnimal: AnimalSummary,
+        freshAnimal: AnimalSummary,
+        failFirstRequest: Bool = false
+    ) {
         self.staleAnimal = staleAnimal
         self.freshAnimal = freshAnimal
+        self.failFirstRequest = failFirstRequest
     }
 
     func fetchAnimalSummaryPage(
@@ -372,6 +410,9 @@ private actor ControlledAnimalListQueryReader: AnimalListQueryReading {
         if requestCount == 1 {
             await withCheckedContinuation { continuation in
                 firstRequestContinuation = continuation
+            }
+            if failFirstRequest {
+                throw CompleteAnimalListSnapshotProbeError.unavailable
             }
             return AnimalSummaryPage(animals: [staleAnimal], hasMore: false)
         }
