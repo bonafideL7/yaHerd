@@ -243,6 +243,7 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
             ),
             tagColorRepository: tagColorRepository,
             herdRepository: herdRepository,
+            currentHerdSelection: selection,
             applicationMutationCenter: mutationCenter
         )
     }
