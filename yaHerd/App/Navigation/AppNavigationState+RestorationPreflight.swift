@@ -61,9 +61,9 @@ private struct PreflightedAppNavigationRestorationValidator: AppNavigationRestor
         let herdID = try base.currentHerdID()
         self.herdID = herdID
 
-        let targetsCurrentHerd = snapshot.selectedHerdID == nil
-            || snapshot.selectedHerdID == herdID
-        guard targetsCurrentHerd else {
+        // A legacy snapshot without a Herd ID cannot validate records or
+        // criteria against a newly selected Herd.
+        guard snapshot.selectedHerdID == herdID else {
             animalResults = [:]
             pastureResults = [:]
             fieldCheckSessionResults = [:]
