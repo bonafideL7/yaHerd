@@ -67,6 +67,36 @@ final class CoreDataHerdSelectionTests: XCTestCase {
         }
     }
 
+    func testImportedHerdReadinessMustPassBeforeChangingSelection() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let selection = AppCurrentHerdSelection()
+        let repository = CoreDataHerdRepository(selection: selection, assembly: assembly)
+        let first = try await repository.createOwnedHerd(named: "Existing")
+        let second = try await repository.createOwnedHerd(named: "Still importing")
+        selection.select(first.id)
+
+        var isReady = false
+        let directory = HerdDirectoryController(
+            repository: repository, selection: selection,
+            validateReadiness: { herdID in
+                XCTAssertEqual(herdID, second.id)
+                if !isReady { throw HerdRepositoryError.missingHerd }
+            }
+        )
+
+        do {
+            try await directory.selectHerdWhenReady(id: second.id)
+            XCTFail("An incomplete imported graph must not become the active Herd")
+        } catch let error as HerdRepositoryError {
+            XCTAssertEqual(error, .missingHerd)
+        }
+        XCTAssertEqual(selection.currentHerdID, first.id)
+
+        isReady = true
+        try await directory.selectHerdWhenReady(id: second.id)
+        XCTAssertEqual(selection.currentHerdID, second.id)
+    }
+
     func testFailedCreationDoesNotSwitchHerd() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let selection = AppCurrentHerdSelection()
