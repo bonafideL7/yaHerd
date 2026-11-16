@@ -8,6 +8,7 @@ import SwiftUI
 struct WorkingSessionDetailView: View {
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     private var repository: any WorkingSessionDetailRepository {
@@ -445,16 +446,21 @@ struct WorkingSessionDetailView: View {
     }
 
     private func reopenSession() {
-        guard !isMutatingSession else { return }
+        guard !isMutatingSession,
+              let originatingHerdID = herdSelection.currentHerdID else { return }
         isMutatingSession = true
 
         Task { @MainActor in
             defer { isMutatingSession = false }
-            await viewModel.reopenSession()
-            if viewModel.errorMessage == nil {
-                animalFilter = .all
-                searchText = ""
-            }
+            let reopened = await viewModel.reopenSession(
+                originatingHerdID: originatingHerdID,
+                currentHerdSelection: herdSelection
+            )
+            guard reopened,
+                  !Task.isCancelled,
+                  herdSelection.currentHerdID == originatingHerdID else { return }
+            animalFilter = .all
+            searchText = ""
         }
     }
 
