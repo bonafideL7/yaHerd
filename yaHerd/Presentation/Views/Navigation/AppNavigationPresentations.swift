@@ -97,13 +97,16 @@ extension View {
 
 private struct AppSettingsMenuButton: View {
     @Environment(AppNavigationState.self) private var navigation
+    @Environment(\.appDataAccessMode) private var dataAccessMode
 
     var body: some View {
         Menu {
-            Button {
-                navigation.showingHerds = true
-            } label: {
-                Label("Switch Herd", systemImage: "arrow.left.arrow.right")
+            if !dataAccessMode.isRecoveryMode {
+                Button {
+                    navigation.showingHerds = true
+                } label: {
+                    Label("Switch Herd", systemImage: "arrow.left.arrow.right")
+                }
             }
             Button {
                 navigation.present(.settings)

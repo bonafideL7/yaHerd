@@ -15,7 +15,8 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         self.selection = AppCurrentHerdSelection(currentHerdID: currentHerdID)
     }
 
-    /// Production launch keeps one durable store and one selected Herd for all features.
+    /// Keep the local first-install default but never select an arbitrary Herd
+    /// when multiple complete local roots already exist.
     static func load(at storeURL: URL) async throws -> CoreDataAppPersistenceAssembly {
         let assembly = try await CoreDataPersistenceAssembly.load(storeURL: storeURL)
         let inventory = try CoreDataHerdRepository(
