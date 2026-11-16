@@ -1321,9 +1321,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             XCTAssertTrue(try seeder.canSeedSampleData())
             let inserted: Bool
             if isLarge {
-                inserted = try await seeder.seedLargeSampleDataIfNeeded()
+                inserted = try await seeder.seedLargeSampleDataIfNeeded(for: originalHerdID)
             } else {
-                inserted = try await seeder.seedSampleDataIfNeeded()
+                inserted = try await seeder.seedSampleDataIfNeeded(for: originalHerdID)
             }
             XCTAssertTrue(inserted)
             XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, 1)
@@ -1366,7 +1366,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
                 .overviewReader.fetchOpenFindings(limit: 100)
             XCTAssertFalse(openFindings.isEmpty)
 
-            let repeated = try await seeder.seedLargeSampleDataIfNeeded()
+            let repeated = try await seeder.seedLargeSampleDataIfNeeded(for: originalHerdID)
             XCTAssertFalse(repeated)
             XCTAssertFalse(try seeder.canSeedSampleData())
             XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, 1)
@@ -1411,7 +1411,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
                 return XCTFail("Read-only app graph should still supply a guarded seed action")
             }
             do {
-                _ = try await readOnlySeeder.seedSampleDataIfNeeded()
+                _ = try await readOnlySeeder.seedSampleDataIfNeeded(for: originalHerdID)
                 XCTFail("Read-only recovery must not permit sample writes")
             } catch {
                 XCTAssertTrue(error is LocalDataWritePolicy.WriteError)
@@ -1428,6 +1428,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let harness = try CoreDataPersistenceHarness()
         let app = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
         let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
+        let herdID = try XCTUnwrap(app.currentHerdSelection.currentHerdID)
         let groups = dependencies.pastureFeatureDependencies.groupEditorRepository
         let groupReader = dependencies.pastureFeatureDependencies.groupDetailRepository
         guard let seeder = dependencies.animalFeatureDependencies.sampleDataSeeder else {
@@ -1457,8 +1458,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         )
         let groupOnlySequence = dependencies.applicationMutationCenter.currentSequence
         XCTAssertFalse(try seeder.canSeedSampleData())
-        let insertedCompact = try await seeder.seedSampleDataIfNeeded()
-        let insertedLarge = try await seeder.seedLargeSampleDataIfNeeded()
+        let insertedCompact = try await seeder.seedSampleDataIfNeeded(for: herdID)
+        let insertedLarge = try await seeder.seedLargeSampleDataIfNeeded(for: herdID)
         XCTAssertFalse(insertedCompact)
         XCTAssertFalse(insertedLarge)
         XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, groupOnlySequence)
@@ -1493,7 +1494,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             dependencies.applicationMutationCenter.animalRevision, groupCreatedRevision
         )
         XCTAssertFalse(try seeder.canSeedSampleData())
-        let repeatedLarge = try await seeder.seedLargeSampleDataIfNeeded()
+        let repeatedLarge = try await seeder.seedLargeSampleDataIfNeeded(for: herdID)
         XCTAssertFalse(repeatedLarge)
         XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, originalSequence)
         XCTAssertEqual(
@@ -1544,9 +1545,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         for seedLarge in [false, true] {
             do {
                 if seedLarge {
-                    _ = try await seeder.seedLargeSampleDataIfNeeded()
+                    _ = try await seeder.seedLargeSampleDataIfNeeded(for: herdID)
                 } else {
-                    _ = try await seeder.seedSampleDataIfNeeded()
+                    _ = try await seeder.seedSampleDataIfNeeded(for: herdID)
                 }
                 XCTFail("An orphaned template must abort the entire sample transaction.")
             } catch {
@@ -1571,7 +1572,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         }
 
         XCTAssertTrue(try seeder.canSeedSampleData())
-        let inserted = try await seeder.seedSampleDataIfNeeded()
+        let inserted = try await seeder.seedSampleDataIfNeeded(for: herdID)
         XCTAssertTrue(inserted)
         try context.performAndWait {
             let stored = try context.fetch(NSFetchRequest<CDWorkingTreatmentTemplate>(
@@ -1633,9 +1634,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         for seedLarge in [false, true] {
             do {
                 if seedLarge {
-                    _ = try await seeder.seedLargeSampleDataIfNeeded()
+                    _ = try await seeder.seedLargeSampleDataIfNeeded(for: herdID)
                 } else {
-                    _ = try await seeder.seedSampleDataIfNeeded()
+                    _ = try await seeder.seedSampleDataIfNeeded(for: herdID)
                 }
                 XCTFail("An ownerless Working graph must not be overwritten by samples.")
             } catch {
@@ -1701,9 +1702,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         for seedLarge in [false, true] {
             do {
                 if seedLarge {
-                    _ = try await seeder.seedLargeSampleDataIfNeeded()
+                    _ = try await seeder.seedLargeSampleDataIfNeeded(for: herdID)
                 } else {
-                    _ = try await seeder.seedSampleDataIfNeeded()
+                    _ = try await seeder.seedSampleDataIfNeeded(for: herdID)
                 }
                 XCTFail("Sample seeding must not overwrite an imported queue item.")
             } catch {
@@ -1729,8 +1730,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             try context.save()
         }
         XCTAssertFalse(try seeder.canSeedSampleData())
-        let compactInserted = try await seeder.seedSampleDataIfNeeded()
-        let largeInserted = try await seeder.seedLargeSampleDataIfNeeded()
+        let compactInserted = try await seeder.seedSampleDataIfNeeded(for: herdID)
+        let largeInserted = try await seeder.seedLargeSampleDataIfNeeded(for: herdID)
         XCTAssertFalse(compactInserted)
         XCTAssertFalse(largeInserted)
         XCTAssertEqual(graph.applicationMutationCenter.currentSequence, 0)
@@ -1789,7 +1790,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             XCTAssertEqual($0 as? CoreDataReadModelError, expected)
         }
         do {
-            _ = try await seeder.seedSampleDataIfNeeded()
+            _ = try await seeder.seedSampleDataIfNeeded(for: herdID)
             XCTFail("Sample seeding must reject an ownerless imported Pasture.")
         } catch {
             XCTAssertEqual(error as? CoreDataReadModelError, expected)
@@ -1857,9 +1858,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         for seedLarge in [false, true] {
             do {
                 if seedLarge {
-                    _ = try await seeder.seedLargeSampleDataIfNeeded()
+                    _ = try await seeder.seedLargeSampleDataIfNeeded(for: herdID)
                 } else {
-                    _ = try await seeder.seedSampleDataIfNeeded()
+                    _ = try await seeder.seedSampleDataIfNeeded(for: herdID)
                 }
                 XCTFail("Seeding must reject an unattached imported treatment.")
             } catch {
@@ -1889,8 +1890,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             try context.save()
         }
         XCTAssertFalse(try seeder.canSeedSampleData())
-        let compactInserted = try await seeder.seedSampleDataIfNeeded()
-        let largeInserted = try await seeder.seedLargeSampleDataIfNeeded()
+        let compactInserted = try await seeder.seedSampleDataIfNeeded(for: herdID)
+        let largeInserted = try await seeder.seedLargeSampleDataIfNeeded(for: herdID)
         XCTAssertFalse(compactInserted)
         XCTAssertFalse(largeInserted)
         XCTAssertEqual(graph.applicationMutationCenter.currentSequence, 0)
@@ -1930,7 +1931,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             )
         }
         do {
-            _ = try await seeder.seedSampleDataIfNeeded()
+            _ = try await seeder.seedSampleDataIfNeeded(for: herdID)
             XCTFail("A competing canonical Tag Color reservation must block the seed")
         } catch let error as CoreDataPersistenceError {
             guard case .tagColorMaterializationInProgress = error else {
@@ -2011,7 +2012,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             graph.animalFeatureDependencies.sampleDataSeeder
         )
         XCTAssertTrue(try seeder.canSeedSampleData())
-        let didSeed = try await seeder.seedSampleDataIfNeeded()
+        let didSeed = try await seeder.seedSampleDataIfNeeded(for: herdID)
         XCTAssertTrue(didSeed)
         let after = try templates.fetchTemplates()
         XCTAssertEqual(after.map(\.id), [originalID])
