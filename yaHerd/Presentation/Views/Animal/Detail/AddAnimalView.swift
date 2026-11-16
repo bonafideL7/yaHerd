@@ -15,6 +15,7 @@ struct AddAnimalView: View {
     private var pastureReferenceDataReader: any PastureReferenceDataReader { animalDependencies.pastureReferenceReader }
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
 
     @State private var viewModel: AddAnimalViewModel
     @State private var activeParentPicker: ParentPickerType?
@@ -23,6 +24,7 @@ struct AddAnimalView: View {
     @State private var editingPendingTag: AnimalTagSnapshot?
     @State private var isSaving = false
     @State private var pendingCreatedAnimal: AnimalDetailSnapshot?
+    @State private var saveTask: Task<Void, Never>?
     
     init(
         title: String = "Add Animal",
@@ -129,6 +131,12 @@ struct AddAnimalView: View {
             ),
             excludeAnimalID: nil
         )
+        .onChange(of: herdSelection.currentHerdID) { _, _ in
+            saveTask?.cancel()
+        }
+        .onDisappear {
+            saveTask?.cancel()
+        }
         .onChange(of: viewModel.form.errorMessage) { _, newValue in
             showingError = newValue != nil
         }
@@ -138,28 +146,52 @@ struct AddAnimalView: View {
     }
 
     private func validateAndSave() {
-        guard !isSaving else { return }
+        guard !isSaving, let originatingHerdID = herdSelection.currentHerdID else { return }
         isSaving = true
 
-        Task { @MainActor in
-            defer { isSaving = false }
+        saveTask = Task { @MainActor in
+            defer {
+                isSaving = false
+                saveTask = nil
+            }
 
             do {
+                try Task.checkCancellation()
+                guard herdSelection.currentHerdID == originatingHerdID else {
+                    throw CancellationError()
+                }
+
                 let createdAnimal: AnimalDetailSnapshot
                 if let pendingCreatedAnimal {
                     createdAnimal = pendingCreatedAnimal
                 } else {
                     createdAnimal = try viewModel.save(
                         defaultTagColorID: tagColorLibrary.defaultColorID,
-                        using: repository
+                        using: repository,
+                        expectedHerdID: originatingHerdID,
+                        selection: herdSelection
                     )
                     pendingCreatedAnimal = createdAnimal
                 }
 
+                try Task.checkCancellation()
+                guard herdSelection.currentHerdID == originatingHerdID else {
+                    throw CancellationError()
+                }
                 try await onSave?(createdAnimal)
+
+                try Task.checkCancellation()
+                guard herdSelection.currentHerdID == originatingHerdID else {
+                    throw CancellationError()
+                }
                 pendingCreatedAnimal = nil
                 dismiss()
+            } catch is CancellationError {
+                // A stale view must not create or navigate within another Herd.
             } catch {
+                guard !Task.isCancelled, herdSelection.currentHerdID == originatingHerdID else {
+                    return
+                }
                 viewModel.errorMessage = UserVisibleErrorMessage.make(error)
                 showingError = true
             }
