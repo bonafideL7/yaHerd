@@ -8,6 +8,7 @@ final class AppDependencies {
 
     let tagColorRepository: any TagColorRepository
     let herdRepository: any HerdRepository
+    let herdSelection: AppCurrentHerdSelection
     let applicationMutationCenter: ApplicationMutationCenter
 
     init(
@@ -18,6 +19,7 @@ final class AppDependencies {
         homeFeatureDependencies: HomeFeatureDependencies,
         tagColorRepository: any TagColorRepository,
         herdRepository: any HerdRepository,
+        herdSelection: AppCurrentHerdSelection,
         applicationMutationCenter: ApplicationMutationCenter
     ) {
         self.animalFeatureDependencies = animalFeatureDependencies
@@ -27,6 +29,7 @@ final class AppDependencies {
         self.homeFeatureDependencies = homeFeatureDependencies
         self.tagColorRepository = tagColorRepository
         self.herdRepository = herdRepository
+        self.herdSelection = herdSelection
         self.applicationMutationCenter = applicationMutationCenter
     }
 }

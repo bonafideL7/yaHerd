@@ -8,7 +8,7 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
     private let assembly: CoreDataPersistenceAssembly
     private let selection: AppCurrentHerdSelection
 
-    init(assembly: CoreDataPersistenceAssembly, currentHerdID: UUID) {
+    init(assembly: CoreDataPersistenceAssembly, currentHerdID: UUID?) {
         self.assembly = assembly
         self.selection = AppCurrentHerdSelection(currentHerdID: currentHerdID)
     }
@@ -16,12 +16,47 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
     /// Production launch keeps one durable store and one selected Herd for all features.
     static func load(at storeURL: URL) async throws -> CoreDataAppPersistenceAssembly {
         let assembly = try await CoreDataPersistenceAssembly.load(storeURL: storeURL)
-        let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
-            assembly: assembly
-        )
+        let inventory = try CoreDataHerdRepository(
+            selection: AppCurrentHerdSelection(), assembly: assembly
+        ).fetchAccessibleHerds()
+        let selectedHerdID: UUID?
+        switch inventory.count {
+        case 0:
+            // Preserve the existing local-only first-install onboarding.
+            // A mirrored store must never use this implicit creation path.
+            selectedHerdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+                assembly: assembly
+            )
+        case 1:
+            selectedHerdID = inventory[0].id
+        default:
+            // No arbitrary "first Herd" selection when several are available.
+            selectedHerdID = nil
+        }
         return CoreDataAppPersistenceAssembly(
             assembly: assembly,
-            currentHerdID: herdID
+            currentHerdID: selectedHerdID
+        )
+    }
+
+    /// Stage 3 application entry: keep both CloudKit stores loaded while
+    /// displaying an explicit picker if no unique complete Herd is available.
+    static func resolveCloudKitHerdForSelection(
+        using assembly: CoreDataPersistenceAssembly,
+        preferredHerdID: UUID? = nil
+    ) throws -> CoreDataAppPersistenceAssembly {
+        let available = try CoreDataHerdRepository(
+            selection: AppCurrentHerdSelection(), assembly: assembly
+        ).fetchAccessibleHerds()
+        let selectedID: UUID?
+        if let preferredHerdID {
+            selectedID = available.contains(where: { $0.id == preferredHerdID })
+                ? preferredHerdID : nil
+        } else {
+            selectedID = available.count == 1 ? available[0].id : nil
+        }
+        return CoreDataAppPersistenceAssembly(
+            assembly: assembly, currentHerdID: selectedID
         )
     }
 
@@ -243,6 +278,7 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
             ),
             tagColorRepository: tagColorRepository,
             herdRepository: herdRepository,
+            herdSelection: selection,
             applicationMutationCenter: mutationCenter
         )
     }

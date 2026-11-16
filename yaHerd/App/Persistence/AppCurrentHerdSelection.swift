@@ -1,6 +1,8 @@
 import Foundation
+import Observation
 
 @MainActor
+@Observable
 final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
     private(set) var currentHerdID: UUID?
 
