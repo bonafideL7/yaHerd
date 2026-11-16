@@ -117,6 +117,39 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         }
     }
 
+    func testImportedRootWithoutUUIDDoesNotHideCompleteHerdOrCreateReplacement() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let context = try assembly.contextFactory.makeWriteContext()
+        let completeID = UUID()
+        try context.performAndWait {
+            let ready = CDHerd(context: context)
+            ready.id = completeID
+            ready.name = "Available"
+            ready.createdAt = Date(timeIntervalSince1970: 100)
+            ready.updatedAt = ready.createdAt
+
+            let importing = CDHerd(context: context)
+            importing.id = nil
+            importing.name = "Import pending"
+            importing.createdAt = Date(timeIntervalSince1970: 200)
+            importing.updatedAt = importing.createdAt
+            try context.save()
+        }
+
+        let selection = AppCurrentHerdSelection()
+        let repository = CoreDataHerdRepository(selection: selection, assembly: assembly)
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+        directory.refresh()
+        XCTAssertEqual(directory.herds.map(\.id), [completeID])
+        XCTAssertNil(directory.selectedHerdID)
+
+        let read = assembly.contextFactory.makeReadContext()
+        try read.performAndWait {
+            let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            XCTAssertEqual(try read.count(for: request), 2)
+        }
+    }
+
     func testIncompleteImportedRootIsNotOfferedAsSelectable() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let context = try assembly.contextFactory.makeWriteContext()

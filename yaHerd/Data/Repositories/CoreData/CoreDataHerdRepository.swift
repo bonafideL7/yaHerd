@@ -49,7 +49,9 @@ final class CoreDataHerdRepository: HerdRepository {
             var available: [AccessibleHerd] = []
 
             for root in roots {
-                let id = try root.requiredID()
+                // A partially imported root without its UUID must not block
+                // valid accessible Herds. Leave it untouched while importing.
+                guard let id = root.id else { continue }
                 guard seenIDs.insert(id).inserted else {
                     throw CoreDataPersistenceError.duplicateApplicationID(
                         entity: CDHerd.coreDataEntityName, id: id, herdID: nil
