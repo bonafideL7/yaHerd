@@ -399,6 +399,16 @@ private struct RunningAppView: View {
             .onChange(of: runtime.herdSelection.currentHerdID) { _, _ in
                 tagColorLibrary.resetForHerdChange()
             }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: CoreDataPersistentContainer.remoteStoreChangeNotification
+                ).receive(on: DispatchQueue.main)
+            ) { _ in
+                // Remote imports and revoked shares may change membership
+                // without a scene transition or an open Herd chooser.
+                guard !runtime.dataAccessMode.isRecoveryMode else { return }
+                herdDirectory.refresh(reportErrors: false)
+            }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     if !runtime.dataAccessMode.isRecoveryMode {
