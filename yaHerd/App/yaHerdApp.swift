@@ -414,7 +414,6 @@ enum AppNavigationSceneStorageAccess {
 
 private struct RootAppView: View {
     @Environment(AppCurrentHerdSelection.self) private var herdSelection
-    @Environment(HerdDirectoryController.self) private var herdDirectory
 
     let storageError: String?
     let dataAccessMode: AppDataAccessMode
@@ -447,18 +446,6 @@ private struct RootAppView: View {
             if herdSelection.currentHerdID == nil && !dataAccessMode.isRecoveryMode {
                 NavigationStack {
                     HerdDirectoryView()
-                }
-                .task {
-                    // CloudKit may import the first accessible Herd after startup.
-                    // Refresh the same loaded store while the chooser is visible.
-                    while !Task.isCancelled && herdSelection.currentHerdID == nil {
-                        herdDirectory.refresh()
-                        do {
-                            try await Task.sleep(for: .seconds(3))
-                        } catch {
-                            break
-                        }
-                    }
                 }
             } else {
                 MainTabView()
