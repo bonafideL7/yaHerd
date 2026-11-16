@@ -418,7 +418,9 @@ struct HerdDirectoryView: View {
             directory.refresh(reportErrors: false)
             // Keep the original stores active while imported relationships arrive.
             while !Task.isCancelled {
-                if let pendingHerdID {
+                // Do not overwrite the active validation task with a no-op
+                // retry, or Cancel could miss the in-flight Herd opening.
+                if let pendingHerdID, !isOpeningHerd {
                     let attempt = Task { @MainActor in await openHerd(id: pendingHerdID) }
                     validationTask = attempt
                     await attempt.value
