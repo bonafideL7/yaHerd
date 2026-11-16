@@ -41,3 +41,24 @@ enum CloudKitSelectedHerdPreference {
         defaults.set(id.uuidString, forKey: key)
     }
 }
+
+@MainActor
+struct CloudKitHerdSelectionContext {
+    let assembly: CoreDataPersistenceAssembly
+    let privateStoreURL: URL
+
+    private var repository: CoreDataHerdRepository {
+        CoreDataHerdRepository(
+            selection: AppCurrentHerdSelection(),
+            assembly: assembly
+        )
+    }
+
+    func fetchHerds() throws -> [AccessibleHerd] {
+        try repository.fetchAccessibleHerds()
+    }
+
+    func createOwnedHerd(named name: String) async throws -> HerdSummary {
+        try await repository.createOwnedHerd(named: name)
+    }
+}
