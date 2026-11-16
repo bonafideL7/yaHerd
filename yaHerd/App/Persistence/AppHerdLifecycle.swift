@@ -51,6 +51,7 @@ final class AppHerdLifecycle {
         guard let data = Data(base64Encoded: scenePayload),
               let saved = try? JSONDecoder().decode(AppNavigationSnapshot.self, from: data),
               let desiredID = saved.selectedHerdID,
+              AppNavigationSnapshot.supportedVersions.contains(saved.version),
               availableHerds.contains(where: { $0.id == desiredID }) else {
             return
         }

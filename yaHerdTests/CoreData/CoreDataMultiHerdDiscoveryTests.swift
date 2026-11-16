@@ -4,6 +4,79 @@ import XCTest
 
 @MainActor
 final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
+    func testStage3HerdSwitchResetsNavigationAndRejectsUnavailableRoots() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let first = UUID()
+        let second = UUID()
+        try await assembly.transactionExecutor.performWrite { context in
+            for id in [first, second] {
+                let root = CDHerd(context: context)
+                root.id = id
+                root.name = id == first ? "First" : "Second"
+                root.createdAt = Date(timeIntervalSince1970: 100)
+                root.updatedAt = Date(timeIntervalSince1970: 100)
+            }
+        }
+        let selected = AppCurrentHerdSelection(currentHerdID: first)
+        let repository = CoreDataHerdRepository(selection: selected, assembly: assembly)
+        let navigation = AppNavigationState()
+        navigation.selectedHerdID = first
+        navigation.herdRouter.path = [.animal(UUID())]
+        navigation.herdRouter.searchText = "First tag"
+        navigation.openWorkArea(.session(UUID()))
+        let lifecycle = AppHerdLifecycle(
+            repository: repository, selection: selected, isMirroring: false
+        )
+        lifecycle.refresh(navigation: navigation)
+        lifecycle.select(second, navigation: navigation)
+        XCTAssertEqual(selected.currentHerdID, second)
+        XCTAssertEqual(navigation.selectedHerdID, second)
+        XCTAssertTrue(navigation.herdRouter.path.isEmpty)
+        XCTAssertEqual(navigation.herdRouter.searchText, "")
+        XCTAssertNil(navigation.fullScreenWorkflow)
+
+        lifecycle.select(UUID(), navigation: navigation)
+        XCTAssertEqual(selected.currentHerdID, second)
+        XCTAssertEqual(navigation.selectedHerdID, second)
+        XCTAssertNotNil(lifecycle.errorMessage)
+    }
+
+    func testStage3HerdSelectionRestoresOnlyAccessibleSnapshot() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let first = UUID()
+        let second = UUID()
+        try await assembly.transactionExecutor.performWrite { context in
+            let root = CDHerd(context: context)
+            root.id = first
+            root.name = "First"
+            root.createdAt = Date(timeIntervalSince1970: 100)
+            root.updatedAt = Date(timeIntervalSince1970: 100)
+        }
+        let selected = AppCurrentHerdSelection()
+        let repository = CoreDataHerdRepository(selection: selected, assembly: assembly)
+        let navigation = AppNavigationState()
+        let lifecycle = AppHerdLifecycle(
+            repository: repository, selection: selected, isMirroring: false
+        )
+        lifecycle.refresh(navigation: navigation)
+        let inaccessible = AppNavigationState()
+        inaccessible.selectedHerdID = second
+        lifecycle.restoreSelection(
+            from: try XCTUnwrap(inaccessible.restorationPayload()),
+            navigation: navigation
+        )
+        XCTAssertNil(selected.currentHerdID)
+        let accessible = AppNavigationState()
+        accessible.selectedHerdID = first
+        lifecycle.restoreSelection(
+            from: try XCTUnwrap(accessible.restorationPayload()),
+            navigation: navigation
+        )
+        XCTAssertEqual(selected.currentHerdID, first)
+        XCTAssertEqual(navigation.selectedHerdID, first)
+    }
+
+
     func testStage3AppLaunchWithMultipleOwnedHerdsShowsSelectionWithoutWriting() async throws {
         let harness = try CoreDataPersistenceHarness()
         let foundation = try await CoreDataPersistenceAssembly.load(storeURL: harness.storeURL)

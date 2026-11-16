@@ -465,6 +465,7 @@ private struct RootAppView: View {
         }
             .environment(navigation)
             .task {
+                guard !hasRestoredNavigation else { return }
                 herdLifecycle.refresh(navigation: navigation)
                 herdLifecycle.restoreSelection(
                     from: navigationRestorationPayload,
@@ -473,7 +474,6 @@ private struct RootAppView: View {
                 if let selectedID = herdSelection.currentHerdID {
                     navigation.resetForHerdChange(to: selectedID)
                 }
-                guard !hasRestoredNavigation else { return }
                 if herdSelection.currentHerdID == nil && !dataAccessMode.isRecoveryMode {
                     hasRestoredNavigation = true
                     return
