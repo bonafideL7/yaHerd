@@ -404,7 +404,7 @@ struct HerdDirectoryView: View {
             }
         }
         .task {
-            directory.refresh()
+            directory.refresh(reportErrors: false)
             // CloudKit can import a shared or owned Herd after the chooser
             // appears. Refresh while this view remains visible, without
             // reopening stores or creating replacement records.
@@ -418,7 +418,7 @@ struct HerdDirectoryView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { directory.refresh() }
+            if phase == .active { directory.refresh(reportErrors: false) }
         }
         .alert("Create Herd", isPresented: $showsCreatePrompt) {
             TextField("Herd name", text: $newHerdName)
