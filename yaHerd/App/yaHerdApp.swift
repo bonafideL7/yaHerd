@@ -198,7 +198,8 @@ struct yaHerdApp: App {
                         recoveryContext: RecoveryModeContext(
                             startupError: startupMessage
                         ),
-                        storageError: startupMessage
+                        storageError: startupMessage,
+                        herdSelection: persistence.currentHerdSelection
                     )
                 )
             } catch {
@@ -233,7 +234,8 @@ struct yaHerdApp: App {
             dependencies: dependencies,
             dataAccessMode: .readWrite,
             recoveryContext: nil,
-            storageError: nil
+            storageError: nil,
+            herdSelection: persistence.currentHerdSelection
         )
     }
 
@@ -301,12 +303,14 @@ private struct AppRuntime {
     let dataAccessMode: AppDataAccessMode
     let recoveryContext: RecoveryModeContext?
     let storageError: String?
+    let herdSelection: AppCurrentHerdSelection
 }
 
 private struct RunningAppView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var tagColorLibrary: TagColorLibraryStore
     @StateObject private var recoveryModeController: RecoveryModeController
+    @State private var herdDirectory: HerdDirectoryController
 
     private let runtime: AppRuntime
     private let applicationSettings: ApplicationSettings
@@ -317,6 +321,10 @@ private struct RunningAppView: View {
     ) {
         self.runtime = runtime
         self.applicationSettings = applicationSettings
+        self._herdDirectory = State(initialValue: HerdDirectoryController(
+            repository: runtime.dependencies.herdRepository,
+            selection: runtime.herdSelection
+        ))
         self._tagColorLibrary = StateObject(
             wrappedValue: TagColorLibraryStore(
                 repository: runtime.dependencies.tagColorRepository
@@ -350,6 +358,8 @@ private struct RunningAppView: View {
             navigationMutationRevision: runtime.dependencies.applicationMutationCenter.currentSequence
         )
             .environment(applicationSettings)
+            .environment(runtime.herdSelection)
+            .environment(herdDirectory)
             .environmentObject(tagColorLibrary)
             .environment(\.appDataAccessMode, runtime.dataAccessMode)
             .environment(
@@ -400,6 +410,8 @@ enum AppNavigationSceneStorageAccess {
 }
 
 private struct RootAppView: View {
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
+
     let storageError: String?
     let dataAccessMode: AppDataAccessMode
     let navigationRestorationValidator: any AppNavigationRestorationValidating
@@ -428,9 +440,13 @@ private struct RootAppView: View {
 
     var body: some View {
         MainTabView()
+            // Remount feature views and their in-flight loaders on every Herd change.
+            // Old Herd drafts and async results cannot survive in the new view tree.
+            .id(herdSelection.currentHerdID)
             .environment(navigation)
             .task {
                 guard !hasRestoredNavigation else { return }
+                navigation.selectedHerdID = herdSelection.currentHerdID
                 let outcome = AppNavigationSceneStorageAccess.restore(
                     navigation: navigation,
                     from: navigationRestorationPayload,
@@ -446,6 +462,17 @@ private struct RootAppView: View {
                         dataAccessMode: dataAccessMode
                       ) else { return }
                 navigationRestorationPayload = payload
+            }
+            .onChange(of: herdSelection.currentHerdID) { _, newHerdID in
+                navigation.resetForHerdChange(to: newHerdID)
+                hasRestoredNavigation = true
+                navigationRestorationDeferred = false
+                if let payload = AppNavigationSceneStorageAccess.payload(
+                    for: navigation,
+                    dataAccessMode: dataAccessMode
+                ) {
+                    navigationRestorationPayload = payload
+                }
             }
             .onChange(of: navigation.snapshot) { _, _ in
                 guard hasRestoredNavigation, !dataAccessMode.isRecoveryMode else { return }
