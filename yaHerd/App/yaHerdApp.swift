@@ -396,6 +396,9 @@ private struct RunningAppView: View {
                 \.workingSessionFeatureDependencies,
                 runtime.dependencies.workingSessionFeatureDependencies
             )
+            .onChange(of: runtime.herdSelection.currentHerdID) { _, _ in
+                tagColorLibrary.resetForHerdChange()
+            }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     tagColorLibrary.refresh()
@@ -475,6 +478,10 @@ private struct RootAppView: View {
             .environment(navigation)
             .task {
                 guard !hasRestoredNavigation else { return }
+                guard dataAccessMode.isRecoveryMode || herdSelection.currentHerdID != nil else {
+                    // No Herd-specific scene snapshot can be restored into the chooser.
+                    return
+                }
                 navigation.selectedHerdID = herdSelection.currentHerdID
                 let outcome = AppNavigationSceneStorageAccess.restore(
                     navigation: navigation,
