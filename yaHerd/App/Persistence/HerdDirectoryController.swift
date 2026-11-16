@@ -22,7 +22,11 @@ final class HerdDirectoryController {
     func refresh(reportErrors: Bool = true) {
         do {
             herds = try repository.fetchAccessibleHerds()
-            errorMessage = nil
+            // A silent background refresh must not dismiss a selection or
+            // creation error before the user can acknowledge it.
+            if reportErrors {
+                errorMessage = nil
+            }
         } catch {
             // Background import refresh must not repeatedly present error
             // dialogs; manual refresh still reports actionable failures.
