@@ -134,9 +134,10 @@ final class PastureTileListViewModel {
         at offsets: IndexSet,
         deletionCommand: any PastureDeletionPerforming,
         orderingRepository: any PastureOrdering,
-        selection: any CurrentHerdSelectionReading
+        selection: any CurrentHerdSelectionReading,
+        originatingHerdID: UUID
     ) async {
-        guard !isDeletingPastures, let originalHerdID = selection.currentHerdID else { return }
+        guard !isDeletingPastures, selection.currentHerdID == originatingHerdID else { return }
 
         let ids = offsets.sorted().compactMap { index in
             items.indices.contains(index) ? items[index].id : nil
@@ -150,7 +151,7 @@ final class PastureTileListViewModel {
         do {
             try await deletionCommand.deletePastures(ids: ids, archivedAt: .now)
         } catch {
-            if !Task.isCancelled && selection.currentHerdID == originalHerdID {
+            if !Task.isCancelled && selection.currentHerdID == originatingHerdID {
                 errorMessage = UserVisibleErrorMessage.make(error)
             }
             return
@@ -158,7 +159,7 @@ final class PastureTileListViewModel {
 
         // The delete already committed for its originating Herd. Do not issue a
         // separate ordering write through repositories now scoped to another Herd.
-        guard !Task.isCancelled, selection.currentHerdID == originalHerdID else { return }
+        guard !Task.isCancelled, selection.currentHerdID == originatingHerdID else { return }
 
         let deletedIDs = Set(ids)
         items.removeAll { deletedIDs.contains($0.id) }
@@ -179,7 +180,8 @@ final class PastureTileListViewModel {
         id: UUID,
         deletionCommand: any PastureDeletionPerforming,
         orderingRepository: any PastureOrdering,
-        selection: any CurrentHerdSelectionReading
+        selection: any CurrentHerdSelectionReading,
+        originatingHerdID: UUID
     ) async {
         guard !isDeletingPastures,
               let index = items.firstIndex(where: { $0.id == id }) else { return }
@@ -187,7 +189,8 @@ final class PastureTileListViewModel {
             at: IndexSet(integer: index),
             deletionCommand: deletionCommand,
             orderingRepository: orderingRepository,
-            selection: selection
+            selection: selection,
+            originatingHerdID: originatingHerdID
         )
     }
 
