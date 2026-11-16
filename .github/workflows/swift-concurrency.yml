@@ -111,19 +111,43 @@ jobs:
           set -euo pipefail
           bash Scripts/verify-concurrency.sh
 
+      # Debug simulator tests already compile the application. Only compile the
+      # separate iCloud Development configuration when its app/persistence
+      # execution paths or project configuration are affected by this PR.
+      - name: Detect iCloud Development build scope
+        if: ${{ github.event_name == 'pull_request' }}
+        id: icloud_scope
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git -c protocol.version=2 fetch -q --no-tags --depth=1 origin "$BASE_SHA"
+          changed_files="$(git diff --name-only --no-renames "$BASE_SHA" HEAD)"
+
+          if grep -Eq '^(yaHerd\.xcodeproj/|yaHerd/yaHerd\.entitlements$|yaHerd/App/|yaHerd/Data/(CoreData/|Persistence/|Repositories/CoreData/)|\.github/workflows/swift-concurrency\.yml$)' <<< "$changed_files"; then
+            echo 'required=true' >> "$GITHUB_OUTPUT"
+            echo 'iCloud Development build required by affected source or configuration.'
+          else
+            echo 'required=false' >> "$GITHUB_OUTPUT"
+            echo 'No iCloud Development build required; Debug simulator tests still run.'
+          fi
+
       - name: Build dedicated iCloud Development configuration
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_concurrency }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_concurrency) || (github.event_name == 'pull_request' && steps.icloud_scope.outputs.required == 'true') }}
         shell: bash
         run: |
           set -euo pipefail
-          # Compile the code path selected by the signed development scheme.
-          # Do not launch mirroring on unsigned CI simulators.
+          # Check the additional compilation configuration, not real iCloud
+          # mirroring (which requires a signed-in Apple Account).
+          # arm64 matches supported iOS devices and the hosted simulator.
           xcodebuild \
             -project yaHerd.xcodeproj \
             -scheme "yaHerd iCloud Development" \
             -configuration iCloudDevelopment \
             -destination "generic/platform=iOS Simulator" \
             -derivedDataPath "$GITHUB_WORKSPACE/.build/ConcurrencyDerivedData" \
+            ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO \
             build
 
