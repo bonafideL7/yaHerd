@@ -55,7 +55,8 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         model.configure(selection: selection)
 
         model.load(using: repository, pastureRepository: EmptyPastureReferenceDataReader())
-        XCTAssertTrue(await waitForRequestCount(1, reader: reader))
+        let started = await waitForRequestCount(1, reader: reader)
+        XCTAssertTrue(started)
 
         // Even before SwiftUI's new-Herd task runs, the old request cannot
         // publish a result when its uncooperative reader eventually returns.
@@ -68,7 +69,8 @@ final class AnimalListViewModelReloadTests: XCTestCase {
 
         model.configure(selection: selection)
         model.load(using: repository, pastureRepository: EmptyPastureReferenceDataReader())
-        XCTAssertTrue(await waitForAnimal(currentAnimal.id, in: model))
+        let loadedCurrentAnimal = await waitForAnimal(currentAnimal.id, in: model)
+        XCTAssertTrue(loadedCurrentAnimal)
         XCTAssertEqual(model.items, [currentAnimal])
     }
 
