@@ -140,14 +140,12 @@ jobs:
           set -euo pipefail
           # Check the additional compilation configuration, not real iCloud
           # mirroring (which requires a signed-in Apple Account).
-          # arm64 matches supported iOS devices and the hosted simulator.
           xcodebuild \
             -project yaHerd.xcodeproj \
             -scheme "yaHerd iCloud Development" \
             -configuration iCloudDevelopment \
             -destination "generic/platform=iOS Simulator" \
             -derivedDataPath "$GITHUB_WORKSPACE/.build/ConcurrencyDerivedData" \
-            ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO \
             build
 
@@ -178,6 +176,11 @@ jobs:
           fi
 
           echo "Running yaHerdTests on simulator $SIMULATOR_ID"
+          TEST_LOG="$(mktemp)"
+          trap 'rm -f "$TEST_LOG"' EXIT
+
+          # Xcode can report TEST SUCCEEDED even when test discovery runs zero
+          # tests. Require a real execution summary for the app test bundle.
           xcodebuild \
             -project yaHerd.xcodeproj \
             -scheme yaHerd \
@@ -186,4 +189,10 @@ jobs:
             -derivedDataPath "$GITHUB_WORKSPACE/.build/ConcurrencyDerivedData" \
             -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO \
-            test
+            test 2>&1 | tee "$TEST_LOG"
+
+          if ! grep -q "Test Suite 'yaHerdTests.xctest' passed" "$TEST_LOG" || \
+             ! grep -Eq 'Executed [1-9][0-9]* tests, with 0 failures' "$TEST_LOG"; then
+            echo "Xcode did not report successful execution of yaHerdTests. A zero-test TEST SUCCEEDED result is not a pass." >&2
+            exit 1
+          fi
