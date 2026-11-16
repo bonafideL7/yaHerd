@@ -13,6 +13,7 @@ struct WorkingCollectAnimalsView: View {
         workingDependencies.animalReferenceQueryReader
     }
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
 
     let sessionID: UUID
 
@@ -23,6 +24,7 @@ struct WorkingCollectAnimalsView: View {
     @State private var showingError = false
     @State private var searchText: String = ""
     @State private var isCollecting = false
+    @State private var collectionTask: Task<Void, Never>?
     @State private var isLoading = true
     @State private var loadErrorMessage: String?
     @State private var loadToken = UUID()
@@ -105,6 +107,7 @@ struct WorkingCollectAnimalsView: View {
             .interactiveDismissDisabled(isCollecting)
             .searchable(text: $searchText, prompt: "Search tag")
             .task { await load() }
+            .onDisappear { collectionTask?.cancel() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -197,33 +200,75 @@ struct WorkingCollectAnimalsView: View {
             return
         }
 
+        guard let originatingHerdID = herdSelection.currentHerdID else { return }
         let animalIDs = Array(selectedAnimalIDs)
+        let sourcePastureID = session?.sourcePastureID
         isCollecting = true
-        Task { @MainActor in
-            defer { isCollecting = false }
+        collectionTask = Task { @MainActor in
+            defer {
+                isCollecting = false
+                collectionTask = nil
+            }
 
             do {
-                // A different screen may have collected Animals while this
-                // modal was open. Recheck source/queue identity before write.
-                guard let current = try repository.fetchSessionDetail(id: sessionID),
-                      current.isSourcePastureAvailable,
-                      current.sourcePastureID == session?.sourcePastureID,
-                      Set(animalIDs).isDisjoint(
-                        with: Set(current.queueItems.compactMap(\.animalID))
-                      ) else {
-                    throw WorkingCollectCandidateError.staleSession
-                }
-                try await repository.collectAnimals(
+                let completed = try await WorkingCollectAnimalsMoveAction.execute(
                     sessionID: sessionID,
-                    animalIDs: animalIDs
+                    animalIDs: animalIDs,
+                    sourcePastureID: sourcePastureID,
+                    originatingHerdID: originatingHerdID,
+                    currentHerdSelection: herdSelection,
+                    repository: repository
                 )
+                guard completed else { return }
                 dismiss()
             } catch {
+                guard !Task.isCancelled,
+                      herdSelection.currentHerdID == originatingHerdID else { return }
                 errorMessage = UserVisibleErrorMessage.make(error)
                 alertTitle = "Can’t Save"
                 showingError = true
             }
         }
+    }
+}
+
+/// Binds a deferred collection request to the Herd that owned the visible
+/// selection when Move was tapped. The repository still owns transaction routing.
+@MainActor
+enum WorkingCollectAnimalsMoveAction {
+    static func execute(
+        sessionID: UUID,
+        animalIDs: [UUID],
+        sourcePastureID: UUID?,
+        originatingHerdID: UUID,
+        currentHerdSelection: any CurrentHerdSelectionReading,
+        repository: any WorkingCollectAnimalsRepository
+    ) async throws -> Bool {
+        guard !Task.isCancelled,
+              currentHerdSelection.currentHerdID == originatingHerdID else {
+            return false
+        }
+
+        // The session or roster can change while the picker is open.
+        guard let current = try repository.fetchSessionDetail(id: sessionID),
+              current.isSourcePastureAvailable,
+              current.sourcePastureID == sourcePastureID,
+              Set(animalIDs).isDisjoint(
+                with: Set(current.queueItems.compactMap(\.animalID))
+              ) else {
+            throw WorkingCollectCandidateError.staleSession
+        }
+
+        try Task.checkCancellation()
+        guard currentHerdSelection.currentHerdID == originatingHerdID else {
+            return false
+        }
+        try await repository.collectAnimals(
+            sessionID: sessionID,
+            animalIDs: animalIDs
+        )
+        return !Task.isCancelled
+            && currentHerdSelection.currentHerdID == originatingHerdID
     }
 }
 
