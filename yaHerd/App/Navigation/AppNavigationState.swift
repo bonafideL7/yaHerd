@@ -566,9 +566,10 @@ final class AppNavigationState {
         let targetsCurrentHerd = snapshot.selectedHerdID == nil
             || snapshot.selectedHerdID == selectedHerdID
         guard targetsCurrentHerd else {
-            herdRouter.path.removeAll()
-            herdRouter.searchPath.removeAll()
-            clearIdentityBoundPastureFilter()
+            // Restored route identities, filters and searches belong to the
+            // previous Herd. None may be displayed in a newly selected Herd.
+            selectedTab = .home
+            herdRouter.resetForHerdChange()
             return
         }
 
