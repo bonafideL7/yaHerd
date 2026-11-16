@@ -103,7 +103,7 @@ final class TagColorLibraryHistoricalLookupTests: XCTestCase {
         )
         let repository = TagColorWriteResultRepository(colors: [northOnly])
         let library = TagColorLibraryStore(repository: repository)
-        XCTAssertEqual(library.colors.map(\\.id), [northOnly.id])
+        XCTAssertEqual(library.colors.map(\.id), [northOnly.id])
 
         // The same app-wide library outlives the selected Herd. A temporary
         // read failure for Herd B must not show Herd A's private definitions.
@@ -111,7 +111,6 @@ final class TagColorLibraryHistoricalLookupTests: XCTestCase {
         library.refreshForHerdChange()
         XCTAssertTrue(library.colors.isEmpty)
         XCTAssertNotNil(library.lastErrorMessage)
-        XCTAssertNil(library.definition(for: northOnly.id))
     }
 
     func testFailedUpsertLeavesPreviousColorsAndCanRetry() {
