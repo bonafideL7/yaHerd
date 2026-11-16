@@ -7,6 +7,7 @@ import SwiftUI
 #Preview {
     AnimalListView()
         .environment(AppNavigationState())
+        .environment(AppCurrentHerdSelection())
         .preferredColorScheme(.dark)
 }
 
@@ -30,6 +31,7 @@ struct AnimalListView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(ApplicationSettings.self) private var applicationSettings
     @Environment(AppNavigationState.self) private var navigation
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
 
     private let viewModel: AnimalListViewModel
     @State private var isSeedingSampleData = false
@@ -343,7 +345,8 @@ struct AnimalListView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
-        .task {
+        .task(id: herdSelection.currentHerdID) {
+            viewModel.configure(selection: herdSelection)
             refreshDerivedState()
             await viewModel.observe(
                 using: repository,
@@ -351,6 +354,10 @@ struct AnimalListView: View {
                 mutationStream: animalDependencies.mutationStream,
                 snapshotReader: animalDependencies.listSnapshotReader
             )
+        }
+        .onChange(of: herdSelection.currentHerdID) { _, _ in
+            viewModel.configure(selection: herdSelection)
+            refreshDerivedState()
         }
         // Query precisely the same whole-Herd emptiness predicate as the writer,
         // only after Animal/pasture loading completes. A filtered empty list
