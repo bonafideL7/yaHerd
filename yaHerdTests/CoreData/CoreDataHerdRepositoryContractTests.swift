@@ -206,6 +206,131 @@ final class CoreDataHerdRepositoryContractTests: XCTestCase {
         )
     }
 
+
+    func testDirectoryDiscoversMultipleOwnedAndSharedHerdsWithoutChangingSelection() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let selection = TestCurrentHerdSelection()
+        let repository = CoreDataHerdRepository(selection: selection, assembly: assembly)
+
+        let first = try await repository.createOwnedHerd(named: "  North Ranch  ")
+        let second = try await repository.createOwnedHerd(named: "South Ranch")
+        XCTAssertEqual(first.name, "North Ranch")
+        XCTAssertNil(selection.currentHerdID)
+
+        let sharedID = UUID()
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let sharedStore = try XCTUnwrap(
+                context.persistentStoreCoordinator?.persistentStores.first {
+                    $0.url?.lastPathComponent
+                        == CoreDataPersistentContainer.sharedStoreFileName
+                }
+            )
+            let root = CDHerd(context: context)
+            root.id = sharedID
+            root.name = "Neighbor's Herd"
+            root.createdAt = Date(timeIntervalSince1970: 100)
+            root.updatedAt = Date(timeIntervalSince1970: 100)
+            context.assign(root, to: sharedStore)
+            try context.save()
+        }
+
+        let directory = try repository.availableHerds()
+        XCTAssertEqual(directory.availableHerds.count, 3)
+        XCTAssertEqual(directory.incompleteRootCount, 0)
+        XCTAssertEqual(
+            Set(directory.availableHerds.filter { $0.location == .owned }.map(\.id)),
+            [first.id, second.id]
+        )
+        XCTAssertEqual(
+            directory.availableHerds.first(where: { $0.id == sharedID })?.location,
+            .shared
+        )
+        XCTAssertNil(selection.currentHerdID)
+    }
+
+    func testDirectoryKeepsCompleteHerdsWhenImportedRootIsIncomplete() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let repository = CoreDataHerdRepository(
+            selection: TestCurrentHerdSelection(), assembly: assembly
+        )
+        let owned = try await repository.createOwnedHerd(named: "Owned")
+
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let sharedStore = try XCTUnwrap(
+                context.persistentStoreCoordinator?.persistentStores.first {
+                    $0.url?.lastPathComponent
+                        == CoreDataPersistentContainer.sharedStoreFileName
+                }
+            )
+            let root = CDHerd(context: context)
+            root.id = UUID()
+            root.name = nil
+            root.createdAt = Date()
+            root.updatedAt = nil
+            context.assign(root, to: sharedStore)
+            try context.save()
+        }
+
+        let directory = try repository.availableHerds()
+        XCTAssertEqual(directory.availableHerds.map(\.id), [owned.id])
+        XCTAssertEqual(directory.incompleteRootCount, 1)
+    }
+
+    func testDirectoryRejectsDuplicateHerdIDsAcrossStores() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let repository = CoreDataHerdRepository(
+            selection: TestCurrentHerdSelection(), assembly: assembly
+        )
+        let owned = try await repository.createOwnedHerd(named: "Owned")
+
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let sharedStore = try XCTUnwrap(
+                context.persistentStoreCoordinator?.persistentStores.first {
+                    $0.url?.lastPathComponent
+                        == CoreDataPersistentContainer.sharedStoreFileName
+                }
+            )
+            let duplicate = CDHerd(context: context)
+            duplicate.id = owned.id
+            duplicate.name = "Unrelated Shared Herd"
+            duplicate.createdAt = Date()
+            duplicate.updatedAt = Date()
+            context.assign(duplicate, to: sharedStore)
+            try context.save()
+        }
+        XCTAssertThrowsError(try repository.availableHerds()) {
+            guard case CoreDataPersistenceError.duplicateApplicationID = $0 else {
+                return XCTFail("Expected a duplicate Herd identity error, got \($0)")
+            }
+        }
+    }
+
+    func testExplicitOwnedCreationRejectsBlankNameWithoutWriting() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let repository = CoreDataHerdRepository(
+            selection: TestCurrentHerdSelection(), assembly: assembly
+        )
+        do {
+            _ = try await repository.createOwnedHerd(named: "   ")
+            XCTFail("Blank names must not create a Herd.")
+        } catch let error as HerdRepositoryError {
+            XCTAssertEqual(error, .emptyName)
+        }
+        XCTAssertTrue(try repository.availableHerds().availableHerds.isEmpty)
+    }
+
     private func makeHarness() async throws -> Harness {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let selection = TestCurrentHerdSelection()
