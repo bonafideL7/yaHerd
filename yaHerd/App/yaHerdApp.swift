@@ -621,7 +621,7 @@ private struct CloudKitDevelopmentHerdSelectionView: View {
                     }
                     ForEach(herds) { herd in
                         Button {
-                            Task { await open(herd.id) }
+                            Task { @MainActor in await open(herd.id) }
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(herd.name)
@@ -643,7 +643,7 @@ private struct CloudKitDevelopmentHerdSelectionView: View {
                     TextField("Herd name", text: $newHerdName)
                         .disabled(isBusy)
                     Button("Create Herd") {
-                        Task { await create() }
+                        Task { @MainActor in await create() }
                     }
                     .disabled(isBusy || newHerdName.trimmingCharacters(
                         in: .whitespacesAndNewlines
