@@ -396,6 +396,41 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertNil(navigation.presentedSheet)
     }
 
+    func testRestoringDifferentHerdDoesNotLeakSavedSearchFiltersOrRoutes() throws {
+        let oldHerdID = UUID()
+        let currentHerdID = UUID()
+        let saved = AppNavigationState()
+        saved.selectedHerdID = oldHerdID
+        saved.openSearch(query: "previous Herd")
+        saved.herdRouter.path = [.animal(UUID())]
+        saved.herdRouter.searchPath = [.pasture(UUID())]
+        saved.herdRouter.mode = .pastures
+        saved.herdRouter.filter = AnimalFilter(recordIssue: .missingTag)
+        saved.herdRouter.pastureFilter = .overCapacity
+        saved.herdRouter.showArchivedRecords = true
+        saved.herdRouter.showRemovedStatuses = true
+
+        let payload = try XCTUnwrap(saved.restorationPayload())
+        let restored = AppNavigationState()
+        restored.restore(
+            from: payload,
+            using: RestorableTestNavigationValidator(herdID: currentHerdID)
+        )
+
+        XCTAssertEqual(restored.selectedHerdID, currentHerdID)
+        XCTAssertEqual(restored.selectedTab, .home)
+        XCTAssertEqual(restored.herdRouter.mode, .animals)
+        XCTAssertTrue(restored.herdRouter.path.isEmpty)
+        XCTAssertTrue(restored.herdRouter.searchPath.isEmpty)
+        XCTAssertEqual(restored.herdRouter.searchText, "")
+        XCTAssertEqual(restored.herdRouter.filter, AnimalFilter())
+        XCTAssertEqual(restored.herdRouter.pastureFilter, .all)
+        XCTAssertFalse(restored.herdRouter.isSearchPresented)
+        XCTAssertFalse(restored.herdRouter.showArchivedRecords)
+        XCTAssertFalse(restored.herdRouter.showRemovedStatuses)
+        XCTAssertNil(restored.fullScreenWorkflow)
+    }
+
     func testInvalidRestorationPayloadLeavesDefaultStateUnchanged() {
         let navigation = AppNavigationState()
         navigation.restore(from: "not-base64")
@@ -410,7 +445,9 @@ final class AppNavigationStateTests: XCTestCase {
 
 @MainActor
 private struct RestorableTestNavigationValidator: AppNavigationRestorationValidating {
-    func currentHerdID() throws -> UUID? { nil }
+    var herdID: UUID? = nil
+
+    func currentHerdID() throws -> UUID? { herdID }
     func animalExists(id: UUID) throws -> Bool { true }
     func pastureExists(id: UUID) throws -> Bool { true }
     func isActiveFieldCheckSession(id: UUID) throws -> Bool { true }
