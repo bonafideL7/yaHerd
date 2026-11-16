@@ -22,7 +22,9 @@ final class HerdDirectoryController {
     func refresh(reportErrors: Bool = true) {
         do {
             herds = try repository.fetchAccessibleHerds()
-            errorMessage = nil
+            if reportErrors {
+                errorMessage = nil
+            }
         } catch {
             // Background import refresh must not repeatedly present error
             // dialogs; manual refresh still reports actionable failures.
