@@ -32,6 +32,127 @@ final class CoreDataHerdRepository: HerdRepository {
         )
     }
 
+    /// List complete Herd roots from both loaded stores. A partially imported
+    /// root cannot safely be selected until its original required fields arrive.
+    /// Even incomplete roots participate in UUID collision checks.
+    func fetchAccessibleHerds() throws -> [AccessibleHerd] {
+        let context = contextFactory.makeReadContext()
+        return try context.performAndWait {
+            let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            request.sortDescriptors = [
+                NSSortDescriptor(key: "createdAt", ascending: true),
+                NSSortDescriptor(key: "id", ascending: true)
+            ]
+            let roots = try context.fetch(request)
+            let stores = context.persistentStoreCoordinator?.persistentStores ?? []
+            var seenIDs = Set<UUID>()
+            var available: [AccessibleHerd] = []
+
+            for root in roots {
+                let id = try root.requiredID()
+                guard seenIDs.insert(id).inserted else {
+                    throw CoreDataPersistenceError.duplicateApplicationID(
+                        entity: CDHerd.coreDataEntityName, id: id, herdID: nil
+                    )
+                }
+                guard let store = root.objectID.persistentStore,
+                      stores.contains(where: { $0 === store }) else {
+                    throw CoreDataPersistenceError.unresolvedHerdStore(id: id)
+                }
+                let category: AccessibleHerd.Category
+                if stores.count == 1 {
+                    category = .owned
+                } else if store.url?.lastPathComponent ==
+                            CoreDataPersistentContainer.sharedStoreFileName {
+                    category = .shared
+                } else if store.url?.lastPathComponent ==
+                            CoreDataPersistentContainer.storeFileName {
+                    category = .owned
+                } else {
+                    throw CoreDataPersistenceError.unresolvedHerdStore(id: id)
+                }
+
+                do {
+                    available.append(AccessibleHerd(
+                        summary: try root.toSummary(), category: category
+                    ))
+                } catch let error as CoreDataHerdMappingError {
+                    switch error {
+                    case .missingName, .missingCreatedAt, .missingUpdatedAt:
+                        // Import can deliver the root before its metadata.
+                        // Keep the original record untouched and undisplayed.
+                        continue
+                    case .missingID:
+                        throw error
+                    }
+                }
+            }
+            return available
+        }
+    }
+
+    /// Explicit user action. A new owned root belongs only in the private
+    /// store; no second default Herd is created by an empty CloudKit import.
+    func createOwnedHerd(named name: String) async throws -> HerdSummary {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            throw HerdRepositoryError.emptyName
+        }
+
+        let context = try contextFactory.makeWriteContext()
+        return try await context.perform {
+            do {
+                let stores = context.persistentStoreCoordinator?.persistentStores ?? []
+                let destination: NSPersistentStore
+                if stores.count == 1, let store = stores.first {
+                    destination = store
+                } else if stores.count == 2,
+                          let privateStore = stores.first(where: {
+                              $0.url?.lastPathComponent ==
+                                  CoreDataPersistentContainer.storeFileName
+                          }),
+                          stores.contains(where: {
+                              $0.url?.lastPathComponent ==
+                                  CoreDataPersistentContainer.sharedStoreFileName
+                          }) {
+                    destination = privateStore
+                } else {
+                    throw CoreDataPersistenceError.unscopedMultiStoreWrite
+                }
+
+                let id = UUID()
+                guard try CoreDataLookup().herd(id: id, in: context) == nil else {
+                    throw CoreDataPersistenceError.duplicateApplicationID(
+                        entity: CDHerd.coreDataEntityName, id: id, herdID: nil
+                    )
+                }
+
+                let now = Date()
+                let herd = CDHerd(context: context)
+                herd.id = id
+                herd.name = trimmedName
+                herd.createdAt = now
+                herd.updatedAt = now
+                context.assign(herd, to: destination)
+                let summary = try herd.toSummary()
+                do {
+                    try context.save()
+                } catch {
+                    ReliabilityLog.persistenceSaveFailure("herd-create", error: error)
+                    throw CoreDataPersistenceError.saveFailed(
+                        description: error.localizedDescription
+                    )
+                }
+                return summary
+            } catch {
+                if context.hasChanges {
+                    context.rollback()
+                }
+                throw error
+            }
+        }
+    }
+
     func fetchCurrentHerd() throws -> HerdSummary {
         guard let herdID = selection.currentHerdID else {
             throw HerdRepositoryError.missingHerd
