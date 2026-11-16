@@ -75,12 +75,12 @@ final class CoreDataHerdSelectionTests: XCTestCase {
         let second = try await repository.createOwnedHerd(named: "Still importing")
         selection.select(first.id)
 
-        var isReady = false
+        let readiness = HerdReadinessGate()
         let directory = HerdDirectoryController(
             repository: repository, selection: selection,
             validateReadiness: { herdID in
                 XCTAssertEqual(herdID, second.id)
-                if !isReady { throw HerdRepositoryError.missingHerd }
+                if !readiness.isReady { throw HerdRepositoryError.missingHerd }
             }
         )
 
@@ -92,7 +92,7 @@ final class CoreDataHerdSelectionTests: XCTestCase {
         }
         XCTAssertEqual(selection.currentHerdID, first.id)
 
-        isReady = true
+        readiness.isReady = true
         try await directory.selectHerdWhenReady(id: second.id)
         XCTAssertEqual(selection.currentHerdID, second.id)
     }
@@ -144,4 +144,9 @@ final class CoreDataHerdSelectionTests: XCTestCase {
         XCTAssertNil(selection.currentHerdID)
     }
 
+}
+
+@MainActor
+private final class HerdReadinessGate {
+    var isReady = false
 }
