@@ -98,6 +98,8 @@ Review the full affected scope and report identifiable material findings togethe
 
 ## Verification and delivery
 
+- Use focused tests and static checks during implementation. Submit one finalized change for the required full PR test suite; rerun the full suite after code changes or when investigation establishes a test-specific reason to retry, not as an undiagnosed experiment. Inspect failing job logs before attempting another run.
+- GitHub-hosted unsigned simulators cannot validate a signed-in CloudKit account, development schema initialization, or real inter-device synchronization. CI may compile the iCloud Development configuration and execute account-independent tests, but never treat this as CloudKit acceptance. Perform account-dependent checks on appropriately signed, signed-in local devices. Do not introduce another hosted-CI workaround for the same established account/signing limitation without new evidence that the environment supports it.
 - Use available build tools and direct source inspection to verify production changes; validate runtime behavior when the environment supports it.
 - A successful build is not proof that reported runtime behavior was fixed.
 - Do not claim to have executed builds or verified behavior when that was not done.
