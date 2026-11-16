@@ -133,9 +133,10 @@ final class PastureTileListViewModel {
     func deletePastures(
         at offsets: IndexSet,
         deletionCommand: any PastureDeletionPerforming,
-        orderingRepository: any PastureOrdering
+        orderingRepository: any PastureOrdering,
+        selection: any CurrentHerdSelectionReading
     ) async {
-        guard !isDeletingPastures else { return }
+        guard !isDeletingPastures, let originalHerdID = selection.currentHerdID else { return }
 
         let ids = offsets.sorted().compactMap { index in
             items.indices.contains(index) ? items[index].id : nil
@@ -149,9 +150,15 @@ final class PastureTileListViewModel {
         do {
             try await deletionCommand.deletePastures(ids: ids, archivedAt: .now)
         } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+            if !Task.isCancelled && selection.currentHerdID == originalHerdID {
+                errorMessage = UserVisibleErrorMessage.make(error)
+            }
             return
         }
+
+        // The delete already committed for its originating Herd. Do not issue a
+        // separate ordering write through repositories now scoped to another Herd.
+        guard !Task.isCancelled, selection.currentHerdID == originalHerdID else { return }
 
         let deletedIDs = Set(ids)
         items.removeAll { deletedIDs.contains($0.id) }
@@ -171,14 +178,16 @@ final class PastureTileListViewModel {
     func deletePasture(
         id: UUID,
         deletionCommand: any PastureDeletionPerforming,
-        orderingRepository: any PastureOrdering
+        orderingRepository: any PastureOrdering,
+        selection: any CurrentHerdSelectionReading
     ) async {
         guard !isDeletingPastures,
               let index = items.firstIndex(where: { $0.id == id }) else { return }
         await deletePastures(
             at: IndexSet(integer: index),
             deletionCommand: deletionCommand,
-            orderingRepository: orderingRepository
+            orderingRepository: orderingRepository,
+            selection: selection
         )
     }
 
