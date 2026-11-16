@@ -81,6 +81,8 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
         navigation.herdRouter.path = [.animal(animalID)]
         navigation.herdRouter.searchPath = [.pasture(pastureID)]
         navigation.herdRouter.filter.pasture = .pasture(pastureID)
+        navigation.herdRouter.searchText = "prior herd"
+        navigation.herdRouter.showArchivedRecords = true
 
         let validator = StubNavigationValidator(currentHerdResult: .success(nil))
 
@@ -90,10 +92,12 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
         XCTAssertTrue(navigation.herdRouter.path.isEmpty)
         XCTAssertTrue(navigation.herdRouter.searchPath.isEmpty)
         XCTAssertEqual(navigation.herdRouter.filter.pasture, .any)
+        XCTAssertEqual(navigation.herdRouter.searchText, "")
+        XCTAssertFalse(navigation.herdRouter.showArchivedRecords)
     }
 
     @MainActor
-    func testEntityReadFailuresPreserveRoutesPastureFilterAndPriorHerdIdentity() {
+    func testConfirmedHerdChangeClearsOldRoutesEvenWhenRecordReadsFail() {
         let selectedHerdID = UUID()
         let refreshedHerdID = UUID()
         let animalID = UUID()
@@ -112,16 +116,15 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
 
         navigation.revalidateIdentityBoundState(using: validator)
 
-        XCTAssertEqual(navigation.selectedHerdID, selectedHerdID)
-        XCTAssertEqual(navigation.herdRouter.path, [.animal(animalID)])
-        XCTAssertEqual(navigation.herdRouter.searchPath, [.pasture(pastureID)])
-        XCTAssertEqual(navigation.herdRouter.filter.pasture, .pasture(pastureID))
+        XCTAssertEqual(navigation.selectedHerdID, refreshedHerdID)
+        XCTAssertTrue(navigation.herdRouter.path.isEmpty)
+        XCTAssertTrue(navigation.herdRouter.searchPath.isEmpty)
+        XCTAssertEqual(navigation.herdRouter.filter.pasture, .any)
     }
 
     @MainActor
-    func testLaterReadFailurePreservesEarlierConfirmedMissingRoute() {
+    func testLaterReadFailurePreservesOldRoutesWhenHerdIsUnchanged() {
         let selectedHerdID = UUID()
-        let refreshedHerdID = UUID()
         let animalID = UUID()
         let pastureID = UUID()
         let navigation = AppNavigationState()
@@ -130,7 +133,7 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
         navigation.herdRouter.searchPath = [.pasture(pastureID)]
 
         let validator = StubNavigationValidator(
-            currentHerdResult: .success(refreshedHerdID),
+            currentHerdResult: .success(selectedHerdID),
             animalResult: .success(false),
             pastureResult: .failure(.readFailed)
         )
