@@ -110,6 +110,44 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     }
 
     @MainActor
+    func testSelectedHerdPreferenceSurvivesReopeningMultiHerdGraph() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let selection = AppCurrentHerdSelection()
+        let repository = CoreDataHerdRepository(selection: selection, assembly: assembly)
+        let first = try await repository.createOwnedHerd(named: "First")
+        let second = try await repository.createOwnedHerd(named: "Second")
+
+        let suiteName = "yaHerd.herdSelection.\\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { preferences.removePersistentDomain(forName: suiteName) }
+
+        let graph = CoreDataAppPersistenceAssembly(
+            assembly: assembly,
+            currentHerdID: first.id,
+            selectionPreferences: preferences
+        )
+        let directory = HerdDirectoryController(
+            repository: graph.makeDependencies(dataAccessMode: .readWrite).herdRepository,
+            selection: graph.currentHerdSelection
+        )
+        directory.refresh()
+        try directory.selectHerd(id: second.id)
+        XCTAssertEqual(graph.currentHerdSelection.currentHerdID, second.id)
+
+        let reopened = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
+            using: assembly,
+            privateStoreURL: URL(fileURLWithPath: "/tmp/unused.sqlite"),
+            selectionPreferences: preferences
+        )
+        XCTAssertEqual(reopened.currentHerdSelection.currentHerdID, second.id)
+        XCTAssertEqual(
+            try reopened.makeDependencies(dataAccessMode: .readWrite)
+                .herdRepository.fetchCurrentHerd().id,
+            second.id
+        )
+    }
+
+    @MainActor
     func testCoreDataAppGraphSharesHerdStoreMutationsAndReadProjections() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
