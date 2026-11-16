@@ -594,6 +594,7 @@ struct AnimalListView: View {
                     viewModel.errorMessage = "Sample data can only be added to an empty herd."
                 }
             } catch {
+                guard herdSelection.currentHerdID == originatingHerdID else { return }
                 viewModel.errorMessage = error.localizedDescription
             }
         }
