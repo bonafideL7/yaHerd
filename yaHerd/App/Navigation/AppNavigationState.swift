@@ -563,9 +563,9 @@ final class AppNavigationState {
         selectedTab = snapshot.selectedTab
         herdRouter.restore(snapshot.herdRouter)
 
-        let targetsCurrentHerd = snapshot.selectedHerdID == nil
-            || snapshot.selectedHerdID == selectedHerdID
-        guard targetsCurrentHerd else {
+        // Without an explicit Herd identity, a stored snapshot cannot own
+        // any current Herd's record routes, filters, or workflow state.
+        guard snapshot.selectedHerdID == selectedHerdID else {
             // No list state from a previous Herd is safe to restore.
             selectedTab = .home
             herdRouter.resetForHerdChange()
