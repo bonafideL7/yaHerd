@@ -78,7 +78,19 @@ final class HerdDirectoryController {
 
     @discardableResult
     func createOwnedHerd(named name: String) async throws -> HerdSummary {
+        try Task.checkCancellation()
+        let originatingSelection = selection.currentHerdID
         let created = try await repository.createOwnedHerd(named: name)
+
+        // Creation may have committed before the chooser was dismissed or
+        // another Herd was selected. Keep the new root without changing the
+        // active Herd for an obsolete request.
+        guard !Task.isCancelled,
+              selection.currentHerdID == originatingSelection else {
+            refresh(reportErrors: false)
+            return created
+        }
+
         try selectHerd(id: created.id)
         return created
     }
