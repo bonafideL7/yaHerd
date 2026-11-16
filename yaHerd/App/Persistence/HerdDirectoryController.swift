@@ -9,6 +9,7 @@ final class HerdDirectoryController {
     @ObservationIgnored private let repository: any HerdRepository
     @ObservationIgnored private let selection: AppCurrentHerdSelection
     @ObservationIgnored private let validateReadiness: (@MainActor (UUID) async throws -> Void)?
+    @ObservationIgnored private var selectionGeneration: UInt64 = 0
 
     private(set) var herds: [AccessibleHerd] = []
     private(set) var errorMessage: String?
@@ -28,7 +29,11 @@ final class HerdDirectoryController {
     func refresh(reportErrors: Bool = true) {
         do {
             let accessible = try repository.fetchAccessibleHerds()
+            let previouslySelectedHerdID = selection.currentHerdID
             selection.revalidateActiveHerd(from: accessible)
+            if selection.currentHerdID != previouslySelectedHerdID {
+                selectionGeneration &+= 1
+            }
             herds = accessible
             if reportErrors {
                 errorMessage = nil
@@ -46,6 +51,7 @@ final class HerdDirectoryController {
     func selectHerd(id: UUID) throws {
         let accessible = try repository.fetchAccessibleHerds()
         try selection.selectAccessibleHerd(id, from: accessible)
+        selectionGeneration &+= 1
         herds = accessible
         errorMessage = nil
     }
@@ -57,6 +63,7 @@ final class HerdDirectoryController {
             throw HerdRepositoryError.missingHerd
         }
         let previousSelection = selection.currentHerdID
+        let originatingGeneration = selectionGeneration
         do {
             try await validateReadiness?(id)
         } catch {
@@ -66,12 +73,14 @@ final class HerdDirectoryController {
             throw error
         }
         try Task.checkCancellation()
-        guard selection.currentHerdID == previousSelection else {
+        guard selection.currentHerdID == previousSelection,
+              selectionGeneration == originatingGeneration else {
             throw CancellationError()
         }
         // Recheck membership after validation; import access can change.
         let current = try repository.fetchAccessibleHerds()
         try selection.selectAccessibleHerd(id, from: current)
+        selectionGeneration &+= 1
         herds = current
         errorMessage = nil
     }
@@ -80,13 +89,15 @@ final class HerdDirectoryController {
     func createOwnedHerd(named name: String) async throws -> HerdSummary {
         try Task.checkCancellation()
         let originatingSelection = selection.currentHerdID
+        let originatingGeneration = selectionGeneration
         let created = try await repository.createOwnedHerd(named: name)
 
         // Creation may have committed before the chooser was dismissed or
         // another Herd was selected. Keep the new root without changing the
         // active Herd for an obsolete request.
         guard !Task.isCancelled,
-              selection.currentHerdID == originatingSelection else {
+              selection.currentHerdID == originatingSelection,
+              selectionGeneration == originatingGeneration else {
             refresh(reportErrors: false)
             return created
         }
