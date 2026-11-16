@@ -94,40 +94,6 @@ jobs:
           xcodebuild -version
           xcrun swiftc --version
 
-      # Simulator startup overlaps the static checks and compilation instead
-      # of delaying the test phase after both builds have completed.
-      - name: Start iOS Simulator for tests
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_tests }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          SIMULATOR_INFO="$(xcrun simctl list -j devices available | python3 -c '
-          import json
-          import sys
-          devices = json.load(sys.stdin).get("devices", {})
-          for runtime, entries in devices.items():
-              if "SimRuntime.iOS-26" not in runtime:
-                  continue
-              for device in entries:
-                  if device.get("isAvailable", True) and device.get("name", "").startswith("iPhone"):
-                      print(device["udid"] + "|" + device.get("state", "Shutdown"))
-                      sys.exit(0)
-          ')"
-
-          SIMULATOR_ID="${SIMULATOR_INFO%%|*}"
-          SIMULATOR_STATE="${SIMULATOR_INFO#*|}"
-          if [[ -z "$SIMULATOR_ID" ]]; then
-            echo "An available iOS 26 iPhone simulator is required to run yaHerdTests." >&2
-            xcrun simctl list devices available >&2
-            exit 1
-          fi
-
-          echo "SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
-          if [[ "$SIMULATOR_STATE" != "Booted" ]]; then
-            xcrun simctl boot "$SIMULATOR_ID"
-          fi
-          echo "Selected simulator $SIMULATOR_ID; boot continues during verification."
-
       - name: Verify architecture
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_architecture }}
         shell: bash
@@ -190,7 +156,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "Running yaHerdTests on simulator ${SIMULATOR_ID:?Simulator selection did not run}"
+
+          # Discover an installed iOS 26 iPhone simulator on the runner.
+          SIMULATOR_ID="$(xcrun simctl list -j devices available | python3 -c '
+          import json
+          import sys
+          devices = json.load(sys.stdin).get("devices", {})
+          for runtime, entries in devices.items():
+              if "SimRuntime.iOS-26" not in runtime:
+                  continue
+              for device in entries:
+                  if device.get("isAvailable", True) and device.get("name", "").startswith("iPhone"):
+                      print(device["udid"])
+                      sys.exit(0)
+          ')"
+
+          if [[ -z "$SIMULATOR_ID" ]]; then
+            echo "An available iOS 26 iPhone simulator is required to run yaHerdTests." >&2
+            xcrun simctl list devices available >&2
+            exit 1
+          fi
+
+          echo "Running yaHerdTests on simulator $SIMULATOR_ID"
           xcodebuild \
             -project yaHerd.xcodeproj \
             -scheme yaHerd \
