@@ -41,7 +41,8 @@ final class WorkingSessionDeletionHerdIsolationTests: XCTestCase {
         selection.select(UUID())
         repository.finishDeletion()
 
-        XCTAssertFalse(try await deletion.value)
+        let completed = try await deletion.value
+        XCTAssertFalse(completed)
         XCTAssertEqual(repository.deletedSessionIDs, [sessionID])
         XCTAssertEqual(repository.fetchCount, 1)
         XCTAssertNil(model.errorMessage)
@@ -66,7 +67,8 @@ final class WorkingSessionDeletionHerdIsolationTests: XCTestCase {
         await repository.waitForPendingDeletion()
         repository.finishDeletion()
 
-        XCTAssertTrue(try await deletion.value)
+        let completed = try await deletion.value
+        XCTAssertTrue(completed)
         XCTAssertEqual(repository.deletedSessionIDs, [sessionID])
         XCTAssertEqual(repository.fetchCount, 2)
     }
@@ -90,7 +92,8 @@ final class WorkingSessionDeletionHerdIsolationTests: XCTestCase {
         deletion.cancel()
         repository.finishDeletion()
 
-        XCTAssertFalse(try await deletion.value)
+        let completed = try await deletion.value
+        XCTAssertFalse(completed)
         XCTAssertEqual(repository.deletedSessionIDs.count, 1)
         XCTAssertEqual(repository.fetchCount, 1)
     }
