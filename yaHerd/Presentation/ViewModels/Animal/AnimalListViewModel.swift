@@ -32,6 +32,20 @@ final class AnimalListViewModel {
     private var derivedStateGeneration = 0
     private var lastDerivedStateRequest: DerivedStateRequest?
     private let derivationActor = AnimalListDerivationActor()
+    @ObservationIgnored private var herdSelection: (any CurrentHerdSelectionReading)?
+    private var selectedHerdID: UUID?
+    private var hasConfiguredHerdSelection = false
+
+    /// Bind this model to the application selection before loading. A load that
+    /// originated under another Herd cannot publish its result after a switch.
+    func configure(selection: any CurrentHerdSelectionReading) {
+        herdSelection = selection
+        let herdID = selection.currentHerdID
+        guard !hasConfiguredHerdSelection || selectedHerdID != herdID else { return }
+        hasConfiguredHerdSelection = true
+        selectedHerdID = herdID
+        resetForHerdChange()
+    }
 
     func observe(
         using repository: any AnimalListRepository,
@@ -70,6 +84,7 @@ final class AnimalListViewModel {
         pastureRepository: any PastureReferenceDataReader,
         snapshotReader: (any AnimalListSnapshotReading)? = nil
     ) {
+        refreshHerdSelection()
         guard !hasLoaded, !isLoading else { return }
         load(using: repository, pastureRepository: pastureRepository, snapshotReader: snapshotReader)
     }
@@ -79,9 +94,11 @@ final class AnimalListViewModel {
         pastureRepository: any PastureReferenceDataReader,
         snapshotReader: (any AnimalListSnapshotReading)? = nil
     ) {
+        refreshHerdSelection()
         loadGeneration += 1
         if !hasLoaded { hasInitialLoadFailure = false }
         let generation = loadGeneration
+        let originatingHerdID = selectedHerdID
         loadTask?.cancel()
         loadTask = nil
 
@@ -100,7 +117,8 @@ final class AnimalListViewModel {
             await self.loadUsingReadModel(
                 queryReader,
                 snapshotReader: snapshotReader,
-                generation: generation
+                generation: generation,
+                originatingHerdID: originatingHerdID
             )
         }
     }
@@ -203,7 +221,8 @@ final class AnimalListViewModel {
     private func loadUsingReadModel(
         _ reader: any AnimalListQueryReading,
         snapshotReader: (any AnimalListSnapshotReading)?,
-        generation: Int
+        generation: Int,
+        originatingHerdID: UUID?
     ) async {
         defer {
             if generation == loadGeneration {
@@ -228,7 +247,11 @@ final class AnimalListViewModel {
                 return (animals, try await pastureOptions)
             }
 
-            guard !Task.isCancelled, generation == loadGeneration else { return }
+            guard !Task.isCancelled else { return }
+            refreshHerdSelection()
+            guard isCurrentLoad(generation: generation, originatingHerdID: originatingHerdID) else {
+                return
+            }
             if !hasLoaded { hasInitialDerivedState = false }
             items = loaded.0
             pastureOptions = loaded.1
@@ -239,7 +262,11 @@ final class AnimalListViewModel {
         } catch is CancellationError {
             return
         } catch {
-            guard generation == loadGeneration else { return }
+            guard !Task.isCancelled else { return }
+            refreshHerdSelection()
+            guard isCurrentLoad(generation: generation, originatingHerdID: originatingHerdID) else {
+                return
+            }
             if !hasLoaded { hasInitialLoadFailure = true }
             errorMessage = UserVisibleErrorMessage.make(error)
         }
@@ -292,6 +319,44 @@ final class AnimalListViewModel {
             guard !page.animals.isEmpty else { return animals }
             offset += page.animals.count
         }
+    }
+
+    private func refreshHerdSelection() {
+        guard let herdSelection,
+              herdSelection.currentHerdID != selectedHerdID else { return }
+        configure(selection: herdSelection)
+    }
+
+    private func isCurrentLoad(generation: Int, originatingHerdID: UUID?) -> Bool {
+        guard generation == loadGeneration else { return false }
+        guard let herdSelection else { return true }
+        return selectedHerdID == originatingHerdID
+            && herdSelection.currentHerdID == originatingHerdID
+    }
+
+    private func resetForHerdChange() {
+        invalidateCurrentLoad()
+        derivedStateTask?.cancel()
+        derivedStateTask = nil
+        derivedStateGeneration += 1
+        lastLoadedRevision = 0
+        items = []
+        pastureOptions = []
+        hasLoaded = false
+        hasInitialDerivedState = false
+        hasInitialLoadFailure = false
+        filteredAndSortedAnimals = []
+        groupedAnimals = []
+        shouldUseSections = false
+        currentSectionIDs = []
+        emptyStateConfiguration = AnimalListEmptyStateConfiguration(
+            title: "No Animals Yet",
+            description: "Add your first animal to start building the herd.",
+            systemImage: "Cow"
+        )
+        hasHiddenOffHerdAnimals = false
+        hasHiddenArchivedRecords = false
+        errorMessage = nil
     }
 
     private func invalidateCurrentLoad() {
