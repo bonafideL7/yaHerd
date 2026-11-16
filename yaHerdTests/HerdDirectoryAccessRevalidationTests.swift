@@ -129,6 +129,34 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         XCTAssertEqual(Set(directory.herds.map(\.id)), [initialID, subsequentlySelectedID, createdID])
     }
 
+    func testCommittedCreationIsNotReportedAsFailedWhenInventoryRefreshThrows() async throws {
+        let selectedID = UUID()
+        let createdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: selectedID)
+        let repository = StubHerdRepository(available: [herd(selectedID)])
+        repository.createdHerd = herd(createdID)
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+
+        let creation = Task {
+            try await directory.createOwnedHerd(named: "New Herd")
+        }
+        await repository.waitForPendingCreation()
+        // The new root has committed, but the follow-up inventory read fails.
+        repository.shouldFail = true
+        repository.completeCreation()
+
+        let created = try await creation.value
+        XCTAssertEqual(created.id, createdID)
+        XCTAssertEqual(directory.selectedHerdID, selectedID)
+        XCTAssertTrue(directory.errorMessage?.contains("was created") == true)
+        XCTAssertTrue(directory.errorMessage?.contains("Refresh") == true)
+
+        repository.shouldFail = false
+        directory.refresh()
+        try directory.selectHerd(id: createdID)
+        XCTAssertEqual(directory.selectedHerdID, createdID)
+    }
+
     func testCancelledCreationPreservesSelectionAfterTheRootWasSaved() async throws {
         let selectedID = UUID()
         let createdID = UUID()
