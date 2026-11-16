@@ -45,7 +45,8 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
         selection.select(UUID())
         repository.complete(with: savedID)
 
-        XCTAssertNil(try await start.value)
+        let result = try await start.value
+        XCTAssertNil(result)
         XCTAssertEqual(repository.createCallCount, 1)
     }
 
@@ -69,7 +70,8 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
         start.cancel()
         repository.complete(with: UUID())
 
-        XCTAssertNil(try await start.value)
+        let result = try await start.value
+        XCTAssertNil(result)
         XCTAssertEqual(repository.createCallCount, 1)
     }
 
@@ -93,7 +95,8 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
         await repository.waitUntilStarted()
         repository.complete(with: savedID)
 
-        XCTAssertEqual(try await start.value, savedID)
+        let result = try await start.value
+        XCTAssertEqual(result, savedID)
         XCTAssertEqual(repository.createCallCount, 1)
     }
 }
