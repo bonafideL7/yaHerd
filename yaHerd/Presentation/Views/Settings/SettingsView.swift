@@ -343,6 +343,7 @@ struct HerdDirectoryView: View {
     @State private var isOpeningHerd = false
     @State private var pendingHerdID: UUID?
     @State private var validationTask: Task<Void, Never>?
+    @State private var creationTask: Task<Void, Never>?
     @State private var showsCreatePrompt = false
     @State private var newHerdName = ""
 
@@ -437,23 +438,37 @@ struct HerdDirectoryView: View {
             if phase == .active { directory.refresh(reportErrors: false) }
         }
         .onDisappear {
-            // Dismissing the chooser must not allow an in-flight import
-            // readiness check to switch Herds after the view is gone.
+            // No in-flight chooser action may select a Herd after dismissal.
             validationTask?.cancel()
+            creationTask?.cancel()
         }
         .alert("Create Herd", isPresented: $showsCreatePrompt) {
             TextField("Herd name", text: $newHerdName)
             Button("Create") {
                 guard !isCreating else { return }
+                validationTask?.cancel()
+                pendingHerdID = nil
                 isCreating = true
-                Task { @MainActor in
-                    defer { isCreating = false }
+                creationTask = Task { @MainActor in
+                    defer {
+                        isCreating = false
+                        creationTask = nil
+                    }
                     do {
+                        try Task.checkCancellation()
                         let created = try await directory.createOwnedHerd(named: newHerdName)
+                        guard !Task.isCancelled, directory.selectedHerdID == created.id else {
+                            return
+                        }
                         navigation.resetForHerdChange(to: created.id)
                         navigation.dismissSheet()
+                    } catch is CancellationError {
+                        // A committed root is still available, but a dismissed
+                        // chooser must not reactivate it.
                     } catch {
-                        directory.report(error)
+                        if !Task.isCancelled {
+                            directory.report(error)
+                        }
                     }
                 }
             }
