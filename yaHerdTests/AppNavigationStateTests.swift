@@ -402,7 +402,11 @@ final class AppNavigationStateTests: XCTestCase {
         original.selectedTab = .search
         original.herdRouter.searchText = "tag from other Herd"
         original.herdRouter.filter = AnimalFilter(recordIssue: .missingTag)
-        original.herdRouter.pastureFilter = .all
+        original.herdRouter.pastureFilter = .overCapacity
+        original.herdRouter.mode = .pastures
+        original.herdRouter.isSearchPresented = true
+        original.herdRouter.showArchivedRecords = true
+        original.herdRouter.showRemovedStatuses = true
         original.herdRouter.searchPath = [.animal(UUID())]
         original.herdRouter.path = [.pasture(UUID())]
 
@@ -419,6 +423,10 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertTrue(restored.herdRouter.searchPath.isEmpty)
         XCTAssertEqual(restored.herdRouter.searchText, "")
         XCTAssertEqual(restored.herdRouter.filter, AnimalFilter())
+        XCTAssertEqual(restored.herdRouter.mode, .animals)
+        XCTAssertEqual(restored.herdRouter.pastureFilter, .all)
+        XCTAssertFalse(restored.herdRouter.showArchivedRecords)
+        XCTAssertFalse(restored.herdRouter.showRemovedStatuses)
         XCTAssertFalse(restored.herdRouter.isSearchPresented)
         XCTAssertNil(restored.fullScreenWorkflow)
     }
