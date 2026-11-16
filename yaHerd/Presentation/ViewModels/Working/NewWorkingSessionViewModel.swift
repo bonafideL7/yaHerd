@@ -147,15 +147,23 @@ final class NewWorkingSessionViewModel: ObservableObject {
         return animals
     }
 
+    /// The repository pins the originating Herd when it begins the write.
+    /// A finished save must not activate a route in another Herd's navigation.
     @discardableResult
     func startSession(
         date: Date,
         pastureID: UUID,
         treatmentTemplateName: String?,
         plannedTreatments: [WorkingTreatmentPlanItem],
-        animalIDs: [UUID]?
-    ) async throws -> UUID {
-        try await workingRepository.startSession(
+        animalIDs: [UUID]?,
+        originatingHerdID: UUID,
+        currentHerdSelection: any CurrentHerdSelectionReading
+    ) async throws -> UUID? {
+        guard currentHerdSelection.currentHerdID == originatingHerdID else {
+            return nil
+        }
+
+        let sessionID = try await workingRepository.startSession(
             input: WorkingSessionStartInput(
                 date: date,
                 sourcePastureID: pastureID,
@@ -164,6 +172,12 @@ final class NewWorkingSessionViewModel: ObservableObject {
                 animalIDs: animalIDs
             )
         )
+
+        guard !Task.isCancelled,
+              currentHerdSelection.currentHerdID == originatingHerdID else {
+            return nil
+        }
+        return sessionID
     }
 }
 
