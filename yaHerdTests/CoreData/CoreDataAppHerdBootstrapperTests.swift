@@ -117,7 +117,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let first = try await repository.createOwnedHerd(named: "First")
         let second = try await repository.createOwnedHerd(named: "Second")
 
-        let suiteName = "yaHerd.herdSelection.\\(UUID().uuidString)"
+        let suiteName = "yaHerd.herdSelection.\(UUID().uuidString)"
         let preferences = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { preferences.removePersistentDomain(forName: suiteName) }
 
