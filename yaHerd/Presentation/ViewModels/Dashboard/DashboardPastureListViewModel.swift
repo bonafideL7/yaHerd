@@ -21,18 +21,21 @@ final class DashboardPastureListViewModel {
         configuration: DashboardConfiguration,
         using repository: any DashboardQueryReading
     ) async {
-        guard !isLoading else { return }
+        guard !isLoading, !Task.isCancelled else { return }
         isLoading = true
         defer { isLoading = false }
 
         do {
-            items = try await LoadDashboardPastureListUseCase(repository: repository)
+            let loadedItems = try await LoadDashboardPastureListUseCase(repository: repository)
                 .execute(configuration: configuration)
+            try Task.checkCancellation()
+            items = loadedItems
             errorMessage = nil
             hasLoaded = true
         } catch is CancellationError {
             return
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
