@@ -91,7 +91,15 @@ final class HerdDirectoryController {
             return created
         }
 
-        try selectHerd(id: created.id)
+        // The repository has committed the new root. Failure to reload the
+        // inventory must not be reported as failed creation: retrying Create
+        // would persist an unintended second Herd.
+        do {
+            try selectHerd(id: created.id)
+        } catch {
+            errorMessage = "\"\(created.name)\" was created, but could not be opened. " +
+                "Refresh Herds and select it. \(error.localizedDescription)"
+        }
         return created
     }
 
