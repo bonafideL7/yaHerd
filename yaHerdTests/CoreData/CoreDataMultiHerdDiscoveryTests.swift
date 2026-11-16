@@ -129,17 +129,16 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
             try context.save()
         }
 
-        let repository = CoreDataHerdRepository(
-            selection: AppCurrentHerdSelection(), assembly: assembly
-        )
-        XCTAssertTrue(try repository.fetchAccessibleHerds().isEmpty)
-        XCTAssertEqual(
-            HerdStartupSelection.resolve(available: try repository.fetchAccessibleHerds(), requestedID: nil),
-            .choose
-        )
-        let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+        let selection = AppCurrentHerdSelection()
+        let repository = CoreDataHerdRepository(selection: selection, assembly: assembly)
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+        directory.refresh()
+        XCTAssertTrue(directory.herds.isEmpty)
+        XCTAssertNil(directory.selectedHerdID)
+
         let read = assembly.contextFactory.makeReadContext()
         try read.performAndWait {
+            let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
             XCTAssertEqual(try read.count(for: request), 1)
         }
     }
