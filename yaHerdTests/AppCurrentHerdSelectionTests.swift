@@ -31,6 +31,11 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
         XCTAssertNil(selection.currentHerdID)
         XCTAssertEqual(defaults.string(forKey: "selected"), idB.uuidString)
 
+        // A single different available Herd must not override the remembered ID.
+        selection.restoreAccessibleHerd(from: [herd(idA)])
+        XCTAssertNil(selection.currentHerdID)
+        XCTAssertEqual(defaults.string(forKey: "selected"), idB.uuidString)
+
         // A temporarily empty import must not erase a previously chosen ID.
         selection.restoreAccessibleHerd(from: [])
         XCTAssertNil(selection.currentHerdID)
