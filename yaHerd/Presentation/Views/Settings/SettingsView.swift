@@ -434,6 +434,11 @@ struct HerdDirectoryView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { directory.refresh(reportErrors: false) }
         }
+        .onDisappear {
+            // Dismissing the chooser must not allow an in-flight import
+            // readiness check to switch Herds after the view is gone.
+            validationTask?.cancel()
+        }
         .alert("Create Herd", isPresented: $showsCreatePrompt) {
             TextField("Herd name", text: $newHerdName)
             Button("Create") {
