@@ -67,6 +67,22 @@ final class CoreDataHerdSelectionTests: XCTestCase {
         }
     }
 
+    func testSilentImportRefreshPreservesActionableHerdErrorUntilAcknowledged() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let selection = AppCurrentHerdSelection()
+        let repository = CoreDataHerdRepository(selection: selection, assembly: assembly)
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+
+        directory.report(HerdRepositoryError.emptyName)
+        let error = try XCTUnwrap(directory.errorMessage)
+        directory.refresh(reportErrors: false)
+        XCTAssertEqual(directory.errorMessage, error,
+                       "Background refresh must not dismiss an actionable error")
+
+        directory.refresh()
+        XCTAssertNil(directory.errorMessage, "Manual refresh may clear the error")
+    }
+
     func testFailedCreationDoesNotSwitchHerd() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let selection = AppCurrentHerdSelection()
