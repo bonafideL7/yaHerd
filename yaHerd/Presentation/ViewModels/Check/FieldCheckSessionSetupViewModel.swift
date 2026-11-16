@@ -24,10 +24,17 @@ final class FieldCheckSessionSetupViewModel {
         pastureID: UUID?,
         startedAt: Date,
         notes: String,
+        originatingHerdID: UUID,
+        currentHerdSelection: any CurrentHerdSelectionReading,
         using repository: any FieldCheckSessionCreating
-    ) async throws -> UUID {
+    ) async throws -> UUID? {
         guard let pastureID else {
             throw FieldCheckRepositoryError.pastureNotFound
+        }
+        // An obsolete setup must not start a write in a newly selected Herd.
+        guard !Task.isCancelled,
+              currentHerdSelection.currentHerdID == originatingHerdID else {
+            return nil
         }
 
         let input = FieldCheckSessionStartInput(
@@ -35,6 +42,15 @@ final class FieldCheckSessionSetupViewModel {
             startedAt: startedAt,
             notes: notes
         )
-        return try await repository.createSession(input: input)
+        // The Core Data repository pins its Herd before awaiting the write gate.
+        let sessionID = try await repository.createSession(input: input)
+
+        // The original save may have committed even after the view was removed.
+        // Never navigate to that record from another Herd's application state.
+        guard !Task.isCancelled,
+              currentHerdSelection.currentHerdID == originatingHerdID else {
+            return nil
+        }
+        return sessionID
     }
 }
