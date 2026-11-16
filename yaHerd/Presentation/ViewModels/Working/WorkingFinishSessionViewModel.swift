@@ -17,6 +17,30 @@ final class WorkingFinishSessionViewModel: ObservableObject {
         self.pastureRepository = pastureRepository
     }
 
+    /// A queued finish must not write against a different selected Herd.
+    /// The repository owns the in-flight transaction; only the originating
+    /// Herd may acknowledge its result to presentation.
+    @discardableResult
+    func finishSession(
+        assignments: [WorkingQueueDestinationAssignment],
+        originatingHerdID: UUID,
+        currentHerdSelection: any CurrentHerdSelectionReading,
+        repository: any WorkingFinishSessionRepository
+    ) async throws -> Bool {
+        guard !Task.isCancelled,
+              currentHerdSelection.currentHerdID == originatingHerdID else {
+            return false
+        }
+
+        try await CompleteWorkingSessionUseCase(repository: repository).execute(
+            sessionID: sessionID,
+            assignments: assignments
+        )
+
+        return !Task.isCancelled
+            && currentHerdSelection.currentHerdID == originatingHerdID
+    }
+
     var needsPastureOptionsRetry: Bool {
         session != nil && !hasLoadedPastureOptions
     }
