@@ -94,6 +94,26 @@ final class TagColorLibraryHistoricalLookupTests: XCTestCase {
         XCTAssertNil(store.lastErrorMessage)
     }
 
+    func testHerdChangeDiscardsOldHerdColorsEvenWhenNewHerdRefreshFails() {
+        let northOnly = TagColorSnapshot(
+            id: UUID(),
+            name: "North Only",
+            prefix: "N",
+            rgba: RGBAColor(r: 0.2, g: 0.6, b: 0.3)
+        )
+        let repository = TagColorWriteResultRepository(colors: [northOnly])
+        let library = TagColorLibraryStore(repository: repository)
+        XCTAssertEqual(library.colors.map(\\.id), [northOnly.id])
+
+        // The same app-wide library outlives the selected Herd. A temporary
+        // read failure for Herd B must not show Herd A's private definitions.
+        repository.failFetch = true
+        library.refreshForHerdChange()
+        XCTAssertTrue(library.colors.isEmpty)
+        XCTAssertNotNil(library.lastErrorMessage)
+        XCTAssertNil(library.definition(for: northOnly.id))
+    }
+
     func testFailedUpsertLeavesPreviousColorsAndCanRetry() {
         let original = TagColorSnapshot(
             id: TagColorDefaults.whiteID,
