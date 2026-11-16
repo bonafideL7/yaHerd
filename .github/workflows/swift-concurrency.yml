@@ -187,18 +187,55 @@ jobs:
             exit 1
           fi
 
-          echo "Running yaHerdTests on simulator $SIMULATOR_ID"
+          BUILD_LOG="$(mktemp)"
+          BOOT_LOG="$(mktemp)"
           TEST_LOG="$(mktemp)"
-          trap 'rm -f "$TEST_LOG"' EXIT
-          xcodebuild \
+          trap 'rm -f "$BUILD_LOG" "$BOOT_LOG" "$TEST_LOG"' EXIT
+
+          # A cold simulator can spend minutes booting after compilation.
+          # Boot concurrently with test compilation instead of serially.
+          echo "Starting iOS simulator $SIMULATOR_ID while building test products."
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b >"$BOOT_LOG" 2>&1 &
+          SIMULATOR_BOOT_PID=$!
+
+          if ! xcodebuild \
             -project yaHerd.xcodeproj \
             -scheme yaHerd \
             -configuration Debug \
-            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -destination "generic/platform=iOS Simulator" \
             -derivedDataPath "$GITHUB_WORKSPACE/.build/ConcurrencyDerivedData" \
             -parallel-testing-enabled NO \
+            ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO \
-            test 2>&1 | tee "$TEST_LOG"
+            build-for-testing >"$BUILD_LOG" 2>&1; then
+            echo 'Debug test compilation failed:' >&2
+            grep -E -i 'error:|fatal|command .* failed|failed to|BUILD FAILED' "$BUILD_LOG" | tail -n 80 >&2 || true
+            tail -n 80 "$BUILD_LOG" >&2
+            exit 1
+          fi
+          echo 'Debug app and test target compiled successfully.'
+
+          if ! wait "$SIMULATOR_BOOT_PID"; then
+            cat "$BOOT_LOG" >&2
+            echo "The simulator failed to finish booting." >&2
+            exit 1
+          fi
+
+          # Use exactly the built test products; do not recompile when running.
+          mapfile -t TEST_RUN_FILES < <(find "$GITHUB_WORKSPACE/.build/ConcurrencyDerivedData/Build/Products" \
+            -maxdepth 1 -type f -name '*.xctestrun' -print)
+          if [[ "${#TEST_RUN_FILES[@]}" -ne 1 ]]; then
+            echo "Expected one .xctestrun manifest; found ${#TEST_RUN_FILES[@]}." >&2
+            exit 1
+          fi
+
+          echo "Running yaHerdTests on booted simulator $SIMULATOR_ID"
+          xcodebuild \
+            -xctestrun "${TEST_RUN_FILES[0]}" \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO \
+            test-without-building 2>&1 | tee "$TEST_LOG"
 
           # Xcode can print TEST SUCCEEDED even when the scheme executes zero
           # tests. A real XCTest summary is required for the PR gate to pass.
