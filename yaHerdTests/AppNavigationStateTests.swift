@@ -360,6 +360,42 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertEqual(restored.herdRouter.searchPath, [.animal(animalID)])
     }
 
+    func testSwitchingHerdClearsOldRecordRoutesSearchAndActiveWorkflows() {
+        let previousHerdID = UUID()
+        let nextHerdID = UUID()
+        let navigation = AppNavigationState()
+        navigation.selectedHerdID = previousHerdID
+        navigation.selectedTab = .herd
+        navigation.herdRouter.path = [.animal(UUID())]
+        navigation.herdRouter.searchPath = [.pasture(UUID())]
+        navigation.herdRouter.searchText = "old Herd"
+        navigation.herdRouter.isSearchPresented = true
+        navigation.herdRouter.filter = AnimalFilter(recordIssue: .missingTag)
+        navigation.herdRouter.showArchivedRecords = true
+        navigation.herdRouter.showRemovedStatuses = true
+        navigation.herdRouter.mode = .pastures
+        navigation.herdRouter.pastureFilter = .archived
+        navigation.openWorkArea(.session(UUID()))
+        navigation.present(.settings)
+
+        navigation.resetForHerdChange(to: nextHerdID)
+
+        XCTAssertEqual(navigation.selectedHerdID, nextHerdID)
+        XCTAssertEqual(navigation.selectedTab, .home)
+        XCTAssertEqual(navigation.herdRouter.mode, .animals)
+        XCTAssertTrue(navigation.herdRouter.path.isEmpty)
+        XCTAssertTrue(navigation.herdRouter.searchPath.isEmpty)
+        XCTAssertEqual(navigation.herdRouter.searchText, "")
+        XCTAssertFalse(navigation.herdRouter.isSearchPresented)
+        XCTAssertEqual(navigation.herdRouter.filter, AnimalFilter())
+        XCTAssertEqual(navigation.herdRouter.pastureFilter, .all)
+        XCTAssertFalse(navigation.herdRouter.showArchivedRecords)
+        XCTAssertFalse(navigation.herdRouter.showRemovedStatuses)
+        XCTAssertNil(navigation.fullScreenWorkflow)
+        XCTAssertNil(navigation.workflowRouter.route)
+        XCTAssertNil(navigation.presentedSheet)
+    }
+
     func testInvalidRestorationPayloadLeavesDefaultStateUnchanged() {
         let navigation = AppNavigationState()
         navigation.restore(from: "not-base64")

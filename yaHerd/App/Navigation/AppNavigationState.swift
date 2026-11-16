@@ -213,6 +213,20 @@ final class HerdRouter {
         showRemovedStatuses = false
         showArchivedRecords = false
     }
+
+    /// A Herd switch must not reuse record paths or list criteria from another Herd.
+    func resetForHerdChange() {
+        path.removeAll()
+        searchPath.removeAll()
+        mode = .animals
+        sortOrder = .tagAscending
+        pastureFilter = .all
+        isSearchPresented = false
+        showingFilters = false
+        showingSort = false
+        clearAnimalCriteria()
+    }
+
 }
 
 @MainActor
@@ -563,6 +577,17 @@ final class AppNavigationState {
         validateRestoredPastureFilter(using: validator)
         restoreActiveWorkflow(snapshot.activeWorkflow, using: validator)
         migrateLegacyWorkflowListRoutes()
+    }
+
+    /// Called after the selected Herd has been validated and changed by the
+    /// application's authoritative Herd selection. No old record identity,
+    /// modal workflow, or search filter is safe to carry across Herds.
+    func resetForHerdChange(to herdID: UUID?) {
+        guard selectedHerdID != herdID else { return }
+        selectedHerdID = herdID
+        selectedTab = .home
+        herdRouter.resetForHerdChange()
+        resetTransientPresentations()
     }
 
     func restorationPayload() -> String? {
