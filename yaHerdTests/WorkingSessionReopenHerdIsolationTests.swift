@@ -37,7 +37,8 @@ final class WorkingSessionReopenHerdIsolationTests: XCTestCase {
         selection.select(UUID())
         repository.completeReopen()
 
-        XCTAssertFalse(await reopening.value)
+        let completed = await reopening.value
+        XCTAssertFalse(completed)
         XCTAssertEqual(repository.reopenCallCount, 1)
         XCTAssertEqual(repository.fetchCount, 0)
         XCTAssertNil(model.errorMessage)
@@ -58,7 +59,8 @@ final class WorkingSessionReopenHerdIsolationTests: XCTestCase {
         await repository.waitForReopen()
         repository.completeReopen()
 
-        XCTAssertTrue(await reopening.value)
+        let completed = await reopening.value
+        XCTAssertTrue(completed)
         XCTAssertEqual(repository.reopenCallCount, 1)
         XCTAssertEqual(repository.fetchCount, 1)
         XCTAssertNil(model.errorMessage)
@@ -80,7 +82,8 @@ final class WorkingSessionReopenHerdIsolationTests: XCTestCase {
         selection.select(UUID())
         repository.failReopen()
 
-        XCTAssertFalse(await reopening.value)
+        let completed = await reopening.value
+        XCTAssertFalse(completed)
         XCTAssertNil(model.errorMessage)
         XCTAssertEqual(repository.fetchCount, 0)
     }
@@ -101,7 +104,8 @@ final class WorkingSessionReopenHerdIsolationTests: XCTestCase {
         reopening.cancel()
         repository.completeReopen()
 
-        XCTAssertFalse(await reopening.value)
+        let completed = await reopening.value
+        XCTAssertFalse(completed)
         XCTAssertEqual(repository.reopenCallCount, 1)
         XCTAssertEqual(repository.fetchCount, 0)
         XCTAssertNil(model.errorMessage)
