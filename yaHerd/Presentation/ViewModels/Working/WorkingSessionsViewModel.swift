@@ -5,15 +5,15 @@ final class WorkingSessionsViewModel: ObservableObject {
     @Published private(set) var sessions: [WorkingSessionSummary] = []
     @Published var errorMessage: String?
 
-    private var repository: any WorkingSessionListReader
+    private var repository: any WorkingSessionsRepository
     private var hasLoaded = false
     private var lastLoadedRevision: UInt64 = 0
 
-    init(repository: any WorkingSessionListReader) {
+    init(repository: any WorkingSessionsRepository) {
         self.repository = repository
     }
 
-    func configure(repository: any WorkingSessionListReader) {
+    func configure(repository: any WorkingSessionsRepository) {
         self.repository = repository
     }
 
