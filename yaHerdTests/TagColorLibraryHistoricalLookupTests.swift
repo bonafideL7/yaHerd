@@ -25,6 +25,26 @@ final class TagColorLibraryHistoricalLookupTests: XCTestCase {
         XCTAssertEqual(library.formattedTag(tagNumber: "42", colorID: previousHerdColor.id), "W42")
     }
 
+    func testHerdChangeLoadsNewHerdColorsAndClearsPreviousDefinitions() {
+        let previousColor = TagColorSnapshot(
+            id: UUID(), name: "Previous Herd", prefix: "P",
+            rgba: RGBAColor(r: 1, g: 0, b: 0)
+        )
+        let nextColor = TagColorSnapshot(
+            id: UUID(), name: "Next Herd", prefix: "N",
+            rgba: RGBAColor(r: 0, g: 0, b: 1)
+        )
+        let repository = TagColorWriteResultRepository(colors: [previousColor])
+        let library = TagColorLibraryStore(repository: repository)
+        XCTAssertEqual(library.colors.map(\.id), [previousColor.id])
+
+        repository.persistedColors = [nextColor]
+        library.resetForHerdChange()
+
+        XCTAssertEqual(library.colors.map(\.id), [nextColor.id])
+        XCTAssertNil(library.lastErrorMessage)
+    }
+
     func testHerdChangeDiscardsHistoricalColorCache() {
         let historicalColor = TagColorSnapshot(
             id: UUID(),
