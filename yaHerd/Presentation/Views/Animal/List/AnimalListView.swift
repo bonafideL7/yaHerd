@@ -576,14 +576,17 @@ struct AnimalListView: View {
 
     private func seedSampleData(large: Bool) {
         guard !isSeedingSampleData, canOfferSampleData,
-              dataAccessMode.allowsDataMutations, let sampleDataSeeder else { return }
+              dataAccessMode.allowsDataMutations, let sampleDataSeeder,
+              let originatingHerdID = herdSelection.currentHerdID else { return }
         isSeedingSampleData = true
         Task { @MainActor in
             defer { isSeedingSampleData = false }
+            guard herdSelection.currentHerdID == originatingHerdID else { return }
             do {
                 let inserted = try await (large
-                    ? sampleDataSeeder.seedLargeSampleDataIfNeeded()
-                    : sampleDataSeeder.seedSampleDataIfNeeded())
+                    ? sampleDataSeeder.seedLargeSampleDataIfNeeded(for: originatingHerdID)
+                    : sampleDataSeeder.seedSampleDataIfNeeded(for: originatingHerdID))
+                guard herdSelection.currentHerdID == originatingHerdID else { return }
                 if inserted {
                     eligibleSampleDataRevision = nil
                     reload()
