@@ -93,4 +93,25 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
         }
         XCTAssertNil(selection.currentHerdID)
     }
+
+    func testPendingImportDoesNotEraseRememberedHerdOrSilentlySelectAnother() throws {
+        let suite = "stage3-import-selection-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let importedID = UUID()
+        let otherID = UUID()
+        let selection = AppCurrentHerdSelection(defaults: defaults, preferenceKey: "selected")
+        selection.select(importedID)
+
+        // The remembered Herd's root is present, but its related records are
+        // not ready. The chooser must be accessible without forgetting the ID.
+        selection.deferCurrentHerdUntilImportReady()
+        XCTAssertNil(selection.currentHerdID)
+        XCTAssertEqual(defaults.string(forKey: "selected"), importedID.uuidString)
+
+        // Choosing a different accessible Herd is an explicit preference change.
+        try selection.selectAccessibleHerd(otherID, from: [herd(importedID), herd(otherID)])
+        XCTAssertEqual(selection.currentHerdID, otherID)
+        XCTAssertEqual(defaults.string(forKey: "selected"), otherID.uuidString)
+    }
 }
