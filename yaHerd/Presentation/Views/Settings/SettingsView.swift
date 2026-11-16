@@ -480,7 +480,8 @@ struct HerdDirectoryView: View {
             navigation.resetForHerdChange(to: id)
             navigation.dismissSheet()
         } catch {
-            if error is CancellationError { return }
+            // A cancelled validation must never restore pending import retries.
+            if Task.isCancelled || error is CancellationError { return }
             #if DEBUG
             if CloudKitDevelopmentLaunch.isImportPending(error) {
                 pendingHerdID = id

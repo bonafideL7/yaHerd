@@ -97,6 +97,50 @@ final class CoreDataHerdSelectionTests: XCTestCase {
         XCTAssertEqual(selection.currentHerdID, second.id)
     }
 
+    func testCancelledImportReadinessFailureDoesNotBecomeASelectionOrRetry() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let selection = AppCurrentHerdSelection()
+        let repository = CoreDataHerdRepository(selection: selection, assembly: assembly)
+        let existing = try await repository.createOwnedHerd(named: "Existing")
+        let importing = try await repository.createOwnedHerd(named: "Still importing")
+        selection.select(existing.id)
+
+        let readiness = HerdReadinessGate()
+        let validationStarted = expectation(description: "Readiness validation started")
+        let directory = HerdDirectoryController(
+            repository: repository,
+            selection: selection,
+            validateReadiness: { id in
+                XCTAssertEqual(id, importing.id)
+                try await withCheckedThrowingContinuation { continuation in
+                    readiness.pendingValidation = continuation
+                    validationStarted.fulfill()
+                }
+            }
+        )
+
+        let opening = Task { try await directory.selectHerdWhenReady(id: importing.id) }
+        await fulfillment(of: [validationStarted], timeout: 3)
+        guard let continuation = readiness.pendingValidation else {
+            opening.cancel()
+            XCTFail("Readiness check did not suspend")
+            return
+        }
+        opening.cancel()
+        continuation.resume(throwing: HerdRepositoryError.missingHerd)
+
+        do {
+            try await opening.value
+            XCTFail("Cancelled import must not select the Herd")
+        } catch is CancellationError {
+            // Cancellation takes precedence over the import-pending error.
+        } catch {
+            XCTFail("Expected CancellationError, got \\(error)")
+        }
+        XCTAssertEqual(selection.currentHerdID, existing.id)
+        XCTAssertNil(directory.errorMessage)
+    }
+
     func testSilentImportRefreshPreservesActionableHerdErrorUntilAcknowledged() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let selection = AppCurrentHerdSelection()
@@ -149,4 +193,5 @@ final class CoreDataHerdSelectionTests: XCTestCase {
 @MainActor
 private final class HerdReadinessGate {
     var isReady = false
+    var pendingValidation: CheckedContinuation<Void, Error>?
 }
