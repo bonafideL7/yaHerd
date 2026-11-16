@@ -22,6 +22,8 @@ Before changing production code:
 
 ## Test-driven implementation and test maintenance
 
+On a branch where the user intentionally removed all `yaHerdTests` sources, the requirements below to execute an existing automated suite apply only when test sources exist. Do not recreate the deleted tests merely to satisfy CI. Verify an actual Debug app build and applicable static checks instead, clearly report that automated tests were **not executed**, and do not treat a build as behavioral acceptance. If test sources are subsequently restored, CI must execute them and reject an empty test run.
+
 Automated tests are part of normal implementation and defect correction, not optional work deferred until PR verification. ChatGPT is responsible for creating, maintaining, and running tests as needed; Codex remains a reviewer only.
 
 - Before editing production code, inspect relevant existing tests and production call paths. Identify behavior, contracts, invariants, and cross-feature effects at risk. Tests describe intended behavior but do not override current user requirements or actual production behavior.
