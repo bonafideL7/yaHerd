@@ -85,6 +85,26 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         XCTAssertEqual(directory.herds.count, 1)
     }
 
+    func testCompletedActiveCreationSelectsTheNewHerd() async throws {
+        let originalID = UUID()
+        let createdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalID)
+        let repository = StubHerdRepository(available: [herd(originalID)])
+        repository.createdHerd = herd(createdID)
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+
+        let creation = Task {
+            try await directory.createOwnedHerd(named: "New Herd")
+        }
+        await repository.waitForPendingCreation()
+        repository.completeCreation()
+
+        let result = try await creation.value
+        XCTAssertEqual(result.id, createdID)
+        XCTAssertEqual(directory.selectedHerdID, createdID)
+        XCTAssertEqual(Set(directory.herds.map(\.id)), [originalID, createdID])
+    }
+
     func testCompletedCreationDoesNotReplaceASelectionMadeWhileSaving() async throws {
         let initialID = UUID()
         let subsequentlySelectedID = UUID()
