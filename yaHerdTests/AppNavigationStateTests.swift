@@ -396,6 +396,38 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertNil(navigation.presentedSheet)
     }
 
+    func testRestoringPreviousHerdClearsFiltersAndRoutesInsteadOfLeakingThem() throws {
+        let oldHerdID = UUID()
+        let newHerdID = UUID()
+        let previous = AppNavigationState()
+        previous.selectedHerdID = oldHerdID
+        previous.selectedTab = .search
+        previous.herdRouter.path = [.animal(UUID())]
+        previous.herdRouter.searchPath = [.pasture(UUID())]
+        previous.herdRouter.searchText = "previous herd"
+        previous.herdRouter.showArchivedRecords = true
+        previous.herdRouter.filter = AnimalFilter(recordIssue: .missingTag)
+        previous.herdRouter.mode = .pastures
+        previous.herdRouter.pastureFilter = .overCapacity
+
+        let payload = try XCTUnwrap(previous.restorationPayload())
+        let restored = AppNavigationState()
+        restored.restore(
+            from: payload,
+            using: RestorableTestNavigationValidator(herdID: newHerdID)
+        )
+
+        XCTAssertEqual(restored.selectedHerdID, newHerdID)
+        XCTAssertEqual(restored.selectedTab, .home)
+        XCTAssertTrue(restored.herdRouter.path.isEmpty)
+        XCTAssertTrue(restored.herdRouter.searchPath.isEmpty)
+        XCTAssertEqual(restored.herdRouter.searchText, "")
+        XCTAssertEqual(restored.herdRouter.filter, AnimalFilter())
+        XCTAssertFalse(restored.herdRouter.showArchivedRecords)
+        XCTAssertEqual(restored.herdRouter.mode, .animals)
+        XCTAssertEqual(restored.herdRouter.pastureFilter, .all)
+    }
+
     func testInvalidRestorationPayloadLeavesDefaultStateUnchanged() {
         let navigation = AppNavigationState()
         navigation.restore(from: "not-base64")
@@ -410,7 +442,8 @@ final class AppNavigationStateTests: XCTestCase {
 
 @MainActor
 private struct RestorableTestNavigationValidator: AppNavigationRestorationValidating {
-    func currentHerdID() throws -> UUID? { nil }
+    var herdID: UUID? = nil
+    func currentHerdID() throws -> UUID? { herdID }
     func animalExists(id: UUID) throws -> Bool { true }
     func pastureExists(id: UUID) throws -> Bool { true }
     func isActiveFieldCheckSession(id: UUID) throws -> Bool { true }
