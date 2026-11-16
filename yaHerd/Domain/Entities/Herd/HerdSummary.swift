@@ -18,7 +18,7 @@ struct HerdSummary: Identifiable, Equatable, Sendable {
 /// Shared access permissions are resolved separately; store location alone
 /// must never be interpreted as permission to edit.
 struct AccessibleHerd: Identifiable, Equatable, Sendable {
-    enum Category: Sendable {
+    enum Category: Equatable, Sendable {
         case owned
         case shared
     }
