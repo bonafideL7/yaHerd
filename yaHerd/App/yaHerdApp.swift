@@ -117,15 +117,16 @@ struct yaHerdApp: App {
                     mirroringEnabled: true
                 )
                 do {
-                    let candidate = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
+                    let candidate = try CoreDataAppPersistenceAssembly.resolveCloudKitHerdForSelection(
                         using: cloudKitAssembly,
-                        privateStoreURL: storeURL,
-                        selectedHerdID: selectedHerdID
+                        preferredHerdID: selectedHerdID
                     )
                     // An imported root can arrive before its owned records
                     // and relationships. Preserve the mirroring engine and
                     // defer Home instead of presenting partial data as corrupt.
-                    try await CloudKitDevelopmentLaunch.validateHomeReadiness(candidate)
+                    if candidate.currentHerdID != nil {
+                        try await CloudKitDevelopmentLaunch.validateHomeReadiness(candidate)
+                    }
                     persistence = candidate
                 } catch {
                     if CloudKitDevelopmentLaunch.isImportPending(error) {
@@ -198,7 +199,8 @@ struct yaHerdApp: App {
                         recoveryContext: RecoveryModeContext(
                             startupError: startupMessage
                         ),
-                        storageError: startupMessage
+                        storageError: startupMessage,
+                        isMirroring: false
                     )
                 )
             } catch {
@@ -233,7 +235,8 @@ struct yaHerdApp: App {
             dependencies: dependencies,
             dataAccessMode: .readWrite,
             recoveryContext: nil,
-            storageError: nil
+            storageError: nil,
+            isMirroring: storageMode == .cloudKitDevelopment
         )
     }
 
@@ -248,12 +251,13 @@ struct yaHerdApp: App {
         defer { developmentImportCheckInProgress = false }
 
         do {
-            let persistence = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
+            let persistence = try CoreDataAppPersistenceAssembly.resolveCloudKitHerdForSelection(
                 using: pending.assembly,
-                privateStoreURL: pending.privateStoreURL,
-                selectedHerdID: pending.selectedHerdID
+                preferredHerdID: pending.selectedHerdID
             )
-            try await CloudKitDevelopmentLaunch.validateHomeReadiness(persistence)
+            if persistence.currentHerdID != nil {
+                try await CloudKitDevelopmentLaunch.validateHomeReadiness(persistence)
+            }
             bootstrapState = .ready(Self.makeRuntime(
                 persistence: persistence,
                 storageMode: .cloudKitDevelopment
@@ -301,6 +305,7 @@ private struct AppRuntime {
     let dataAccessMode: AppDataAccessMode
     let recoveryContext: RecoveryModeContext?
     let storageError: String?
+    let isMirroring: Bool
 }
 
 private struct RunningAppView: View {
@@ -347,7 +352,10 @@ private struct RunningAppView: View {
             storageError: runtime.storageError,
             dataAccessMode: runtime.dataAccessMode,
             navigationRestorationValidator: navigationRestorationValidator,
-            navigationMutationRevision: runtime.dependencies.applicationMutationCenter.currentSequence
+            navigationMutationRevision: runtime.dependencies.applicationMutationCenter.currentSequence,
+            herdRepository: runtime.dependencies.herdRepository,
+            herdSelection: runtime.dependencies.herdSelection,
+            isMirroring: runtime.isMirroring
         )
             .environment(applicationSettings)
             .environmentObject(tagColorLibrary)
@@ -368,6 +376,9 @@ private struct RunningAppView: View {
                 if newPhase == .active {
                     tagColorLibrary.refresh()
                 }
+            }
+            .onChange(of: runtime.dependencies.herdSelection.currentHerdID) { _, _ in
+                tagColorLibrary.refresh()
             }
     }
 }
@@ -400,13 +411,18 @@ enum AppNavigationSceneStorageAccess {
 }
 
 private struct RootAppView: View {
+    @Environment(\.scenePhase) private var scenePhase
+
     let storageError: String?
     let dataAccessMode: AppDataAccessMode
     let navigationRestorationValidator: any AppNavigationRestorationValidating
     let navigationMutationRevision: UInt64
+    let herdSelection: AppCurrentHerdSelection
+    let isMirroring: Bool
 
     @State private var showsStorageError: Bool
     @State private var navigation = AppNavigationState()
+    @State private var herdLifecycle: AppHerdLifecycle
     @State private var hasRestoredNavigation = false
     @State private var navigationRestorationDeferred = false
     @SceneStorage("navigation.restoration.v1") private var navigationRestorationPayload = ""
@@ -415,22 +431,53 @@ private struct RootAppView: View {
         storageError: String?,
         dataAccessMode: AppDataAccessMode,
         navigationRestorationValidator: any AppNavigationRestorationValidating,
-        navigationMutationRevision: UInt64
+        navigationMutationRevision: UInt64,
+        herdRepository: any HerdRepository,
+        herdSelection: AppCurrentHerdSelection,
+        isMirroring: Bool
     ) {
         self.storageError = storageError
         self.dataAccessMode = dataAccessMode
         self.navigationRestorationValidator = navigationRestorationValidator
         self.navigationMutationRevision = navigationMutationRevision
+        self.herdSelection = herdSelection
+        self.isMirroring = isMirroring
+        self._herdLifecycle = State(initialValue: AppHerdLifecycle(
+            repository: herdRepository,
+            selection: herdSelection,
+            isMirroring: isMirroring
+        ))
         self._showsStorageError = State(
             initialValue: storageError != nil && !dataAccessMode.isRecoveryMode
         )
     }
 
     var body: some View {
-        MainTabView()
+        Group {
+            if herdSelection.currentHerdID == nil && !dataAccessMode.isRecoveryMode {
+                herdChooser(allowsDismiss: false)
+            } else {
+                // Remount independent feature models at each Herd boundary so
+                // a completed query from Herd A cannot render inside Herd B.
+                MainTabView()
+                    .id(herdSelection.currentHerdID)
+            }
+        }
             .environment(navigation)
             .task {
+                herdLifecycle.refresh(navigation: navigation)
+                herdLifecycle.restoreSelection(
+                    from: navigationRestorationPayload,
+                    navigation: navigation
+                )
+                if let selectedID = herdSelection.currentHerdID {
+                    navigation.resetForHerdChange(to: selectedID)
+                }
                 guard !hasRestoredNavigation else { return }
+                if herdSelection.currentHerdID == nil && !dataAccessMode.isRecoveryMode {
+                    hasRestoredNavigation = true
+                    return
+                }
                 let outcome = AppNavigationSceneStorageAccess.restore(
                     navigation: navigation,
                     from: navigationRestorationPayload,
@@ -459,7 +506,9 @@ private struct RootAppView: View {
                 navigationRestorationPayload = payload
             }
             .onChange(of: navigationMutationRevision) { _, _ in
-                guard hasRestoredNavigation, !dataAccessMode.isRecoveryMode else { return }
+                herdLifecycle.refresh(navigation: navigation)
+                guard hasRestoredNavigation, !dataAccessMode.isRecoveryMode,
+                      herdSelection.currentHerdID != nil else { return }
 
                 if navigationRestorationDeferred {
                     let outcome = navigation.restorePreservingStoredSnapshot(
@@ -481,13 +530,53 @@ private struct RootAppView: View {
                 }
             }
             .onOpenURL { url in
-                navigation.handle(url: url)
+                if herdSelection.currentHerdID != nil {
+                    navigation.handle(url: url)
+                }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    herdLifecycle.refresh(navigation: navigation)
+                }
+            }
+            .task {
+                guard isMirroring else { return }
+                while !Task.isCancelled {
+                    do {
+                        try await Task.sleep(for: .seconds(5))
+                    } catch {
+                        break
+                    }
+                    if scenePhase == .active {
+                        herdLifecycle.refresh(navigation: navigation)
+                    }
+                }
+            }
+            .sheet(isPresented: Binding(
+                get: { navigation.showingHerds },
+                set: { navigation.showingHerds = $0 }
+            )) {
+                herdChooser(allowsDismiss: true)
+                    .onAppear {
+                        herdLifecycle.refresh(navigation: navigation)
+                    }
             }
             .alert("Storage Error", isPresented: $showsStorageError) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(storageError ?? "Persistent storage could not be opened.")
             }
+    }
+
+    private func herdChooser(allowsDismiss: Bool) -> some View {
+        HerdSelectionView(
+            lifecycle: herdLifecycle,
+            allowsDismiss: allowsDismiss,
+            onSelect: { herdLifecycle.select($0, navigation: navigation) },
+            onCreate: { await herdLifecycle.createOwnedHerd(named: $0, navigation: navigation) },
+            onRefresh: { herdLifecycle.refresh(navigation: navigation) },
+            onDismiss: { navigation.showingHerds = false }
+        )
     }
 }
 
