@@ -135,6 +135,16 @@ final class TagColorLibraryStore: ObservableObject {
         load()
     }
 
+    /// A Herd switch changes the ownership boundary of every color ID.
+    /// Keep same-Herd refresh's last-good behavior, but never retain another
+    /// Herd's visible colors when the new store read is temporarily unavailable.
+    func refreshForHerdChange() {
+        colors.removeAll()
+        historicalDefinitionsByID.removeAll()
+        lastErrorMessage = nil
+        load()
+    }
+
     private func load() {
         do {
             historicalDefinitionsByID.removeAll()

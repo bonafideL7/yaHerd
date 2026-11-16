@@ -65,6 +65,32 @@ final class TagColorLibraryHistoricalLookupTests: XCTestCase {
         XCTAssertEqual(repository.fetchColorIDs, [explicitMissingColorID])
     }
 
+    func testHerdChangeClearsOldColorsEvenWhenNextHerdReadFails() {
+        let north = TagColorSnapshot(
+            id: UUID(), name: "North Blue", prefix: "NB",
+            rgba: RGBAColor(r: 0, g: 0, b: 1), isDefault: true
+        )
+        let south = TagColorSnapshot(
+            id: UUID(), name: "South Orange", prefix: "SO",
+            rgba: RGBAColor(r: 1, g: 0.5, b: 0), isDefault: true
+        )
+        let repository = TagColorWriteResultRepository(colors: [north])
+        let store = TagColorLibraryStore(repository: repository)
+        XCTAssertEqual(store.colors.map(\.id), [north.id])
+
+        // The active Herd changes before its color records are readable.
+        repository.persistedColors = [south]
+        repository.failFetch = true
+        store.refreshForHerdChange()
+        XCTAssertTrue(store.colors.isEmpty)
+        XCTAssertNotNil(store.lastErrorMessage)
+
+        repository.failFetch = false
+        store.refreshForHerdChange()
+        XCTAssertEqual(store.colors.map(\.id), [south.id])
+        XCTAssertNil(store.lastErrorMessage)
+    }
+
     func testCommittedUpsertSurvivesPostWriteLibraryRefreshFailure() {
         let original = TagColorSnapshot(
             id: TagColorDefaults.whiteID,

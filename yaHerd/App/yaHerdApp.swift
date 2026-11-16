@@ -382,6 +382,11 @@ private struct RunningAppView: View {
                     tagColorLibrary.refresh()
                 }
             }
+            .onChange(of: runtime.herdSelection.currentHerdID) { _, _ in
+                // The store outlives Herd-specific view trees. Never display
+                // a previous Herd's tag color names or IDs after switching.
+                tagColorLibrary.refreshForHerdChange()
+            }
     }
 }
 
