@@ -6,7 +6,7 @@ protocol SampleDataSeeding {
     /// Uses the identical selected-Herd predicate as the write transaction.
     func canSeedSampleData() throws -> Bool
 
-    /// Returns false without writing if the selected Herd already has records.
-    func seedSampleDataIfNeeded() async throws -> Bool
-    func seedLargeSampleDataIfNeeded() async throws -> Bool
+    /// Returns false without writing if the selected Herd already has records. The caller supplies its originating Herd ID so a deferred action cannot target a later selection.
+    func seedSampleDataIfNeeded(for herdID: UUID) async throws -> Bool
+    func seedLargeSampleDataIfNeeded(for herdID: UUID) async throws -> Bool
 }
