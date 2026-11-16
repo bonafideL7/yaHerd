@@ -39,18 +39,23 @@ final class HomeViewModel {
         configuration: DashboardConfiguration,
         useCase: LoadHomeUseCase
     ) async -> Bool {
-        guard !isLoading else { return false }
+        guard !isLoading, !Task.isCancelled else { return false }
         isLoading = true
         defer {
             isLoading = false
         }
 
         do {
-            snapshot = try await useCase.execute(configuration: configuration)
+            let loadedSnapshot = try await useCase.execute(configuration: configuration)
+            try Task.checkCancellation()
+            snapshot = loadedSnapshot
             errorMessage = nil
             hasLoaded = true
             return true
+        } catch is CancellationError {
+            return false
         } catch {
+            guard !Task.isCancelled else { return false }
             errorMessage = UserVisibleErrorMessage.make(error)
             return false
         }
