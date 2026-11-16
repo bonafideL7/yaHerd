@@ -41,6 +41,9 @@ struct yaHerdApp: App {
                             #endif
                         }
                     )
+                    // A selected-Herd change must rebuild StateObjects and
+                    // in-flight view tasks against the new repository graph.
+                    .id(runtime.selectedHerdID)
 
                 case .storageUnavailable(let message):
                     StartupStorageFailureView(message: message)
@@ -247,7 +250,8 @@ struct yaHerdApp: App {
                             startupError: startupMessage
                         ),
                         storageError: startupMessage,
-                        cloudKitHerdContext: nil
+                        cloudKitHerdContext: nil,
+                        selectedHerdID: nil
                     )
                 )
             } catch {
@@ -274,6 +278,7 @@ struct yaHerdApp: App {
         cloudKitHerdContext: CloudKitHerdSelectionContext? = nil
     ) -> AppRuntime {
         let dependencies = persistence.makeDependencies(dataAccessMode: .readWrite)
+        let selectedHerdID = try? dependencies.herdRepository.fetchCurrentHerd().id
         AppLaunchDiagnostics.record(actualStorageMode: storageMode)
         #if DEBUG
         NSLog("yaHerd active storage mode: %@", storageMode.displayName)
@@ -284,7 +289,8 @@ struct yaHerdApp: App {
             dataAccessMode: .readWrite,
             recoveryContext: nil,
             storageError: nil,
-            cloudKitHerdContext: cloudKitHerdContext
+            cloudKitHerdContext: cloudKitHerdContext,
+            selectedHerdID: selectedHerdID
         )
     }
 
@@ -365,6 +371,7 @@ private struct AppRuntime {
     let recoveryContext: RecoveryModeContext?
     let storageError: String?
     let cloudKitHerdContext: CloudKitHerdSelectionContext?
+    let selectedHerdID: UUID?
 }
 
 private struct RunningAppView: View {
