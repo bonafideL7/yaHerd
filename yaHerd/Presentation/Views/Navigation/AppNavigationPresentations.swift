@@ -101,6 +101,11 @@ private struct AppSettingsMenuButton: View {
     var body: some View {
         Menu {
             Button {
+                navigation.showingHerds = true
+            } label: {
+                Label("Switch Herd", systemImage: "arrow.left.arrow.right")
+            }
+            Button {
                 navigation.present(.settings)
             } label: {
                 Label("Settings", systemImage: "gearshape")

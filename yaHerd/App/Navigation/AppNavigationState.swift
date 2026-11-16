@@ -521,6 +521,7 @@ final class AppNavigationState {
     let workflowRouter = WorkflowRouter()
     var presentedSheet: AppPresentedSheet?
     var fullScreenWorkflow: AppFullScreenWorkflow?
+    var showingHerds = false
 
     /// The animal sort/filter accessory belongs only to the visible root animal list,
     /// not detail views, Field Checks, Working Sessions, or isolated workflows.
@@ -588,6 +589,7 @@ final class AppNavigationState {
         selectedTab = .home
         herdRouter.resetForHerdChange()
         resetTransientPresentations()
+        showingHerds = false
     }
 
     func restorationPayload() -> String? {
