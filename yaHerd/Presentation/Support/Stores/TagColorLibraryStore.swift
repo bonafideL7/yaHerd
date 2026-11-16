@@ -135,6 +135,15 @@ final class TagColorLibraryStore: ObservableObject {
         load()
     }
 
+    /// A Herd change invalidates all visible and historical color definitions.
+    /// Unlike a routine refresh, a failed fetch must not display the old Herd's colors.
+    func refreshForHerdChange() {
+        colors.removeAll()
+        historicalDefinitionsByID.removeAll()
+        lastErrorMessage = nil
+        load()
+    }
+
     private func load() {
         do {
             historicalDefinitionsByID.removeAll()
