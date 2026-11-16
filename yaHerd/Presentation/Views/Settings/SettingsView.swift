@@ -9,6 +9,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(\.recoveryModeController) private var recoveryModeController
+    @Environment(\.openHerdChooser) private var openHerdChooser
 
     var body: some View {
         List {
@@ -27,6 +28,18 @@ struct SettingsView: View {
                     Text("Data editing is disabled for this launch.")
                         .font(.caption)
                         .foregroundStyle(.red)
+                }
+            }
+
+            if let openHerdChooser, !dataAccessMode.isRecoveryMode {
+                Section("Herds") {
+                    Button(action: openHerdChooser) {
+                        SettingsRow(
+                            title: "Switch Herd",
+                            subtitle: "Choose an owned or joined Herd, or create a new one.",
+                            systemImage: "square.stack.3d.up"
+                        )
+                    }
                 }
             }
 
@@ -319,5 +332,16 @@ private struct SettingsSaveAndCloseToolbarModifier: ViewModifier {
 extension View {
     func settingsSaveAndCloseToolbar() -> some View {
         modifier(SettingsSaveAndCloseToolbarModifier())
+    }
+}
+
+private struct OpenHerdChooserKey: EnvironmentKey {
+    static var defaultValue: (() -> Void)? { nil }
+}
+
+extension EnvironmentValues {
+    var openHerdChooser: (() -> Void)? {
+        get { self[OpenHerdChooserKey.self] }
+        set { self[OpenHerdChooserKey.self] = newValue }
     }
 }
