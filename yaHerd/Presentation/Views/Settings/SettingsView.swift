@@ -333,7 +333,7 @@ extension View {
 }
 
 @MainActor
-private struct HerdDirectoryView: View {
+struct HerdDirectoryView: View {
     @Environment(HerdDirectoryController.self) private var directory
     @Environment(AppNavigationState.self) private var navigation
     @Environment(\.appDataAccessMode) private var dataAccessMode
