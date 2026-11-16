@@ -4,6 +4,7 @@ struct WorkingFinishSessionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     private var repository: any WorkingFinishSessionRepository {
@@ -429,7 +430,10 @@ struct WorkingFinishSessionView: View {
     }
 
     private func completeSession() {
-        guard !isFinishing, let session, canFinish else { return }
+        guard !isFinishing,
+              let session,
+              canFinish,
+              let originatingHerdID = herdSelection.currentHerdID else { return }
 
         let assignments = orderedItems.map { item in
             let destinationPastureID = exceptionAnimalIDs.contains(item.id)
@@ -447,12 +451,16 @@ struct WorkingFinishSessionView: View {
             defer { isFinishing = false }
 
             do {
-                try await CompleteWorkingSessionUseCase(repository: repository).execute(
-                    sessionID: session.id,
-                    assignments: assignments
-                )
+                guard try await viewModel.finishSession(
+                    assignments: assignments,
+                    originatingHerdID: originatingHerdID,
+                    currentHerdSelection: herdSelection,
+                    repository: repository
+                ) else { return }
                 dismiss()
             } catch {
+                guard !Task.isCancelled,
+                      herdSelection.currentHerdID == originatingHerdID else { return }
                 errorMessage = UserVisibleErrorMessage.make(error)
                 showingError = true
             }
