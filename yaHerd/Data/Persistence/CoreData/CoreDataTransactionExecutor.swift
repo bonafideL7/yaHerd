@@ -48,10 +48,11 @@ final class CoreDataTransactionExecutor {
                     try CoreDataLookup().prepareForSave(herdID: herdID, in: context)
                 }
 
+                // A Herd switch can cancel the editor while this context
+                // stages changes. Do not commit an obsolete transaction.
+                // Cancellation is not a persistence failure.
+                try Task.checkCancellation()
                 do {
-                    // A Herd switch can cancel the editor while this context
-                    // stages changes. Do not commit an obsolete transaction.
-                    try Task.checkCancellation()
                     try context.save()
                     return result
                 } catch {
