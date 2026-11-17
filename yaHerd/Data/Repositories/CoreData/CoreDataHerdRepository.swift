@@ -120,60 +120,61 @@ final class CoreDataHerdRepository: HerdRepository {
                     try cancellation.withLock {
                         if $0 { throw CancellationError() }
                     }
+
                     let stores = context.persistentStoreCoordinator?.persistentStores ?? []
-                let destination: NSPersistentStore
-                if stores.count == 1, let store = stores.first {
-                    destination = store
-                } else if stores.count == 2,
-                          let privateStore = stores.first(where: {
-                              $0.url?.lastPathComponent ==
-                                  CoreDataPersistentContainer.storeFileName
-                          }),
-                          stores.contains(where: {
-                              $0.url?.lastPathComponent ==
-                                  CoreDataPersistentContainer.sharedStoreFileName
-                          }) {
-                    destination = privateStore
-                } else {
-                    throw CoreDataPersistenceError.unscopedMultiStoreWrite
-                }
+                    let destination: NSPersistentStore
+                    if stores.count == 1, let store = stores.first {
+                        destination = store
+                    } else if stores.count == 2,
+                              let privateStore = stores.first(where: {
+                                  $0.url?.lastPathComponent ==
+                                      CoreDataPersistentContainer.storeFileName
+                              }),
+                              stores.contains(where: {
+                                  $0.url?.lastPathComponent ==
+                                      CoreDataPersistentContainer.sharedStoreFileName
+                              }) {
+                        destination = privateStore
+                    } else {
+                        throw CoreDataPersistenceError.unscopedMultiStoreWrite
+                    }
 
-                let id = UUID()
-                guard try CoreDataLookup().herd(id: id, in: context) == nil else {
-                    throw CoreDataPersistenceError.duplicateApplicationID(
-                        entity: CDHerd.coreDataEntityName, id: id, herdID: nil
-                    )
-                }
+                    let id = UUID()
+                    guard try CoreDataLookup().herd(id: id, in: context) == nil else {
+                        throw CoreDataPersistenceError.duplicateApplicationID(
+                            entity: CDHerd.coreDataEntityName, id: id, herdID: nil
+                        )
+                    }
 
-                let now = Date()
-                let herd = CDHerd(context: context)
-                herd.id = id
-                herd.name = trimmedName
-                herd.createdAt = now
-                herd.updatedAt = now
-                context.assign(herd, to: destination)
-                let summary = try herd.toSummary()
-                try beforeSave?(context)
-                // Respect cancellation after staging but before the commit.
-                // An already-completed save cannot be undone.
-                try cancellation.withLock {
-                    if $0 { throw CancellationError() }
-                }
-                do {
-                    try context.save()
+                    let now = Date()
+                    let herd = CDHerd(context: context)
+                    herd.id = id
+                    herd.name = trimmedName
+                    herd.createdAt = now
+                    herd.updatedAt = now
+                    context.assign(herd, to: destination)
+                    let summary = try herd.toSummary()
+                    try beforeSave?(context)
+                    // Respect cancellation after staging but before the commit.
+                    // An already-completed save cannot be undone.
+                    try cancellation.withLock {
+                        if $0 { throw CancellationError() }
+                    }
+                    do {
+                        try context.save()
+                    } catch {
+                        ReliabilityLog.persistenceSaveFailure("herd-create", error: error)
+                        throw CoreDataPersistenceError.saveFailed(
+                            description: error.localizedDescription
+                        )
+                    }
+                    return summary
                 } catch {
-                    ReliabilityLog.persistenceSaveFailure("herd-create", error: error)
-                    throw CoreDataPersistenceError.saveFailed(
-                        description: error.localizedDescription
-                    )
+                    if context.hasChanges {
+                        context.rollback()
+                    }
+                    throw error
                 }
-                return summary
-            } catch {
-                if context.hasChanges {
-                    context.rollback()
-                }
-                throw error
-            }
             }
         } onCancel: {
             cancellation.withLock { $0 = true }
