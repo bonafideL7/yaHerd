@@ -166,8 +166,10 @@ final class FieldCheckSessionDetailViewModel {
 
     private func persistNotesOperation(
         sessionID: UUID,
-        using repository: any FieldCheckSessionDetailRepository
+        using repository: any FieldCheckSessionDetailRepository,
+        mayContinue: @escaping @MainActor () -> Bool = { true }
     ) async -> Bool {
+        guard mayContinue() else { return false }
         guard let detail else {
             return true
         }
@@ -180,9 +182,11 @@ final class FieldCheckSessionDetailViewModel {
 
         do {
             try await repository.updateNotes(sessionID: sessionID, notes: notesDraft)
+            guard mayContinue() else { return false }
             refresh(sessionID: sessionID, using: repository)
             return true
         } catch {
+            guard mayContinue() else { return false }
             errorMessage = UserVisibleErrorMessage.make(error)
             return false
         }
@@ -191,12 +195,21 @@ final class FieldCheckSessionDetailViewModel {
     @discardableResult
     func persistNotes(
         sessionID: UUID,
+        originatingHerdID: UUID,
+        currentHerdSelection: any CurrentHerdSelectionReading,
         using repository: any FieldCheckSessionDetailRepository
     ) async -> Bool {
-        await performOrderedMutation {
+        guard currentHerdSelection.currentHerdID == originatingHerdID else {
+            return false
+        }
+
+        return await performOrderedMutation {
             await self.persistNotesOperation(
                 sessionID: sessionID,
-                using: repository
+                using: repository,
+                mayContinue: {
+                    currentHerdSelection.currentHerdID == originatingHerdID
+                }
             )
         }
     }
