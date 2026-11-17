@@ -194,6 +194,7 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
     func testSessionStartDoesNotRunAfterSwitchingHerdsBeforeSubmission() async throws {
         let originatingHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
+        let originatingSelectionRevision = selection.selectionRevision
         let repository = SuspendedWorkingSessionStartRepository()
         let model = NewWorkingSessionViewModel(
             pastureRepository: EmptyPastureRepository(),
@@ -208,7 +209,10 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
             plannedTreatments: [],
             animalIDs: nil,
             originatingHerdID: originatingHerdID,
-            currentHerdSelection: selection
+            currentHerdSelection: selection,
+            selectionIsUnchanged: {
+                selection.selectionRevision == originatingSelectionRevision
+            }
         )
 
         XCTAssertNil(result)
@@ -218,6 +222,7 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
     func testCompletedSessionStartIsDiscardedAfterSwitchingHerds() async throws {
         let originatingHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
+        let originatingSelectionRevision = selection.selectionRevision
         let repository = SuspendedWorkingSessionStartRepository()
         let model = NewWorkingSessionViewModel(
             pastureRepository: EmptyPastureRepository(),
@@ -233,7 +238,10 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
                 plannedTreatments: [],
                 animalIDs: nil,
                 originatingHerdID: originatingHerdID,
-                currentHerdSelection: selection
+                currentHerdSelection: selection,
+            selectionIsUnchanged: {
+                selection.selectionRevision == originatingSelectionRevision
+            }
             )
         }
         await repository.waitUntilStarted()
@@ -248,6 +256,7 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
     func testCompletedSessionStartIsDiscardedAfterHerdSelectionRoundTrip() async throws {
         let originatingHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
+        let originatingSelectionRevision = selection.selectionRevision
         let repository = SuspendedWorkingSessionStartRepository()
         let model = NewWorkingSessionViewModel(
             pastureRepository: EmptyPastureRepository(),
@@ -263,7 +272,10 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
                 plannedTreatments: [],
                 animalIDs: nil,
                 originatingHerdID: originatingHerdID,
-                currentHerdSelection: selection
+                currentHerdSelection: selection,
+            selectionIsUnchanged: {
+                selection.selectionRevision == originatingSelectionRevision
+            }
             )
         }
         await repository.waitUntilStarted()
@@ -281,6 +293,7 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
     func testCompletedSessionStartIsDeliveredWhenHerdRemainsSelected() async throws {
         let originatingHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
+        let originatingSelectionRevision = selection.selectionRevision
         let repository = SuspendedWorkingSessionStartRepository()
         let model = NewWorkingSessionViewModel(
             pastureRepository: EmptyPastureRepository(),
@@ -296,7 +309,10 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
                 plannedTreatments: [],
                 animalIDs: nil,
                 originatingHerdID: originatingHerdID,
-                currentHerdSelection: selection
+                currentHerdSelection: selection,
+            selectionIsUnchanged: {
+                selection.selectionRevision == originatingSelectionRevision
+            }
             )
         }
         await repository.waitUntilStarted()
