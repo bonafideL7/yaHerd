@@ -4,7 +4,9 @@ struct FieldCheckSessionDetailView: View {
     @Environment(\.fieldCheckFeatureDependencies) private var fieldCheckDependencies
     private var repository: any FieldCheckSessionDetailRepository { fieldCheckDependencies.sessionDetailRepository }
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @State private var model = FieldCheckSessionDetailViewModel()
+    @State private var originatingHerdID: UUID?
     @State private var rosterFilter: FieldCheckRosterFilter = .remaining
     @State private var rosterSearchText = ""
     @State private var showingAddFinding = false
@@ -269,6 +271,7 @@ struct FieldCheckSessionDetailView: View {
             }
         }
         .task(id: sessionID) {
+            originatingHerdID = herdSelection.currentHerdID
             model.load(sessionID: sessionID, using: repository)
             syncSelectedPane()
             applyInitialFindingRouteIfNeeded()
@@ -277,9 +280,7 @@ struct FieldCheckSessionDetailView: View {
             if dataAccessMode.allowsDataMutations
                 && model.detail?.isCompleted == false
                 && model.detail?.isPastureArchived == false {
-                Task { @MainActor in
-                    await model.persistNotes(sessionID: sessionID, using: repository)
-                }
+                persistNotesForOriginatingHerd()
             }
         }
         .sheet(isPresented: $showingFinishReview) {
@@ -347,9 +348,7 @@ struct FieldCheckSessionDetailView: View {
             }
         }
         .sheet(isPresented: $showingNotes, onDismiss: {
-            Task { @MainActor in
-                await model.persistNotes(sessionID: sessionID, using: repository)
-            }
+            persistNotesForOriginatingHerd()
         }) {
             if let detail = model.detail {
                 NavigationStack {
@@ -990,15 +989,29 @@ struct FieldCheckSessionDetailView: View {
         }
     }
 
+    private func persistNotesForOriginatingHerd() {
+        guard let originatingHerdID,
+              herdSelection.currentHerdID == originatingHerdID else {
+            return
+        }
+
+        Task { @MainActor in
+            await model.persistNotes(
+                sessionID: sessionID,
+                originatingHerdID: originatingHerdID,
+                currentHerdSelection: herdSelection,
+                using: repository
+            )
+        }
+    }
+
     private func selectPane(_ pane: FieldCheckSessionPane) {
         if dataAccessMode.allowsDataMutations,
             model.detail?.isPastureArchived == false,
             selectedPane == .notes,
             pane != .notes
         {
-            Task { @MainActor in
-                await model.persistNotes(sessionID: sessionID, using: repository)
-            }
+            persistNotesForOriginatingHerd()
         }
 
         if pane != .roster {
