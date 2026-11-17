@@ -239,9 +239,9 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
                 animalIDs: nil,
                 originatingHerdID: originatingHerdID,
                 currentHerdSelection: selection,
-            selectionIsUnchanged: {
-                selection.selectionRevision == originatingSelectionRevision
-            }
+                selectionIsUnchanged: {
+                    selection.selectionRevision == originatingSelectionRevision
+                }
             )
         }
         await repository.waitUntilStarted()
@@ -273,9 +273,9 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
                 animalIDs: nil,
                 originatingHerdID: originatingHerdID,
                 currentHerdSelection: selection,
-            selectionIsUnchanged: {
-                selection.selectionRevision == originatingSelectionRevision
-            }
+                selectionIsUnchanged: {
+                    selection.selectionRevision == originatingSelectionRevision
+                }
             )
         }
         await repository.waitUntilStarted()
@@ -286,7 +286,8 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
         selection.select(originatingHerdID)
         repository.complete(with: savedSessionID)
 
-        XCTAssertNil(try await start.value)
+        let result = try await start.value
+        XCTAssertNil(result)
         XCTAssertEqual(repository.startCallCount, 1)
     }
 
@@ -310,9 +311,9 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
                 animalIDs: nil,
                 originatingHerdID: originatingHerdID,
                 currentHerdSelection: selection,
-            selectionIsUnchanged: {
-                selection.selectionRevision == originatingSelectionRevision
-            }
+                selectionIsUnchanged: {
+                    selection.selectionRevision == originatingSelectionRevision
+                }
             )
         }
         await repository.waitUntilStarted()
