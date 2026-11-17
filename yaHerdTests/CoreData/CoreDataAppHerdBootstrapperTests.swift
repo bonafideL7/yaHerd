@@ -288,6 +288,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     @MainActor
     func testTwoStoreAppLoaderSelectsExistingSharedHerdWithoutChangingPrivateHerd() async throws {
         let harness = try CoreDataPersistenceHarness()
+        try await seedExplicitLocalHerd(at: harness.storeURL)
         let existing = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
         let privateHerdID = try existing.makeDependencies(dataAccessMode: .readWrite)
             .herdRepository.fetchCurrentHerd().id
@@ -622,6 +623,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     @MainActor
     func testDevelopmentTwoStoreStartupSelectsExistingPrivateHerdNotSharedHerd() async throws {
         let harness = try CoreDataPersistenceHarness()
+        try await seedExplicitLocalHerd(at: harness.storeURL)
         let local = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
         let originalID = try local.makeDependencies(dataAccessMode: .readWrite)
             .herdRepository.fetchCurrentHerd().id
@@ -907,6 +909,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     @MainActor
     func testAppCutoverReopensDurableCoreDataHerdAndPastures() async throws {
         let harness = try CoreDataPersistenceHarness()
+        try await seedExplicitLocalHerd(at: harness.storeURL)
         let first = try await CoreDataAppPersistenceAssembly.load(
             at: harness.storeURL
         )
@@ -997,6 +1000,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         try marker.write(to: obsoleteFile)
         try marker.write(to: obsoleteJournal)
 
+        try await seedExplicitLocalHerd(at: store)
         let first = try await CoreDataAppPersistenceAssembly.load(at: store)
         let firstHerdID = try first.makeDependencies(
             dataAccessMode: .readWrite
@@ -1355,6 +1359,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
 
         for (isLarge, expectedAnimals) in [(false, 18), (true, 480)] {
             let harness = try CoreDataPersistenceHarness()
+            try await seedExplicitLocalHerd(at: harness.storeURL)
             let app = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
             let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
             let originalHerdID = try dependencies.herdRepository.fetchCurrentHerd().id
@@ -1471,6 +1476,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     @MainActor
     func testSampleActionsDoNotModifyExistingPastureOrStandaloneGroup() async throws {
         let harness = try CoreDataPersistenceHarness()
+        try await seedExplicitLocalHerd(at: harness.storeURL)
         let app = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
         let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
         let herdID = try XCTUnwrap(app.currentHerdSelection.currentHerdID)
@@ -2085,6 +2091,20 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertEqual(try templates.fetchTemplates().count, 2)
         try templates.deleteTemplates(ids: [originalID, nextID])
         XCTAssertTrue(try templates.fetchTemplates().isEmpty)
+    }
+
+
+    /// These contracts start with an existing Herd; first-launch UI creation
+    /// is verified independently in CoreDataStage3StartupSelectionTests.
+    @MainActor
+    private func seedExplicitLocalHerd(at storeURL: URL) async throws {
+        let assembly = try await CoreDataPersistenceAssembly.load(storeURL: storeURL)
+        let repository = CoreDataHerdRepository(
+            selection: AppCurrentHerdSelection(), assembly: assembly
+        )
+        _ = try await repository.createOwnedHerd(
+            named: CoreDataAppHerdBootstrapper.defaultHerdName
+        )
     }
 
 }
