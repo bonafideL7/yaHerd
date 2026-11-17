@@ -3,6 +3,47 @@ import XCTest
 @testable import yaHerd
 
 final class WorkingQueueEditorIdentityTests: XCTestCase {
+    @MainActor
+    func testEditorHerdIdentityRejectsSelectionSwitchAndReturnToSameHerd() throws {
+        let herdA = UUID()
+        let herdB = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdA)
+        let identity = try XCTUnwrap(WorkingQueueEditorHerdIdentity(selection: selection))
+
+        XCTAssertTrue(identity.isCurrent(in: selection))
+
+        selection.select(herdA)
+        XCTAssertTrue(
+            identity.isCurrent(in: selection),
+            "Selecting the already active Herd must not invalidate the current editor."
+        )
+
+        selection.select(herdB)
+        XCTAssertFalse(identity.isCurrent(in: selection))
+
+        selection.select(herdA)
+        XCTAssertFalse(
+            identity.isCurrent(in: selection),
+            "Returning to a Herd must not revive an editor from an earlier selection."
+        )
+
+        let reopened = try XCTUnwrap(WorkingQueueEditorHerdIdentity(selection: selection))
+        XCTAssertTrue(reopened.isCurrent(in: selection))
+    }
+
+    @MainActor
+    func testEditorHerdIdentityRequiresAnActiveSelectionAndRejectsRevocation() throws {
+        let selection = AppCurrentHerdSelection()
+        XCTAssertNil(WorkingQueueEditorHerdIdentity(selection: selection))
+
+        selection.select(UUID())
+        let identity = try XCTUnwrap(WorkingQueueEditorHerdIdentity(selection: selection))
+        selection.revalidateActiveHerd(from: [])
+
+        XCTAssertNil(selection.currentHerdID)
+        XCTAssertFalse(identity.isCurrent(in: selection))
+    }
+
     func testAsyncSireExistenceResultCannotEraseAnotherSelection() {
         let checkedID = UUID()
         let newerID = UUID()

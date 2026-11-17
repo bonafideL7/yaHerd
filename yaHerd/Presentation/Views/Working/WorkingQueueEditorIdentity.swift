@@ -1,5 +1,24 @@
 import Foundation
 
+/// Captures the opening Herd *and* selection generation. A return to the
+/// same UUID must not re-enable a detached Working editor.
+@MainActor
+struct WorkingQueueEditorHerdIdentity {
+    let herdID: UUID
+    let selectionRevision: UInt64
+
+    init?(selection: AppCurrentHerdSelection) {
+        guard let herdID = selection.currentHerdID else { return nil }
+        self.herdID = herdID
+        self.selectionRevision = selection.selectionRevision
+    }
+
+    func isCurrent(in selection: AppCurrentHerdSelection) -> Bool {
+        herdID == selection.currentHerdID
+            && selectionRevision == selection.selectionRevision
+    }
+}
+
 struct WorkingQueueEditorSourcePastureReference: Equatable {
     let id: UUID?
     let name: String?
