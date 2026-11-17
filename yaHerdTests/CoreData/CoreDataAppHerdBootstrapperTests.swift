@@ -55,6 +55,51 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertEqual(restoredID, originalID)
     }
 
+    func testBootstrapRejectsIncompleteExistingHerdMetadataWithoutCreatingReplacement() async throws {
+        for missingField in ["name", "createdAt", "updatedAt"] {
+            let assembly = try await CoreDataPersistenceAssembly.inMemory()
+            let originalID = UUID()
+            let context = try assembly.contextFactory.makeWriteContext()
+            try context.performAndWait {
+                let herd = CDHerd(context: context)
+                herd.id = originalID
+                herd.name = missingField == "name" ? nil : "Imported Herd"
+                herd.createdAt = missingField == "createdAt"
+                    ? nil : Date(timeIntervalSince1970: 100)
+                herd.updatedAt = missingField == "updatedAt"
+                    ? nil : Date(timeIntervalSince1970: 200)
+                try context.save()
+            }
+
+            do {
+                _ = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+                    assembly: assembly
+                )
+                XCTFail("Bootstrap must reject a Herd missing \\(missingField).")
+            } catch {
+                let expected: CoreDataHerdMappingError
+                switch missingField {
+                case "name":
+                    expected = .missingName(herdID: originalID)
+                case "createdAt":
+                    expected = .missingCreatedAt(herdID: originalID)
+                default:
+                    expected = .missingUpdatedAt(herdID: originalID)
+                }
+                XCTAssertEqual(error as? CoreDataHerdMappingError, expected)
+            }
+
+            let readContext = assembly.contextFactory.makeReadContext()
+            try readContext.performAndWait {
+                let roots = try readContext.fetch(
+                    NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+                )
+                XCTAssertEqual(roots.count, 1)
+                XCTAssertEqual(roots.first?.id, originalID)
+            }
+        }
+    }
+
     func testBootstrapCreatesOneLocalHerdAndReusesItsApplicationID() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let timestamp = Date(timeIntervalSince1970: 1_800_000_000)
