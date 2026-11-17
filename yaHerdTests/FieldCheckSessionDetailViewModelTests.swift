@@ -137,6 +137,104 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         XCTAssertEqual(model.detail?.notes, "Saved notes")
     }
 
+    func testQueuedQuickCountsStopAfterHerdSwitch() async throws {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
+        let sessionID = UUID()
+        let repository = FieldCheckSessionDetailRepositorySpy(
+            detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
+        )
+        repository.shouldBlockFirstQuickCountWrite = true
+        let model = FieldCheckSessionDetailViewModel()
+        XCTAssertTrue(model.load(sessionID: sessionID, using: repository))
+
+        let isOriginatingHerd = {
+            selection.currentHerdID == herdID && selection.selectionRevision == revision
+        }
+        model.updateQuickAnimalTypeCounts(
+            sessionID: sessionID, counts: [.cow: 1],
+            using: repository, mayContinue: isOriginatingHerd
+        )
+        await waitUntil { repository.quickCountUpdates.count == 1 }
+        model.updateQuickAnimalTypeCounts(
+            sessionID: sessionID, counts: [.cow: 2],
+            using: repository, mayContinue: isOriginatingHerd
+        )
+
+        selection.select(UUID())
+        repository.releaseFirstQuickCountWrite()
+        for _ in 0..<100 { await Task.yield() }
+
+        XCTAssertEqual(repository.quickCountUpdates.map { $0[.cow, default: 0] }, [1])
+        XCTAssertEqual(model.detail?.quickCowCount, 0, "An obsolete queue must not refresh the prior Herd view.")
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testQuickCountQueueRejectsSelectionRoundTrip() async throws {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
+        let sessionID = UUID()
+        let repository = FieldCheckSessionDetailRepositorySpy(
+            detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
+        )
+        repository.shouldBlockFirstQuickCountWrite = true
+        let model = FieldCheckSessionDetailViewModel()
+        XCTAssertTrue(model.load(sessionID: sessionID, using: repository))
+
+        let isOriginatingHerd = {
+            selection.currentHerdID == herdID && selection.selectionRevision == revision
+        }
+        model.updateQuickAnimalTypeCounts(
+            sessionID: sessionID, counts: [.cow: 1],
+            using: repository, mayContinue: isOriginatingHerd
+        )
+        await waitUntil { repository.quickCountUpdates.count == 1 }
+        model.updateQuickAnimalTypeCounts(
+            sessionID: sessionID, counts: [.cow: 3],
+            using: repository, mayContinue: isOriginatingHerd
+        )
+
+        selection.select(UUID())
+        selection.select(herdID)
+        repository.releaseFirstQuickCountWrite()
+        for _ in 0..<100 { await Task.yield() }
+
+        XCTAssertEqual(repository.quickCountUpdates.map { $0[.cow, default: 0] }, [1])
+        XCTAssertEqual(model.detail?.quickCowCount, 0)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testQuickCountFailureAfterHerdSwitchDoesNotPublishStaleError() async throws {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
+        let sessionID = UUID()
+        let repository = FieldCheckSessionDetailRepositorySpy(
+            detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
+        )
+        repository.shouldBlockFirstQuickCountWrite = true
+        repository.quickCountFailure = FieldCheckSessionDetailTestError.quickCountFailure
+        let model = FieldCheckSessionDetailViewModel()
+        XCTAssertTrue(model.load(sessionID: sessionID, using: repository))
+
+        model.updateQuickAnimalTypeCounts(
+            sessionID: sessionID, counts: [.cow: 1],
+            using: repository,
+            mayContinue: {
+                selection.currentHerdID == herdID && selection.selectionRevision == revision
+            }
+        )
+        await waitUntil { repository.quickCountUpdates.count == 1 }
+        selection.select(UUID())
+        repository.releaseFirstQuickCountWrite()
+        for _ in 0..<100 { await Task.yield() }
+
+        XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(model.detail?.quickCowCount, 0)
+    }
+
     func testRapidQuickCountUpdatesStayOptimisticAndCoalesceToLatestValue() async throws {
         let sessionID = UUID()
         let repository = FieldCheckSessionDetailRepositorySpy(
