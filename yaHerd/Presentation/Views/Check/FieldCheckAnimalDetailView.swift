@@ -6,6 +6,7 @@ struct FieldCheckAnimalDetailView: View {
     private var fieldCheckRepository: any FieldCheckAnimalDetailRepository { fieldCheckDependencies.animalDetailRepository }
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
 
     @State private var model = FieldCheckAnimalDetailViewModel()
     @State private var isLineageExpanded = false
@@ -154,6 +155,7 @@ struct FieldCheckAnimalDetailView: View {
             )
         }
         .task {
+            model.bindHerdSelection(herdSelection)
             if !model.hasLoaded {
                 model.load(
                     animalID: animalID,
