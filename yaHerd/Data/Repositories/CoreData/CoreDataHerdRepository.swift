@@ -1,5 +1,6 @@
 @preconcurrency import CoreData
 import Foundation
+import Synchronization
 
 @MainActor
 final class CoreDataHerdRepository: HerdRepository {
@@ -96,15 +97,30 @@ final class CoreDataHerdRepository: HerdRepository {
     /// Explicit user action. A new owned root belongs only in the private
     /// store; no second default Herd is created by an empty CloudKit import.
     func createOwnedHerd(named name: String) async throws -> HerdSummary {
+        try await createOwnedHerd(named: name, beforeSave: nil)
+    }
+
+    func createOwnedHerd(
+        named name: String,
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)?
+    ) async throws -> HerdSummary {
+        try Task.checkCancellation()
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
             throw HerdRepositoryError.emptyName
         }
 
         let context = try contextFactory.makeWriteContext()
-        return try await context.perform {
-            do {
-                let stores = context.persistentStoreCoordinator?.persistentStores ?? []
+        // Swift task cancellation is not automatically visible inside Core
+        // Data's private queue. A dismissed chooser must not save its Create.
+        let cancellation = Mutex(false)
+        return try await withTaskCancellationHandler {
+            try await context.perform {
+                do {
+                    try cancellation.withLock {
+                        if $0 { throw CancellationError() }
+                    }
+                    let stores = context.persistentStoreCoordinator?.persistentStores ?? []
                 let destination: NSPersistentStore
                 if stores.count == 1, let store = stores.first {
                     destination = store
@@ -137,6 +153,12 @@ final class CoreDataHerdRepository: HerdRepository {
                 herd.updatedAt = now
                 context.assign(herd, to: destination)
                 let summary = try herd.toSummary()
+                try beforeSave?(context)
+                // Respect cancellation after staging but before the commit.
+                // An already-completed save cannot be undone.
+                try cancellation.withLock {
+                    if $0 { throw CancellationError() }
+                }
                 do {
                     try context.save()
                 } catch {
@@ -152,6 +174,9 @@ final class CoreDataHerdRepository: HerdRepository {
                 }
                 throw error
             }
+            }
+        } onCancel: {
+            cancellation.withLock { $0 = true }
         }
     }
 
