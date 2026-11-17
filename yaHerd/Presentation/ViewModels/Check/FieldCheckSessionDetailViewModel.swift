@@ -573,6 +573,9 @@ final class FieldCheckAnimalDetailViewModel {
     @ObservationIgnored private let dateProvider: any DateProviding
     @ObservationIgnored private var orderedMutationTail: Task<Bool, Never>?
     @ObservationIgnored private var orderedMutationSequence: UInt64 = 0
+    @ObservationIgnored private var currentHerdSelection: AppCurrentHerdSelection?
+    @ObservationIgnored private var originatingHerdID: UUID?
+    @ObservationIgnored private var originatingSelectionRevision: UInt64?
     private(set) var animalDetail: AnimalDetailSnapshot?
     private(set) var sessionDetail: FieldCheckSessionDetailSnapshot?
     var preparedOffspringEditor: PreparedAnimalEditor?
@@ -593,6 +596,25 @@ final class FieldCheckAnimalDetailViewModel {
 
     init(dateProvider: any DateProviding = SystemDateProvider()) {
         self.dateProvider = dateProvider
+    }
+
+    /// Bind once to the Herd that opened this editor. Rebinding an obsolete
+    /// view after a selection change must not authorize its queued actions.
+    func bindHerdSelection(_ selection: AppCurrentHerdSelection) {
+        guard currentHerdSelection == nil else { return }
+        currentHerdSelection = selection
+        originatingHerdID = selection.currentHerdID
+        originatingSelectionRevision = selection.selectionRevision
+    }
+
+    private var isOriginHerdCurrent: Bool {
+        guard let currentHerdSelection,
+              let originatingHerdID,
+              let originatingSelectionRevision else {
+            return false
+        }
+        return currentHerdSelection.currentHerdID == originatingHerdID
+            && currentHerdSelection.selectionRevision == originatingSelectionRevision
     }
 
     func load(
@@ -619,6 +641,7 @@ final class FieldCheckAnimalDetailViewModel {
         animalRepository: any AnimalDetailRepository,
         fieldCheckRepository: any FieldCheckAnimalDetailRepository
     ) {
+        guard isOriginHerdCurrent else { return }
         do {
             animalDetail = try animalRepository.fetchAnimalDetail(id: animalID)
             preparedOffspringEditor = try PrepareOffspringDraftUseCase(repository: animalRepository).execute(forDamID: animalID)
@@ -632,6 +655,7 @@ final class FieldCheckAnimalDetailViewModel {
     private func performOrderedMutation(
         _ operation: @escaping @MainActor () async -> Bool
     ) async -> Bool {
+        guard isOriginHerdCurrent, !Task.isCancelled else { return false }
         let predecessor = orderedMutationTail
         orderedMutationSequence &+= 1
         let sequence = orderedMutationSequence
@@ -641,6 +665,8 @@ final class FieldCheckAnimalDetailViewModel {
                !(await predecessor.value) {
                 return false
             }
+            // A queued action may resume after this editor's Herd was changed.
+            guard !Task.isCancelled, self.isOriginHerdCurrent else { return false }
             return await operation()
         }
 
@@ -670,6 +696,7 @@ final class FieldCheckAnimalDetailViewModel {
                     animalCheckID: animalCheckID,
                     isCounted: isCounted
                 )
+                guard self.isOriginHerdCurrent, !Task.isCancelled else { return false }
                 self.refresh(
                     animalID: animalID,
                     sessionID: sessionID,
@@ -678,6 +705,7 @@ final class FieldCheckAnimalDetailViewModel {
                 )
                 return true
             } catch {
+                guard self.isOriginHerdCurrent, !Task.isCancelled else { return false }
                 self.errorMessage = UserVisibleErrorMessage.make(error)
                 return false
             }
@@ -700,6 +728,7 @@ final class FieldCheckAnimalDetailViewModel {
                     animalCheckID: animalCheckID,
                     isMissing: isMissing
                 )
+                guard self.isOriginHerdCurrent, !Task.isCancelled else { return false }
                 self.refresh(
                     animalID: animalID,
                     sessionID: sessionID,
@@ -708,6 +737,7 @@ final class FieldCheckAnimalDetailViewModel {
                 )
                 return true
             } catch {
+                guard self.isOriginHerdCurrent, !Task.isCancelled else { return false }
                 self.errorMessage = UserVisibleErrorMessage.make(error)
                 return false
             }
@@ -727,14 +757,16 @@ final class FieldCheckAnimalDetailViewModel {
                     animalID: animalID,
                     checkedAt: self.dateProvider.now
                 )
-                return true
+                return self.isOriginHerdCurrent && !Task.isCancelled
             } catch {
+                guard self.isOriginHerdCurrent, !Task.isCancelled else { return false }
                 operationError = error
                 self.errorMessage = UserVisibleErrorMessage.make(error)
                 return false
             }
         }
 
+        guard isOriginHerdCurrent, !Task.isCancelled else { throw CancellationError() }
         guard succeeded else {
             throw operationError ?? FieldCheckAnimalDetailMutationError.priorMutationFailed
         }
@@ -753,6 +785,7 @@ final class FieldCheckAnimalDetailViewModel {
                     sessionID: sessionID,
                     input: input
                 )
+                guard self.isOriginHerdCurrent, !Task.isCancelled else { return false }
                 self.refresh(
                     animalID: animalID,
                     sessionID: sessionID,
@@ -761,6 +794,7 @@ final class FieldCheckAnimalDetailViewModel {
                 )
                 return true
             } catch {
+                guard self.isOriginHerdCurrent, !Task.isCancelled else { return false }
                 self.errorMessage = UserVisibleErrorMessage.make(error)
                 return false
             }
@@ -782,6 +816,7 @@ final class FieldCheckAnimalDetailViewModel {
                     findingID: findingID,
                     input: input
                 )
+                guard self.isOriginHerdCurrent, !Task.isCancelled else { return false }
                 self.refresh(
                     animalID: animalID,
                     sessionID: sessionID,
@@ -790,6 +825,7 @@ final class FieldCheckAnimalDetailViewModel {
                 )
                 return true
             } catch {
+                guard self.isOriginHerdCurrent, !Task.isCancelled else { return false }
                 self.errorMessage = UserVisibleErrorMessage.make(error)
                 return false
             }
@@ -811,6 +847,7 @@ final class FieldCheckAnimalDetailViewModel {
                     findingID: findingID,
                     status: status
                 )
+                guard self.isOriginHerdCurrent, !Task.isCancelled else { return false }
                 self.refresh(
                     animalID: animalID,
                     sessionID: sessionID,
@@ -819,6 +856,7 @@ final class FieldCheckAnimalDetailViewModel {
                 )
                 return true
             } catch {
+                guard self.isOriginHerdCurrent, !Task.isCancelled else { return false }
                 self.errorMessage = UserVisibleErrorMessage.make(error)
                 return false
             }
@@ -838,6 +876,7 @@ final class FieldCheckAnimalDetailViewModel {
                     sessionID: sessionID,
                     findingID: findingID
                 )
+                guard self.isOriginHerdCurrent, !Task.isCancelled else { return false }
                 self.refresh(
                     animalID: animalID,
                     sessionID: sessionID,
@@ -846,6 +885,7 @@ final class FieldCheckAnimalDetailViewModel {
                 )
                 return true
             } catch {
+                guard self.isOriginHerdCurrent, !Task.isCancelled else { return false }
                 self.errorMessage = UserVisibleErrorMessage.make(error)
                 return false
             }
