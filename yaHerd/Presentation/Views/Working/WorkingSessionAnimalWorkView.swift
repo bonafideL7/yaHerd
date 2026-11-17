@@ -4,6 +4,7 @@ struct WorkingSessionAnimalWorkView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.workingSessionFeatureDependencies) var workingDependencies
     @Environment(\.appDataAccessMode) var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @EnvironmentObject var tagColorLibrary: TagColorLibraryStore
 
     var repository: any WorkingQueueItemEditingRepository {
@@ -136,7 +137,7 @@ struct WorkingSessionAnimalWorkView: View {
             let mutationStream = workingDependencies.mutationStream
             let startingSequence = mutationStream.currentSequence
 
-            viewModel.configure(repository: repository)
+            viewModel.configure(repository: repository, herdSelection: herdSelection)
             viewModel.load()
             loadPastures()
             seedStateIfNeeded()
