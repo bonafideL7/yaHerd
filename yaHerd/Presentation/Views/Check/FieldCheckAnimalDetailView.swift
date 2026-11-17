@@ -6,8 +6,11 @@ struct FieldCheckAnimalDetailView: View {
     private var fieldCheckRepository: any FieldCheckAnimalDetailRepository { fieldCheckDependencies.animalDetailRepository }
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
 
     @State private var model = FieldCheckAnimalDetailViewModel()
+    @State private var originatingHerdID: UUID?
+    @State private var originatingHerdSelectionRevision: UInt64?
     @State private var isLineageExpanded = false
     @State private var showingAddOffspring = false
     @State private var showingAddFinding = false
@@ -24,8 +27,17 @@ struct FieldCheckAnimalDetailView: View {
         model.animalDetail?.displayTagColorID
     }
 
+    private var isPresentingOriginatingHerd: Bool {
+        guard let originatingHerdID, let originatingHerdSelectionRevision else {
+            return false
+        }
+        return herdSelection.currentHerdID == originatingHerdID
+            && herdSelection.selectionRevision == originatingHerdSelectionRevision
+    }
+
     private var isSessionEditable: Bool {
         dataAccessMode.allowsDataMutations
+            && isPresentingOriginatingHerd
             && model.sessionDetail?.isCompleted == false
             && model.sessionDetail?.isPastureArchived == false
     }
@@ -83,6 +95,7 @@ struct FieldCheckAnimalDetailView: View {
             }
         }
         .sheet(isPresented: $showingAddOffspring, onDismiss: {
+            guard isPresentingOriginatingHerd else { return }
             model.refresh(
                 animalID: animalID,
                 sessionID: sessionID,
@@ -99,7 +112,8 @@ struct FieldCheckAnimalDetailView: View {
                     try await model.addTrackedAnimalToSession(
                         animalID: createdAnimal.id,
                         sessionID: sessionID,
-                        fieldCheckRepository: fieldCheckRepository
+                        fieldCheckRepository: fieldCheckRepository,
+                        mayContinue: { isPresentingOriginatingHerd }
                     )
                 }
             }
@@ -118,7 +132,8 @@ struct FieldCheckAnimalDetailView: View {
                             sessionID: sessionID,
                             input: input,
                             animalRepository: animalRepository,
-                            fieldCheckRepository: fieldCheckRepository
+                            fieldCheckRepository: fieldCheckRepository,
+                            mayContinue: { isPresentingOriginatingHerd }
                         )
                     }
                 }
@@ -139,13 +154,15 @@ struct FieldCheckAnimalDetailView: View {
                             findingID: finding.id,
                             input: input,
                             animalRepository: animalRepository,
-                            fieldCheckRepository: fieldCheckRepository
+                            fieldCheckRepository: fieldCheckRepository,
+                            mayContinue: { isPresentingOriginatingHerd }
                         )
                     }
                 }
             }
         }
         .refreshable {
+            guard isPresentingOriginatingHerd else { return }
             model.refresh(
                 animalID: animalID,
                 sessionID: sessionID,
@@ -154,6 +171,10 @@ struct FieldCheckAnimalDetailView: View {
             )
         }
         .task {
+            guard originatingHerdID == nil else { return }
+            originatingHerdID = herdSelection.currentHerdID
+            originatingHerdSelectionRevision = herdSelection.selectionRevision
+            guard isPresentingOriginatingHerd else { return }
             if !model.hasLoaded {
                 model.load(
                     animalID: animalID,
@@ -216,7 +237,8 @@ struct FieldCheckAnimalDetailView: View {
                         sessionID: sessionID,
                         isCounted: true,
                         animalRepository: animalRepository,
-                        fieldCheckRepository: fieldCheckRepository
+                        fieldCheckRepository: fieldCheckRepository,
+                        mayContinue: { isPresentingOriginatingHerd }
                     )
                 }
             } label: {
@@ -233,7 +255,8 @@ struct FieldCheckAnimalDetailView: View {
                         sessionID: sessionID,
                         isCounted: false,
                         animalRepository: animalRepository,
-                        fieldCheckRepository: fieldCheckRepository
+                        fieldCheckRepository: fieldCheckRepository,
+                        mayContinue: { isPresentingOriginatingHerd }
                     )
                 }
             } label: {
@@ -250,7 +273,8 @@ struct FieldCheckAnimalDetailView: View {
                             sessionID: sessionID,
                             isCounted: true,
                             animalRepository: animalRepository,
-                            fieldCheckRepository: fieldCheckRepository
+                            fieldCheckRepository: fieldCheckRepository,
+                            mayContinue: { isPresentingOriginatingHerd }
                         )
                     }
                 } label: {
@@ -267,7 +291,8 @@ struct FieldCheckAnimalDetailView: View {
                             sessionID: sessionID,
                             isMissing: true,
                             animalRepository: animalRepository,
-                            fieldCheckRepository: fieldCheckRepository
+                            fieldCheckRepository: fieldCheckRepository,
+                            mayContinue: { isPresentingOriginatingHerd }
                         )
                     }
                 } label: {
@@ -328,7 +353,8 @@ struct FieldCheckAnimalDetailView: View {
                         findingID: finding.id,
                         status: status,
                         animalRepository: animalRepository,
-                        fieldCheckRepository: fieldCheckRepository
+                        fieldCheckRepository: fieldCheckRepository,
+                        mayContinue: { isPresentingOriginatingHerd }
                     )
                 }
             } : nil
@@ -344,7 +370,8 @@ struct FieldCheckAnimalDetailView: View {
                                 sessionID: sessionID,
                                 findingID: finding.id,
                                 animalRepository: animalRepository,
-                                fieldCheckRepository: fieldCheckRepository
+                                fieldCheckRepository: fieldCheckRepository,
+                                mayContinue: { isPresentingOriginatingHerd }
                             )
                         }
                     }
