@@ -96,6 +96,37 @@ final class AppNavigationRestorationPreflightTests: XCTestCase {
     }
 
     @MainActor
+    func testDeferredNavigationRestoresOriginalRouteAfterImportCompletes() {
+        let herdID = UUID()
+        let animalID = UUID()
+        let payload = makePayload(herdID: herdID, animalID: animalID)
+        let navigation = AppNavigationState()
+
+        let pendingImport = PreflightStubNavigationValidator(
+            currentHerdResult: .success(herdID),
+            animalResult: .failure(.readFailed)
+        )
+        XCTAssertEqual(
+            navigation.restorePreservingStoredSnapshot(from: payload, using: pendingImport),
+            .deferredValidation
+        )
+        XCTAssertTrue(navigation.herdRouter.path.isEmpty)
+
+        // A remote-store notification or foreground activation must be able to
+        // replay the untouched payload once its selected record becomes readable.
+        let completedImport = PreflightStubNavigationValidator(
+            currentHerdResult: .success(herdID),
+            animalResult: .success(true)
+        )
+        XCTAssertEqual(
+            navigation.restorePreservingStoredSnapshot(from: payload, using: completedImport),
+            .applied
+        )
+        XCTAssertEqual(navigation.selectedHerdID, herdID)
+        XCTAssertEqual(navigation.herdRouter.path, [.animal(animalID)])
+    }
+
+    @MainActor
     func testSuccessfulPreflightRestoresDurableRouteAndWorkflow() {
         let herdID = UUID()
         let animalID = UUID()
