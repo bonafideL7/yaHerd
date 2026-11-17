@@ -161,8 +161,17 @@ struct FieldCheckSessionDetailView: View {
         selectedPane == .roster && !trimmedRosterSearchText.isEmpty
     }
 
+    private var isPresentingOriginatingHerd: Bool {
+        guard let originatingHerdID, let originatingHerdSelectionRevision else {
+            return false
+        }
+        return herdSelection.currentHerdID == originatingHerdID
+            && herdSelection.selectionRevision == originatingHerdSelectionRevision
+    }
+
     private var canEditActiveCheck: Bool {
         dataAccessMode.allowsDataMutations
+            && isPresentingOriginatingHerd
             && model.detail?.isCompleted == false
             && model.detail?.isPastureArchived == false
             && !model.isCompletingSession
@@ -204,6 +213,7 @@ struct FieldCheckSessionDetailView: View {
                                 Label("Reopen Check", systemImage: "lock.open")
                             }
                             .disabledWhenDataReadOnly()
+                            .disabled(!isPresentingOriginatingHerd)
                         } label: {
                             Image(systemName: "ellipsis")
                                 .font(.system(size: 17, weight: .semibold))
@@ -216,7 +226,8 @@ struct FieldCheckSessionDetailView: View {
                         } label: {
                             Label(
                                 selectedPane == .findings ? "Animal List" : "Findings",
-                                systemImage: selectedPane == .findings ? "list.bullet" : "exclamationmark.bubble"
+                                systemImage: selectedPane == .findings ? "list.bullet" : "exclamationmark.bubble",
+                                mayContinue: { isPresentingOriginatingHerd }
                             )
                         }
                         .accessibilityLabel(selectedPane == .findings ? "Animal List" : "Findings")
@@ -329,7 +340,9 @@ struct FieldCheckSessionDetailView: View {
                         return await model.addTrackedAnimalToSession(
                             sessionID: sessionID,
                             animalID: animalID,
-                            using: repository
+                            using: repository,
+                            mayContinue: { isPresentingOriginatingHerd },
+                            mayContinue: { isPresentingOriginatingHerd }
                         )
                     }
                 }
@@ -371,7 +384,8 @@ struct FieldCheckSessionDetailView: View {
                             sessionID: sessionID,
                             findingID: finding.id,
                             input: input,
-                            using: repository
+                            using: repository,
+                            mayContinue: { isPresentingOriginatingHerd }
                         )
                     }
                 }
@@ -538,7 +552,8 @@ struct FieldCheckSessionDetailView: View {
                                     sessionID: sessionID,
                                     animalCheckID: check.id,
                                     isCounted: !check.wasCounted,
-                                    using: repository
+                                    using: repository,
+                                    mayContinue: { isPresentingOriginatingHerd }
                                 )
                             }
                         },
@@ -548,7 +563,8 @@ struct FieldCheckSessionDetailView: View {
                                     sessionID: sessionID,
                                     animalCheckID: check.id,
                                     isMissing: !check.isMissing,
-                                    using: repository
+                                    using: repository,
+                                    mayContinue: { isPresentingOriginatingHerd }
                                 )
                             }
                         },
@@ -824,7 +840,8 @@ struct FieldCheckSessionDetailView: View {
                                     sessionID: sessionID,
                                     findingID: finding.id,
                                     status: status,
-                                    using: repository
+                                    using: repository,
+                                    mayContinue: { isPresentingOriginatingHerd }
                                 )
                             }
                         } : nil
@@ -957,7 +974,8 @@ struct FieldCheckSessionDetailView: View {
                         sessionID: sessionID,
                         findingID: finding.id,
                         status: status,
-                        using: repository
+                        using: repository,
+                        mayContinue: { isPresentingOriginatingHerd }
                     )
                 }
             } : nil
@@ -971,7 +989,8 @@ struct FieldCheckSessionDetailView: View {
                             await model.deleteFinding(
                                 sessionID: sessionID,
                                 findingID: finding.id,
-                                using: repository
+                                using: repository,
+                                mayContinue: { isPresentingOriginatingHerd }
                             )
                         }
                     }
@@ -1128,7 +1147,8 @@ struct FieldCheckSessionDetailView: View {
             await model.completeSession(
                 sessionID: sessionID,
                 using: repository,
-                completionAlreadyAccepted: true
+                completionAlreadyAccepted: true,
+                mayContinue: { isPresentingOriginatingHerd }
             )
             if model.detail?.isCompleted == true {
                 showingFinishReview = false
