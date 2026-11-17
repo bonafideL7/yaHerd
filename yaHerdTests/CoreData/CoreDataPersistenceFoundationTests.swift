@@ -43,13 +43,16 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             _ = Self.makeHerd(id: herdID, name: "Selected Herd", in: context)
         }
 
+        let staged = expectation(description: "Herd mutation staged")
+        let allowSave = DispatchSemaphore(value: 0)
         let staleWrite = Task { @MainActor in
             try await assembly.transactionExecutor.performWrite(
                 herdID: herdID,
                 beforeSave: { _ in
-                    // Simulate a Herd switch cancelling an editor after its
-                    // mutation was staged but before Core Data committed it.
-                    withUnsafeCurrentTask { $0?.cancel() }
+                    staged.fulfill()
+                    guard allowSave.wait(timeout: .now() + 10) == .success else {
+                        throw ProbeError.injectedFailure
+                    }
                 }
             ) { context in
                 guard let herd = try CoreDataLookup().herd(id: herdID, in: context) else {
@@ -62,6 +65,12 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
                 pasture.herd = herd
             }
         }
+
+        // Cancel the original async caller while its Core Data queue is
+        // waiting to save. Cancellation inside that queue has no Swift task.
+        await fulfillment(of: [staged], timeout: 10)
+        staleWrite.cancel()
+        allowSave.signal()
 
         do {
             try await staleWrite.value
