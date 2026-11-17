@@ -7,6 +7,7 @@ struct FieldCheckSessionDetailView: View {
     @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @State private var model = FieldCheckSessionDetailViewModel()
     @State private var originatingHerdID: UUID?
+    @State private var originatingHerdSelectionRevision: UInt64?
     @State private var rosterFilter: FieldCheckRosterFilter = .remaining
     @State private var rosterSearchText = ""
     @State private var showingAddFinding = false
@@ -272,6 +273,7 @@ struct FieldCheckSessionDetailView: View {
         }
         .task(id: sessionID) {
             originatingHerdID = herdSelection.currentHerdID
+            originatingHerdSelectionRevision = herdSelection.selectionRevision
             model.load(sessionID: sessionID, using: repository)
             syncSelectedPane()
             applyInitialFindingRouteIfNeeded()
@@ -1053,11 +1055,19 @@ struct FieldCheckSessionDetailView: View {
         Binding(
             get: { model.quickAnimalTypeCountsDraft },
             set: { newValue in
-                guard canEditActiveCheck else { return }
+                guard canEditActiveCheck,
+                      let originatingHerdID,
+                      let originatingHerdSelectionRevision else {
+                    return
+                }
                 model.updateQuickAnimalTypeCounts(
                     sessionID: sessionID,
                     counts: newValue,
-                    using: repository
+                    using: repository,
+                    mayContinue: {
+                        herdSelection.currentHerdID == originatingHerdID
+                            && herdSelection.selectionRevision == originatingHerdSelectionRevision
+                    }
                 )
             }
         )
