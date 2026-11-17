@@ -157,9 +157,12 @@ final class NewWorkingSessionViewModel: ObservableObject {
         plannedTreatments: [WorkingTreatmentPlanItem],
         animalIDs: [UUID]?,
         originatingHerdID: UUID,
-        currentHerdSelection: any CurrentHerdSelectionReading
+        currentHerdSelection: any CurrentHerdSelectionReading,
+        selectionIsUnchanged: @escaping @MainActor () -> Bool
     ) async throws -> UUID? {
-        guard currentHerdSelection.currentHerdID == originatingHerdID else {
+        guard !Task.isCancelled,
+              currentHerdSelection.currentHerdID == originatingHerdID,
+              selectionIsUnchanged() else {
             return nil
         }
 
@@ -174,7 +177,8 @@ final class NewWorkingSessionViewModel: ObservableObject {
         )
 
         guard !Task.isCancelled,
-              currentHerdSelection.currentHerdID == originatingHerdID else {
+              currentHerdSelection.currentHerdID == originatingHerdID,
+              selectionIsUnchanged() else {
             return nil
         }
         return sessionID
