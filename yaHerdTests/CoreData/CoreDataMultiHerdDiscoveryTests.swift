@@ -104,7 +104,7 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
 
         XCTAssertTrue(try repository.fetchAccessibleHerds().isEmpty)
         let created = try await repository.createOwnedHerd(named: "Intended")
-        XCTAssertEqual(try repository.fetchAccessibleHerds().map(\\.id), [created.id])
+        XCTAssertEqual(try repository.fetchAccessibleHerds().map(\.id), [created.id])
     }
 
     func testCancellationAfterStagingRollsBackTheNewHerd() async throws {
@@ -138,7 +138,7 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
 
         XCTAssertTrue(try repository.fetchAccessibleHerds().isEmpty)
         let created = try await repository.createOwnedHerd(named: "Intended")
-        XCTAssertEqual(try repository.fetchAccessibleHerds().map(\\.id), [created.id])
+        XCTAssertEqual(try repository.fetchAccessibleHerds().map(\.id), [created.id])
     }
 
     func testDuplicateIDsAcrossStoresFailDiscoveryRatherThanSelectingOne() async throws {
