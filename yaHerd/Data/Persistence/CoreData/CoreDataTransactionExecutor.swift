@@ -1,5 +1,6 @@
 @preconcurrency import CoreData
 import Foundation
+import Synchronization
 
 final class CoreDataTransactionExecutor {
     private let contextFactory: CoreDataContextFactory
@@ -16,7 +17,6 @@ final class CoreDataTransactionExecutor {
     ) async throws -> Result {
         let context: NSManagedObjectContext
         do {
-            // A dismissed Herd editor must not start a queued mutation.
             try Task.checkCancellation()
             context = try contextFactory.makeWriteContext()
         } catch {
@@ -24,50 +24,63 @@ final class CoreDataTransactionExecutor {
             throw error
         }
 
-        return try await context.perform {
-            defer { afterTransaction?() }
+        // Core Data performs the closure on its own queue. Swift Task
+        // cancellation is not visible there without an explicit bridge.
+        let cancellation = Mutex(false)
+        return try await withTaskCancellationHandler {
+            try await context.perform {
+                defer { afterTransaction?() }
 
-            do {
-                try Task.checkCancellation()
-                // The legacy unscoped entry point is valid only while one store
-                // is loaded. In a private/shared container, an unqualified
-                // insert (including legacy Herd bootstrap) has no safe owner.
-                guard herdID != nil
-                        || context.persistentStoreCoordinator?.persistentStores.count == 1 else {
-                    throw CoreDataPersistenceError.unscopedMultiStoreWrite
-                }
-
-                let result = try operation(context)
-                try Task.checkCancellation()
-                guard context.hasChanges else {
-                    return result
-                }
-
-                try beforeSave?(context)
-                if let herdID {
-                    try CoreDataLookup().prepareForSave(herdID: herdID, in: context)
-                }
-
-                // A Herd switch can cancel the editor while this context
-                // stages changes. Do not commit an obsolete transaction.
-                // Cancellation is not a persistence failure.
-                try Task.checkCancellation()
                 do {
-                    try context.save()
-                    return result
+                    try cancellation.withLock {
+                        if $0 { throw CancellationError() }
+                    }
+
+                    // The legacy unscoped entry point is valid only while one store
+                    // is loaded. In a private/shared container, an unqualified
+                    // insert (including legacy Herd bootstrap) has no safe owner.
+                    guard herdID != nil
+                            || context.persistentStoreCoordinator?.persistentStores.count == 1 else {
+                        throw CoreDataPersistenceError.unscopedMultiStoreWrite
+                    }
+
+                    let result = try operation(context)
+                    try cancellation.withLock {
+                        if $0 { throw CancellationError() }
+                    }
+                    guard context.hasChanges else {
+                        return result
+                    }
+
+                    try beforeSave?(context)
+                    if let herdID {
+                        try CoreDataLookup().prepareForSave(herdID: herdID, in: context)
+                    }
+
+                    // A Herd switch may cancel the caller while changes are
+                    // staged. Roll them back unless the save has already begun.
+                    try cancellation.withLock {
+                        if $0 { throw CancellationError() }
+                    }
+                    do {
+                        try context.save()
+                        return result
+                    } catch {
+                        ReliabilityLog.persistenceSaveFailure("transaction-save", error: error)
+                        context.rollback()
+                        throw CoreDataPersistenceError.saveFailed(
+                            description: error.localizedDescription
+                        )
+                    }
                 } catch {
-                    ReliabilityLog.persistenceSaveFailure("transaction-save", error: error)
-                    context.rollback()
-                    throw CoreDataPersistenceError.saveFailed(
-                        description: error.localizedDescription
-                    )
+                    if context.hasChanges {
+                        context.rollback()
+                    }
+                    throw error
                 }
-            } catch {
-                if context.hasChanges {
-                    context.rollback()
-                }
-                throw error
             }
+        } onCancel: {
+            cancellation.withLock { $0 = true }
         }
     }
 }
