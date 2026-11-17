@@ -96,7 +96,9 @@ enum CoreDataAppHerdBootstrapper {
                     ascending: true
                 )
             ]
-            return try context.fetch(request).map { try $0.requiredID() }
+            // A root with an ID but incomplete metadata is not usable. Do not
+            // select it or create a replacement while its data is unresolved.
+            return try context.fetch(request).map { try $0.toSummary().id }
         }
     }
 
