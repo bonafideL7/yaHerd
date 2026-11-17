@@ -317,6 +317,7 @@ struct NewWorkingSessionView: View {
         // Capture one coherent setup snapshot before the async command begins.
         // Changes to form controls must not alter a submitted selection.
         let sessionDate = date
+        let originatingSelectionRevision = herdSelection.selectionRevision
         let templateName = selectedTemplateName
         let submittedAnimalIDs = specifiesAnimals ? Array(selectedAnimalIDs) : nil
         isStarting = true
@@ -331,7 +332,10 @@ struct NewWorkingSessionView: View {
                     plannedTreatments: cleanedTreatments,
                     animalIDs: submittedAnimalIDs,
                     originatingHerdID: originatingHerdID,
-                    currentHerdSelection: herdSelection
+                    currentHerdSelection: herdSelection,
+                    selectionIsUnchanged: {
+                        herdSelection.selectionRevision == originatingSelectionRevision
+                    }
                 )
                 guard let sessionID else { return }
                 if let onSessionCreated {
@@ -341,7 +345,8 @@ struct NewWorkingSessionView: View {
                 }
             } catch {
                 guard !Task.isCancelled,
-                      herdSelection.currentHerdID == originatingHerdID else { return }
+                      herdSelection.currentHerdID == originatingHerdID,
+                      herdSelection.selectionRevision == originatingSelectionRevision else { return }
                 viewModel.errorMessage = UserVisibleErrorMessage.make(error)
             }
         }
