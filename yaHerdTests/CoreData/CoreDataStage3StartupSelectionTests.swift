@@ -42,6 +42,40 @@ final class CoreDataStage3StartupSelectionTests: XCTestCase {
             .herdRepository.fetchAccessibleHerds().count, 1)
     }
 
+    func testIncompleteLocalRootCannotBeMistakenForAnEmptyInstallation() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.load(
+            storeURL: harness.storeURL
+        )
+        let originalID = UUID()
+        let writer = try assembly.contextFactory.makeWriteContext()
+        try writer.performAndWait {
+            let root = CDHerd(context: writer)
+            root.id = originalID
+            root.name = nil
+            root.createdAt = Date(timeIntervalSince1970: 100)
+            root.updatedAt = Date(timeIntervalSince1970: 100)
+            try writer.save()
+        }
+
+        do {
+            _ = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
+            XCTFail("An incomplete local Herd must not open the empty-state chooser.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataHerdMappingError, .missingName(herdID: originalID))
+        }
+
+        let reader = assembly.contextFactory.makeReadContext()
+        try reader.performAndWait {
+            let roots = try reader.fetch(
+                NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            )
+            XCTAssertEqual(roots.count, 1)
+            XCTAssertEqual(roots.first?.id, originalID)
+            XCTAssertNil(roots.first?.name)
+        }
+    }
+
     func testLocalMultiHerdLaunchUsesChooserWithoutCreatingAnotherRoot() async throws {
         let harness = try CoreDataPersistenceHarness()
         let suiteName = "yaHerd.stage3.startup.\(UUID())"
