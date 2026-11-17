@@ -16,6 +16,8 @@ final class CoreDataTransactionExecutor {
     ) async throws -> Result {
         let context: NSManagedObjectContext
         do {
+            // A dismissed Herd editor must not start a queued mutation.
+            try Task.checkCancellation()
             context = try contextFactory.makeWriteContext()
         } catch {
             afterTransaction?()
@@ -26,6 +28,7 @@ final class CoreDataTransactionExecutor {
             defer { afterTransaction?() }
 
             do {
+                try Task.checkCancellation()
                 // The legacy unscoped entry point is valid only while one store
                 // is loaded. In a private/shared container, an unqualified
                 // insert (including legacy Herd bootstrap) has no safe owner.
@@ -35,6 +38,7 @@ final class CoreDataTransactionExecutor {
                 }
 
                 let result = try operation(context)
+                try Task.checkCancellation()
                 guard context.hasChanges else {
                     return result
                 }
@@ -45,6 +49,9 @@ final class CoreDataTransactionExecutor {
                 }
 
                 do {
+                    // A Herd switch can cancel the editor while this context
+                    // stages changes. Do not commit an obsolete transaction.
+                    try Task.checkCancellation()
                     try context.save()
                     return result
                 } catch {
