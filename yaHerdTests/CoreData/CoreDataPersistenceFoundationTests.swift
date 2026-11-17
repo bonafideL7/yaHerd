@@ -7,6 +7,77 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         case injectedFailure
     }
 
+    func testAlreadyCancelledHerdWriteDoesNotCommit() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let herdID = UUID()
+
+        let staleWrite = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            try await assembly.transactionExecutor.performWrite { context in
+                _ = Self.makeHerd(
+                    id: herdID, name: "Cancelled Herd", in: context
+                )
+            }
+        }
+
+        do {
+            try await staleWrite.value
+            XCTFail("A cancelled transaction must not persist a new Herd.")
+        } catch is CancellationError {
+            // Expected: cancellation precedes the first Core Data mutation.
+        }
+
+        let read = assembly.contextFactory.makeReadContext()
+        try read.performAndWait {
+            XCTAssertNil(try CoreDataLookup().herd(id: herdID, in: read))
+        }
+    }
+
+    func testCancelledHerdWriteRollsBackStagedChangesBeforeSave() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let herdID = UUID()
+        let pastureID = UUID()
+        try await assembly.transactionExecutor.performWrite { context in
+            _ = Self.makeHerd(id: herdID, name: "Selected Herd", in: context)
+        }
+
+        let staleWrite = Task {
+            try await assembly.transactionExecutor.performWrite(
+                herdID: herdID,
+                beforeSave: { _ in
+                    // Simulate a Herd switch cancelling an editor after its
+                    // mutation was staged but before Core Data committed it.
+                    withUnsafeCurrentTask { $0?.cancel() }
+                }
+            ) { context in
+                guard let herd = try CoreDataLookup().herd(id: herdID, in: context) else {
+                    throw HerdRepositoryError.missingHerd
+                }
+                let pasture = CDPasture(context: context)
+                pasture.id = pastureID
+                pasture.name = "Obsolete Pasture"
+                pasture.sortOrder = 0
+                pasture.herd = herd
+            }
+        }
+
+        do {
+            try await staleWrite.value
+            XCTFail("A cancelled Herd transaction must roll back before saving.")
+        } catch is CancellationError {
+            // Expected: the cancellation must not become a successful write.
+        }
+
+        let read = assembly.contextFactory.makeReadContext()
+        try read.performAndWait {
+            let persisted = try CoreDataLookup().herdOwned(
+                CDPasture.self, id: pastureID, herdID: herdID, in: read
+            )
+            XCTAssertNil(persisted)
+            XCTAssertNotNil(try CoreDataLookup().herd(id: herdID, in: read))
+        }
+    }
+
     func testSQLiteStoreSavesAndReloadsApplicationIdentityInFreshContext() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await harness.makeAssembly()
