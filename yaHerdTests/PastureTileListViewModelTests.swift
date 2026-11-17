@@ -381,6 +381,80 @@ final class PastureTileListViewModelTests: XCTestCase {
         XCTAssertTrue(ordering.reorderedIDs.isEmpty)
         XCTAssertFalse(viewModel.isDeletingPastures)
     }
+
+    func testHerdRoundTripDuringDeletionDoesNotReorderFromObsoleteView() async {
+        let first = PastureTestSupport.makeSummary(name: "First")
+        let second = PastureTestSupport.makeSummary(name: "Second")
+        let reader = PastureListReaderStub(result: .success([first, second]))
+        let ordering = PastureOrderingSpy()
+        let deletion = ControlledPastureDeletionCommand()
+        deletion.shouldSuspend = true
+        let herdA = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdA)
+        let viewModel = PastureTileListViewModel()
+        viewModel.load(using: reader)
+        viewModel.requestDelete(first)
+
+        let running = Task { @MainActor in
+            await viewModel.deletePasture(
+                id: first.id,
+                deletionCommand: deletion,
+                orderingRepository: ordering,
+                selection: selection,
+                originatingHerdID: herdA
+            )
+        }
+
+        await deletion.waitUntilStarted()
+        selection.select(UUID())
+        selection.select(herdA)
+        deletion.finishSuspendedWrite()
+        await running.value
+
+        XCTAssertEqual(deletion.requestedIDs, [[first.id]])
+        XCTAssertTrue(ordering.reorderedIDs.isEmpty,
+                      "An earlier view must not reorder even after returning to its Herd.")
+        XCTAssertEqual(viewModel.items, [first, second])
+        XCTAssertEqual(viewModel.pasturePendingDeletion, first)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertFalse(viewModel.isDeletingPastures)
+    }
+
+    func testHerdRoundTripDuringFailedDeletionDoesNotPublishObsoleteError() async {
+        let pasture = PastureTestSupport.makeSummary(name: "Original")
+        let reader = PastureListReaderStub(result: .success([pasture]))
+        let ordering = PastureOrderingSpy()
+        let deletion = ControlledPastureDeletionCommand()
+        deletion.shouldSuspend = true
+        deletion.errorToThrow = PastureTestError.forced
+        let herdA = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdA)
+        let viewModel = PastureTileListViewModel()
+        viewModel.load(using: reader)
+
+        let running = Task { @MainActor in
+            await viewModel.deletePasture(
+                id: pasture.id,
+                deletionCommand: deletion,
+                orderingRepository: ordering,
+                selection: selection,
+                originatingHerdID: herdA
+            )
+        }
+
+        await deletion.waitUntilStarted()
+        selection.select(UUID())
+        selection.select(herdA)
+        deletion.finishSuspendedWrite()
+        await running.value
+
+        XCTAssertEqual(deletion.requestedIDs, [[pasture.id]])
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(viewModel.items, [pasture])
+        XCTAssertTrue(ordering.reorderedIDs.isEmpty)
+        XCTAssertFalse(viewModel.isDeletingPastures)
+    }
+
 }
 
 @MainActor
