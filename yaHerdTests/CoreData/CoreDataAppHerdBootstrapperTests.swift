@@ -75,7 +75,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
                 _ = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
                     assembly: assembly
                 )
-                XCTFail("Bootstrap must reject a Herd missing \\(missingField).")
+                XCTFail("Bootstrap must reject a Herd missing \(missingField).")
             } catch {
                 let expected: CoreDataHerdMappingError
                 switch missingField {
