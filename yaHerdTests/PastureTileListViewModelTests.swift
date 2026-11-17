@@ -128,7 +128,8 @@ final class PastureTileListViewModelTests: XCTestCase {
             ),
             orderingRepository: pastureRepository,
             selection: testSelection,
-            originatingHerdID: testHerdID
+            originatingHerdID: testHerdID,
+            originatingSelectionRevision: testSelection.selectionRevision
         )
 
         XCTAssertTrue(viewModel.items.isEmpty)
@@ -156,7 +157,8 @@ final class PastureTileListViewModelTests: XCTestCase {
             ),
             orderingRepository: pastureRepository,
             selection: testSelection,
-            originatingHerdID: testHerdID
+            originatingHerdID: testHerdID,
+            originatingSelectionRevision: testSelection.selectionRevision
         )
 
         XCTAssertEqual(viewModel.items, [pasture])
@@ -180,7 +182,8 @@ final class PastureTileListViewModelTests: XCTestCase {
                 deletionCommand: deletion,
                 orderingRepository: ordering,
                 selection: testSelection,
-                originatingHerdID: testHerdID
+                originatingHerdID: testHerdID,
+                originatingSelectionRevision: testSelection.selectionRevision
             )
         }
 
@@ -194,7 +197,8 @@ final class PastureTileListViewModelTests: XCTestCase {
             deletionCommand: deletion,
             orderingRepository: ordering,
             selection: testSelection,
-            originatingHerdID: testHerdID
+            originatingHerdID: testHerdID,
+            originatingSelectionRevision: testSelection.selectionRevision
         )
         XCTAssertEqual(deletion.requestedIDs, [[first.id]])
         XCTAssertTrue(ordering.reorderedIDs.isEmpty)
@@ -224,7 +228,8 @@ final class PastureTileListViewModelTests: XCTestCase {
             deletionCommand: deletion,
             orderingRepository: ordering,
             selection: testSelection,
-            originatingHerdID: testHerdID
+            originatingHerdID: testHerdID,
+            originatingSelectionRevision: testSelection.selectionRevision
         )
 
         XCTAssertEqual(viewModel.items, [pasture])
@@ -250,7 +255,8 @@ final class PastureTileListViewModelTests: XCTestCase {
             deletionCommand: deletion,
             orderingRepository: ordering,
             selection: testSelection,
-            originatingHerdID: testHerdID
+            originatingHerdID: testHerdID,
+            originatingSelectionRevision: testSelection.selectionRevision
         )
 
         XCTAssertEqual(deletion.requestedIDs, [[deleted.id]])
@@ -273,14 +279,16 @@ final class PastureTileListViewModelTests: XCTestCase {
             deletionCommand: deletion,
             orderingRepository: ordering,
             selection: testSelection,
-            originatingHerdID: testHerdID
+            originatingHerdID: testHerdID,
+            originatingSelectionRevision: testSelection.selectionRevision
         )
         await viewModel.deletePastures(
             at: IndexSet(),
             deletionCommand: deletion,
             orderingRepository: ordering,
             selection: testSelection,
-            originatingHerdID: testHerdID
+            originatingHerdID: testHerdID,
+            originatingSelectionRevision: testSelection.selectionRevision
         )
 
         XCTAssertTrue(deletion.requestedIDs.isEmpty)
@@ -295,6 +303,7 @@ final class PastureTileListViewModelTests: XCTestCase {
         let ordering = PastureOrderingSpy()
         let originatingHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
+        let originatingSelectionRevision = selection.selectionRevision
         let viewModel = PastureTileListViewModel()
         viewModel.load(using: reader)
 
@@ -305,7 +314,8 @@ final class PastureTileListViewModelTests: XCTestCase {
             deletionCommand: deletion,
             orderingRepository: ordering,
             selection: selection,
-            originatingHerdID: originatingHerdID
+            originatingHerdID: originatingHerdID,
+            originatingSelectionRevision: originatingSelectionRevision
         )
 
         XCTAssertTrue(deletion.requestedIDs.isEmpty)
@@ -324,6 +334,7 @@ final class PastureTileListViewModelTests: XCTestCase {
         deletion.shouldSuspend = true
         let originatingHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
+        let originatingSelectionRevision = selection.selectionRevision
         let viewModel = PastureTileListViewModel()
         viewModel.load(using: reader)
 
@@ -333,7 +344,8 @@ final class PastureTileListViewModelTests: XCTestCase {
                 deletionCommand: deletion,
                 orderingRepository: ordering,
                 selection: selection,
-                originatingHerdID: originatingHerdID
+                originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: originatingSelectionRevision
             )
         }
 
@@ -359,6 +371,7 @@ final class PastureTileListViewModelTests: XCTestCase {
         deletion.errorToThrow = PastureTestError.forced
         let originatingHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
+        let originatingSelectionRevision = selection.selectionRevision
         let viewModel = PastureTileListViewModel()
         viewModel.load(using: reader)
 
@@ -368,7 +381,8 @@ final class PastureTileListViewModelTests: XCTestCase {
                 deletionCommand: deletion,
                 orderingRepository: ordering,
                 selection: selection,
-                originatingHerdID: originatingHerdID
+                originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: originatingSelectionRevision
             )
         }
         await deletion.waitUntilStarted()
@@ -382,6 +396,37 @@ final class PastureTileListViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isDeletingPastures)
     }
 
+    func testHerdRoundTripBeforeQueuedDeletionDoesNotStartOldRequest() async {
+        let pasture = PastureTestSupport.makeSummary(name: "Old Herd Pasture")
+        let reader = PastureListReaderStub(result: .success([pasture]))
+        let deletion = ControlledPastureDeletionCommand()
+        let ordering = PastureOrderingSpy()
+        let herdA = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdA)
+        let originatingSelectionRevision = selection.selectionRevision
+        let viewModel = PastureTileListViewModel()
+        viewModel.load(using: reader)
+
+        // The confirmation captured A, but selection changed away and back
+        // before the queued task could begin its repository mutation.
+        selection.select(UUID())
+        selection.select(herdA)
+        await viewModel.deletePasture(
+            id: pasture.id,
+            deletionCommand: deletion,
+            orderingRepository: ordering,
+            selection: selection,
+            originatingHerdID: herdA,
+            originatingSelectionRevision: originatingSelectionRevision
+        )
+
+        XCTAssertTrue(deletion.requestedIDs.isEmpty)
+        XCTAssertTrue(ordering.reorderedIDs.isEmpty)
+        XCTAssertEqual(viewModel.items, [pasture])
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertFalse(viewModel.isDeletingPastures)
+    }
+
     func testHerdRoundTripDuringDeletionDoesNotReorderFromObsoleteView() async {
         let first = PastureTestSupport.makeSummary(name: "First")
         let second = PastureTestSupport.makeSummary(name: "Second")
@@ -391,6 +436,7 @@ final class PastureTileListViewModelTests: XCTestCase {
         deletion.shouldSuspend = true
         let herdA = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: herdA)
+        let originatingSelectionRevision = selection.selectionRevision
         let viewModel = PastureTileListViewModel()
         viewModel.load(using: reader)
         viewModel.requestDelete(first)
@@ -401,7 +447,8 @@ final class PastureTileListViewModelTests: XCTestCase {
                 deletionCommand: deletion,
                 orderingRepository: ordering,
                 selection: selection,
-                originatingHerdID: herdA
+                originatingHerdID: herdA,
+                originatingSelectionRevision: originatingSelectionRevision
             )
         }
 
@@ -429,6 +476,7 @@ final class PastureTileListViewModelTests: XCTestCase {
         deletion.errorToThrow = PastureTestError.forced
         let herdA = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: herdA)
+        let originatingSelectionRevision = selection.selectionRevision
         let viewModel = PastureTileListViewModel()
         viewModel.load(using: reader)
 
@@ -438,7 +486,8 @@ final class PastureTileListViewModelTests: XCTestCase {
                 deletionCommand: deletion,
                 orderingRepository: ordering,
                 selection: selection,
-                originatingHerdID: herdA
+                originatingHerdID: herdA,
+                originatingSelectionRevision: originatingSelectionRevision
             )
         }
 
