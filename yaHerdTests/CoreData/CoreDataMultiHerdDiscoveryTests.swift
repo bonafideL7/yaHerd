@@ -82,6 +82,65 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         XCTAssertEqual(try repository.fetchAccessibleHerds().count, 2)
     }
 
+    func testCancelledCreateDoesNotPersistAnUnwantedHerd() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let repository = CoreDataHerdRepository(
+            selection: AppCurrentHerdSelection(), assembly: assembly
+        )
+
+        // The user's Create task can be cancelled before the repository runs,
+        // for example when the Herd chooser is dismissed.
+        let creation = Task { @MainActor in
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await repository.createOwnedHerd(named: "Dismissed")
+        }
+
+        do {
+            _ = try await creation.value
+            XCTFail("A cancelled Create task must not persist a Herd.")
+        } catch is CancellationError {
+            // The request was abandoned before any Core Data work.
+        }
+
+        XCTAssertTrue(try repository.fetchAccessibleHerds().isEmpty)
+        let created = try await repository.createOwnedHerd(named: "Intended")
+        XCTAssertEqual(try repository.fetchAccessibleHerds().map(\\.id), [created.id])
+    }
+
+    func testCancellationAfterStagingRollsBackTheNewHerd() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let repository = CoreDataHerdRepository(
+            selection: AppCurrentHerdSelection(), assembly: assembly
+        )
+        let staged = expectation(description: "Herd is staged before save")
+        let releaseSave = DispatchSemaphore(value: 0)
+        defer { releaseSave.signal() }
+
+        let creation = Task { @MainActor in
+            try await repository.createOwnedHerd(named: "Dismissed", beforeSave: { _ in
+                staged.fulfill()
+                guard releaseSave.wait(timeout: .now() + 10) == .success else {
+                    throw CancellationError()
+                }
+            })
+        }
+
+        await fulfillment(of: [staged], timeout: 5)
+        creation.cancel()
+        releaseSave.signal()
+
+        do {
+            _ = try await creation.value
+            XCTFail("A cancelled staged Herd must not be saved.")
+        } catch is CancellationError {
+            // The pending insert was rolled back before committing.
+        }
+
+        XCTAssertTrue(try repository.fetchAccessibleHerds().isEmpty)
+        let created = try await repository.createOwnedHerd(named: "Intended")
+        XCTAssertEqual(try repository.fetchAccessibleHerds().map(\\.id), [created.id])
+    }
+
     func testDuplicateIDsAcrossStoresFailDiscoveryRatherThanSelectingOne() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
