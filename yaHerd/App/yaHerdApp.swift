@@ -459,6 +459,7 @@ enum AppNavigationSceneStorageAccess {
 }
 
 private struct RootAppView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(AppCurrentHerdSelection.self) private var herdSelection
 
     let storageError: String?
@@ -549,22 +550,29 @@ private struct RootAppView: View {
                 guard hasRestoredNavigation, !dataAccessMode.isRecoveryMode else { return }
 
                 if navigationRestorationDeferred {
-                    let outcome = navigation.restorePreservingStoredSnapshot(
-                        from: navigationRestorationPayload,
-                        using: navigationRestorationValidator
-                    )
-                    navigationRestorationDeferred = outcome == .deferredValidation
-                    guard outcome == .applied else { return }
-                } else {
-                    navigation.revalidateIdentityBoundState(
-                        using: navigationRestorationValidator
-                    )
+                    retryDeferredNavigationRestoration()
+                    return
                 }
+                navigation.revalidateIdentityBoundState(using: navigationRestorationValidator)
                 if let payload = AppNavigationSceneStorageAccess.payload(
                     for: navigation,
                     dataAccessMode: dataAccessMode
                 ) {
                     navigationRestorationPayload = payload
+                }
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: CoreDataPersistentContainer.remoteStoreChangeNotification
+                ).receive(on: DispatchQueue.main)
+            ) { _ in
+                // Stage 3 retries only a pending scene restoration; broad remote
+                // feature invalidation belongs to the later history work.
+                retryDeferredNavigationRestoration()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    retryDeferredNavigationRestoration()
                 }
             }
             .onOpenURL { url in
@@ -575,6 +583,27 @@ private struct RootAppView: View {
             } message: {
                 Text(storageError ?? "Persistent storage could not be opened.")
             }
+    }
+
+    @MainActor
+    private func retryDeferredNavigationRestoration() {
+        guard hasRestoredNavigation,
+              navigationRestorationDeferred,
+              !dataAccessMode.isRecoveryMode,
+              let activeHerdID = herdSelection.currentHerdID,
+              navigation.selectedHerdID == activeHerdID else { return }
+
+        let outcome = navigation.restorePreservingStoredSnapshot(
+            from: navigationRestorationPayload,
+            using: navigationRestorationValidator
+        )
+        navigationRestorationDeferred = outcome == .deferredValidation
+        guard outcome == .applied,
+              let payload = AppNavigationSceneStorageAccess.payload(
+                  for: navigation,
+                  dataAccessMode: dataAccessMode
+              ) else { return }
+        navigationRestorationPayload = payload
     }
 }
 
