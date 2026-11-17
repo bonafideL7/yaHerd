@@ -184,6 +184,64 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         XCTAssertEqual(directory.selectedHerdID, originalID)
     }
 
+    func testDirectSelectionRoundTripCannotReactivateObsoleteCreation() async throws {
+        let originalID = UUID()
+        let otherID = UUID()
+        let createdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalID)
+        let repository = StubHerdRepository(available: [herd(originalID), herd(otherID)])
+        repository.createdHerd = herd(createdID)
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+
+        let creation = Task { try await directory.createOwnedHerd(named: "New Herd") }
+        await repository.waitForPendingCreation()
+
+        // External callers use the authoritative selection rather than the
+        // directory, so the directory's own generation does not change.
+        selection.select(otherID)
+        selection.select(originalID)
+        repository.completeCreation()
+
+        let created = try await creation.value
+        XCTAssertEqual(created.id, createdID)
+        XCTAssertEqual(directory.selectedHerdID, originalID)
+        XCTAssertEqual(Set(directory.herds.map(\.id)), [originalID, otherID, createdID])
+    }
+
+    func testDirectSelectionRoundTripCancelsObsoleteReadinessCheck() async throws {
+        let originalID = UUID()
+        let otherID = UUID()
+        let pendingID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalID)
+        let repository = StubHerdRepository(
+            available: [herd(originalID), herd(otherID), herd(pendingID)]
+        )
+        var pendingReadiness: CheckedContinuation<Void, Never>?
+        let directory = HerdDirectoryController(
+            repository: repository,
+            selection: selection,
+            validateReadiness: { _ in
+                await withCheckedContinuation { pendingReadiness = $0 }
+            }
+        )
+
+        let opening = Task { try await directory.selectHerdWhenReady(id: pendingID) }
+        while pendingReadiness == nil {
+            await Task.yield()
+        }
+        selection.select(otherID)
+        selection.select(originalID)
+        pendingReadiness?.resume()
+
+        do {
+            try await opening.value
+            XCTFail("An obsolete readiness check must not overwrite a newer selection.")
+        } catch is CancellationError {
+            // The newer selection wins, even when its UUID matches the original.
+        }
+        XCTAssertEqual(directory.selectedHerdID, originalID)
+    }
+
     func testCommittedCreationIsNotReportedAsFailedWhenInventoryRefreshThrows() async throws {
         let selectedID = UUID()
         let createdID = UUID()
