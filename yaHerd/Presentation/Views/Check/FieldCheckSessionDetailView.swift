@@ -207,7 +207,7 @@ struct FieldCheckSessionDetailView: View {
                         Menu {
                             Button {
                                 Task { @MainActor in
-                                    await model.reopenSession(sessionID: sessionID, using: repository)
+                                    await model.reopenSession(sessionID: sessionID, using: repository, mayContinue: { isPresentingOriginatingHerd })
                                 }
                             } label: {
                                 Label("Reopen Check", systemImage: "lock.open")
@@ -226,8 +226,7 @@ struct FieldCheckSessionDetailView: View {
                         } label: {
                             Label(
                                 selectedPane == .findings ? "Animal List" : "Findings",
-                                systemImage: selectedPane == .findings ? "list.bullet" : "exclamationmark.bubble",
-                                mayContinue: { isPresentingOriginatingHerd }
+                                systemImage: selectedPane == .findings ? "list.bullet" : "exclamationmark.bubble"
                             )
                         }
                         .accessibilityLabel(selectedPane == .findings ? "Animal List" : "Findings")
@@ -327,7 +326,7 @@ struct FieldCheckSessionDetailView: View {
                 ) { input in
                     guard canEditActiveCheck else { return }
                     Task { @MainActor in
-                        await model.addFinding(sessionID: sessionID, input: input, using: repository)
+                        await model.addFinding(sessionID: sessionID, input: input, using: repository, mayContinue: { isPresentingOriginatingHerd })
                     }
                 }
             }
@@ -341,7 +340,6 @@ struct FieldCheckSessionDetailView: View {
                             sessionID: sessionID,
                             animalID: animalID,
                             using: repository,
-                            mayContinue: { isPresentingOriginatingHerd },
                             mayContinue: { isPresentingOriginatingHerd }
                         )
                     }
