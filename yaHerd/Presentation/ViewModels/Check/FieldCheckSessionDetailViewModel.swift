@@ -107,9 +107,11 @@ final class FieldCheckSessionDetailViewModel {
 
     private func performOrderedMutation(
         allowsDuringCompletion: Bool = false,
+        mayContinue: @escaping @MainActor () -> Bool = { true },
         _ operation: @escaping @MainActor () async -> Bool
     ) async -> Bool {
-        guard allowsDuringCompletion || !isCompletingSession else {
+        guard (allowsDuringCompletion || !isCompletingSession),
+              mayContinue() else {
             return false
         }
 
@@ -129,6 +131,8 @@ final class FieldCheckSessionDetailViewModel {
                 return false
             }
 
+            // Selection may change while an earlier write is suspended.
+            guard !Task.isCancelled, mayContinue() else { return false }
             return await operation()
         }
 
@@ -295,18 +299,21 @@ final class FieldCheckSessionDetailViewModel {
         sessionID: UUID,
         animalCheckID: UUID,
         isCounted: Bool,
-        using repository: any FieldCheckSessionDetailRepository
+        using repository: any FieldCheckSessionDetailRepository,
+        mayContinue: @escaping @MainActor () -> Bool = { true }
     ) async {
-        _ = await performOrderedMutation {
+        _ = await performOrderedMutation(mayContinue: mayContinue) {
             do {
                 try await repository.setAnimalCheckCounted(
                     sessionID: sessionID,
                     animalCheckID: animalCheckID,
                     isCounted: isCounted
                 )
+                guard mayContinue() else { return false }
                 self.refresh(sessionID: sessionID, using: repository)
                 return true
             } catch {
+                guard mayContinue() else { return false }
                 self.errorMessage = UserVisibleErrorMessage.make(error)
                 return false
             }
@@ -317,18 +324,21 @@ final class FieldCheckSessionDetailViewModel {
         sessionID: UUID,
         animalCheckID: UUID,
         isMissing: Bool,
-        using repository: any FieldCheckSessionDetailRepository
+        using repository: any FieldCheckSessionDetailRepository,
+        mayContinue: @escaping @MainActor () -> Bool = { true }
     ) async {
-        _ = await performOrderedMutation {
+        _ = await performOrderedMutation(mayContinue: mayContinue) {
             do {
                 try await repository.setAnimalCheckMissing(
                     sessionID: sessionID,
                     animalCheckID: animalCheckID,
                     isMissing: isMissing
                 )
+                guard mayContinue() else { return false }
                 self.refresh(sessionID: sessionID, using: repository)
                 return true
             } catch {
+                guard mayContinue() else { return false }
                 self.errorMessage = UserVisibleErrorMessage.make(error)
                 return false
             }
@@ -338,18 +348,21 @@ final class FieldCheckSessionDetailViewModel {
     func addTrackedAnimalToSession(
         sessionID: UUID,
         animalID: UUID,
-        using repository: any FieldCheckSessionDetailRepository
+        using repository: any FieldCheckSessionDetailRepository,
+        mayContinue: @escaping @MainActor () -> Bool = { true }
     ) async -> Bool {
-        await performOrderedMutation {
+        await performOrderedMutation(mayContinue: mayContinue) {
             do {
                 try await repository.addTrackedAnimalToSession(
                     sessionID: sessionID,
                     animalID: animalID,
                     checkedAt: .now
                 )
+                guard mayContinue() else { return false }
                 self.refresh(sessionID: sessionID, using: repository)
                 return true
             } catch {
+                guard mayContinue() else { return false }
                 self.errorMessage = UserVisibleErrorMessage.make(error)
                 return false
             }
@@ -359,14 +372,17 @@ final class FieldCheckSessionDetailViewModel {
     func addFinding(
         sessionID: UUID,
         input: FieldCheckFindingInput,
-        using repository: any FieldCheckSessionDetailRepository
+        using repository: any FieldCheckSessionDetailRepository,
+        mayContinue: @escaping @MainActor () -> Bool = { true }
     ) async {
-        _ = await performOrderedMutation {
+        _ = await performOrderedMutation(mayContinue: mayContinue) {
             do {
                 try await repository.addFinding(sessionID: sessionID, input: input)
+                guard mayContinue() else { return false }
                 self.refresh(sessionID: sessionID, using: repository)
                 return true
             } catch {
+                guard mayContinue() else { return false }
                 self.errorMessage = UserVisibleErrorMessage.make(error)
                 return false
             }
@@ -377,18 +393,21 @@ final class FieldCheckSessionDetailViewModel {
         sessionID: UUID,
         findingID: UUID,
         input: FieldCheckFindingInput,
-        using repository: any FieldCheckSessionDetailRepository
+        using repository: any FieldCheckSessionDetailRepository,
+        mayContinue: @escaping @MainActor () -> Bool = { true }
     ) async {
-        _ = await performOrderedMutation {
+        _ = await performOrderedMutation(mayContinue: mayContinue) {
             do {
                 try await repository.updateFinding(
                     sessionID: sessionID,
                     findingID: findingID,
                     input: input
                 )
+                guard mayContinue() else { return false }
                 self.refresh(sessionID: sessionID, using: repository)
                 return true
             } catch {
+                guard mayContinue() else { return false }
                 self.errorMessage = UserVisibleErrorMessage.make(error)
                 return false
             }
@@ -399,18 +418,21 @@ final class FieldCheckSessionDetailViewModel {
         sessionID: UUID,
         findingID: UUID,
         status: FieldCheckFindingStatus,
-        using repository: any FieldCheckSessionDetailRepository
+        using repository: any FieldCheckSessionDetailRepository,
+        mayContinue: @escaping @MainActor () -> Bool = { true }
     ) async {
-        _ = await performOrderedMutation {
+        _ = await performOrderedMutation(mayContinue: mayContinue) {
             do {
                 try await repository.updateFindingStatus(
                     sessionID: sessionID,
                     findingID: findingID,
                     status: status
                 )
+                guard mayContinue() else { return false }
                 self.refresh(sessionID: sessionID, using: repository)
                 return true
             } catch {
+                guard mayContinue() else { return false }
                 self.errorMessage = UserVisibleErrorMessage.make(error)
                 return false
             }
@@ -420,17 +442,20 @@ final class FieldCheckSessionDetailViewModel {
     func deleteFinding(
         sessionID: UUID,
         findingID: UUID,
-        using repository: any FieldCheckSessionDetailRepository
+        using repository: any FieldCheckSessionDetailRepository,
+        mayContinue: @escaping @MainActor () -> Bool = { true }
     ) async {
-        _ = await performOrderedMutation {
+        _ = await performOrderedMutation(mayContinue: mayContinue) {
             do {
                 try await repository.deleteFinding(
                     sessionID: sessionID,
                     findingID: findingID
                 )
+                guard mayContinue() else { return false }
                 self.refresh(sessionID: sessionID, using: repository)
                 return true
             } catch {
+                guard mayContinue() else { return false }
                 self.errorMessage = UserVisibleErrorMessage.make(error)
                 return false
             }
@@ -440,8 +465,10 @@ final class FieldCheckSessionDetailViewModel {
     func completeSession(
         sessionID: UUID,
         using repository: any FieldCheckSessionDetailRepository,
-        completionAlreadyAccepted: Bool = false
+        completionAlreadyAccepted: Bool = false,
+        mayContinue: @escaping @MainActor () -> Bool = { true }
     ) async {
+        guard mayContinue() else { return }
         if completionAlreadyAccepted {
             guard isCompletingSession else {
                 return
@@ -454,19 +481,23 @@ final class FieldCheckSessionDetailViewModel {
 
         defer { endSessionCompletion() }
 
-        _ = await performOrderedMutation(allowsDuringCompletion: true) {
+        _ = await performOrderedMutation(allowsDuringCompletion: true, mayContinue: mayContinue) {
             guard await self.persistNotesOperation(
                 sessionID: sessionID,
-                using: repository
+                using: repository,
+                mayContinue: mayContinue
             ) else {
                 return false
             }
 
+            guard mayContinue() else { return false }
             do {
                 try await repository.completeSession(id: sessionID)
+                guard mayContinue() else { return false }
                 self.refresh(sessionID: sessionID, using: repository)
                 return true
             } catch {
+                guard mayContinue() else { return false }
                 self.errorMessage = UserVisibleErrorMessage.make(error)
                 return false
             }
@@ -475,14 +506,17 @@ final class FieldCheckSessionDetailViewModel {
 
     func reopenSession(
         sessionID: UUID,
-        using repository: any FieldCheckSessionDetailRepository
+        using repository: any FieldCheckSessionDetailRepository,
+        mayContinue: @escaping @MainActor () -> Bool = { true }
     ) async {
-        _ = await performOrderedMutation {
+        _ = await performOrderedMutation(mayContinue: mayContinue) {
             do {
                 try await repository.reopenSession(id: sessionID)
+                guard mayContinue() else { return false }
                 self.refresh(sessionID: sessionID, using: repository)
                 return true
             } catch {
+                guard mayContinue() else { return false }
                 self.errorMessage = UserVisibleErrorMessage.make(error)
                 return false
             }
