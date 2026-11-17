@@ -40,7 +40,11 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
             }
             return
         }
-        setCurrentHerdID(accessibleHerds.count == 1 ? accessibleHerds[0].id : nil)
+        if accessibleHerds.count == 1 {
+            select(accessibleHerds[0].id)
+        } else {
+            setCurrentHerdID(nil)
+        }
     }
 
     /// Reconcile only an already active Herd after a successful inventory read.
