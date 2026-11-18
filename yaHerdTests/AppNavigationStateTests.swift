@@ -404,6 +404,8 @@ final class AppNavigationStateTests: XCTestCase {
 
     func testNewSelectionRevisionClearsRoutesAndDraftPresentationsAfterHerdRoundTrip() {
         let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let startingRevision = selection.selectionRevision
         let navigation = AppNavigationState()
         navigation.selectedHerdID = herdID
         navigation.selectedTab = .search
@@ -417,7 +419,11 @@ final class AppNavigationStateTests: XCTestCase {
 
         // SwiftUI may observe A -> B -> A as one final UUID update. The
         // selection revision still changed and must invalidate old routes.
-        navigation.resetForHerdChange(to: herdID, force: true)
+        selection.select(UUID())
+        selection.select(herdID)
+        XCTAssertNotEqual(selection.selectionRevision, startingRevision)
+        XCTAssertEqual(selection.currentHerdID, herdID)
+        navigation.resetForHerdChange(to: selection.currentHerdID, force: true)
 
         XCTAssertEqual(navigation.selectedHerdID, herdID)
         XCTAssertEqual(navigation.selectedTab, .home)
