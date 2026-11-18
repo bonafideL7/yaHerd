@@ -1,6 +1,12 @@
 import Foundation
 import Observation
 
+enum HerdInventoryState: Equatable {
+    case loading
+    case available
+    case unavailable
+}
+
 /// Coordinates the Herd list with the authoritative, persisted app selection.
 /// No item is selected from a cached list without refreshing store access first.
 @MainActor
@@ -12,6 +18,7 @@ final class HerdDirectoryController {
     @ObservationIgnored private var selectionGeneration: UInt64 = 0
 
     private(set) var herds: [AccessibleHerd] = []
+    private(set) var inventoryState: HerdInventoryState = .loading
     private(set) var errorMessage: String?
 
     var selectedHerdID: UUID? { selection.currentHerdID }
@@ -28,7 +35,7 @@ final class HerdDirectoryController {
 
     func refresh(reportErrors: Bool = true) {
         do {
-            let accessible = try repository.fetchAccessibleHerds()
+            let accessible = try readAccessibleHerds()
             let previouslySelectedHerdID = selection.currentHerdID
             selection.revalidateActiveHerd(from: accessible)
             if selection.currentHerdID != previouslySelectedHerdID {
@@ -49,7 +56,7 @@ final class HerdDirectoryController {
     }
 
     func selectHerd(id: UUID) throws {
-        let accessible = try repository.fetchAccessibleHerds()
+        let accessible = try readAccessibleHerds()
         try selection.selectAccessibleHerd(id, from: accessible)
         selectionGeneration &+= 1
         herds = accessible
@@ -58,7 +65,7 @@ final class HerdDirectoryController {
 
     /// Do not publish a partially imported Herd into the active repository graph.
     func selectHerdWhenReady(id: UUID) async throws {
-        let accessible = try repository.fetchAccessibleHerds()
+        let accessible = try readAccessibleHerds()
         guard accessible.filter({ $0.id == id }).count == 1 else {
             throw HerdRepositoryError.missingHerd
         }
@@ -80,7 +87,7 @@ final class HerdDirectoryController {
             throw CancellationError()
         }
         // Recheck membership after validation; import access can change.
-        let current = try repository.fetchAccessibleHerds()
+        let current = try readAccessibleHerds()
         try selection.selectAccessibleHerd(id, from: current)
         selectionGeneration &+= 1
         herds = current
@@ -90,6 +97,9 @@ final class HerdDirectoryController {
     @discardableResult
     func createOwnedHerd(named name: String) async throws -> HerdSummary {
         try Task.checkCancellation()
+        // A failed first inventory read is not proof that the cloud or local
+        // database contains no Herds. Never create a new root in that state.
+        _ = try readAccessibleHerds()
         let originatingSelection = selection.currentHerdID
         let originatingSelectionRevision = selection.selectionRevision
         let originatingGeneration = selectionGeneration
@@ -116,6 +126,17 @@ final class HerdDirectoryController {
                 "Refresh Herds and select it. \(error.localizedDescription)"
         }
         return created
+    }
+
+    private func readAccessibleHerds() throws -> [AccessibleHerd] {
+        do {
+            let accessible = try repository.fetchAccessibleHerds()
+            inventoryState = .available
+            return accessible
+        } catch {
+            inventoryState = .unavailable
+            throw error
+        }
     }
 
     func report(_ error: Error) {
