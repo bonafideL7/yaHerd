@@ -69,8 +69,9 @@ final class AnimalParentPickerViewModelTests: XCTestCase {
         let cow = parentOption(tag: "C20", sex: .female)
         let reader = ParentOptionQueryProbe(items: [bull, cow])
         let model = AnimalParentPickerViewModel()
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
 
-        await model.load(excluding: cow.id, using: reader)
+        await model.load(excluding: cow.id, using: reader, selection: selection, originatingSelectionRevision: selection.selectionRevision)
         XCTAssertTrue(model.hasLoaded)
         XCTAssertNil(model.errorMessage)
         XCTAssertEqual(model.items.map(\.id), [bull.id, cow.id])
@@ -105,13 +106,14 @@ final class AnimalParentPickerViewModelTests: XCTestCase {
         let option = parentOption(tag: "P01", sex: .male)
         let reader = ParentOptionQueryProbe(items: [option])
         let model = AnimalParentPickerViewModel()
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
 
-        await model.load(excluding: nil, using: reader)
+        await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: selection.selectionRevision)
         XCTAssertTrue(model.hasLoaded)
         XCTAssertEqual(model.items.map(\.id), [option.id])
 
         await reader.setFailure(true)
-        await model.load(excluding: nil, using: reader)
+        await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: selection.selectionRevision)
         XCTAssertFalse(model.hasLoaded)
         XCTAssertFalse(model.isLoading)
         XCTAssertTrue(model.items.isEmpty)
@@ -121,7 +123,7 @@ final class AnimalParentPickerViewModelTests: XCTestCase {
         )
 
         await reader.setFailure(false)
-        await model.load(excluding: nil, using: reader)
+        await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: selection.selectionRevision)
         XCTAssertTrue(model.hasLoaded)
         XCTAssertNil(model.errorMessage)
         XCTAssertEqual(model.items.map(\.id), [option.id])
@@ -132,12 +134,13 @@ final class AnimalParentPickerViewModelTests: XCTestCase {
         let newOption = parentOption(tag: "NEW", sex: .female)
         let reader = ParentOptionQueryProbe(items: [newOption], initialPausedResult: [oldOption])
         let model = AnimalParentPickerViewModel()
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
 
         let older = Task { @MainActor in
-            await model.load(excluding: nil, using: reader)
+            await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: selection.selectionRevision)
         }
         await reader.waitForFirstRequest()
-        await model.load(excluding: nil, using: reader)
+        await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: selection.selectionRevision)
         XCTAssertEqual(model.items.map(\.id), [newOption.id])
 
         await reader.releaseFirstRequest()
@@ -145,6 +148,65 @@ final class AnimalParentPickerViewModelTests: XCTestCase {
         XCTAssertEqual(model.items.map(\.id), [newOption.id])
         XCTAssertTrue(model.hasLoaded)
         XCTAssertNil(model.errorMessage)
+    }
+
+
+    func testParentOptionsLoadedForAnotherHerdAreNotSelectable() async {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let revision = selection.selectionRevision
+        let option = parentOption(tag: "A01", sex: .male)
+        let reader = ParentOptionQueryProbe(items: [option])
+        let model = AnimalParentPickerViewModel()
+
+        await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: revision)
+        XCTAssertTrue(model.hasCurrentOptions(for: selection, originatingSelectionRevision: revision))
+
+        selection.select(UUID())
+        XCTAssertFalse(
+            model.hasCurrentOptions(for: selection, originatingSelectionRevision: revision),
+            "A stale picker must not expose previous-Herd parent options before its next load."
+        )
+    }
+
+    func testParentOptionsInFlightAreDiscardedAfterHerdRoundTrip() async {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let revision = selection.selectionRevision
+        let option = parentOption(tag: "A01", sex: .male)
+        let reader = ParentOptionQueryProbe(items: [option], initialPausedResult: [option])
+        let model = AnimalParentPickerViewModel()
+
+        let load = Task { @MainActor in
+            await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: revision)
+        }
+        await reader.waitForFirstRequest()
+        selection.select(UUID())
+        selection.select(originalHerdID)
+        await reader.releaseFirstRequest()
+        await load.value
+
+        XCTAssertTrue(model.items.isEmpty)
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertFalse(model.isLoading)
+        XCTAssertFalse(model.hasCurrentOptions(for: selection, originatingSelectionRevision: revision))
+    }
+
+    func testObsoletePickerRefreshDoesNotQueryAnotherHerd() async {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let revision = selection.selectionRevision
+        let reader = ParentOptionQueryProbe(items: [parentOption(tag: "B01", sex: .female)])
+        let model = AnimalParentPickerViewModel()
+
+        selection.select(UUID())
+        selection.select(originalHerdID)
+        await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: revision)
+
+        let requestCount = await reader.totalRequests()
+        XCTAssertEqual(requestCount, 0)
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertTrue(model.items.isEmpty)
     }
 
     private func parentOption(tag: String, sex: Sex) -> AnimalParentOption {
@@ -180,6 +242,7 @@ private actor ParentOptionQueryProbe: AnimalParentOptionQueryReading {
 
     func setFailure(_ value: Bool) { shouldFail = value }
     func lastExcludedID() -> UUID? { lastExcluded }
+    func totalRequests() -> Int { requestCount }
 
     func waitForFirstRequest() async {
         if firstEntered { return }
