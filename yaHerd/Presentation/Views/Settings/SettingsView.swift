@@ -374,7 +374,15 @@ struct HerdDirectoryView: View {
                     .disabled(dataAccessMode.isRecoveryMode || isCreating || isOpeningHerd)
                 }
 
-                if directory.herds.isEmpty {
+                if directory.inventoryState == .loading {
+                    ProgressView("Loading available Herds")
+                } else if directory.inventoryState == .unavailable {
+                    Label(
+                        "The Herd list could not be read. Existing Herds may still be present. Refresh before creating a Herd.",
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .foregroundStyle(.secondary)
+                } else if directory.herds.isEmpty {
                     Text("No complete Herds are available. iCloud records may still be importing; refresh before creating a new Herd.")
                         .foregroundStyle(.secondary)
                 }
@@ -401,7 +409,7 @@ struct HerdDirectoryView: View {
                     } label: {
                         Label("Create Herd", systemImage: "plus")
                     }
-                    .disabled(isCreating)
+                    .disabled(isCreating || directory.inventoryState != .available)
                 } footer: {
                     Text("Creating a Herd adds a new owned Herd. It does not join an invitation.")
                 }
@@ -445,7 +453,7 @@ struct HerdDirectoryView: View {
         .alert("Create Herd", isPresented: $showsCreatePrompt) {
             TextField("Herd name", text: $newHerdName)
             Button("Create") {
-                guard !isCreating else { return }
+                guard !isCreating, directory.inventoryState == .available else { return }
                 validationTask?.cancel()
                 pendingHerdID = nil
                 isCreating = true
