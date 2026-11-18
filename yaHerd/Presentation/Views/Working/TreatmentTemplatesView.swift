@@ -11,11 +11,13 @@ struct TreatmentTemplatesView: View {
         workingDependencies.treatmentTemplatesRepository
     }
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @StateObject private var viewModel = WorkingTreatmentTemplatesViewModel(
         repository: EmptyWorkingRepository()
     )
 
     @State private var showingAdd = false
+    @State private var herdIdentity: WorkingQueueEditorHerdIdentity?
     @State private var errorMessage: String?
     @State private var showingError = false
 
@@ -40,7 +42,10 @@ struct TreatmentTemplatesView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .deleteDisabled(!dataAccessMode.allowsDataMutations)
+                    .deleteDisabled(
+                        !dataAccessMode.allowsDataMutations ||
+                        herdIdentity?.isCurrent(in: herdSelection) != true
+                    )
                 }
                 .onDelete(perform: delete)
             }
@@ -54,14 +59,19 @@ struct TreatmentTemplatesView: View {
                     Image(systemName: "plus")
                 }
                 .disabledWhenDataReadOnly()
+                .disabled(herdIdentity?.isCurrent(in: herdSelection) != true)
             }
         }
         .task {
+            if herdIdentity == nil {
+                herdIdentity = WorkingQueueEditorHerdIdentity(selection: herdSelection)
+            }
+            guard herdIdentity?.isCurrent(in: herdSelection) == true else { return }
             viewModel.configure(repository: repository)
             viewModel.load()
         }
         .onChange(of: showingAdd) { _, isPresented in
-            if !isPresented {
+            if !isPresented, herdIdentity?.isCurrent(in: herdSelection) == true {
                 viewModel.load()
             }
         }
@@ -80,7 +90,11 @@ struct TreatmentTemplatesView: View {
 
     private func delete(at offsets: IndexSet) {
         do {
-            try repository.deleteTemplates(ids: offsets.map { viewModel.templates[$0].id })
+            guard try WorkingTreatmentTemplateHerdAction.performIfCurrent(
+                identity: herdIdentity,
+                selection: herdSelection,
+                { try repository.deleteTemplates(ids: offsets.map { viewModel.templates[$0].id }) }
+            ) != nil else { return }
             viewModel.load()
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
@@ -91,12 +105,14 @@ struct TreatmentTemplatesView: View {
 
 private struct TreatmentTemplateAddView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
     private var repository: any WorkingTreatmentTemplateCreating {
         workingDependencies.treatmentTemplateCreator
     }
 
     @State private var name = ""
+    @State private var herdIdentity: WorkingQueueEditorHerdIdentity?
     @State private var plannedTreatments: [WorkingTreatmentPlanItem] = [
         WorkingTreatmentPlanItem(name: "")
     ]
@@ -131,6 +147,7 @@ private struct TreatmentTemplateAddView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     ToolbarSaveButton { save() }
+                        .disabled(herdIdentity?.isCurrent(in: herdSelection) != true)
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     ToolbarCancelButton { dismiss() }
@@ -140,6 +157,11 @@ private struct TreatmentTemplateAddView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(errorMessage ?? "")
+            }
+        }
+        .task {
+            if herdIdentity == nil {
+                herdIdentity = WorkingQueueEditorHerdIdentity(selection: herdSelection)
             }
         }
     }
@@ -159,7 +181,11 @@ private struct TreatmentTemplateAddView: View {
         guard !cleanedTreatments.isEmpty else { return }
 
         do {
-            _ = try repository.createTemplate(name: trimmedName, items: cleanedTreatments)
+            guard try WorkingTreatmentTemplateHerdAction.performIfCurrent(
+                identity: herdIdentity,
+                selection: herdSelection,
+                { try repository.createTemplate(name: trimmedName, items: cleanedTreatments) }
+            ) != nil else { return }
             dismiss()
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
@@ -169,6 +195,7 @@ private struct TreatmentTemplateAddView: View {
 }
 
 private struct TreatmentTemplateDetailView: View {
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
     private var repository: any WorkingTreatmentTemplateEditorRepository {
         workingDependencies.treatmentTemplateEditorRepository
@@ -177,6 +204,7 @@ private struct TreatmentTemplateDetailView: View {
     @StateObject private var viewModel: WorkingTreatmentTemplateDetailViewModel
 
     @State private var nameDraft = ""
+    @State private var herdIdentity: WorkingQueueEditorHerdIdentity?
     @State private var plannedTreatments: [WorkingTreatmentPlanItem] = []
     @State private var errorMessage: String?
     @State private var showingError = false
@@ -238,6 +266,7 @@ private struct TreatmentTemplateDetailView: View {
             }
             ToolbarItem(placement: .confirmationAction) {
                 ToolbarSaveButton { save() }
+                    .disabled(herdIdentity?.isCurrent(in: herdSelection) != true)
             }
         }
         .confirmationDialog(
@@ -251,6 +280,10 @@ private struct TreatmentTemplateDetailView: View {
             Text("Changes to this treatment set have not been saved.")
         }
         .task {
+            if herdIdentity == nil {
+                herdIdentity = WorkingQueueEditorHerdIdentity(selection: herdSelection)
+            }
+            guard herdIdentity?.isCurrent(in: herdSelection) == true else { return }
             viewModel.configure(repository: repository)
             viewModel.load()
             seedFromSnapshot()
@@ -287,15 +320,36 @@ private struct TreatmentTemplateDetailView: View {
         guard !cleanedTreatments.isEmpty else { return }
 
         do {
-            try repository.updateTemplate(
-                id: template.id,
-                name: trimmedName,
-                items: cleanedTreatments
-            )
+            guard try WorkingTreatmentTemplateHerdAction.performIfCurrent(
+                identity: herdIdentity,
+                selection: herdSelection,
+                {
+                    try repository.updateTemplate(
+                        id: template.id,
+                        name: trimmedName,
+                        items: cleanedTreatments
+                    )
+                }
+            ) != nil else { return }
             dismiss()
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true
         }
+    }
+}
+
+
+/// A detached template editor must not write into whichever Herd is active later.
+/// The synchronous repository call cannot be interrupted by an actor reentrancy.
+@MainActor
+enum WorkingTreatmentTemplateHerdAction {
+    static func performIfCurrent<Result>(
+        identity: WorkingQueueEditorHerdIdentity?,
+        selection: AppCurrentHerdSelection,
+        _ action: () throws -> Result
+    ) rethrows -> Result? {
+        guard identity?.isCurrent(in: selection) == true else { return nil }
+        return try action()
     }
 }
