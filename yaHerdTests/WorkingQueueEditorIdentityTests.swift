@@ -459,8 +459,6 @@ extension WorkingQueueEditorIdentityTests {
     }
 }
 
-
-
 @MainActor
 final class WorkingSessionTreatmentPlanHerdIsolationTests: XCTestCase {
     func testQueuedSaveDoesNotReadOrWriteAfterHerdSwitch() async throws {
