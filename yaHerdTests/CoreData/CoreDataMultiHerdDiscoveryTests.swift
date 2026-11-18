@@ -125,7 +125,7 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
 
         let created = try await repository.createOwnedHerd(named: "Deliberately New")
         XCTAssertEqual(
-            Set(try repository.fetchAccessibleHerds().map(\\.id)),
+            Set(try repository.fetchAccessibleHerds().map(\.id)),
             [incompleteID, created.id]
         )
     }
@@ -155,7 +155,7 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
             selection: AppCurrentHerdSelection(), assembly: assembly
         )
         let created = try await repository.createOwnedHerd(named: "My Own Herd")
-        XCTAssertEqual(try repository.fetchAccessibleHerds().map(\\.id), [created.id])
+        XCTAssertEqual(try repository.fetchAccessibleHerds().map(\.id), [created.id])
 
         try context.performAndWait {
             let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
