@@ -71,7 +71,12 @@ final class AnimalParentPickerViewModelTests: XCTestCase {
         let model = AnimalParentPickerViewModel()
         let selection = AppCurrentHerdSelection(currentHerdID: UUID())
 
-        await model.load(excluding: cow.id, using: reader, selection: selection, originatingSelectionRevision: selection.selectionRevision)
+        await model.load(
+            excluding: cow.id,
+            using: reader,
+            selection: selection,
+            originatingSelectionRevision: selection.selectionRevision
+        )
         XCTAssertTrue(model.hasLoaded)
         XCTAssertNil(model.errorMessage)
         XCTAssertEqual(model.items.map(\.id), [bull.id, cow.id])
@@ -108,12 +113,22 @@ final class AnimalParentPickerViewModelTests: XCTestCase {
         let model = AnimalParentPickerViewModel()
         let selection = AppCurrentHerdSelection(currentHerdID: UUID())
 
-        await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: selection.selectionRevision)
+        await model.load(
+            excluding: nil,
+            using: reader,
+            selection: selection,
+            originatingSelectionRevision: selection.selectionRevision
+        )
         XCTAssertTrue(model.hasLoaded)
         XCTAssertEqual(model.items.map(\.id), [option.id])
 
         await reader.setFailure(true)
-        await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: selection.selectionRevision)
+        await model.load(
+            excluding: nil,
+            using: reader,
+            selection: selection,
+            originatingSelectionRevision: selection.selectionRevision
+        )
         XCTAssertFalse(model.hasLoaded)
         XCTAssertFalse(model.isLoading)
         XCTAssertTrue(model.items.isEmpty)
@@ -123,7 +138,12 @@ final class AnimalParentPickerViewModelTests: XCTestCase {
         )
 
         await reader.setFailure(false)
-        await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: selection.selectionRevision)
+        await model.load(
+            excluding: nil,
+            using: reader,
+            selection: selection,
+            originatingSelectionRevision: selection.selectionRevision
+        )
         XCTAssertTrue(model.hasLoaded)
         XCTAssertNil(model.errorMessage)
         XCTAssertEqual(model.items.map(\.id), [option.id])
@@ -137,10 +157,20 @@ final class AnimalParentPickerViewModelTests: XCTestCase {
         let selection = AppCurrentHerdSelection(currentHerdID: UUID())
 
         let older = Task { @MainActor in
-            await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: selection.selectionRevision)
+            await model.load(
+            excluding: nil,
+            using: reader,
+            selection: selection,
+            originatingSelectionRevision: selection.selectionRevision
+        )
         }
         await reader.waitForFirstRequest()
-        await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: selection.selectionRevision)
+        await model.load(
+            excluding: nil,
+            using: reader,
+            selection: selection,
+            originatingSelectionRevision: selection.selectionRevision
+        )
         XCTAssertEqual(model.items.map(\.id), [newOption.id])
 
         await reader.releaseFirstRequest()
@@ -150,7 +180,6 @@ final class AnimalParentPickerViewModelTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
-
     func testParentOptionsLoadedForAnotherHerdAreNotSelectable() async {
         let originalHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
@@ -159,7 +188,12 @@ final class AnimalParentPickerViewModelTests: XCTestCase {
         let reader = ParentOptionQueryProbe(items: [option])
         let model = AnimalParentPickerViewModel()
 
-        await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: revision)
+        await model.load(
+            excluding: nil,
+            using: reader,
+            selection: selection,
+            originatingSelectionRevision: revision
+        )
         XCTAssertTrue(model.hasCurrentOptions(for: selection, originatingSelectionRevision: revision))
 
         selection.select(UUID())
@@ -178,7 +212,12 @@ final class AnimalParentPickerViewModelTests: XCTestCase {
         let model = AnimalParentPickerViewModel()
 
         let load = Task { @MainActor in
-            await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: revision)
+            await model.load(
+            excluding: nil,
+            using: reader,
+            selection: selection,
+            originatingSelectionRevision: revision
+        )
         }
         await reader.waitForFirstRequest()
         selection.select(UUID())
@@ -201,7 +240,12 @@ final class AnimalParentPickerViewModelTests: XCTestCase {
 
         selection.select(UUID())
         selection.select(originalHerdID)
-        await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: revision)
+        await model.load(
+            excluding: nil,
+            using: reader,
+            selection: selection,
+            originatingSelectionRevision: revision
+        )
 
         let requestCount = await reader.totalRequests()
         XCTAssertEqual(requestCount, 0)
