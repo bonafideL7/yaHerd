@@ -48,6 +48,34 @@ final class WorkingSessionDeletionHerdIsolationTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testInFlightDeletionDoesNotReloadAfterSwitchingAwayAndBack() async throws {
+        let originatingHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
+        let repository = SuspendedWorkingSessionsRepository()
+        repository.suspendDeletion = true
+        let model = WorkingSessionsViewModel(repository: repository)
+        XCTAssertTrue(model.load())
+
+        let sessionID = UUID()
+        let deletion = Task {
+            try await model.deleteSession(
+                id: sessionID,
+                originatingHerdID: originatingHerdID,
+                currentHerdSelection: selection
+            )
+        }
+        await repository.waitForPendingDeletion()
+        selection.select(UUID())
+        selection.select(originatingHerdID)
+        repository.finishDeletion()
+
+        let completed = try await deletion.value
+        XCTAssertFalse(completed)
+        XCTAssertEqual(repository.deletedSessionIDs, [sessionID])
+        XCTAssertEqual(repository.fetchCount, 1)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testSuccessfulDeletionReloadsOnlyWhenOriginalHerdIsStillSelected() async throws {
         let originatingHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
