@@ -37,6 +37,10 @@ final class CoreDataHerdRepository: HerdRepository {
     /// root cannot safely be selected until its original required fields arrive.
     /// Even incomplete roots participate in UUID collision checks.
     func fetchAccessibleHerds() throws -> [AccessibleHerd] {
+        try fetchHerdInventory().herds
+    }
+
+    func fetchHerdInventory() throws -> HerdInventory {
         let context = contextFactory.makeReadContext()
         return try context.performAndWait {
             let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
@@ -48,11 +52,15 @@ final class CoreDataHerdRepository: HerdRepository {
             let stores = context.persistentStoreCoordinator?.persistentStores ?? []
             var seenIDs = Set<UUID>()
             var available: [AccessibleHerd] = []
+            var hasIncompleteRoots = false
 
             for root in roots {
                 // A partially imported root without its UUID must not block
                 // valid accessible Herds. Leave it untouched while importing.
-                guard let id = root.id else { continue }
+                guard let id = root.id else {
+                    hasIncompleteRoots = true
+                    continue
+                }
                 guard seenIDs.insert(id).inserted else {
                     throw CoreDataPersistenceError.duplicateApplicationID(
                         entity: CDHerd.coreDataEntityName, id: id, herdID: nil
@@ -84,13 +92,14 @@ final class CoreDataHerdRepository: HerdRepository {
                     case .missingName, .missingCreatedAt, .missingUpdatedAt:
                         // Import can deliver the root before its metadata.
                         // Keep the original record untouched and undisplayed.
+                        hasIncompleteRoots = true
                         continue
                     case .missingID:
                         throw error
                     }
                 }
             }
-            return available
+            return HerdInventory(herds: available, hasIncompleteRoots: hasIncompleteRoots)
         }
     }
 
