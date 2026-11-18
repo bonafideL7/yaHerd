@@ -737,39 +737,84 @@ final class AppNavigationState {
         }
     }
 
+    /// Incoming URLs are not trusted navigation state: a record URL may refer to
+    /// a different Herd or a share that has since been revoked. Validate every
+    /// target against the selected Herd before dismissing any current editor.
     @discardableResult
-    func handle(url: URL) -> Bool {
+    func handle(
+        url: URL,
+        using validator: any AppNavigationRestorationValidating
+    ) -> Bool {
         guard url.scheme?.lowercased() == "yaherd" else { return false }
 
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         let destination = url.host?.lowercased() ?? ""
         let pathValues = url.pathComponents.filter { $0 != "/" }
+        let request: AppNavigationRequest
 
         switch destination {
         case "animal":
-            guard let value = pathValues.first, let id = UUID(uuidString: value) else { return false }
-            handle(.openAnimal(id))
+            guard let value = pathValues.first,
+                  let id = UUID(uuidString: value) else { return false }
+            request = .openAnimal(id)
         case "pasture":
-            guard let value = pathValues.first, let id = UUID(uuidString: value) else { return false }
-            handle(.openPasture(id))
+            guard let value = pathValues.first,
+                  let id = UUID(uuidString: value) else { return false }
+            request = .openPasture(id)
         case "field-check":
-            guard let value = pathValues.first, let sessionID = UUID(uuidString: value) else { return false }
+            guard let value = pathValues.first,
+                  let sessionID = UUID(uuidString: value) else { return false }
             if let findingValue = components?.queryItems?.first(where: { $0.name == "finding" })?.value,
                let findingID = UUID(uuidString: findingValue) {
-                handle(.openFinding(sessionID: sessionID, findingID: findingID))
+                request = .openFinding(sessionID: sessionID, findingID: findingID)
             } else {
-                handle(.continueFieldCheck(sessionID))
+                request = .continueFieldCheck(sessionID)
             }
         case "work-session":
-            guard let value = pathValues.first, let id = UUID(uuidString: value) else { return false }
-            handle(.continueWorkingSession(id))
+            guard let value = pathValues.first,
+                  let id = UUID(uuidString: value) else { return false }
+            request = .continueWorkingSession(id)
         case "search":
             let query = components?.queryItems?.first(where: { $0.name == "q" })?.value ?? ""
-            handle(.searchAnimals(query))
+            request = .searchAnimals(query)
         default:
             return false
         }
 
+        // An unselected or superseded Herd cannot receive a record or search
+        // destination. The validator reads through the current Herd's scoped
+        // repositories; a missing target or transient read failure fails closed.
+        guard let selectedHerdID,
+              (try? validator.currentHerdID()) == selectedHerdID else { return false }
+
+        do {
+            let exists: Bool
+            switch request {
+            case .openAnimal(let animalID):
+                exists = try validator.animalExists(id: animalID)
+            case .openPasture(let pastureID):
+                exists = try validator.pastureExists(id: pastureID)
+            case .openFinding(let sessionID, let findingID):
+                guard let findingValidator = validator as? any FocusedFieldCheckFindingValidating
+                else { return false }
+                exists = try validator.fieldCheckSessionExists(id: sessionID)
+                    && findingValidator.fieldCheckFindingExists(
+                        sessionID: sessionID,
+                        findingID: findingID
+                    )
+            case .continueFieldCheck(let sessionID):
+                exists = try validator.fieldCheckSessionExists(id: sessionID)
+            case .continueWorkingSession(let sessionID):
+                exists = try validator.workingSessionExists(id: sessionID)
+            case .searchAnimals:
+                exists = true
+            }
+            guard exists else { return false }
+        } catch {
+            return false
+        }
+
+        handle(request)
         return true
     }
 
