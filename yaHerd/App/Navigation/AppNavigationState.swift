@@ -797,11 +797,13 @@ final class AppNavigationState {
             case .openFinding(let sessionID, let findingID):
                 guard let findingValidator = validator as? any FocusedFieldCheckFindingValidating
                 else { return false }
-                exists = try validator.fieldCheckSessionExists(id: sessionID)
-                    && findingValidator.fieldCheckFindingExists(
-                        sessionID: sessionID,
-                        findingID: findingID
-                    )
+                guard try validator.fieldCheckSessionExists(id: sessionID) else {
+                    return false
+                }
+                exists = try findingValidator.fieldCheckFindingExists(
+                    sessionID: sessionID,
+                    findingID: findingID
+                )
             case .continueFieldCheck(let sessionID):
                 exists = try validator.fieldCheckSessionExists(id: sessionID)
             case .continueWorkingSession(let sessionID):
