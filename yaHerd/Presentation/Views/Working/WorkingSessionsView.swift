@@ -150,6 +150,7 @@ struct WorkingSessionsView: View {
     private func deleteSession(_ session: WorkingSessionSummary) {
         guard !isDeletingSession,
               let originatingHerdID = herdSelection.currentHerdID else { return }
+        let originatingSelectionRevision = herdSelection.selectionRevision
         isDeletingSession = true
 
         Task { @MainActor in
@@ -159,13 +160,15 @@ struct WorkingSessionsView: View {
                 guard try await viewModel.deleteSession(
                     id: session.id,
                     originatingHerdID: originatingHerdID,
+                    originatingSelectionRevision: originatingSelectionRevision,
                     currentHerdSelection: herdSelection
                 ) else { return }
                 sessionPendingDeleteID = nil
                 errorMessage = nil
             } catch {
                 guard !Task.isCancelled,
-                      herdSelection.currentHerdID == originatingHerdID else { return }
+                      herdSelection.currentHerdID == originatingHerdID,
+                      herdSelection.selectionRevision == originatingSelectionRevision else { return }
                 errorMessage = UserVisibleErrorMessage.make(error)
                 showingError = true
             }
