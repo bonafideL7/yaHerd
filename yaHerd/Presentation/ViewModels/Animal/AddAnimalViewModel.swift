@@ -23,9 +23,11 @@ final class AddAnimalViewModel {
         defaultTagColorID: UUID?,
         using repository: any AnimalEditorRepository,
         expectedHerdID: UUID,
-        selection: any CurrentHerdSelectionReading
+        expectedSelectionRevision: UInt64,
+        selection: AppCurrentHerdSelection
     ) throws -> AnimalDetailSnapshot {
-        guard selection.currentHerdID == expectedHerdID else {
+        guard selection.currentHerdID == expectedHerdID,
+              selection.selectionRevision == expectedSelectionRevision else {
             throw CancellationError()
         }
         let input = try form.makeInput(defaultTagColorID: defaultTagColorID)
