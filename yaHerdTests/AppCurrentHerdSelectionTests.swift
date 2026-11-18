@@ -69,6 +69,43 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
         XCTAssertEqual(defaults.string(forKey: "selected"), id.uuidString)
     }
 
+    func testRememberedHerdDoesNotRestoreFromDifferentStoreAfterRelaunch() throws {
+        for originalCategory: AccessibleHerd.Category in [.owned, .shared] {
+            let suite = "stage3-category-restore-\(UUID())"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+
+            let herdID = UUID()
+            let original = AccessibleHerd(
+                summary: herd(herdID).summary,
+                category: originalCategory
+            )
+            let replacement = AccessibleHerd(
+                summary: original.summary,
+                category: originalCategory == .owned ? .shared : .owned
+            )
+            let selection = AppCurrentHerdSelection(
+                defaults: defaults, preferenceKey: "selected"
+            )
+            try selection.selectAccessibleHerd(herdID, from: [original])
+
+            let relaunched = AppCurrentHerdSelection(
+                defaults: defaults, preferenceKey: "selected"
+            )
+            relaunched.restoreAccessibleHerd(from: [replacement])
+            XCTAssertNil(relaunched.currentHerdID)
+            XCTAssertEqual(defaults.string(forKey: "selected"), herdID.uuidString)
+
+            // Explicit opening updates the expected store category.
+            try relaunched.selectAccessibleHerd(herdID, from: [replacement])
+            let reopened = AppCurrentHerdSelection(
+                defaults: defaults, preferenceKey: "selected"
+            )
+            reopened.restoreAccessibleHerd(from: [replacement])
+            XCTAssertEqual(reopened.currentHerdID, herdID)
+        }
+    }
+
     func testSelectingAccessibleHerdPersistsAndRejectsUnknownIdentity() throws {
         let suite = "stage3-selection-\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
