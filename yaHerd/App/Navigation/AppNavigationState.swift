@@ -583,8 +583,10 @@ final class AppNavigationState {
     /// Called after the selected Herd has been validated and changed by the
     /// application's authoritative Herd selection. No old record identity,
     /// modal workflow, or search filter is safe to carry across Herds.
-    func resetForHerdChange(to herdID: UUID?) {
-        guard selectedHerdID != herdID else { return }
+    func resetForHerdChange(to herdID: UUID?, force: Bool = false) {
+        // A new selection revision invalidates the prior navigation even when
+        // a rapid Herd A → B → A switch ends on the original UUID.
+        guard force || selectedHerdID != herdID else { return }
         selectedHerdID = herdID
         selectedTab = .home
         herdRouter.resetForHerdChange()
