@@ -199,6 +199,7 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         let repository = CoreDataHerdRepository(selection: selection, assembly: assembly)
         let directory = HerdDirectoryController(repository: repository, selection: selection)
         directory.refresh()
+        XCTAssertEqual(directory.inventoryState, .incomplete)
         XCTAssertEqual(directory.herds.map(\.id), [completeID])
         XCTAssertNil(directory.selectedHerdID)
 
@@ -213,6 +214,7 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let context = try assembly.contextFactory.makeWriteContext()
         let validID = UUID()
+        let incompleteID = UUID()
         try context.performAndWait {
             let complete = CDHerd(context: context)
             complete.id = validID
@@ -220,7 +222,7 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
             complete.createdAt = Date(timeIntervalSince1970: 100)
             complete.updatedAt = Date(timeIntervalSince1970: 100)
             let incomplete = CDHerd(context: context)
-            incomplete.id = UUID()
+            incomplete.id = incompleteID
             incomplete.name = nil
             incomplete.createdAt = nil
             incomplete.updatedAt = nil
@@ -233,6 +235,28 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         XCTAssertEqual(inventory.herds.map(\.id), [validID])
         XCTAssertTrue(inventory.hasIncompleteRoots)
         XCTAssertEqual(try repository.fetchAccessibleHerds().map(\.id), [validID])
+
+        let selection = AppCurrentHerdSelection()
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+        directory.refresh()
+        XCTAssertEqual(directory.inventoryState, .incomplete)
+        XCTAssertEqual(directory.herds.map(\.id), [validID])
+
+        // When the remaining import metadata arrives, the original root
+        // becomes selectable without creating or rewriting its identity.
+        let updateContext = try assembly.contextFactory.makeWriteContext()
+        try updateContext.performAndWait {
+            let imported = try XCTUnwrap(CoreDataLookup().herd(id: incompleteID, in: updateContext))
+            imported.name = "Imported"
+            imported.createdAt = Date(timeIntervalSince1970: 200)
+            imported.updatedAt = Date(timeIntervalSince1970: 200)
+            try updateContext.save()
+        }
+
+        directory.refresh()
+        XCTAssertEqual(directory.inventoryState, .available)
+        XCTAssertEqual(Set(directory.herds.map(\.id)), Set([validID, incompleteID]))
+        XCTAssertNil(directory.selectedHerdID)
     }
 
     func testDeferredSampleSeedDoesNotWriteToNewlySelectedHerd() async throws {
