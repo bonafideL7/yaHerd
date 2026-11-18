@@ -131,7 +131,7 @@ struct AddAnimalView: View {
             ),
             excludeAnimalID: nil
         )
-        .onChange(of: herdSelection.currentHerdID) { _, _ in
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
             saveTask?.cancel()
         }
         .onDisappear {
@@ -147,6 +147,7 @@ struct AddAnimalView: View {
 
     private func validateAndSave() {
         guard !isSaving, let originatingHerdID = herdSelection.currentHerdID else { return }
+        let originatingSelectionRevision = herdSelection.selectionRevision
         isSaving = true
 
         saveTask = Task { @MainActor in
@@ -157,7 +158,8 @@ struct AddAnimalView: View {
 
             do {
                 try Task.checkCancellation()
-                guard herdSelection.currentHerdID == originatingHerdID else {
+                guard herdSelection.currentHerdID == originatingHerdID,
+                      herdSelection.selectionRevision == originatingSelectionRevision else {
                     throw CancellationError()
                 }
 
@@ -169,19 +171,22 @@ struct AddAnimalView: View {
                         defaultTagColorID: tagColorLibrary.defaultColorID,
                         using: repository,
                         expectedHerdID: originatingHerdID,
+                        expectedSelectionRevision: originatingSelectionRevision,
                         selection: herdSelection
                     )
                     pendingCreatedAnimal = createdAnimal
                 }
 
                 try Task.checkCancellation()
-                guard herdSelection.currentHerdID == originatingHerdID else {
+                guard herdSelection.currentHerdID == originatingHerdID,
+                      herdSelection.selectionRevision == originatingSelectionRevision else {
                     throw CancellationError()
                 }
                 try await onSave?(createdAnimal)
 
                 try Task.checkCancellation()
-                guard herdSelection.currentHerdID == originatingHerdID else {
+                guard herdSelection.currentHerdID == originatingHerdID,
+                      herdSelection.selectionRevision == originatingSelectionRevision else {
                     throw CancellationError()
                 }
                 pendingCreatedAnimal = nil
@@ -189,7 +194,9 @@ struct AddAnimalView: View {
             } catch is CancellationError {
                 // A stale view must not create or navigate within another Herd.
             } catch {
-                guard !Task.isCancelled, herdSelection.currentHerdID == originatingHerdID else {
+                guard !Task.isCancelled,
+                      herdSelection.currentHerdID == originatingHerdID,
+                      herdSelection.selectionRevision == originatingSelectionRevision else {
                     return
                 }
                 viewModel.errorMessage = UserVisibleErrorMessage.make(error)
