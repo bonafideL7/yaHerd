@@ -82,6 +82,87 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         XCTAssertEqual(try repository.fetchAccessibleHerds().count, 2)
     }
 
+    func testIncompleteOwnedRootBlocksCreationUntilImportCompletes() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let incompleteID = UUID()
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let privateStore = try XCTUnwrap(
+                context.persistentStoreCoordinator?.persistentStores.first {
+                    $0.url?.lastPathComponent == CoreDataPersistentContainer.storeFileName
+                }
+            )
+            let importing = CDHerd(context: context)
+            importing.id = incompleteID
+            importing.name = nil
+            importing.createdAt = Date(timeIntervalSince1970: 100)
+            importing.updatedAt = Date(timeIntervalSince1970: 100)
+            context.assign(importing, to: privateStore)
+            try context.save()
+        }
+
+        let repository = CoreDataHerdRepository(
+            selection: AppCurrentHerdSelection(), assembly: assembly
+        )
+        do {
+            _ = try await repository.createOwnedHerd(named: "Accidental replacement")
+            XCTFail("An incomplete owned root must not be replaced with another Herd.")
+        } catch {
+            XCTAssertEqual(error as? HerdRepositoryError, .incompleteOwnedHerd)
+        }
+
+        try context.performAndWait {
+            let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            let roots = try context.fetch(request)
+            XCTAssertEqual(roots.count, 1)
+            XCTAssertEqual(roots.first?.id, incompleteID)
+            roots.first?.name = "Imported Herd"
+            try context.save()
+        }
+
+        let created = try await repository.createOwnedHerd(named: "Deliberately New")
+        XCTAssertEqual(
+            Set(try repository.fetchAccessibleHerds().map(\\.id)),
+            [incompleteID, created.id]
+        )
+    }
+
+    func testIncompleteSharedRootDoesNotBlockOwnedHerdCreation() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let sharedStore = try XCTUnwrap(
+                context.persistentStoreCoordinator?.persistentStores.first {
+                    $0.url?.lastPathComponent == CoreDataPersistentContainer.sharedStoreFileName
+                }
+            )
+            let importing = CDHerd(context: context)
+            importing.id = UUID()
+            importing.name = nil
+            importing.createdAt = nil
+            importing.updatedAt = nil
+            context.assign(importing, to: sharedStore)
+            try context.save()
+        }
+
+        let repository = CoreDataHerdRepository(
+            selection: AppCurrentHerdSelection(), assembly: assembly
+        )
+        let created = try await repository.createOwnedHerd(named: "My Own Herd")
+        XCTAssertEqual(try repository.fetchAccessibleHerds().map(\\.id), [created.id])
+
+        try context.performAndWait {
+            let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            XCTAssertEqual(try context.count(for: request), 2)
+        }
+    }
+
     func testCancelledCreateDoesNotPersistAnUnwantedHerd() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let repository = CoreDataHerdRepository(
