@@ -283,6 +283,51 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         XCTAssertEqual(directory.selectedHerdID, originalID)
     }
 
+    func testReadinessDoesNotActivateDifferentStoreOwnershipForSameHerdID() async throws {
+        for originalCategory: AccessibleHerd.Category in [.owned, .shared] {
+            let activeID = UUID()
+            let candidateID = UUID()
+            let selection = AppCurrentHerdSelection(currentHerdID: activeID)
+            let candidate = AccessibleHerd(
+                summary: herd(candidateID).summary,
+                category: originalCategory
+            )
+            let repository = StubHerdRepository(available: [herd(activeID), candidate])
+            var pendingReadiness: CheckedContinuation<Void, Never>?
+            let directory = HerdDirectoryController(
+                repository: repository,
+                selection: selection,
+                validateReadiness: { _ in
+                    await withCheckedContinuation { pendingReadiness = $0 }
+                }
+            )
+
+            let opening = Task { try await directory.selectHerdWhenReady(id: candidateID) }
+            while pendingReadiness == nil {
+                await Task.yield()
+            }
+
+            // The old root disappears while its graph is being validated. A
+            // different store now exposes the same application UUID.
+            repository.available = [
+                herd(activeID),
+                AccessibleHerd(
+                    summary: candidate.summary,
+                    category: originalCategory == .owned ? .shared : .owned
+                )
+            ]
+            pendingReadiness?.resume()
+
+            do {
+                try await opening.value
+                XCTFail("Readiness for one store must not activate another store's Herd.")
+            } catch is CancellationError {
+                // A fresh readiness check is required for the replacement root.
+            }
+            XCTAssertEqual(directory.selectedHerdID, activeID)
+        }
+    }
+
     func testCommittedCreationIsNotReportedAsFailedWhenInventoryRefreshThrows() async throws {
         let selectedID = UUID()
         let createdID = UUID()
