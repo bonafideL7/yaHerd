@@ -3,10 +3,13 @@ import SwiftUI
 struct PastureGroupEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.pastureFeatureDependencies) private var pastureDependencies
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     private var repository: any PastureGroupEditorRepository { pastureDependencies.groupEditorRepository }
 
     @State private var model = PastureGroupFormViewModel()
     @State private var hasPreparedForm = false
+    @State private var originatingHerdID: UUID?
+    @State private var originatingSelectionRevision: UInt64?
 
     private let group: PastureGroupDetailSnapshot?
     private let onSave: (() -> Void)?
@@ -64,6 +67,8 @@ struct PastureGroupEditorView: View {
     private func prepareFormIfNeeded() {
         guard !hasPreparedForm else { return }
         hasPreparedForm = true
+        originatingHerdID = herdSelection.currentHerdID
+        originatingSelectionRevision = herdSelection.selectionRevision
         if let group {
             model.populate(from: group)
         }
@@ -71,10 +76,24 @@ struct PastureGroupEditorView: View {
 
     private func save() {
         do {
+            guard let originatingHerdID, let originatingSelectionRevision else {
+                throw CancellationError()
+            }
             if let group {
-                try model.update(id: group.id, using: repository)
+                try model.update(
+                    id: group.id,
+                    using: repository,
+                    expectedHerdID: originatingHerdID,
+                    expectedSelectionRevision: originatingSelectionRevision,
+                    selection: herdSelection
+                )
             } else {
-                try model.create(using: repository)
+                try model.create(
+                    using: repository,
+                    expectedHerdID: originatingHerdID,
+                    expectedSelectionRevision: originatingSelectionRevision,
+                    selection: herdSelection
+                )
             }
             onSave?()
             dismiss()
