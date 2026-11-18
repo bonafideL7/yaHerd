@@ -38,7 +38,17 @@ final class HerdDirectoryController {
         do {
             let accessible = try readAccessibleHerds()
             let previouslySelectedHerdID = selection.currentHerdID
-            selection.revalidateActiveHerd(from: accessible)
+            if let previouslySelectedHerdID,
+               let previous = herds.first(where: { $0.id == previouslySelectedHerdID }),
+               let refreshed = accessible.first(where: { $0.id == previouslySelectedHerdID }),
+               previous.category != refreshed.category {
+                // The same UUID now resolves through a different store. Do
+                // not carry the old selection into that replacement Herd.
+                // A user may reopen it through the graph-readiness preflight.
+                selection.deferCurrentHerdUntilImportReady()
+            } else {
+                selection.revalidateActiveHerd(from: accessible)
+            }
             if selection.currentHerdID != previouslySelectedHerdID {
                 selectionGeneration &+= 1
             }
