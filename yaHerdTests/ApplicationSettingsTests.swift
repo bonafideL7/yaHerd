@@ -93,6 +93,48 @@ final class ApplicationSettingsTests: XCTestCase {
         XCTAssertEqual(secondSettings.targetAcresPerHeadDefault, 3.0)
     }
 
+    func testRecentPasturesAreScopedByHerdAndRetainedAfterReload() {
+        let store = InMemoryApplicationSettingsStore()
+        let settings = ApplicationSettings(store: store)
+        let firstHerdID = UUID()
+        let secondHerdID = UUID()
+        // UUIDs can legitimately recur in independent Herd scopes.
+        let pastureID = UUID()
+
+        settings.setRecentPastureIDs([pastureID], for: firstHerdID)
+        XCTAssertEqual(settings.recentPastureIDs(for: firstHerdID), [pastureID])
+        XCTAssertEqual(settings.recentPastureIDs(for: secondHerdID), [])
+
+        settings.setRecentPastureIDs([pastureID], for: secondHerdID)
+        settings.setRecentPastureIDs([], for: firstHerdID)
+        XCTAssertEqual(settings.recentPastureIDs(for: firstHerdID), [])
+        XCTAssertEqual(settings.recentPastureIDs(for: secondHerdID), [pastureID])
+
+        let reloaded = ApplicationSettings(store: store)
+        XCTAssertEqual(reloaded.recentPastureIDs(for: firstHerdID), [])
+        XCTAssertEqual(reloaded.recentPastureIDs(for: secondHerdID), [pastureID])
+    }
+
+    func testHerdRecentPasturesNormalizeAndResetAllScopes() {
+        let store = InMemoryApplicationSettingsStore()
+        let settings = ApplicationSettings(store: store)
+        let firstHerdID = UUID()
+        let secondHerdID = UUID()
+        let ids = (0..<5).map { _ in UUID() }
+
+        settings.setRecentPastureIDs([ids[0], ids[0]] + ids.dropFirst(), for: firstHerdID)
+        settings.setRecentPastureIDs([ids[4]], for: secondHerdID)
+        XCTAssertEqual(settings.recentPastureIDs(for: firstHerdID), Array(ids.prefix(4)))
+        XCTAssertEqual(settings.recentPastureIDs(for: secondHerdID), [ids[4]])
+
+        settings.resetToDefaults()
+        XCTAssertEqual(settings.recentPastureIDs(for: firstHerdID), [])
+        XCTAssertEqual(settings.recentPastureIDs(for: secondHerdID), [])
+        let reloaded = ApplicationSettings(store: store)
+        XCTAssertEqual(reloaded.recentPastureIDs(for: firstHerdID), [])
+        XCTAssertEqual(reloaded.recentPastureIDs(for: secondHerdID), [])
+    }
+
     func testResetToDefaultsRestoresLocalPreferences() {
         let settings = ApplicationSettings(store: InMemoryApplicationSettingsStore())
         settings.isDashboardEnabled = true
