@@ -55,7 +55,7 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         XCTAssertNil(directory.errorMessage)
     }
 
-    func testRefreshInvalidatesSelectedHerdWhoseStoreOwnershipChanges() throws {
+    func testRefreshInvalidatesSelectedHerdWhoseStoreOwnershipChanges() async throws {
         for originalCategory: AccessibleHerd.Category in [.owned, .shared] {
             let suite = "stage3-store-ownership-\(UUID())"
             let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -86,6 +86,10 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
             XCTAssertEqual(defaults.string(forKey: "selected"), selectedID.uuidString)
             XCTAssertEqual(directory.herds.first?.category, replacement.category)
             XCTAssertEqual(directory.inventoryState, .available)
+
+            // Only a new explicit opening may activate the replacement root.
+            try await directory.selectHerdWhenReady(id: selectedID)
+            XCTAssertEqual(directory.selectedHerdID, selectedID)
         }
     }
 
