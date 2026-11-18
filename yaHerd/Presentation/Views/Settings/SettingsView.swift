@@ -382,8 +382,14 @@ struct HerdDirectoryView: View {
                         systemImage: "exclamationmark.triangle"
                     )
                     .foregroundStyle(.secondary)
+                } else if directory.inventoryState == .incomplete {
+                    Label(
+                        "Some Herd records are incomplete and may still be importing. Refresh to check for newly available Herds.",
+                        systemImage: "icloud.and.arrow.down"
+                    )
+                    .foregroundStyle(.secondary)
                 } else if directory.herds.isEmpty {
-                    Text("No complete Herds are available. iCloud records may still be importing; refresh before creating a new Herd.")
+                    Text("No Herds are available. If iCloud synchronization is still starting, refresh before creating a separate Herd.")
                         .foregroundStyle(.secondary)
                 }
 
@@ -407,11 +413,16 @@ struct HerdDirectoryView: View {
                         newHerdName = ""
                         showsCreatePrompt = true
                     } label: {
-                        Label("Create Herd", systemImage: "plus")
+                        Label(
+                            directory.inventoryState == .incomplete ? "Create Separate Herd" : "Create Herd",
+                            systemImage: "plus"
+                        )
                     }
-                    .disabled(isCreating || directory.inventoryState != .available)
+                    .disabled(isCreating || isOpeningHerd ||
+                              (directory.inventoryState != .available &&
+                               directory.inventoryState != .incomplete))
                 } footer: {
-                    Text("Creating a Herd adds a new owned Herd. It does not join an invitation.")
+                    Text("Creating a Herd adds a separate owned Herd. It does not join an invitation or replace incomplete imported records.")
                 }
             }
         }
@@ -453,7 +464,9 @@ struct HerdDirectoryView: View {
         .alert("Create Herd", isPresented: $showsCreatePrompt) {
             TextField("Herd name", text: $newHerdName)
             Button("Create") {
-                guard !isCreating, directory.inventoryState == .available else { return }
+                guard !isCreating, !isOpeningHerd,
+                      directory.inventoryState == .available ||
+                      directory.inventoryState == .incomplete else { return }
                 validationTask?.cancel()
                 pendingHerdID = nil
                 isCreating = true
