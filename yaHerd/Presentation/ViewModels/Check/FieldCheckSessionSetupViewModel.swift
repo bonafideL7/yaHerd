@@ -26,6 +26,7 @@ final class FieldCheckSessionSetupViewModel {
         notes: String,
         originatingHerdID: UUID,
         currentHerdSelection: any CurrentHerdSelectionReading,
+        selectionIsUnchanged: @escaping @MainActor () -> Bool,
         using repository: any FieldCheckSessionCreating
     ) async throws -> UUID? {
         guard let pastureID else {
@@ -33,7 +34,8 @@ final class FieldCheckSessionSetupViewModel {
         }
         // An obsolete setup must not start a write in a newly selected Herd.
         guard !Task.isCancelled,
-              currentHerdSelection.currentHerdID == originatingHerdID else {
+              currentHerdSelection.currentHerdID == originatingHerdID,
+              selectionIsUnchanged() else {
             return nil
         }
 
@@ -48,7 +50,8 @@ final class FieldCheckSessionSetupViewModel {
         // The original save may have committed even after the view was removed.
         // Never navigate to that record from another Herd's application state.
         guard !Task.isCancelled,
-              currentHerdSelection.currentHerdID == originatingHerdID else {
+              currentHerdSelection.currentHerdID == originatingHerdID,
+              selectionIsUnchanged() else {
             return nil
         }
         return sessionID
