@@ -139,6 +139,21 @@ final class CoreDataHerdRepository: HerdRepository {
                         throw CoreDataPersistenceError.unscopedMultiStoreWrite
                     }
 
+                    // A newly installed device may see an imported Herd root before
+                    // its required metadata. Do not create another owned Herd
+                    // while that incomplete root remains in the private store.
+                    let incompleteRequest = NSFetchRequest<CDHerd>(
+                        entityName: CDHerd.coreDataEntityName
+                    )
+                    incompleteRequest.affectedStores = [destination]
+                    incompleteRequest.predicate = NSPredicate(
+                        format: "id == nil OR name == nil OR createdAt == nil OR updatedAt == nil"
+                    )
+                    incompleteRequest.fetchLimit = 1
+                    guard try context.count(for: incompleteRequest) == 0 else {
+                        throw HerdRepositoryError.incompleteOwnedHerd
+                    }
+
                     let id = UUID()
                     guard try CoreDataLookup().herd(id: id, in: context) == nil else {
                         throw CoreDataPersistenceError.duplicateApplicationID(
