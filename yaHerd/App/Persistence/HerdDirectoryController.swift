@@ -4,6 +4,7 @@ import Observation
 enum HerdInventoryState: Equatable {
     case loading
     case available
+    case incomplete
     case unavailable
 }
 
@@ -130,9 +131,9 @@ final class HerdDirectoryController {
 
     private func readAccessibleHerds() throws -> [AccessibleHerd] {
         do {
-            let accessible = try repository.fetchAccessibleHerds()
-            inventoryState = .available
-            return accessible
+            let inventory = try repository.fetchHerdInventory()
+            inventoryState = inventory.hasIncompleteRoots ? .incomplete : .available
+            return inventory.herds
         } catch {
             inventoryState = .unavailable
             throw error
