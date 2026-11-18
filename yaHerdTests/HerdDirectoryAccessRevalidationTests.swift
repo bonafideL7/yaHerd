@@ -328,6 +328,47 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         }
     }
 
+    func testReadinessStillOpensSameStoreHerdAfterRemoteRename() async throws {
+        let activeID = UUID()
+        let candidateID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: activeID)
+        let candidate = AccessibleHerd(
+            summary: herd(candidateID).summary,
+            category: .shared
+        )
+        let repository = StubHerdRepository(available: [herd(activeID), candidate])
+        var pendingReadiness: CheckedContinuation<Void, Never>?
+        let directory = HerdDirectoryController(
+            repository: repository,
+            selection: selection,
+            validateReadiness: { _ in
+                await withCheckedContinuation { pendingReadiness = $0 }
+            }
+        )
+
+        let opening = Task { try await directory.selectHerdWhenReady(id: candidateID) }
+        while pendingReadiness == nil {
+            await Task.yield()
+        }
+        repository.available = [
+            herd(activeID),
+            AccessibleHerd(
+                summary: HerdSummary(
+                    publicID: candidateID,
+                    name: "Updated Name",
+                    createdAt: candidate.summary.createdAt,
+                    updatedAt: candidate.summary.updatedAt.addingTimeInterval(1)
+                ),
+                category: .shared
+            )
+        ]
+        pendingReadiness?.resume()
+
+        try await opening.value
+        XCTAssertEqual(directory.selectedHerdID, candidateID)
+        XCTAssertEqual(directory.herds.first { $0.id == candidateID }?.name, "Updated Name")
+    }
+
     func testCommittedCreationIsNotReportedAsFailedWhenInventoryRefreshThrows() async throws {
         let selectedID = UUID()
         let createdID = UUID()
