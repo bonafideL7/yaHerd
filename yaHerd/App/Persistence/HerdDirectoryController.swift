@@ -67,7 +67,8 @@ final class HerdDirectoryController {
     /// Do not publish a partially imported Herd into the active repository graph.
     func selectHerdWhenReady(id: UUID) async throws {
         let accessible = try readAccessibleHerds()
-        guard accessible.filter({ $0.id == id }).count == 1 else {
+        let matching = accessible.filter { $0.id == id }
+        guard matching.count == 1, let originalHerd = matching.first else {
             throw HerdRepositoryError.missingHerd
         }
         let previousSelection = selection.currentHerdID
@@ -87,8 +88,15 @@ final class HerdDirectoryController {
               selectionGeneration == originatingGeneration else {
             throw CancellationError()
         }
-        // Recheck membership after validation; import access can change.
+        // An identically identified root can replace the validated root in
+        // another store while CloudKit import or access changes are in flight.
+        // Validate the new store's graph before activating it.
         let current = try readAccessibleHerds()
+        let currentMatching = current.filter { $0.id == id }
+        guard currentMatching.count == 1,
+              currentMatching[0].category == originalHerd.category else {
+            throw CancellationError()
+        }
         try selection.selectAccessibleHerd(id, from: current)
         selectionGeneration &+= 1
         herds = current
