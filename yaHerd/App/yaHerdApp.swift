@@ -576,7 +576,7 @@ private struct RootAppView: View {
                 }
             }
             .onOpenURL { url in
-                navigation.handle(url: url)
+                navigation.handle(url: url, using: navigationRestorationValidator)
             }
             .alert("Storage Error", isPresented: $showsStorageError) {
                 Button("OK", role: .cancel) {}
