@@ -17,6 +17,7 @@ final class AddAnimalHerdIsolationTests: XCTestCase {
                 defaultTagColorID: nil,
                 using: repository,
                 expectedHerdID: origin,
+                expectedSelectionRevision: selection.selectionRevision,
                 selection: selection
             )
         ) { error in
@@ -38,6 +39,7 @@ final class AddAnimalHerdIsolationTests: XCTestCase {
                 defaultTagColorID: nil,
                 using: repository,
                 expectedHerdID: origin,
+                expectedSelectionRevision: selection.selectionRevision,
                 selection: selection
             )
         ) { error in
@@ -57,6 +59,7 @@ final class AddAnimalHerdIsolationTests: XCTestCase {
                 defaultTagColorID: nil,
                 using: repository,
                 expectedHerdID: origin,
+                expectedSelectionRevision: selection.selectionRevision,
                 selection: selection
             )
         ) { error in
