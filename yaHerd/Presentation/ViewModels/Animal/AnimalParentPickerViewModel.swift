@@ -12,13 +12,30 @@ final class AnimalParentPickerViewModel {
     var errorMessage: String?
 
     @ObservationIgnored private var loadToken = UUID()
+    @ObservationIgnored private var loadedHerdID: UUID?
+    @ObservationIgnored private var loadedSelectionRevision: UInt64?
+
+    /// Never expose an option from an older Herd selection, even before the
+    /// picker has been dismissed or a replacement query has started.
+    func hasCurrentOptions(
+        for selection: AppCurrentHerdSelection,
+        originatingSelectionRevision: UInt64
+    ) -> Bool {
+        hasLoaded
+            && loadedHerdID != nil
+            && loadedHerdID == selection.currentHerdID
+            && loadedSelectionRevision == originatingSelectionRevision
+            && selection.selectionRevision == originatingSelectionRevision
+    }
 
     /// All three parent picker callers share this complete, coherent read.
     /// Clearing before the request and publishing only on success prevents a
     /// stale or partial option from being selected after a failed refresh.
     func load(
         excluding excludedAnimalID: UUID?,
-        using reader: (any AnimalParentOptionQueryReading)?
+        using reader: (any AnimalParentOptionQueryReading)?,
+        selection: AppCurrentHerdSelection,
+        originatingSelectionRevision: UInt64
     ) async {
         let token = UUID()
         loadToken = token
@@ -26,6 +43,16 @@ final class AnimalParentPickerViewModel {
         isLoading = true
         hasLoaded = false
         errorMessage = nil
+        loadedHerdID = nil
+        loadedSelectionRevision = nil
+
+        // A queued refresh must not switch its query to the Herd that became
+        // current after the user opened this picker.
+        guard let originatingHerdID = selection.currentHerdID,
+              selection.selectionRevision == originatingSelectionRevision else {
+            isLoading = false
+            return
+        }
 
         guard let reader else {
             isLoading = false
@@ -37,7 +64,14 @@ final class AnimalParentPickerViewModel {
             let options = try await reader.fetchParentOptions(excluding: excludedAnimalID)
             try Task.checkCancellation()
             guard token == loadToken else { return }
+            guard selection.currentHerdID == originatingHerdID,
+                  selection.selectionRevision == originatingSelectionRevision else {
+                isLoading = false
+                return
+            }
             items = options
+            loadedHerdID = originatingHerdID
+            loadedSelectionRevision = originatingSelectionRevision
             isLoading = false
             hasLoaded = true
         } catch is CancellationError {
@@ -45,6 +79,8 @@ final class AnimalParentPickerViewModel {
         } catch {
             guard token == loadToken else { return }
             isLoading = false
+            guard selection.currentHerdID == originatingHerdID,
+                  selection.selectionRevision == originatingSelectionRevision else { return }
             errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
