@@ -166,6 +166,7 @@ struct FieldCheckSessionSetupView: View {
         isStartingSession = true
         let sessionStartedAt = startedAt
         let openingNotes = notes
+        let originatingSelectionRevision = herdSelection.selectionRevision
 
         Task { @MainActor in
             defer { isStartingSession = false }
@@ -177,6 +178,9 @@ struct FieldCheckSessionSetupView: View {
                     notes: openingNotes,
                     originatingHerdID: originatingHerdID,
                     currentHerdSelection: herdSelection,
+                    selectionIsUnchanged: {
+                        herdSelection.selectionRevision == originatingSelectionRevision
+                    },
                     using: setupRepository
                 )
                 guard let sessionID else { return }
@@ -188,7 +192,8 @@ struct FieldCheckSessionSetupView: View {
                 }
             } catch {
                 guard !Task.isCancelled,
-                      herdSelection.currentHerdID == originatingHerdID else { return }
+                      herdSelection.currentHerdID == originatingHerdID,
+                      herdSelection.selectionRevision == originatingSelectionRevision else { return }
                 model.errorMessage = UserVisibleErrorMessage.make(error)
             }
         }
