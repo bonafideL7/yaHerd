@@ -106,6 +106,36 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
         }
     }
 
+    func testExplicitSameIDStoreReplacementResetsSelectionRevision() throws {
+        let suite = "stage3-same-id-store-switch-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let selectedID = UUID()
+        let original = herd(selectedID)
+        let replacement = AccessibleHerd(
+            summary: original.summary,
+            category: .shared
+        )
+        let selection = AppCurrentHerdSelection(
+            defaults: defaults, preferenceKey: "selected"
+        )
+        try selection.selectAccessibleHerd(selectedID, from: [original])
+        let firstRevision = selection.selectionRevision
+
+        // Reopening the same UUID from another store must invalidate the
+        // old Herd's routes and drafts, even without an intervening refresh.
+        try selection.selectAccessibleHerd(selectedID, from: [replacement])
+        XCTAssertEqual(selection.currentHerdID, selectedID)
+        XCTAssertGreaterThan(selection.selectionRevision, firstRevision)
+
+        let relaunched = AppCurrentHerdSelection(
+            defaults: defaults, preferenceKey: "selected"
+        )
+        relaunched.restoreAccessibleHerd(from: [replacement])
+        XCTAssertEqual(relaunched.currentHerdID, selectedID)
+    }
+
     func testSelectingAccessibleHerdPersistsAndRejectsUnknownIdentity() throws {
         let suite = "stage3-selection-\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
