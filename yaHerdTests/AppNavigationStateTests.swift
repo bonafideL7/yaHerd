@@ -83,8 +83,12 @@ final class AppNavigationStateTests: XCTestCase {
     func testAnimalDeepLinkSelectsHerdTabAndTypedAnimalRoute() {
         let animalID = UUID()
         let navigation = AppNavigationState()
+        navigation.selectedHerdID = UUID()
 
-        XCTAssertTrue(navigation.handle(url: URL(string: "yaherd://animal/\(animalID.uuidString)")!))
+        XCTAssertTrue(navigation.handle(
+            url: URL(string: "yaherd://animal/\(animalID.uuidString)")!,
+            using: RestorableTestNavigationValidator(herdID: navigation.selectedHerdID)
+        ))
         XCTAssertEqual(navigation.selectedTab, .herd)
         XCTAssertEqual(navigation.herdRouter.path, [.animal(animalID)])
         XCTAssertEqual(navigation.herdRouter.mode, .animals)
@@ -113,12 +117,14 @@ final class AppNavigationStateTests: XCTestCase {
         let sessionID = UUID()
         let findingID = UUID()
         let navigation = AppNavigationState()
+        navigation.selectedHerdID = UUID()
 
         XCTAssertTrue(
             navigation.handle(
                 url: URL(
                     string: "yaherd://field-check/\(sessionID.uuidString)?finding=\(findingID.uuidString)"
-                )!
+                )!,
+                using: RestorableTestNavigationValidator(herdID: navigation.selectedHerdID)
             )
         )
 
@@ -444,7 +450,7 @@ final class AppNavigationStateTests: XCTestCase {
 }
 
 @MainActor
-private struct RestorableTestNavigationValidator: AppNavigationRestorationValidating {
+private struct RestorableTestNavigationValidator: AppNavigationRestorationValidating, FocusedFieldCheckFindingValidating {
     var herdID: UUID? = nil
     func currentHerdID() throws -> UUID? { herdID }
     func animalExists(id: UUID) throws -> Bool { true }
@@ -453,4 +459,5 @@ private struct RestorableTestNavigationValidator: AppNavigationRestorationValida
     func isActiveWorkingSession(id: UUID) throws -> Bool { true }
     func fieldCheckSessionExists(id: UUID) throws -> Bool { true }
     func workingSessionExists(id: UUID) throws -> Bool { true }
+    func fieldCheckFindingExists(sessionID: UUID, findingID: UUID) throws -> Bool { true }
 }
