@@ -405,7 +405,7 @@ private struct RunningAppView: View {
                 \.workingSessionFeatureDependencies,
                 runtime.dependencies.workingSessionFeatureDependencies
             )
-            .onChange(of: runtime.herdSelection.currentHerdID) { _, _ in
+            .onChange(of: runtime.herdSelection.selectionRevision) { _, _ in
                 tagColorLibrary.resetForHerdChange()
             }
             .onReceive(
@@ -496,8 +496,8 @@ private struct RootAppView: View {
                 }
             } else {
                 MainTabView()
-                    // Discard old Herd drafts and view-owned async state.
-                    .id(herdSelection.currentHerdID)
+                    // Discard old Herd drafts and async state even after A → B → A.
+                    .id(herdSelection.selectionRevision)
             }
         }
             .environment(navigation)
@@ -524,8 +524,8 @@ private struct RootAppView: View {
                       ) else { return }
                 navigationRestorationPayload = payload
             }
-            .onChange(of: herdSelection.currentHerdID) { _, newHerdID in
-                navigation.resetForHerdChange(to: newHerdID)
+            .onChange(of: herdSelection.selectionRevision) { _, _ in
+                navigation.resetForHerdChange(to: herdSelection.currentHerdID, force: true)
                 hasRestoredNavigation = true
                 navigationRestorationDeferred = false
                 if let payload = AppNavigationSceneStorageAccess.payload(
