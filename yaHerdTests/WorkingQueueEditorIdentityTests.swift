@@ -459,3 +459,142 @@ extension WorkingQueueEditorIdentityTests {
     }
 }
 
+
+
+@MainActor
+final class WorkingSessionTreatmentPlanHerdIsolationTests: XCTestCase {
+    func testQueuedSaveDoesNotReadOrWriteAfterHerdSwitch() async throws {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let original = try XCTUnwrap(WorkingQueueEditorHerdIdentity(selection: selection))
+        let repository = SuspendedWorkingTreatmentPlanRepository()
+        selection.select(UUID())
+
+        let saved = try await WorkingSessionTreatmentPlanSave.execute(
+            sessionID: repository.sessionID,
+            initialTreatments: [],
+            updatedTreatments: [WorkingTreatmentPlanItem(name: "Dewormer")],
+            editorIdentity: original,
+            selection: selection,
+            repository: repository
+        )
+        XCTAssertFalse(saved)
+        XCTAssertEqual(repository.fetchCount, 0)
+        XCTAssertEqual(repository.updateCount, 0)
+    }
+
+    func testInFlightSaveDoesNotPublishAfterHerdRoundTrip() async throws {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let original = try XCTUnwrap(WorkingQueueEditorHerdIdentity(selection: selection))
+        let repository = SuspendedWorkingTreatmentPlanRepository()
+        repository.suspendUpdate = true
+
+        let operation = Task {
+            try await WorkingSessionTreatmentPlanSave.execute(
+                sessionID: repository.sessionID,
+                initialTreatments: [],
+                updatedTreatments: [WorkingTreatmentPlanItem(name: "Dewormer")],
+                editorIdentity: original,
+                selection: selection,
+                repository: repository
+            )
+        }
+        await repository.waitForUpdate()
+        let originalHerdID = try XCTUnwrap(selection.currentHerdID)
+        selection.select(UUID())
+        selection.select(originalHerdID)
+        repository.completeUpdate()
+
+        XCTAssertFalse(try await operation.value)
+        XCTAssertEqual(repository.updateCount, 1)
+    }
+
+    func testUnchangedHerdCanSaveTreatmentPlan() async throws {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let original = try XCTUnwrap(WorkingQueueEditorHerdIdentity(selection: selection))
+        let repository = SuspendedWorkingTreatmentPlanRepository()
+
+        let saved = try await WorkingSessionTreatmentPlanSave.execute(
+            sessionID: repository.sessionID,
+            initialTreatments: [],
+            updatedTreatments: [WorkingTreatmentPlanItem(name: "Dewormer")],
+            editorIdentity: original,
+            selection: selection,
+            repository: repository
+        )
+
+        XCTAssertTrue(saved)
+        XCTAssertEqual(repository.fetchCount, 1)
+        XCTAssertEqual(repository.updateCount, 1)
+    }
+
+    func testChangedPlanCannotOverwriteMoreRecentChanges() async throws {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let original = try XCTUnwrap(WorkingQueueEditorHerdIdentity(selection: selection))
+        let repository = SuspendedWorkingTreatmentPlanRepository()
+        repository.plannedTreatments = [WorkingTreatmentPlanItem(name: "Recent Update")]
+
+        do {
+            _ = try await WorkingSessionTreatmentPlanSave.execute(
+                sessionID: repository.sessionID,
+                initialTreatments: [],
+                updatedTreatments: [WorkingTreatmentPlanItem(name: "Stale Change")],
+                editorIdentity: original,
+                selection: selection,
+                repository: repository
+            )
+            XCTFail("A treatment plan edited elsewhere must not be overwritten.")
+        } catch let error as WorkingSessionTreatmentPlanSave.ValidationError {
+            XCTAssertEqual(error, .treatmentsChanged)
+        }
+        XCTAssertEqual(repository.updateCount, 0)
+    }
+}
+
+@MainActor
+private final class SuspendedWorkingTreatmentPlanRepository: WorkingSessionDetailRepository {
+    let sessionID = UUID()
+    var plannedTreatments: [WorkingTreatmentPlanItem] = []
+    var suspendUpdate = false
+    private(set) var fetchCount = 0
+    private(set) var updateCount = 0
+    private var pendingUpdate: CheckedContinuation<Void, Never>?
+
+    func fetchSessionDetail(id: UUID) throws -> WorkingSessionDetailSnapshot? {
+        fetchCount += 1
+        guard id == sessionID else { return nil }
+        return WorkingSessionDetailSnapshot(
+            id: sessionID,
+            date: .now,
+            status: .active,
+            sourcePastureID: nil,
+            sourcePastureName: "North",
+            isSourcePastureAvailable: false,
+            treatmentTemplateName: nil,
+            plannedTreatments: plannedTreatments,
+            queueItems: []
+        )
+    }
+
+    func updateSessionTreatments(id: UUID, plannedTreatments: [WorkingTreatmentPlanItem]) async throws {
+        updateCount += 1
+        if suspendUpdate {
+            await withCheckedContinuation { continuation in
+                pendingUpdate = continuation
+            }
+        }
+        self.plannedTreatments = plannedTreatments
+    }
+
+    func waitForUpdate() async {
+        while pendingUpdate == nil { await Task.yield() }
+    }
+
+    func completeUpdate() {
+        let pending = pendingUpdate
+        pendingUpdate = nil
+        pending?.resume()
+    }
+
+    func deleteSession(id: UUID) async throws {}
+    func reopenSession(id: UUID) async throws {}
+}
