@@ -504,7 +504,8 @@ final class WorkingSessionTreatmentPlanHerdIsolationTests: XCTestCase {
         selection.select(originalHerdID)
         repository.completeUpdate()
 
-        XCTAssertFalse(try await operation.value)
+        let saved = try await operation.value
+        XCTAssertFalse(saved)
         XCTAssertEqual(repository.updateCount, 1)
     }
 
