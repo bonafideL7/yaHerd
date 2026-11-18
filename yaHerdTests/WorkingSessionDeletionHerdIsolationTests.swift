@@ -13,6 +13,29 @@ final class WorkingSessionDeletionHerdIsolationTests: XCTestCase {
         let completed = try await model.deleteSession(
             id: UUID(),
             originatingHerdID: originatingHerdID,
+            originatingSelectionRevision: selection.selectionRevision,
+            currentHerdSelection: selection
+        )
+
+        XCTAssertFalse(completed)
+        XCTAssertTrue(repository.deletedSessionIDs.isEmpty)
+        XCTAssertEqual(repository.fetchCount, 0)
+    }
+
+    func testDeletionDoesNotStartAfterSwitchingAwayAndBack() async throws {
+        let originatingHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
+        let originatingRevision = selection.selectionRevision
+        selection.select(UUID())
+        selection.select(originatingHerdID)
+
+        let repository = SuspendedWorkingSessionsRepository()
+        let model = WorkingSessionsViewModel(repository: repository)
+
+        let completed = try await model.deleteSession(
+            id: UUID(),
+            originatingHerdID: originatingHerdID,
+            originatingSelectionRevision: originatingRevision,
             currentHerdSelection: selection
         )
 
@@ -34,6 +57,7 @@ final class WorkingSessionDeletionHerdIsolationTests: XCTestCase {
             try await model.deleteSession(
                 id: sessionID,
                 originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: selection.selectionRevision,
                 currentHerdSelection: selection
             )
         }
@@ -51,6 +75,7 @@ final class WorkingSessionDeletionHerdIsolationTests: XCTestCase {
     func testInFlightDeletionDoesNotReloadAfterSwitchingAwayAndBack() async throws {
         let originatingHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
+        let originatingRevision = selection.selectionRevision
         let repository = SuspendedWorkingSessionsRepository()
         repository.suspendDeletion = true
         let model = WorkingSessionsViewModel(repository: repository)
@@ -61,6 +86,7 @@ final class WorkingSessionDeletionHerdIsolationTests: XCTestCase {
             try await model.deleteSession(
                 id: sessionID,
                 originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: originatingRevision,
                 currentHerdSelection: selection
             )
         }
@@ -89,6 +115,7 @@ final class WorkingSessionDeletionHerdIsolationTests: XCTestCase {
             try await model.deleteSession(
                 id: sessionID,
                 originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: selection.selectionRevision,
                 currentHerdSelection: selection
             )
         }
@@ -113,6 +140,7 @@ final class WorkingSessionDeletionHerdIsolationTests: XCTestCase {
             try await model.deleteSession(
                 id: UUID(),
                 originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: selection.selectionRevision,
                 currentHerdSelection: selection
             )
         }
