@@ -55,6 +55,47 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         XCTAssertNil(directory.errorMessage)
     }
 
+    func testInitialInventoryFailureIsNotReportedAsAConfirmedEmptyInventory() {
+        let selection = AppCurrentHerdSelection()
+        let repository = StubHerdRepository()
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+
+        XCTAssertEqual(directory.inventoryState, .loading)
+
+        repository.shouldFail = true
+        directory.refresh(reportErrors: false)
+
+        XCTAssertEqual(directory.inventoryState, .unavailable)
+        XCTAssertTrue(directory.herds.isEmpty)
+        XCTAssertNil(directory.errorMessage)
+        XCTAssertNil(directory.selectedHerdID)
+
+        repository.shouldFail = false
+        directory.refresh(reportErrors: false)
+
+        XCTAssertEqual(directory.inventoryState, .available)
+        XCTAssertTrue(directory.herds.isEmpty)
+    }
+
+    func testFailedInventoryPreflightCannotCreateAnotherHerd() async throws {
+        let selection = AppCurrentHerdSelection()
+        let repository = StubHerdRepository()
+        repository.createdHerd = herd(UUID())
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+
+        repository.shouldFail = true
+        do {
+            _ = try await directory.createOwnedHerd(named: "Unexpected Herd")
+            XCTFail("An unreadable inventory must not permit new Herd creation.")
+        } catch let error as HerdRepositoryError {
+            XCTAssertEqual(error, .missingHerd)
+        }
+
+        XCTAssertEqual(directory.inventoryState, .unavailable)
+        XCTAssertEqual(repository.createInvocationCount, 0)
+        XCTAssertNil(directory.selectedHerdID)
+    }
+
     func testBackgroundSuccessDoesNotDismissManualInventoryError() {
         let selection = AppCurrentHerdSelection()
         let repository = StubHerdRepository()
@@ -307,6 +348,7 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         var available: [AccessibleHerd]
         var shouldFail = false
         var createdHerd: AccessibleHerd?
+        var createInvocationCount = 0
         private var pendingCreation: CheckedContinuation<HerdSummary, Never>?
 
         init(available: [AccessibleHerd] = []) {
@@ -323,6 +365,7 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         }
 
         func createOwnedHerd(named name: String) async throws -> HerdSummary {
+            createInvocationCount += 1
             guard createdHerd != nil else { throw HerdRepositoryError.missingHerd }
             return await withCheckedContinuation { continuation in
                 pendingCreation = continuation
