@@ -171,6 +171,39 @@ final class WorkingSessionCompletionUseCaseTests: XCTestCase {
         XCTAssertEqual(repository.completionCalls.count, 1)
     }
 
+    func testFinishViewModelDoesNotAcknowledgeCompletionAfterHerdSelectionRoundTrip() async throws {
+        let sessionID = UUID()
+        let originatingHerdID = UUID()
+        let otherHerdID = UUID()
+        let repository = WorkingSessionCompletionRepositorySpy(
+            session: makeSession(id: sessionID, queueItemIDs: [])
+        )
+        repository.suspendCompletion = true
+        let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
+        let model = WorkingFinishSessionViewModel(
+            sessionID: sessionID,
+            workingRepository: repository,
+            pastureRepository: EmptyPastureRepository()
+        )
+
+        let finishing = Task {
+            try await model.finishSession(
+                assignments: [],
+                originatingHerdID: originatingHerdID,
+                currentHerdSelection: selection,
+                repository: repository
+            )
+        }
+        await repository.waitForPendingCompletion()
+        selection.select(otherHerdID)
+        selection.select(originatingHerdID)
+        repository.finishPendingCompletion()
+
+        let completed = try await finishing.value
+        XCTAssertFalse(completed, "An obsolete finish must not dismiss a newly opened Herd view.")
+        XCTAssertEqual(repository.completionCalls.count, 1)
+    }
+
     func testFinishViewModelAcknowledgesCompletionWhenHerdIsUnchanged() async throws {
         let sessionID = UUID()
         let herdID = UUID()
