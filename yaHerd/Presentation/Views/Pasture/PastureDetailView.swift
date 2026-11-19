@@ -5,7 +5,10 @@ struct PastureDetailView: View {
     private var repository: any PastureDetailEditingRepository { pastureDependencies.detailRepository }
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(AppNavigationState.self) private var navigation
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @State private var isStockingExpanded = false
+    @State private var originatingHerdID: UUID?
+    @State private var originatingSelectionRevision: UInt64?
     @State private var model = PastureDetailViewModel()
 
     private let pastureID: UUID
@@ -42,8 +45,22 @@ struct PastureDetailView: View {
             if model.isEditing {
                 ToolbarItem(placement: .confirmationAction) {
                     ToolbarSaveButton {
-                        model.save(pastureID: pastureID, using: repository)
+                        guard let originatingHerdID, let originatingSelectionRevision else {
+                            return
+                        }
+                        model.save(
+                            pastureID: pastureID,
+                            using: repository,
+                            expectedHerdID: originatingHerdID,
+                            expectedSelectionRevision: originatingSelectionRevision,
+                            selection: herdSelection
+                        )
                     }
+                    .disabled(
+                        originatingHerdID == nil ||
+                        originatingHerdID != herdSelection.currentHerdID ||
+                        originatingSelectionRevision != herdSelection.selectionRevision
+                    )
                 }
 
                 ToolbarItem(placement: .cancellationAction) {
@@ -61,6 +78,10 @@ struct PastureDetailView: View {
             }
         }
         .task(id: pastureID) {
+            if originatingSelectionRevision == nil {
+                originatingHerdID = herdSelection.currentHerdID
+                originatingSelectionRevision = herdSelection.selectionRevision
+            }
             await model.observe(
                 pastureID: pastureID,
                 using: repository,
