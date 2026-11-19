@@ -56,7 +56,10 @@ struct NewWorkingSessionView: View {
     }
 
     private var eligibleAnimals: [AnimalSummary] {
-        viewModel.eligibleAnimals(pastureID: selectedPastureID)
+        guard viewModel.hasCurrentCandidates(
+            pastureID: selectedPastureID, selection: herdSelection
+        ) else { return [] }
+        return viewModel.eligibleAnimals(pastureID: selectedPastureID)
     }
 
     private var includedAnimalCount: Int {
@@ -66,7 +69,9 @@ struct NewWorkingSessionView: View {
     private var canStart: Bool {
         !isStarting
             && viewModel.hasLoadedSetupSuccessfully
-            && viewModel.loadedPastureID == selectedPastureID
+            && viewModel.hasCurrentCandidates(
+                pastureID: selectedPastureID, selection: herdSelection
+            )
             && !viewModel.isLoadingAnimals
             && dataAccessMode.allowsDataMutations
             && selectedPasture != nil
@@ -96,9 +101,11 @@ struct NewWorkingSessionView: View {
         if viewModel.isLoadingAnimals {
             return "Loading eligible animals…"
         }
-        if viewModel.loadedPastureID != selectedPastureID {
+        if !viewModel.hasCurrentCandidates(
+            pastureID: selectedPastureID, selection: herdSelection
+        ) {
             return viewModel.candidateLoadErrorMessage
-                ?? "Eligible animals could not be loaded. Reopen Working setup to retry."
+                ?? "Eligible animals could not be loaded for the selected Herd. Reopen Working setup to retry."
         }
         if eligibleAnimals.isEmpty {
             return "The selected pasture has no active animals available to work."
@@ -141,8 +148,13 @@ struct NewWorkingSessionView: View {
             // request independent candidates or allow a partial session.
             guard viewModel.hasLoadedSetupSuccessfully else { return }
             let pastureID = selectedPastureID
-            await viewModel.loadEligibleAnimals(pastureID: pastureID)
-            if !Task.isCancelled && viewModel.loadedPastureID == pastureID {
+            await viewModel.loadEligibleAnimals(
+                pastureID: pastureID, currentHerdSelection: herdSelection
+            )
+            if !Task.isCancelled,
+               viewModel.hasCurrentCandidates(
+                   pastureID: pastureID, selection: herdSelection
+               ) {
                 resetAnimalSelection()
             }
         }
