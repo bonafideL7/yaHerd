@@ -1,9 +1,12 @@
 import SwiftUI
 
 struct PastureGroupDetailView: View {
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @Environment(\.pastureFeatureDependencies) private var pastureDependencies
     private var repository: any PastureGroupDetailRepository { pastureDependencies.groupDetailRepository }
     @State private var model = PastureGroupDetailViewModel()
+    @State private var originatingHerdID: UUID?
+    @State private var originatingSelectionRevision: UInt64 = 0
 
     private let groupID: UUID
 
@@ -29,7 +32,13 @@ struct PastureGroupDetailView: View {
                         } else {
                             ForEach(model.assignmentRows) { row in
                                 Button {
-                                    model.toggleAssignment(row, using: repository)
+                                    guard let originatingHerdID else { return }
+                                    model.toggleAssignment(
+                                        row, using: repository,
+                                        expectedHerdID: originatingHerdID,
+                                        expectedSelectionRevision: originatingSelectionRevision,
+                                        selection: herdSelection
+                                    )
                                 } label: {
                                     PastureGroupAssignmentRowView(row: row)
                                 }
@@ -67,6 +76,9 @@ struct PastureGroupDetailView: View {
             }
         }
         .task(id: groupID) {
+            // Bind this detail instance to the Herd incarnation it loaded.
+            originatingHerdID = herdSelection.currentHerdID
+            originatingSelectionRevision = herdSelection.selectionRevision
             model.load(groupID: groupID, using: repository)
         }
         .alert("Can’t Complete Request", isPresented: errorBinding) {
