@@ -504,6 +504,97 @@ final class PastureTileListViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isDeletingPastures)
     }
 
+
+    func testHerdSwitchDiscardsPreviousPastureStateBeforeLoadingNewHerd() {
+        let oldPasture = PastureTestSupport.makeSummary(name: "Old Herd")
+        let newPasture = PastureTestSupport.makeSummary(name: "New Herd")
+        let reader = PastureListReaderStub(result: .success([oldPasture]))
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let model = PastureTileListViewModel()
+        model.configure(selection: selection)
+        XCTAssertTrue(model.load(using: reader))
+        model.select(oldPasture)
+        model.requestDelete(oldPasture)
+        model.requestAddPasture()
+        model.beginDragging(oldPasture)
+        model.internalFilter = .overCapacity
+
+        selection.select(UUID())
+        model.configure(selection: selection)
+
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertTrue(model.items.isEmpty)
+        XCTAssertNil(model.selectedPasture)
+        XCTAssertNil(model.pasturePendingDeletion)
+        XCTAssertNil(model.draggedPasture)
+        XCTAssertFalse(model.isPresentingAddPasture)
+        XCTAssertEqual(model.internalFilter, .all)
+        XCTAssertNil(model.errorMessage)
+
+        reader.result = .success([newPasture])
+        XCTAssertTrue(model.load(using: reader))
+        XCTAssertEqual(model.items, [newPasture])
+    }
+
+    func testFailedNewHerdLoadNeverRetainsOldHerdPastures() {
+        let oldPasture = PastureTestSupport.makeSummary(name: "Old Herd")
+        let reader = PastureListReaderStub(result: .success([oldPasture]))
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let model = PastureTileListViewModel()
+        model.configure(selection: selection)
+        XCTAssertTrue(model.load(using: reader))
+
+        selection.select(UUID())
+        reader.result = .failure(PastureTestError.forced)
+
+        XCTAssertFalse(model.load(using: reader))
+        XCTAssertTrue(model.items.isEmpty)
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertTrue(model.hasInitialLoadFailure)
+    }
+
+    func testDragCommitAfterHerdRoundTripNeverReordersNewSelection() {
+        let first = PastureTestSupport.makeSummary(name: "First")
+        let second = PastureTestSupport.makeSummary(name: "Second")
+        let reader = PastureListReaderStub(result: .success([first, second]))
+        let ordering = PastureOrderingSpy()
+        let herdA = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdA)
+        let model = PastureTileListViewModel()
+        model.configure(selection: selection)
+        XCTAssertTrue(model.load(using: reader))
+
+        model.beginDragging(first)
+        model.moveDraggedPasture(from: 0, to: 2)
+        selection.select(UUID())
+        selection.select(herdA)
+
+        model.commitDragOrder(using: ordering)
+
+        XCTAssertTrue(ordering.reorderedIDs.isEmpty)
+        XCTAssertTrue(model.items.isEmpty)
+        XCTAssertNil(model.draggedPasture)
+        XCTAssertFalse(model.hasLoaded)
+    }
+
+    func testDragCommitWithinUnchangedHerdPersistsNewOrder() {
+        let first = PastureTestSupport.makeSummary(name: "First")
+        let second = PastureTestSupport.makeSummary(name: "Second")
+        let reader = PastureListReaderStub(result: .success([first, second]))
+        let ordering = PastureOrderingSpy()
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let model = PastureTileListViewModel()
+        model.configure(selection: selection)
+        XCTAssertTrue(model.load(using: reader))
+
+        model.beginDragging(first)
+        model.moveDraggedPasture(from: 0, to: 2)
+        model.commitDragOrder(using: ordering)
+
+        XCTAssertEqual(ordering.reorderedIDs, [[second.id, first.id]])
+        XCTAssertEqual(model.items, [second, first])
+    }
+
 }
 
 @MainActor
