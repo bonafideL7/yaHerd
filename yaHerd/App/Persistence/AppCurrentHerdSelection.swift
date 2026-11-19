@@ -28,14 +28,20 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
     /// saved identity when CloudKit has not yet imported any roots.
     /// A multi-Herd inventory without a valid preference needs an explicit choice.
     func restoreAccessibleHerd(from accessibleHerds: [AccessibleHerd]) {
-        let ids = Set(accessibleHerds.map(\.id))
-        if let currentHerdID, ids.contains(currentHerdID) {
-            return
+        if let currentHerdID {
+            let matches = accessibleHerds.filter { $0.id == currentHerdID }
+            if matches.count == 1,
+               (defaults?.string(forKey: preferenceKey) != currentHerdID.uuidString
+                || matchesRememberedStoreCategory(matches[0].category)) {
+                // An explicit in-memory choice takes precedence over another
+                // remembered UUID. For the same UUID, its store must still match.
+                return
+            }
         }
         if let stored = defaults?.string(forKey: preferenceKey) {
-            if let storedID = UUID(uuidString: stored),
-               let storedHerd = accessibleHerds.first(where: { $0.id == storedID }),
-               matchesRememberedStoreCategory(storedHerd.category) {
+            let storedHerds = accessibleHerds.filter { $0.id.uuidString == stored }
+            if storedHerds.count == 1,
+               matchesRememberedStoreCategory(storedHerds[0].category) {
                 setCurrentHerdID(storedID)
                 rememberStoreCategory(storedHerd.category)
             } else {
