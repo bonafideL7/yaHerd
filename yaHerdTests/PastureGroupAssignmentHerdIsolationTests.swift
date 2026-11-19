@@ -4,9 +4,9 @@ import XCTest
 
 @MainActor
 final class PastureGroupAssignmentHerdIsolationTests: XCTestCase {
-    func testAssignmentRejectsDifferentSelectedHerdBeforeRepositoryAccess() {
+    func testAssignmentRejectsDifferentSelectedHerdBeforeRepositoryAccess() throws {
         let (model, row, repository, selection) = makeFixture()
-        let origin = try! XCTUnwrap(selection.currentHerdID)
+        let origin = try XCTUnwrap(selection.currentHerdID)
         let revision = selection.selectionRevision
 
         selection.select(UUID())
@@ -23,9 +23,9 @@ final class PastureGroupAssignmentHerdIsolationTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
-    func testAssignmentRejectsSelectionRoundTripBackToSameHerd() {
+    func testAssignmentRejectsSelectionRoundTripBackToSameHerd() throws {
         let (model, row, repository, selection) = makeFixture()
-        let origin = try! XCTUnwrap(selection.currentHerdID)
+        let origin = try XCTUnwrap(selection.currentHerdID)
         let revision = selection.selectionRevision
 
         selection.select(UUID())
@@ -42,9 +42,9 @@ final class PastureGroupAssignmentHerdIsolationTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
-    func testAssignmentRejectsRevokedSelectionWithoutWriting() {
+    func testAssignmentRejectsRevokedSelectionWithoutWriting() throws {
         let (model, row, repository, selection) = makeFixture()
-        let origin = try! XCTUnwrap(selection.currentHerdID)
+        let origin = try XCTUnwrap(selection.currentHerdID)
         let revision = selection.selectionRevision
 
         selection.deferCurrentHerdUntilImportReady()
@@ -60,9 +60,9 @@ final class PastureGroupAssignmentHerdIsolationTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
-    func testAssignmentInUnchangedHerdUsesExistingValidationAndReload() {
+    func testAssignmentInUnchangedHerdUsesExistingValidationAndReload() throws {
         let (model, row, repository, selection) = makeFixture()
-        let origin = try! XCTUnwrap(selection.currentHerdID)
+        let origin = try XCTUnwrap(selection.currentHerdID)
 
         model.toggleAssignment(
             row, using: repository,
@@ -91,12 +91,13 @@ final class PastureGroupAssignmentHerdIsolationTests: XCTestCase {
         let pasture = PastureTestSupport.makeSummary(name: "North")
         let row = PastureGroupAssignmentRow(pasture: pasture, groupID: groupID)
         let model = PastureGroupDetailViewModel()
-        model.detail = PastureGroupDetailSnapshot(
+        let detail = PastureGroupDetailSnapshot(
             id: groupID, name: "North Rotation", grazeDays: 7,
             restDays: 21, pastures: []
         )
+        model.detail = detail
         model.allPastures = [pasture]
-        let repository = AssignmentRepositoryProbe(detail: model.detail!, pastures: [pasture])
+        let repository = AssignmentRepositoryProbe(detail: detail, pastures: [pasture])
         let selection = AppCurrentHerdSelection(currentHerdID: UUID())
         return (model, row, repository, selection)
     }
