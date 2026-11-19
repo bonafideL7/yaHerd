@@ -108,6 +108,59 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         XCTAssertEqual(model.items, [freshAnimal])
     }
 
+    func testHerdRoundTripDiscardsErrorFromSupersededRead() async {
+        let originalHerdID = UUID()
+        let animal = makeAnimal(name: "Current selection", tagNumber: "301")
+        let reader = ControlledAnimalListQueryReader(
+            staleAnimal: animal, freshAnimal: animal, failFirstRequest: true
+        )
+        let repository = BackgroundQueryingAnimalListRepository(
+            base: StubAnimalListRepository(), queryReader: reader
+        )
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let model = AnimalListViewModel()
+        model.configure(selection: selection)
+        model.load(using: repository, pastureRepository: EmptyPastureReferenceDataReader())
+        let started = await waitForRequestCount(1, reader: reader)
+        XCTAssertTrue(started)
+
+        selection.select(UUID())
+        selection.select(originalHerdID)
+        await reader.releaseFirstRequest()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertNil(model.errorMessage)
+        XCTAssertFalse(model.hasInitialLoadFailure)
+        XCTAssertFalse(model.hasLoaded)
+
+        model.load(using: repository, pastureRepository: EmptyPastureReferenceDataReader())
+        let loaded = await waitForAnimal(animal.id, in: model)
+        XCTAssertTrue(loaded)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testReconfiguringAfterHerdRoundTripResetsPreviouslyLoadedState() {
+        let originalHerdID = UUID()
+        let animal = makeAnimal(name: "Previously loaded", tagNumber: "401")
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let model = AnimalListViewModel()
+        model.configure(selection: selection)
+        model.load(
+            using: RecordingAnimalListRepository(animals: [animal]),
+            pastureRepository: EmptyPastureReferenceDataReader()
+        )
+        XCTAssertEqual(model.items, [animal])
+
+        selection.select(UUID())
+        selection.select(originalHerdID)
+        model.configure(selection: selection)
+
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertTrue(model.items.isEmpty)
+        XCTAssertTrue(model.pastureOptions.isEmpty)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testFailedPriorHerdReadCannotPublishErrorAfterSelectionChanges() async {
         let staleAnimal = makeAnimal(name: "Old Herd", tagNumber: "101")
         let freshAnimal = makeAnimal(name: "New Herd", tagNumber: "201")
