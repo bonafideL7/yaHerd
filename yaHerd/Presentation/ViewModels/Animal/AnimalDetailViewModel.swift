@@ -20,6 +20,30 @@ final class AnimalDetailViewModel {
 
     @ObservationIgnored private var editingHerdID: UUID?
     @ObservationIgnored private var editingSelectionRevision: UInt64?
+    @ObservationIgnored private var viewingHerdID: UUID?
+    @ObservationIgnored private var viewingSelectionRevision: UInt64?
+    @ObservationIgnored private var hasCapturedViewingSelection = false
+
+    func captureViewingSelection(_ selection: AppCurrentHerdSelection) {
+        guard !hasCapturedViewingSelection else { return }
+        hasCapturedViewingSelection = true
+        viewingHerdID = selection.currentHerdID
+        viewingSelectionRevision = selection.selectionRevision
+    }
+
+    func isViewingSelectionCurrent(_ selection: AppCurrentHerdSelection) -> Bool {
+        guard let viewingHerdID, let viewingSelectionRevision else { return false }
+        return selection.currentHerdID == viewingHerdID
+            && selection.selectionRevision == viewingSelectionRevision
+    }
+
+    private func validateViewingSelection(_ selection: AppCurrentHerdSelection) -> Bool {
+        guard isViewingSelectionCurrent(selection) else {
+            errorMessage = "The selected Herd changed. Reopen this animal before making changes."
+            return false
+        }
+        return true
+    }
 
     func load(
         animalID: UUID,
@@ -44,7 +68,8 @@ final class AnimalDetailViewModel {
     }
 
     func beginEditing(selection: AppCurrentHerdSelection) {
-        guard let detail, let herdID = selection.currentHerdID else { return }
+        guard validateViewingSelection(selection),
+              let detail, let herdID = selection.currentHerdID else { return }
         editingHerdID = herdID
         editingSelectionRevision = selection.selectionRevision
         form.populate(from: detail)
@@ -204,7 +229,8 @@ final class AnimalDetailViewModel {
         _ status: AnimalStatus? = nil,
         selection: AppCurrentHerdSelection
     ) {
-        guard let detail, let herdID = selection.currentHerdID else { return }
+        guard validateViewingSelection(selection),
+              let detail, let herdID = selection.currentHerdID else { return }
         editingHerdID = herdID
         editingSelectionRevision = selection.selectionRevision
         form.populate(from: detail)
@@ -238,8 +264,10 @@ final class AnimalDetailViewModel {
     func archive(
         animalID: UUID,
         using repository: any AnimalDetailRepository,
-        pastureRepository: any PastureReferenceDataReader
+        pastureRepository: any PastureReferenceDataReader,
+        selection: AppCurrentHerdSelection
     ) {
+        guard validateViewingSelection(selection) else { return }
         do {
             try repository.archive(ids: [animalID])
             load(animalID: animalID, using: repository, pastureRepository: pastureRepository)
@@ -251,8 +279,10 @@ final class AnimalDetailViewModel {
     func restore(
         animalID: UUID,
         using repository: any AnimalDetailRepository,
-        pastureRepository: any PastureReferenceDataReader
+        pastureRepository: any PastureReferenceDataReader,
+        selection: AppCurrentHerdSelection
     ) {
+        guard validateViewingSelection(selection) else { return }
         do {
             try repository.restore(ids: [animalID])
             load(animalID: animalID, using: repository, pastureRepository: pastureRepository)
@@ -263,8 +293,10 @@ final class AnimalDetailViewModel {
 
     func preparePermanentDeleteReview(
         animalID: UUID,
-        using repository: any AnimalDetailRepository
+        using repository: any AnimalDetailRepository,
+        selection: AppCurrentHerdSelection
     ) -> AnimalDetailSnapshot? {
+        guard validateViewingSelection(selection) else { return nil }
         do {
             let currentDetail = try fetchArchivedDetail(animalID: animalID, using: repository)
             detail = currentDetail
@@ -276,7 +308,12 @@ final class AnimalDetailViewModel {
         }
     }
 
-    func delete(animalID: UUID, using repository: any AnimalDetailRepository) {
+    func delete(
+        animalID: UUID,
+        using repository: any AnimalDetailRepository,
+        selection: AppCurrentHerdSelection
+    ) {
+        guard validateViewingSelection(selection) else { return }
         do {
             _ = try fetchArchivedDetail(animalID: animalID, using: repository)
             try repository.delete(ids: [animalID])
