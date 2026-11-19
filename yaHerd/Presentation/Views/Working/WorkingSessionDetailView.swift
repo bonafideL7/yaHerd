@@ -448,17 +448,20 @@ struct WorkingSessionDetailView: View {
     private func reopenSession() {
         guard !isMutatingSession,
               let originatingHerdID = herdSelection.currentHerdID else { return }
+        let originatingRevision = herdSelection.selectionRevision
         isMutatingSession = true
 
         Task { @MainActor in
             defer { isMutatingSession = false }
             let reopened = await viewModel.reopenSession(
                 originatingHerdID: originatingHerdID,
-                currentHerdSelection: herdSelection
+                currentHerdSelection: herdSelection,
+                selectionIsUnchanged: { herdSelection.selectionRevision == originatingRevision }
             )
             guard reopened,
                   !Task.isCancelled,
-                  herdSelection.currentHerdID == originatingHerdID else { return }
+                  herdSelection.currentHerdID == originatingHerdID,
+                  herdSelection.selectionRevision == originatingRevision else { return }
             animalFilter = .all
             searchText = ""
         }
