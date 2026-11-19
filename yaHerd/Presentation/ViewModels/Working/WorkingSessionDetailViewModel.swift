@@ -64,23 +64,27 @@ final class WorkingSessionDetailViewModel: ObservableObject {
     @discardableResult
     func reopenSession(
         originatingHerdID: UUID,
-        currentHerdSelection: any CurrentHerdSelectionReading
+        currentHerdSelection: any CurrentHerdSelectionReading,
+        selectionIsUnchanged: @MainActor () -> Bool
     ) async -> Bool {
         guard !Task.isCancelled,
-              currentHerdSelection.currentHerdID == originatingHerdID else {
+              currentHerdSelection.currentHerdID == originatingHerdID,
+              selectionIsUnchanged() else {
             return false
         }
 
         do {
             try await repository.reopenSession(id: sessionID)
             guard !Task.isCancelled,
-                  currentHerdSelection.currentHerdID == originatingHerdID else {
+                  currentHerdSelection.currentHerdID == originatingHerdID,
+                  selectionIsUnchanged() else {
                 return false
             }
             return load()
         } catch {
             guard !Task.isCancelled,
-                  currentHerdSelection.currentHerdID == originatingHerdID else {
+                  currentHerdSelection.currentHerdID == originatingHerdID,
+                  selectionIsUnchanged() else {
                 return false
             }
             errorMessage = UserVisibleErrorMessage.make(error)
