@@ -39,7 +39,9 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
             }
         }
         if let stored = defaults?.string(forKey: preferenceKey) {
-            let storedHerds = accessibleHerds.filter { $0.id.uuidString == stored }
+            let storedHerds = UUID(uuidString: stored).map { storedID in
+                accessibleHerds.filter { $0.id == storedID }
+            } ?? []
             if storedHerds.count == 1,
                matchesRememberedStoreCategory(storedHerds[0].category) {
                 setCurrentHerdID(storedID)
