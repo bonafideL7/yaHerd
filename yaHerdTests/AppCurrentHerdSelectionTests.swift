@@ -224,6 +224,7 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
         let explicitID = UUID()
         let storedID = UUID()
         defaults.set(storedID.uuidString, forKey: "selected")
+        defaults.set("shared", forKey: "selected.storeCategory")
         let selection = AppCurrentHerdSelection(
             currentHerdID: explicitID, defaults: defaults, preferenceKey: "selected"
         )
