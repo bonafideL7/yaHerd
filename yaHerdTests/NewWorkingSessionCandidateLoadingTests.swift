@@ -191,6 +191,85 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
     }
 
 
+    func testObsoleteCandidateReadCannotPublishAfterHerdSelectionRoundTrip() async {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let pastureID = UUID()
+        let animal = makeCandidate(tag: "A01", pastureID: pastureID)
+        let reader = WorkingSetupCandidateReader(
+            animalsByPasture: [pastureID: [animal]],
+            pausedPastureID: pastureID
+        )
+        let model = NewWorkingSessionViewModel(
+            pastureRepository: EmptyPastureRepository(),
+            animalReferenceQueryReader: reader,
+            workingRepository: EmptyWorkingRepository()
+        )
+
+        let oldRead = Task {
+            await model.loadEligibleAnimals(
+                pastureID: pastureID, currentHerdSelection: selection
+            )
+        }
+        await reader.waitForPausedRequest()
+        selection.select(UUID())
+        selection.select(originalHerdID)
+        await reader.resumePausedRequest()
+        await oldRead.value
+
+        XCTAssertNil(model.loadedPastureID)
+        XCTAssertTrue(model.animals.isEmpty)
+        XCTAssertFalse(model.hasCurrentCandidates(pastureID: pastureID, selection: selection))
+        XCTAssertNil(model.errorMessage)
+
+        model.configure(
+            pastureRepository: EmptyPastureRepository(),
+            animalReferenceQueryReader: WorkingSetupCandidateReader(
+                animalsByPasture: [pastureID: [animal]]
+            ),
+            workingRepository: EmptyWorkingRepository()
+        )
+        await model.loadEligibleAnimals(
+            pastureID: pastureID, currentHerdSelection: selection
+        )
+
+        XCTAssertEqual(model.animals.map(\.id), [animal.id])
+        XCTAssertTrue(model.hasCurrentCandidates(pastureID: pastureID, selection: selection))
+        selection.select(nil)
+        XCTAssertFalse(model.hasCurrentCandidates(pastureID: pastureID, selection: selection))
+    }
+
+    func testObsoleteCandidateFailureDoesNotExposeAnotherHerdError() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let pastureID = UUID()
+        let reader = WorkingSetupCandidateReader(
+            animalsByPasture: [pastureID: [makeCandidate(tag: "A02", pastureID: pastureID)]],
+            pausedPastureID: pastureID
+        )
+        await reader.setFailureOffset(0)
+        let model = NewWorkingSessionViewModel(
+            pastureRepository: EmptyPastureRepository(),
+            animalReferenceQueryReader: reader,
+            workingRepository: EmptyWorkingRepository()
+        )
+
+        let oldRead = Task {
+            await model.loadEligibleAnimals(
+                pastureID: pastureID, currentHerdSelection: selection
+            )
+        }
+        await reader.waitForPausedRequest()
+        selection.select(UUID())
+        await reader.resumePausedRequest()
+        await oldRead.value
+
+        XCTAssertNil(model.loadedPastureID)
+        XCTAssertTrue(model.animals.isEmpty)
+        XCTAssertNil(model.errorMessage)
+        XCTAssertNil(model.candidateLoadErrorMessage)
+        XCTAssertFalse(model.hasCurrentCandidates(pastureID: pastureID, selection: selection))
+    }
+
     func testSessionStartDoesNotRunAfterSwitchingHerdsBeforeSubmission() async throws {
         let originatingHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
