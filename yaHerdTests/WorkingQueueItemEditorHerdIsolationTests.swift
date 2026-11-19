@@ -18,6 +18,59 @@ final class WorkingQueueItemEditorHerdIsolationTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testTagReplacementDoesNotStartAfterReturningToOriginalHerd() async {
+        let herdA = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdA)
+        let repository = TagReplacementRepositorySpy()
+        let model = makeModel(repository: repository, selection: selection)
+
+        selection.select(UUID())
+        selection.select(herdA)
+        await model.replacePrimaryTag(number: "NEW", colorID: nil)
+
+        XCTAssertEqual(repository.replacementCalls, 0)
+        XCTAssertEqual(model.snapshot?.animalDisplayTagNumber, "OLD")
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testLateTagReplacementSuccessDoesNotPublishAfterHerdRoundTrip() async {
+        let herdA = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdA)
+        let repository = TagReplacementRepositorySpy()
+        let model = makeModel(repository: repository, selection: selection)
+
+        let operation = Task { @MainActor in
+            await model.replacePrimaryTag(number: "NEW", colorID: nil)
+        }
+        await waitForReplacement(repository)
+        selection.select(UUID())
+        selection.select(herdA)
+        repository.succeedReplacement()
+        await operation.value
+
+        XCTAssertEqual(repository.replacementCalls, 1)
+        XCTAssertEqual(model.snapshot?.animalDisplayTagNumber, "OLD")
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testLateTagReplacementFailureDoesNotPublishAfterHerdRoundTrip() async {
+        let herdA = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdA)
+        let repository = TagReplacementRepositorySpy()
+        let model = makeModel(repository: repository, selection: selection)
+
+        let operation = Task { @MainActor in
+            await model.replacePrimaryTag(number: "NEW", colorID: nil)
+        }
+        await waitForReplacement(repository)
+        selection.select(UUID())
+        selection.select(herdA)
+        repository.failReplacement()
+        await operation.value
+
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testLateTagReplacementSuccessDoesNotPublishAfterHerdSwitch() async {
         let selection = AppCurrentHerdSelection(currentHerdID: UUID())
         let repository = TagReplacementRepositorySpy()
