@@ -577,6 +577,30 @@ final class PastureTileListViewModelTests: XCTestCase {
         XCTAssertFalse(model.hasLoaded)
     }
 
+    func testDeletionConfirmationRetainsOriginatingHerdUntilDismissed() {
+        let pasture = PastureTestSupport.makeSummary(name: "Old Herd Pasture")
+        let reader = PastureListReaderStub(result: .success([pasture]))
+        let herdA = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdA)
+        let model = PastureTileListViewModel()
+        model.configure(selection: selection)
+        XCTAssertTrue(model.load(using: reader))
+
+        model.requestDelete(pasture)
+
+        XCTAssertEqual(model.pendingDeletionHerdID, herdA)
+        XCTAssertEqual(model.pendingDeletionSelectionRevision, selection.selectionRevision)
+
+        selection.select(UUID())
+        // A confirmation presented before the switch must not acquire B's
+        // selection identity when its destructive action is eventually tapped.
+        XCTAssertEqual(model.pendingDeletionHerdID, herdA)
+        model.configure(selection: selection)
+        XCTAssertNil(model.pasturePendingDeletion)
+        XCTAssertNil(model.pendingDeletionHerdID)
+        XCTAssertNil(model.pendingDeletionSelectionRevision)
+    }
+
     func testDragCommitWithinUnchangedHerdPersistsNewOrder() {
         let first = PastureTestSupport.makeSummary(name: "First")
         let second = PastureTestSupport.makeSummary(name: "Second")
