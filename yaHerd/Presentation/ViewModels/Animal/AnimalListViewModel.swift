@@ -34,6 +34,7 @@ final class AnimalListViewModel {
     private let derivationActor = AnimalListDerivationActor()
     @ObservationIgnored private var herdSelection: (any CurrentHerdSelectionReading)?
     private var selectedHerdID: UUID?
+    private var selectedSelectionRevision: UInt64 = 0
     private var hasConfiguredHerdSelection = false
 
     /// Bind this model to the application selection before loading. A load that
@@ -41,9 +42,13 @@ final class AnimalListViewModel {
     func configure(selection: any CurrentHerdSelectionReading) {
         herdSelection = selection
         let herdID = selection.currentHerdID
-        guard !hasConfiguredHerdSelection || selectedHerdID != herdID else { return }
+        let revision = selection.selectionRevision
+        guard !hasConfiguredHerdSelection ||
+              selectedHerdID != herdID ||
+              selectedSelectionRevision != revision else { return }
         hasConfiguredHerdSelection = true
         selectedHerdID = herdID
+        selectedSelectionRevision = revision
         resetForHerdChange()
     }
 
@@ -99,6 +104,7 @@ final class AnimalListViewModel {
         if !hasLoaded { hasInitialLoadFailure = false }
         let generation = loadGeneration
         let originatingHerdID = selectedHerdID
+        let originatingSelectionRevision = selectedSelectionRevision
         loadTask?.cancel()
         loadTask = nil
 
@@ -118,7 +124,8 @@ final class AnimalListViewModel {
                 queryReader,
                 snapshotReader: snapshotReader,
                 generation: generation,
-                originatingHerdID: originatingHerdID
+                originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: originatingSelectionRevision
             )
         }
     }
@@ -222,7 +229,8 @@ final class AnimalListViewModel {
         _ reader: any AnimalListQueryReading,
         snapshotReader: (any AnimalListSnapshotReading)?,
         generation: Int,
-        originatingHerdID: UUID?
+        originatingHerdID: UUID?,
+        originatingSelectionRevision: UInt64
     ) async {
         defer {
             if generation == loadGeneration {
@@ -249,7 +257,11 @@ final class AnimalListViewModel {
 
             guard !Task.isCancelled else { return }
             refreshHerdSelection()
-            guard isCurrentLoad(generation: generation, originatingHerdID: originatingHerdID) else {
+            guard isCurrentLoad(
+                generation: generation,
+                originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: originatingSelectionRevision
+            ) else {
                 return
             }
             if !hasLoaded { hasInitialDerivedState = false }
@@ -264,7 +276,11 @@ final class AnimalListViewModel {
         } catch {
             guard !Task.isCancelled else { return }
             refreshHerdSelection()
-            guard isCurrentLoad(generation: generation, originatingHerdID: originatingHerdID) else {
+            guard isCurrentLoad(
+                generation: generation,
+                originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: originatingSelectionRevision
+            ) else {
                 return
             }
             if !hasLoaded { hasInitialLoadFailure = true }
@@ -323,15 +339,22 @@ final class AnimalListViewModel {
 
     private func refreshHerdSelection() {
         guard let herdSelection,
-              herdSelection.currentHerdID != selectedHerdID else { return }
+              herdSelection.currentHerdID != selectedHerdID ||
+              herdSelection.selectionRevision != selectedSelectionRevision else { return }
         configure(selection: herdSelection)
     }
 
-    private func isCurrentLoad(generation: Int, originatingHerdID: UUID?) -> Bool {
+    private func isCurrentLoad(
+        generation: Int,
+        originatingHerdID: UUID?,
+        originatingSelectionRevision: UInt64
+    ) -> Bool {
         guard generation == loadGeneration else { return false }
         guard let herdSelection else { return true }
         return selectedHerdID == originatingHerdID
+            && selectedSelectionRevision == originatingSelectionRevision
             && herdSelection.currentHerdID == originatingHerdID
+            && herdSelection.selectionRevision == originatingSelectionRevision
     }
 
     private func resetForHerdChange() {
