@@ -8,6 +8,13 @@ import Foundation
 @MainActor
 protocol CurrentHerdSelectionReading: AnyObject {
     var currentHerdID: UUID? { get }
+    var selectionRevision: UInt64 { get }
+}
+
+// Static test selections have no incarnation changes. The application
+// selection overrides this with its monotonically increasing revision.
+extension CurrentHerdSelectionReading {
+    var selectionRevision: UInt64 { 0 }
 }
 
 @MainActor
