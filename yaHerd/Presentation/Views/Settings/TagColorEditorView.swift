@@ -8,9 +8,11 @@ import SwiftUI
 struct TagColorEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppNavigationState.self) private var navigation
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     let existing: TagColorSnapshot?
+    let originatingSelection: TagColorSettingsMutationGuard?
 
     @State private var name: String
     @State private var prefix: String
@@ -18,11 +20,20 @@ struct TagColorEditorView: View {
     @State private var prefixEdited = false
     @State private var saveErrorMessage: String?
 
-    init(existing: TagColorSnapshot?) {
+    init(existing: TagColorSnapshot?, originatingSelection: TagColorSettingsMutationGuard?) {
         self.existing = existing
+        self.originatingSelection = originatingSelection
         _name = State(initialValue: existing?.name ?? "")
         _prefix = State(initialValue: existing?.prefix ?? "")
         _color = State(initialValue: existing?.color ?? .yellow)
+    }
+
+    private var isCurrentSelection: Bool {
+        originatingSelection?.isCurrent(in: herdSelection) == true
+    }
+
+    private var staleSelectionMessage: String {
+        "The selected Herd changed. Reopen Tag Colors before making changes."
     }
 
     var body: some View {
@@ -70,7 +81,14 @@ struct TagColorEditorView: View {
                                 .accessibilityAddTraits(.isSelected)
                         } else {
                             Button {
-                                guard tagColorLibrary.setDefaultColor(id: existing.id) else {
+                                guard let didSave = originatingSelection?.performIfCurrent(
+                                    in: herdSelection,
+                                    { tagColorLibrary.setDefaultColor(id: existing.id) }
+                                ) else {
+                                    saveErrorMessage = staleSelectionMessage
+                                    return
+                                }
+                                guard didSave else {
                                     saveErrorMessage = tagColorLibrary.lastErrorMessage
                                         ?? "The default tag color could not be updated."
                                     return
@@ -78,6 +96,7 @@ struct TagColorEditorView: View {
                             } label: {
                                 Label("Set as Default Tag Color", systemImage: "checkmark.circle")
                             }
+                            .disabled(!isCurrentSelection)
                         }
                     } footer: {
                         Text("New tags use the default color unless another color is selected.")
@@ -106,7 +125,14 @@ struct TagColorEditorView: View {
                             rgba: RGBAColor(color: color)
                         )
 
-                        guard tagColorLibrary.upsert(def) else {
+                        guard let didSave = originatingSelection?.performIfCurrent(
+                            in: herdSelection,
+                            { tagColorLibrary.upsert(def) }
+                        ) else {
+                            saveErrorMessage = staleSelectionMessage
+                            return
+                        }
+                        guard didSave else {
                             saveErrorMessage = tagColorLibrary.lastErrorMessage
                                 ?? "The tag color could not be saved."
                             return
@@ -118,7 +144,7 @@ struct TagColorEditorView: View {
                             dismiss()
                         }
                     }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!isCurrentSelection || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .alert(
