@@ -356,6 +356,7 @@ struct AnimalListView: View {
             )
         }
         .onChange(of: herdSelection.currentHerdID) { _, _ in
+            inlineEntry.cancel()
             viewModel.configure(selection: herdSelection)
             refreshDerivedState()
         }
@@ -688,7 +689,7 @@ struct AnimalListView: View {
         guard dataAccessMode.allowsDataMutations, applicationSettings.inlineAnimalEditingEnabled, !batchMode else { return }
 
         withAnimation(.snappy) {
-            inlineEntry.beginNew()
+            inlineEntry.beginNew(selection: herdSelection)
         }
     }
 
@@ -708,7 +709,12 @@ struct AnimalListView: View {
                 throw AnimalValidationError.animalNotFound
             }
             withAnimation(.snappy) {
-                inlineEntry.beginEditing(animal, detail: detail, tagColorLibrary: tagColorLibrary)
+                inlineEntry.beginEditing(
+                    animal,
+                    detail: detail,
+                    tagColorLibrary: tagColorLibrary,
+                    selection: herdSelection
+                )
             }
         } catch {
             viewModel.errorMessage = UserVisibleErrorMessage.make(error)
@@ -742,7 +748,8 @@ struct AnimalListView: View {
                 startNewEntryAfterCreate: startNewEntryAfterCreate,
                 colors: tagColorLibrary.colors,
                 defaultTagColorID: tagColorLibrary.defaultColorID,
-                using: repository
+                using: repository,
+                selection: herdSelection
             )
 
             if didCommit {
