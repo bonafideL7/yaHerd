@@ -61,12 +61,23 @@ final class PastureGroupDetailViewModel {
         load(groupID: groupID, using: repository)
     }
 
-    func toggleAssignment(_ row: PastureGroupAssignmentRow, using repository: any PastureGroupAssignRepository & PastureGroupDetailReader & PastureListReader) {
+    func toggleAssignment(
+        _ row: PastureGroupAssignmentRow,
+        using repository: any PastureGroupAssignRepository & PastureGroupDetailReader & PastureListReader,
+        expectedHerdID: UUID,
+        expectedSelectionRevision: UInt64,
+        selection: AppCurrentHerdSelection
+    ) {
+        // The repository uses the live selection. A retained detail action
+        // must not redirect an earlier Herd's assignment to the new Herd,
+        // including a switch away and back to the same UUID.
+        guard selection.currentHerdID == expectedHerdID,
+              selection.selectionRevision == expectedSelectionRevision else { return }
         let destinationGroupID = row.isAssignedToCurrentGroup ? nil : detail?.id
         assign(row.pasture.id, to: destinationGroupID, using: repository)
     }
 
-    func assign(_ pastureID: UUID, to groupID: UUID?, using repository: any PastureGroupAssignRepository & PastureGroupDetailReader & PastureListReader) {
+    private func assign(_ pastureID: UUID, to groupID: UUID?, using repository: any PastureGroupAssignRepository & PastureGroupDetailReader & PastureListReader) {
         do {
             try AssignPastureToGroupUseCase(repository: repository).execute(
                 pastureID: pastureID,
