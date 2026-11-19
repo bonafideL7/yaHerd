@@ -34,7 +34,7 @@ final class WorkingSessionReopenHerdIsolationTests: XCTestCase {
             await model.reopenSession(
                 originatingHerdID: originatingHerdID,
                 currentHerdSelection: selection,
-            selectionIsUnchanged: { selection.selectionRevision == capturedRevision }
+                selectionIsUnchanged: { selection.selectionRevision == capturedRevision }
             )
         }
         await repository.waitForReopen()
@@ -59,7 +59,7 @@ final class WorkingSessionReopenHerdIsolationTests: XCTestCase {
             await model.reopenSession(
                 originatingHerdID: originatingHerdID,
                 currentHerdSelection: selection,
-            selectionIsUnchanged: { selection.selectionRevision == capturedRevision }
+                selectionIsUnchanged: { selection.selectionRevision == capturedRevision }
             )
         }
         await repository.waitForReopen()
@@ -83,7 +83,7 @@ final class WorkingSessionReopenHerdIsolationTests: XCTestCase {
             await model.reopenSession(
                 originatingHerdID: originatingHerdID,
                 currentHerdSelection: selection,
-            selectionIsUnchanged: { selection.selectionRevision == capturedRevision }
+                selectionIsUnchanged: { selection.selectionRevision == capturedRevision }
             )
         }
         await repository.waitForReopen()
@@ -107,7 +107,7 @@ final class WorkingSessionReopenHerdIsolationTests: XCTestCase {
             await model.reopenSession(
                 originatingHerdID: originatingHerdID,
                 currentHerdSelection: selection,
-            selectionIsUnchanged: { selection.selectionRevision == capturedRevision }
+                selectionIsUnchanged: { selection.selectionRevision == capturedRevision }
             )
         }
         await repository.waitForReopen()
@@ -130,7 +130,7 @@ final class WorkingSessionReopenHerdIsolationTests: XCTestCase {
             await model.reopenSession(
                 originatingHerdID: originatingHerdID,
                 currentHerdSelection: selection,
-            selectionIsUnchanged: { selection.selectionRevision == capturedRevision }
+                selectionIsUnchanged: { selection.selectionRevision == capturedRevision }
             )
         }
         await repository.waitForReopen()
@@ -177,7 +177,7 @@ final class WorkingSessionReopenHerdIsolationTests: XCTestCase {
             await model.reopenSession(
                 originatingHerdID: originatingHerdID,
                 currentHerdSelection: selection,
-            selectionIsUnchanged: { selection.selectionRevision == capturedRevision }
+                selectionIsUnchanged: { selection.selectionRevision == capturedRevision }
             )
         }
         await repository.waitForReopen()
@@ -203,7 +203,7 @@ final class WorkingSessionReopenHerdIsolationTests: XCTestCase {
             await model.reopenSession(
                 originatingHerdID: originatingHerdID,
                 currentHerdSelection: selection,
-            selectionIsUnchanged: { selection.selectionRevision == capturedRevision }
+                selectionIsUnchanged: { selection.selectionRevision == capturedRevision }
             )
         }
         await repository.waitForReopen()
