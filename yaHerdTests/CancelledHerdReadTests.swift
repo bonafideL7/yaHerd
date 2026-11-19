@@ -58,9 +58,10 @@ final class CancelledHerdReadTests: XCTestCase {
 
     func testCancelledDashboardReadDoesNotPublishLateSuccessAndAllowsRetry() async {
         let reader = SuspendedDashboardReader()
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
         let model = DashboardViewModel()
         let running = Task { @MainActor in
-            await model.load(configuration: DashboardConfiguration(), using: reader)
+            await model.load(configuration: DashboardConfiguration(), using: reader, selection: selection)
         }
 
         await reader.waitUntilStarted()
@@ -73,7 +74,7 @@ final class CancelledHerdReadTests: XCTestCase {
         XCTAssertNil(model.snapshot)
         XCTAssertNil(model.errorMessage)
 
-        let retried = await model.load(configuration: DashboardConfiguration(), using: reader)
+        let retried = await model.load(configuration: DashboardConfiguration(), using: reader, selection: selection)
         XCTAssertTrue(retried)
         XCTAssertTrue(model.hasLoaded)
         XCTAssertNotNil(model.snapshot)
@@ -81,13 +82,87 @@ final class CancelledHerdReadTests: XCTestCase {
 
     func testCancelledDashboardReadDoesNotPresentLateError() async {
         let reader = SuspendedDashboardReader()
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
         let model = DashboardViewModel()
         let running = Task { @MainActor in
-            await model.load(configuration: DashboardConfiguration(), using: reader)
+            await model.load(configuration: DashboardConfiguration(), using: reader, selection: selection)
         }
 
         await reader.waitUntilStarted()
         running.cancel()
+        await reader.failFirstRequest()
+        let completed = await running.value
+
+        XCTAssertFalse(completed)
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertNil(model.snapshot)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testDashboardLateSuccessIsRejectedAfterHerdSwitch() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let reader = SuspendedDashboardReader()
+        let model = DashboardViewModel()
+        let running = Task { @MainActor in
+            await model.load(configuration: DashboardConfiguration(), using: reader, selection: selection)
+        }
+
+        await reader.waitUntilStarted()
+        selection.select(UUID())
+        await reader.releaseFirstRequest()
+        let completed = await running.value
+
+        XCTAssertFalse(completed)
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertNil(model.snapshot)
+        XCTAssertNil(model.errorMessage)
+
+        let retried = await model.load(
+            configuration: DashboardConfiguration(), using: reader, selection: selection
+        )
+        XCTAssertTrue(retried)
+        XCTAssertTrue(model.hasLoaded)
+        XCTAssertNotNil(model.snapshot)
+    }
+
+    func testDashboardLateSuccessIsRejectedAfterHerdRoundTrip() async {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let reader = SuspendedDashboardReader()
+        let model = DashboardViewModel()
+        let running = Task { @MainActor in
+            await model.load(configuration: DashboardConfiguration(), using: reader, selection: selection)
+        }
+
+        await reader.waitUntilStarted()
+        selection.select(UUID())
+        selection.select(herdID)
+        await reader.releaseFirstRequest()
+        let completed = await running.value
+
+        XCTAssertFalse(completed)
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertNil(model.snapshot)
+
+        let retried = await model.load(
+            configuration: DashboardConfiguration(), using: reader, selection: selection
+        )
+        XCTAssertTrue(retried)
+        XCTAssertTrue(model.hasLoaded)
+    }
+
+    func testDashboardLateErrorIsRejectedAfterHerdRoundTrip() async {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let reader = SuspendedDashboardReader()
+        let model = DashboardViewModel()
+        let running = Task { @MainActor in
+            await model.load(configuration: DashboardConfiguration(), using: reader, selection: selection)
+        }
+
+        await reader.waitUntilStarted()
+        selection.select(UUID())
+        selection.select(herdID)
         await reader.failFirstRequest()
         let completed = await running.value
 
