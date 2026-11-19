@@ -106,6 +106,61 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
         }
     }
 
+    func testActiveHerdRestorationRejectsStoreCategoryReplacement() throws {
+        for originalCategory: AccessibleHerd.Category in [.owned, .shared] {
+            let suite = "stage3-active-category-restore-\(UUID())"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+
+            let herdID = UUID()
+            let original = AccessibleHerd(
+                summary: herd(herdID).summary,
+                category: originalCategory
+            )
+            let replacement = AccessibleHerd(
+                summary: original.summary,
+                category: originalCategory == .owned ? .shared : .owned
+            )
+            let selection = AppCurrentHerdSelection(
+                defaults: defaults, preferenceKey: "selected"
+            )
+            try selection.selectAccessibleHerd(herdID, from: [original])
+            let revision = selection.selectionRevision
+
+            // An active UUID is not proof that its owning store is unchanged.
+            selection.restoreAccessibleHerd(from: [replacement])
+
+            XCTAssertNil(selection.currentHerdID)
+            XCTAssertEqual(selection.selectionRevision, revision + 1)
+            XCTAssertEqual(defaults.string(forKey: "selected"), herdID.uuidString)
+            XCTAssertEqual(
+                defaults.string(forKey: "selected.storeCategory"),
+                originalCategory == .owned ? "owned" : "shared"
+            )
+
+            try selection.selectAccessibleHerd(herdID, from: [replacement])
+            XCTAssertEqual(selection.currentHerdID, herdID)
+        }
+    }
+
+    func testActiveHerdRestorationPreservesSameStoreIdentity() throws {
+        let suite = "stage3-active-same-store-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(
+            defaults: defaults, preferenceKey: "selected"
+        )
+        try selection.selectAccessibleHerd(herdID, from: [herd(herdID)])
+        let revision = selection.selectionRevision
+
+        selection.restoreAccessibleHerd(from: [herd(herdID)])
+
+        XCTAssertEqual(selection.currentHerdID, herdID)
+        XCTAssertEqual(selection.selectionRevision, revision)
+    }
+
     func testExplicitSameIDStoreReplacementResetsSelectionRevision() throws {
         let suite = "stage3-same-id-store-switch-\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
