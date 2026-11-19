@@ -42,7 +42,6 @@ final class AnimalInlineEntryViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.birthDate, calendar.startOfDay(for: fixedNow))
     }
 
-
     func testInlineCreateRejectsChangedOrRevokedHerdBeforeRepositoryWrite() {
         for change in HerdChange.allCases {
             let herdID = UUID()
@@ -65,7 +64,7 @@ final class AnimalInlineEntryViewModelTests: XCTestCase {
             ) { error in
                 XCTAssertTrue(error is CancellationError)
             }
-            XCTAssertEqual(repository.createCount, 0, "Unexpected write after \\(change)")
+            XCTAssertEqual(repository.createCount, 0, "Unexpected write after \(change)")
             XCTAssertTrue(model.isActive, "The rejected draft must remain available")
         }
     }
@@ -93,7 +92,7 @@ final class AnimalInlineEntryViewModelTests: XCTestCase {
             ) { error in
                 XCTAssertTrue(error is CancellationError)
             }
-            XCTAssertEqual(repository.fetchCount, 0, "Unexpected read after \\(change)")
+            XCTAssertEqual(repository.fetchCount, 0, "Unexpected read after \(change)")
             XCTAssertEqual(repository.updateCount, 0)
         }
     }
@@ -119,13 +118,14 @@ final class AnimalInlineEntryViewModelTests: XCTestCase {
         XCTAssertEqual(repository.createCount, 1)
     }
 
-    func testInlineEditStillReadsUnderUnchangedSelection() {
+    func testInlineEditStillUpdatesUnderUnchangedSelection() {
         let selection = AppCurrentHerdSelection(currentHerdID: UUID())
         let model = AnimalInlineEntryViewModel()
         let repository = InlineAnimalWriteProbe()
         model.beginNew(selection: selection)
         model.editingAnimalID = UUID()
         model.text = "Daisy"
+        repository.provideDetail = true
 
         XCTAssertThrowsError(
             try model.commit(
@@ -139,6 +139,7 @@ final class AnimalInlineEntryViewModelTests: XCTestCase {
             XCTAssertTrue(error is InlineAnimalWriteProbe.ProbeError)
         }
         XCTAssertEqual(repository.fetchCount, 1)
+        XCTAssertEqual(repository.updateCount, 1)
     }
 
     func testNewDraftAfterHerdSwitchUsesNewSelectionRevision() {
@@ -206,12 +207,45 @@ private final class InlineAnimalWriteProbe: AnimalListRepository {
     private(set) var createCount = 0
     private(set) var fetchCount = 0
     private(set) var updateCount = 0
+    var provideDetail = false
 
     func fetchAnimals() throws -> [AnimalSummary] { [] }
 
     func fetchAnimalDetail(id: UUID) throws -> AnimalDetailSnapshot? {
         fetchCount += 1
-        throw ProbeError.attempted
+        guard provideDetail else { throw ProbeError.attempted }
+        return AnimalDetailSnapshot(
+            id: id,
+            name: "Daisy",
+            displayTagNumber: "",
+            displayTagColorID: nil,
+            sex: .female,
+            animalType: .cow,
+            birthDate: .distantPast,
+            status: .active,
+            pastureID: nil,
+            pastureName: nil,
+            sireID: nil,
+            sire: nil,
+            damID: nil,
+            dam: nil,
+            distinguishingFeatures: [],
+            saleDate: nil,
+            salePrice: nil,
+            reasonSold: nil,
+            deathDate: nil,
+            causeOfDeath: nil,
+            statusReferenceID: nil,
+            statusReferenceName: nil,
+            isArchived: false,
+            archivedAt: nil,
+            archiveReason: nil,
+            activeTags: [],
+            inactiveTags: [],
+            location: .pasture,
+            maternalOffspringCountIncludingArchived: 0,
+            maternalOffspring: []
+        )
     }
 
     func create(input: AnimalInput) throws -> AnimalDetailSnapshot {
