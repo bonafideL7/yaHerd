@@ -30,8 +30,11 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
     func restoreAccessibleHerd(from accessibleHerds: [AccessibleHerd]) {
         if let currentHerdID {
             let matches = accessibleHerds.filter { $0.id == currentHerdID }
+            let rememberedHerdID = UUID(
+                uuidString: defaults?.string(forKey: preferenceKey) ?? ""
+            )
             if matches.count == 1,
-               (defaults?.string(forKey: preferenceKey) != currentHerdID.uuidString
+               (rememberedHerdID != currentHerdID
                 || matchesRememberedStoreCategory(matches[0].category)) {
                 // An explicit in-memory choice takes precedence over another
                 // remembered UUID. For the same UUID, its store must still match.
