@@ -143,7 +143,17 @@ final class PastureDetailViewModel {
         isEditing = false
     }
 
-    func save(pastureID: UUID, using repository: any PastureUpdateRepository & PastureResidentAnimalReader) {
+    func save(
+        pastureID: UUID,
+        using repository: any PastureUpdateRepository & PastureResidentAnimalReader,
+        expectedHerdID: UUID,
+        expectedSelectionRevision: UInt64,
+        selection: AppCurrentHerdSelection
+    ) {
+        guard selection.currentHerdID == expectedHerdID,
+              selection.selectionRevision == expectedSelectionRevision else {
+            return
+        }
         guard loadedPastureID == pastureID, detail?.id == pastureID else {
             errorMessage = "The selected pasture changed before this edit could be saved. Please try again."
             return
