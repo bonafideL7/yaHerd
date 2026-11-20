@@ -50,7 +50,7 @@ final class DashboardViewModel {
         configuration: DashboardConfiguration,
         using repository: any DashboardQueryReading
     ) async -> Bool {
-        guard !isLoading else { return false }
+        guard !isLoading, !Task.isCancelled else { return false }
         isLoading = true
         defer {
             isLoading = false
@@ -60,12 +60,17 @@ final class DashboardViewModel {
         }
 
         do {
-            snapshot = try await LoadDashboardUseCase(repository: repository)
+            let loadedSnapshot = try await LoadDashboardUseCase(repository: repository)
                 .execute(configuration: configuration)
+            try Task.checkCancellation()
+            snapshot = loadedSnapshot
             errorMessage = nil
             hasLoaded = true
             return true
+        } catch is CancellationError {
+            return false
         } catch {
+            guard !Task.isCancelled else { return false }
             errorMessage = UserVisibleErrorMessage.make(error)
             return false
         }
