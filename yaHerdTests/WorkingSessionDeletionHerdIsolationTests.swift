@@ -4,7 +4,6 @@ import XCTest
 
 @MainActor
 final class WorkingSessionDeletionHerdIsolationTests: XCTestCase {
-
     func testPendingConfirmationRetainsOriginalSessionAndRejectsSwitchedHerd() {
         let originalHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
@@ -59,6 +58,7 @@ final class WorkingSessionDeletionHerdIsolationTests: XCTestCase {
             completedQueueItems: 0
         )
     }
+
     func testDeletionDoesNotStartAfterTheOriginatingHerdChanges() async throws {
         let originatingHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: UUID())
