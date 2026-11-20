@@ -3,6 +3,72 @@ import XCTest
 
 @MainActor
 final class TagColorLibraryHistoricalLookupTests: XCTestCase {
+    func testHerdChangeClearsOldColorsWhenNewHerdReadFails() {
+        let previousHerdColor = TagColorSnapshot(
+            id: UUID(),
+            name: "Previous Herd Red",
+            prefix: "R",
+            rgba: RGBAColor(r: 1, g: 0, b: 0)
+        )
+        let repository = TagColorWriteResultRepository(colors: [previousHerdColor])
+        let library = TagColorLibraryStore(repository: repository)
+
+        XCTAssertEqual(library.formattedTag(tagNumber: "42", colorID: previousHerdColor.id), "R42")
+        repository.failFetch = true
+        repository.failColorFetch = true
+
+        library.resetForHerdChange()
+
+        XCTAssertTrue(library.colors.isEmpty,
+                      "A failed new-Herd read must not expose the previous Herd's colors")
+        XCTAssertNotNil(library.lastErrorMessage)
+        XCTAssertEqual(library.formattedTag(tagNumber: "42", colorID: previousHerdColor.id), "W42")
+    }
+
+    func testHerdChangeLoadsNewHerdColorsAndClearsPreviousDefinitions() {
+        let previousColor = TagColorSnapshot(
+            id: UUID(), name: "Previous Herd", prefix: "P",
+            rgba: RGBAColor(r: 1, g: 0, b: 0)
+        )
+        let nextColor = TagColorSnapshot(
+            id: UUID(), name: "Next Herd", prefix: "N",
+            rgba: RGBAColor(r: 0, g: 0, b: 1)
+        )
+        let repository = TagColorWriteResultRepository(colors: [previousColor])
+        let library = TagColorLibraryStore(repository: repository)
+        XCTAssertEqual(library.colors.map(\.id), [previousColor.id])
+
+        repository.simulateHerdColors([nextColor])
+        library.resetForHerdChange()
+
+        XCTAssertEqual(library.colors.map(\.id), [nextColor.id])
+        XCTAssertNil(library.lastErrorMessage)
+    }
+
+    func testHerdChangeDiscardsHistoricalColorCache() {
+        let historicalColor = TagColorSnapshot(
+            id: UUID(),
+            name: "Historical Green",
+            prefix: "G",
+            rgba: RGBAColor(r: 0, g: 0.5, b: 0)
+        )
+        let repository = HistoricalLookupTagColorRepository(
+            visibleColors: [],
+            historicalColorsByID: [historicalColor.id: historicalColor]
+        )
+        let library = TagColorLibraryStore(repository: repository)
+
+        XCTAssertEqual(library.definition(for: historicalColor.id), historicalColor)
+        XCTAssertEqual(library.definition(for: historicalColor.id), historicalColor)
+        XCTAssertEqual(repository.fetchColorIDs, [historicalColor.id])
+
+        library.resetForHerdChange()
+        _ = library.definition(for: historicalColor.id)
+
+        XCTAssertEqual(repository.fetchColorIDs, [historicalColor.id, historicalColor.id],
+                       "A color cached for another Herd must be looked up again")
+    }
+
     func testHistoricalDefinitionResolvesOutsideVisibleLibrary() {
         let visible = TagColorSnapshot(
             id: TagColorDefaults.whiteID,
@@ -188,9 +254,14 @@ private final class HistoricalLookupTagColorRepository: TagColorRepository {
 private final class TagColorWriteResultRepository: TagColorRepository {
     private(set) var persistedColors: [TagColorSnapshot]
     var failFetch = false
+    var failColorFetch = false
     var failWrite = false
 
     init(colors: [TagColorSnapshot]) {
+        persistedColors = colors
+    }
+
+    func simulateHerdColors(_ colors: [TagColorSnapshot]) {
         persistedColors = colors
     }
 
@@ -200,7 +271,8 @@ private final class TagColorWriteResultRepository: TagColorRepository {
     }
 
     func fetchColor(id: UUID) throws -> TagColorSnapshot? {
-        persistedColors.first { $0.id == id }
+        if failColorFetch { throw HistoricalLookupFailure.unavailable }
+        return persistedColors.first { $0.id == id }
     }
 
     func upsert(_ color: TagColorSnapshot) throws {
