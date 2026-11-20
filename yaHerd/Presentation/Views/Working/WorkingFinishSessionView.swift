@@ -209,8 +209,8 @@ struct WorkingFinishSessionView: View {
             .sheet(isPresented: $showingExceptionPicker) {
                 if isViewingOriginatingHerd {
                     WorkingFinishExceptionSelectionView(
-                    items: orderedItems,
-                    selection: $exceptionAnimalIDs
+                        items: orderedItems,
+                        selection: $exceptionAnimalIDs
                     )
                 }
             }
