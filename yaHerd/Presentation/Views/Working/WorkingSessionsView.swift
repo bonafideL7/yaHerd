@@ -47,11 +47,13 @@ struct WorkingSessionsView: View {
     }
 
     private var activeSessions: [WorkingSessionSummary] {
-        viewModel.sessions.filter { $0.status == .active }
+        guard viewModel.isCurrentHerdSelection else { return [] }
+        return viewModel.sessions.filter { $0.status == .active }
     }
 
     private var finishedSessions: [WorkingSessionSummary] {
-        viewModel.sessions.filter { $0.status != .active }
+        guard viewModel.isCurrentHerdSelection else { return [] }
+        return viewModel.sessions.filter { $0.status != .active }
     }
 
     var body: some View {
@@ -117,14 +119,23 @@ struct WorkingSessionsView: View {
         .interactiveDismissDisabled(isDeletingSession)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button(action: onStartSessionSetup) {
+                Button {
+                    guard viewModel.isCurrentHerdSelection,
+                          herdSelection.currentHerdID != nil else { return }
+                    onStartSessionSetup()
+                } label: {
                     Image(systemName: "plus")
                 }
-                .disabled(!dataAccessMode.allowsDataMutations || isDeletingSession)
+                .disabled(
+                    !dataAccessMode.allowsDataMutations
+                    || isDeletingSession
+                    || !viewModel.isCurrentHerdSelection
+                )
             }
         }
-        .task {
+        .task(id: herdSelection.selectionRevision) {
             viewModel.configure(repository: repository)
+            viewModel.configure(selection: herdSelection)
             await viewModel.observe(mutationStream: workingDependencies.mutationStream)
         }
         .alert(
@@ -155,19 +166,28 @@ struct WorkingSessionsView: View {
             if newValue != nil { showingError = true }
         }
         .onChange(of: herdSelection.selectionRevision) { _, _ in
-            // A pending confirmation cannot cross Herd selection incarnations.
+            // Discard both the old list and any pending confirmation immediately.
+            viewModel.configure(selection: herdSelection)
             pendingDeletion = nil
             showingDeleteAlert = false
+            errorMessage = nil
+            showingError = false
         }
     }
 
     private func workingSessionNavigationRow(_ session: WorkingSessionSummary) -> some View {
-        Button {
+        let originatingHerdID = herdSelection.currentHerdID
+        let originatingRevision = herdSelection.selectionRevision
+        return Button {
+            guard let originatingHerdID,
+                  viewModel.isCurrentHerdSelection,
+                  herdSelection.currentHerdID == originatingHerdID,
+                  herdSelection.selectionRevision == originatingRevision else { return }
             onSessionStarted(session.id)
         } label: {
             WorkingSessionRow(session: session)
         }
-        .disabled(isDeletingSession)
+        .disabled(isDeletingSession || !viewModel.isCurrentHerdSelection)
     }
 
     private func requestDelete(
