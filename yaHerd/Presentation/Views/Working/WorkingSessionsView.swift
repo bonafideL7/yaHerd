@@ -69,7 +69,11 @@ struct WorkingSessionsView: View {
                 } label: {
                     Label("Treatment Sets", systemImage: "syringe")
                 }
-                .disabled(isDeletingSession)
+                .disabled(
+                    isDeletingSession
+                    || !viewModel.isCurrentHerdSelection
+                    || herdSelection.currentHerdID == nil
+                )
             }
 
             if displayedActiveSessions.isEmpty && displayedFinishedSessions.isEmpty {
