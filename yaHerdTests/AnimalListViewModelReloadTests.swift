@@ -88,7 +88,8 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         let model = AnimalListViewModel()
         model.configure(selection: selection)
         model.load(using: repository, pastureRepository: EmptyPastureReferenceDataReader())
-        XCTAssertTrue(await waitForRequestCount(1, reader: reader))
+        let firstRequestStarted = await waitForRequestCount(1, reader: reader)
+        XCTAssertTrue(firstRequestStarted)
 
         // SwiftUI may coalesce both selection updates while the asynchronous
         // reader is suspended. An equal Herd UUID is not the same selection.
@@ -102,7 +103,8 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
 
         model.load(using: repository, pastureRepository: EmptyPastureReferenceDataReader())
-        XCTAssertTrue(await waitForAnimal(freshAnimal.id, in: model))
+        let refreshedAnimalLoaded = await waitForAnimal(freshAnimal.id, in: model)
+        XCTAssertTrue(refreshedAnimalLoaded)
         XCTAssertEqual(model.items, [freshAnimal])
     }
 
