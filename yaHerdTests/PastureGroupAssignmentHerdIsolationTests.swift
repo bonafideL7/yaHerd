@@ -81,6 +81,111 @@ final class PastureGroupAssignmentHerdIsolationTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+
+    func testDetailLoadRejectsOtherSelectedHerdBeforeRepositoryReads() throws {
+        let (_, row, repository, selection) = makeFixture()
+        let origin = try XCTUnwrap(selection.currentHerdID)
+        let originalRevision = selection.selectionRevision
+        let model = PastureGroupDetailViewModel()
+
+        selection.select(UUID())
+        model.load(
+            groupID: row.groupID, using: repository,
+            expectedHerdID: origin,
+            expectedSelectionRevision: originalRevision,
+            selection: selection
+        )
+
+        XCTAssertEqual(repository.groupReads, 0)
+        XCTAssertEqual(repository.pastureReads, 0)
+        XCTAssertNil(model.detail)
+        XCTAssertTrue(model.allPastures.isEmpty)
+    }
+
+    func testDetailLoadRejectsHerdSelectionRoundTrip() throws {
+        let (_, row, repository, selection) = makeFixture()
+        let origin = try XCTUnwrap(selection.currentHerdID)
+        let originalRevision = selection.selectionRevision
+        let model = PastureGroupDetailViewModel()
+
+        selection.select(UUID())
+        selection.select(origin)
+        model.load(
+            groupID: row.groupID, using: repository,
+            expectedHerdID: origin,
+            expectedSelectionRevision: originalRevision,
+            selection: selection
+        )
+
+        XCTAssertEqual(repository.groupReads, 0)
+        XCTAssertEqual(repository.pastureReads, 0)
+        XCTAssertNil(model.detail)
+    }
+
+    func testDetailLoadAllowsUnchangedSelectionAndEditor() throws {
+        let (_, row, repository, selection) = makeFixture()
+        let origin = try XCTUnwrap(selection.currentHerdID)
+        let model = PastureGroupDetailViewModel()
+
+        model.load(
+            groupID: row.groupID, using: repository,
+            expectedHerdID: origin,
+            expectedSelectionRevision: selection.selectionRevision,
+            selection: selection
+        )
+        model.beginEditing(
+            expectedHerdID: origin,
+            expectedSelectionRevision: selection.selectionRevision,
+            selection: selection
+        )
+
+        XCTAssertEqual(repository.groupReads, 1)
+        XCTAssertEqual(repository.pastureReads, 1)
+        XCTAssertEqual(model.detail?.id, row.groupID)
+        XCTAssertEqual(model.allPastures.count, 1)
+        XCTAssertTrue(model.isPresentingEditGroup)
+    }
+
+    func testObsoleteDetailClearsContentsAndRejectsEditAndReload() throws {
+        let (_, row, repository, selection) = makeFixture()
+        let origin = try XCTUnwrap(selection.currentHerdID)
+        let originalRevision = selection.selectionRevision
+        let model = PastureGroupDetailViewModel()
+
+        model.load(
+            groupID: row.groupID, using: repository,
+            expectedHerdID: origin,
+            expectedSelectionRevision: originalRevision,
+            selection: selection
+        )
+        model.beginEditing(
+            expectedHerdID: origin,
+            expectedSelectionRevision: originalRevision,
+            selection: selection
+        )
+
+        selection.select(nil)
+        model.resetForHerdChange()
+        model.beginEditing(
+            expectedHerdID: origin,
+            expectedSelectionRevision: originalRevision,
+            selection: selection
+        )
+        model.reloadAfterSave(
+            groupID: row.groupID, using: repository,
+            expectedHerdID: origin,
+            expectedSelectionRevision: originalRevision,
+            selection: selection
+        )
+
+        XCTAssertEqual(repository.groupReads, 1)
+        XCTAssertEqual(repository.pastureReads, 1)
+        XCTAssertNil(model.detail)
+        XCTAssertTrue(model.allPastures.isEmpty)
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertFalse(model.isPresentingEditGroup)
+    }
+
     private func makeFixture() -> (
         PastureGroupDetailViewModel,
         PastureGroupAssignmentRow,
