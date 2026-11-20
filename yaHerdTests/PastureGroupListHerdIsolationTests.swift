@@ -10,7 +10,13 @@ final class PastureGroupListHerdIsolationTests: XCTestCase {
         let group = makeGroup()
         let repository = GroupListDeletionProbe(groups: [group])
         let model = PastureGroupListViewModel()
-        model.requestDelete(group, selection: selection)
+        model.load(using: repository, selection: selection)
+        model.requestDelete(
+            group,
+            originatingHerdID: selection.currentHerdID,
+            originatingSelectionRevision: selection.selectionRevision,
+            selection: selection
+        )
 
         selection.select(UUID())
         model.deleteGroup(id: group.id, using: repository, selection: selection)
@@ -26,7 +32,13 @@ final class PastureGroupListHerdIsolationTests: XCTestCase {
         let group = makeGroup()
         let repository = GroupListDeletionProbe(groups: [group])
         let model = PastureGroupListViewModel()
-        model.requestDelete(group, selection: selection)
+        model.load(using: repository, selection: selection)
+        model.requestDelete(
+            group,
+            originatingHerdID: selection.currentHerdID,
+            originatingSelectionRevision: selection.selectionRevision,
+            selection: selection
+        )
 
         selection.select(UUID())
         selection.select(originalID)
@@ -42,7 +54,13 @@ final class PastureGroupListHerdIsolationTests: XCTestCase {
         let group = makeGroup()
         let repository = GroupListDeletionProbe(groups: [group])
         let model = PastureGroupListViewModel()
-        model.requestDelete(group, selection: selection)
+        model.load(using: repository, selection: selection)
+        model.requestDelete(
+            group,
+            originatingHerdID: selection.currentHerdID,
+            originatingSelectionRevision: selection.selectionRevision,
+            selection: selection
+        )
 
         model.deleteGroup(id: group.id, using: repository, selection: selection)
 
@@ -57,8 +75,13 @@ final class PastureGroupListHerdIsolationTests: XCTestCase {
         let group = makeGroup()
         let repository = GroupListDeletionProbe(groups: [group])
         let model = PastureGroupListViewModel()
-        model.load(using: repository)
-        model.requestDelete(group, selection: selection)
+        model.load(using: repository, selection: selection)
+        model.requestDelete(
+            group,
+            originatingHerdID: selection.currentHerdID,
+            originatingSelectionRevision: selection.selectionRevision,
+            selection: selection
+        )
         model.requestAddGroup()
         model.errorMessage = "Previous Herd error"
 
@@ -68,6 +91,83 @@ final class PastureGroupListHerdIsolationTests: XCTestCase {
         XCTAssertNil(model.groupPendingDeletion)
         XCTAssertFalse(model.isPresentingAddGroup)
         XCTAssertNil(model.errorMessage)
+    }
+
+    func testLateSwipeFromPreviousHerdCannotStampSameUUIDOnCurrentHerd() {
+        let originalHerdID = UUID()
+        let nextHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let originalRevision = selection.selectionRevision
+        let group = makeGroup()
+        let repository = GroupListDeletionProbe(groups: [group])
+        let model = PastureGroupListViewModel()
+        model.load(using: repository, selection: selection)
+
+        // A retained row callback executes after B replaces the list with
+        // a different Herd's group that happens to have the same UUID.
+        selection.select(nextHerdID)
+        model.resetForHerdChange()
+        repository.groups = [group]
+        model.load(using: repository, selection: selection)
+        model.requestDelete(
+            group,
+            originatingHerdID: originalHerdID,
+            originatingSelectionRevision: originalRevision,
+            selection: selection
+        )
+        model.deleteGroup(id: group.id, using: repository, selection: selection)
+
+        XCTAssertNil(model.groupPendingDeletion)
+        XCTAssertTrue(repository.validatedIDs.isEmpty)
+        XCTAssertTrue(repository.deletedIDs.isEmpty)
+        XCTAssertEqual(repository.groups.map(\.id), [group.id])
+    }
+
+    func testLateSwipeCannotReactivateAfterReturningToOriginalHerd() {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let originalRevision = selection.selectionRevision
+        let group = makeGroup()
+        let repository = GroupListDeletionProbe(groups: [group])
+        let model = PastureGroupListViewModel()
+        model.load(using: repository, selection: selection)
+
+        selection.select(UUID())
+        selection.select(herdID)
+        model.resetForHerdChange()
+        model.load(using: repository, selection: selection)
+        model.requestDelete(
+            group,
+            originatingHerdID: herdID,
+            originatingSelectionRevision: originalRevision,
+            selection: selection
+        )
+        model.deleteGroup(id: group.id, using: repository, selection: selection)
+
+        XCTAssertNil(model.groupPendingDeletion)
+        XCTAssertTrue(repository.deletedIDs.isEmpty)
+        XCTAssertEqual(repository.groups.count, 1)
+    }
+
+    func testRowFromPreviousListIsRejectedBeforeReloadCompletes() {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let originalRevision = selection.selectionRevision
+        let group = makeGroup()
+        let repository = GroupListDeletionProbe(groups: [group])
+        let model = PastureGroupListViewModel()
+        model.load(using: repository, selection: selection)
+
+        selection.select(UUID())
+        model.requestDelete(
+            group,
+            originatingHerdID: originalHerdID,
+            originatingSelectionRevision: originalRevision,
+            selection: selection
+        )
+
+        XCTAssertNil(model.groupPendingDeletion)
+        XCTAssertEqual(repository.groups.count, 1)
     }
 
     private func makeGroup() -> PastureGroupSummary {
