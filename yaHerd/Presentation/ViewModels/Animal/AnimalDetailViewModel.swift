@@ -18,6 +18,9 @@ final class AnimalDetailViewModel {
     var pendingScrollTarget: AnimalEditorScrollTarget?
     var preparedOffspringEditor: PreparedAnimalEditor?
 
+    @ObservationIgnored private var editingHerdID: UUID?
+    @ObservationIgnored private var editingSelectionRevision: UInt64?
+
     func load(
         animalID: UUID,
         using repository: any AnimalDetailRepository,
@@ -40,8 +43,10 @@ final class AnimalDetailViewModel {
         }
     }
 
-    func beginEditing() {
-        guard let detail else { return }
+    func beginEditing(selection: AppCurrentHerdSelection) {
+        guard let detail, let herdID = selection.currentHerdID else { return }
+        editingHerdID = herdID
+        editingSelectionRevision = selection.selectionRevision
         form.populate(from: detail)
         draftTags = detail.activeTags + detail.inactiveTags
         pendingScrollTarget = nil
@@ -49,6 +54,8 @@ final class AnimalDetailViewModel {
     }
 
     func cancelEditing() {
+        editingHerdID = nil
+        editingSelectionRevision = nil
         guard let detail else {
             draftTags = []
             pendingScrollTarget = nil
@@ -61,8 +68,21 @@ final class AnimalDetailViewModel {
         isEditing = false
     }
 
-    func save(animalID: UUID, defaultTagColorID: UUID?, using repository: any AnimalDetailRepository) {
-        guard detail != nil else { return }
+    func save(
+        animalID: UUID,
+        defaultTagColorID: UUID?,
+        using repository: any AnimalDetailRepository,
+        selection: AppCurrentHerdSelection
+    ) {
+        guard isEditing,
+              detail?.id == animalID,
+              let editingHerdID,
+              let editingSelectionRevision,
+              selection.currentHerdID == editingHerdID,
+              selection.selectionRevision == editingSelectionRevision else {
+            errorMessage = "The selected Herd or animal changed. Reopen the editor before saving."
+            return
+        }
 
         do {
             let input = try form.makeInput(defaultTagColorID: defaultTagColorID)
@@ -78,6 +98,9 @@ final class AnimalDetailViewModel {
             draftTags = updated.activeTags + updated.inactiveTags
             pendingScrollTarget = nil
             isEditing = false
+            editingHerdID = nil
+            editingSelectionRevision = nil
+            errorMessage = nil
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
@@ -177,9 +200,13 @@ final class AnimalDetailViewModel {
         return detail.sex == .female && !detail.isArchived && detail.status == .active
     }
 
-    func beginEditingStatus(_ status: AnimalStatus? = nil) {
-        guard let detail else { return }
-
+    func beginEditingStatus(
+        _ status: AnimalStatus? = nil,
+        selection: AppCurrentHerdSelection
+    ) {
+        guard let detail, let herdID = selection.currentHerdID else { return }
+        editingHerdID = herdID
+        editingSelectionRevision = selection.selectionRevision
         form.populate(from: detail)
         draftTags = detail.activeTags + detail.inactiveTags
 
