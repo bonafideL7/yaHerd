@@ -29,3 +29,10 @@ struct AccessibleHerd: Identifiable, Equatable, Sendable {
     var id: UUID { summary.id }
     var name: String { summary.name }
 }
+
+/// Complete selectable Herds and whether other roots are awaiting metadata.
+/// An incomplete root has no safe domain identity and is never selectable.
+struct HerdInventory: Sendable {
+    let herds: [AccessibleHerd]
+    let hasIncompleteRoots: Bool
+}
