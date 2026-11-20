@@ -3,6 +3,147 @@ import XCTest
 
 @MainActor
 final class FieldCheckSessionDetailViewModelTests: XCTestCase {
+
+    func testQueuedFindingStatusDoesNotRunAfterHerdSelectionRoundTrip() async throws {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
+        let sessionID = UUID()
+        let repository = FieldCheckSessionDetailRepositorySpy(
+            detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
+        )
+        repository.shouldBlockSetCountedWrite = true
+        let model = FieldCheckSessionDetailViewModel()
+        XCTAssertTrue(model.load(sessionID: sessionID, using: repository))
+        let animalCheckID = try XCTUnwrap(repository.detail.animalChecks.first?.id)
+
+        let predecessor = Task {
+            await model.setAnimalCheckCounted(
+                sessionID: sessionID, animalCheckID: animalCheckID,
+                isCounted: true, using: repository
+            )
+        }
+        await waitUntil { repository.operationLog.contains("setCounted") }
+
+        let pending = Task {
+            await model.updateFindingStatus(
+                sessionID: sessionID, findingID: UUID(),
+                status: .resolved, using: repository,
+                mayContinue: {
+                    selection.currentHerdID == herdID
+                        && selection.selectionRevision == revision
+                }
+            )
+        }
+        for _ in 0..<20 { await Task.yield() }
+
+        selection.select(UUID())
+        selection.select(herdID)
+        repository.releaseSetCountedWrite()
+        await predecessor.value
+        await pending.value
+
+        XCTAssertFalse(repository.operationLog.contains("findingStatus"))
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testInFlightFindingStatusFailureDoesNotPublishOldHerdError() async throws {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
+        let sessionID = UUID()
+        let repository = FieldCheckSessionDetailRepositorySpy(
+            detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
+        )
+        repository.shouldBlockFindingStatusWrite = true
+        repository.findingStatusFailure = FieldCheckSessionDetailTestError.findingStatusFailure
+        let model = FieldCheckSessionDetailViewModel()
+        XCTAssertTrue(model.load(sessionID: sessionID, using: repository))
+
+        let pending = Task {
+            await model.updateFindingStatus(
+                sessionID: sessionID, findingID: UUID(),
+                status: .resolved, using: repository,
+                mayContinue: {
+                    selection.currentHerdID == herdID
+                        && selection.selectionRevision == revision
+                }
+            )
+        }
+        await waitUntil { repository.operationLog.contains("findingStatus") }
+        selection.select(UUID())
+        repository.releaseFindingStatusWrite()
+        await pending.value
+
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testQueuedRosterMutationDoesNotRunAfterHerdChange() async throws {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
+        let sessionID = UUID()
+        let repository = FieldCheckSessionDetailRepositorySpy(
+            detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
+        )
+        repository.shouldBlockSetCountedWrite = true
+        let model = FieldCheckSessionDetailViewModel()
+        XCTAssertTrue(model.load(sessionID: sessionID, using: repository))
+        let animalCheckID = try XCTUnwrap(repository.detail.animalChecks.first?.id)
+
+        let predecessor = Task {
+            await model.setAnimalCheckCounted(
+                sessionID: sessionID, animalCheckID: animalCheckID,
+                isCounted: true, using: repository
+            )
+        }
+        await waitUntil { repository.operationLog.contains("setCounted") }
+
+        let pending = Task {
+            await model.setAnimalCheckMissing(
+                sessionID: sessionID, animalCheckID: animalCheckID,
+                isMissing: true, using: repository,
+                mayContinue: {
+                    selection.currentHerdID == herdID
+                        && selection.selectionRevision == revision
+                }
+            )
+        }
+        for _ in 0..<20 { await Task.yield() }
+
+        selection.select(UUID())
+        repository.releaseSetCountedWrite()
+        await predecessor.value
+        await pending.value
+
+        XCTAssertFalse(repository.operationLog.contains("setMissing"))
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testFindingStatusUpdatesWhenHerdSelectionIsUnchanged() async {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
+        let sessionID = UUID()
+        let repository = FieldCheckSessionDetailRepositorySpy(
+            detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
+        )
+        let model = FieldCheckSessionDetailViewModel()
+        XCTAssertTrue(model.load(sessionID: sessionID, using: repository))
+
+        await model.updateFindingStatus(
+            sessionID: sessionID, findingID: UUID(),
+            status: .resolved, using: repository,
+            mayContinue: {
+                selection.currentHerdID == herdID
+                    && selection.selectionRevision == revision
+            }
+        )
+
+        XCTAssertTrue(repository.operationLog.contains("findingStatus"))
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testQueuedNotesPersistenceDoesNotRetargetAfterHerdChange() async throws {
         let herdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: herdID)
@@ -920,6 +1061,9 @@ private final class FieldCheckSessionDetailRepositorySpy:
     var quickCountFailure: Error?
     var notesFailure: Error?
     var shouldBlockNotesWrite = false
+    var shouldBlockFindingStatusWrite = false
+    var findingStatusFailure: Error?
+    private var findingStatusContinuation: CheckedContinuation<Void, Never>?
     private var notesContinuation: CheckedContinuation<Void, Never>?
     private(set) var notesWriteCount = 0
     var shouldBlockSetCountedWrite = false
@@ -1044,7 +1188,24 @@ private final class FieldCheckSessionDetailRepositorySpy:
         sessionID: UUID,
         findingID: UUID,
         status: FieldCheckFindingStatus
-    ) async throws {}
+    ) async throws {
+        operationLog.append("findingStatus")
+        if shouldBlockFindingStatusWrite {
+            await withCheckedContinuation { continuation in
+                findingStatusContinuation = continuation
+            }
+        }
+        if let findingStatusFailure {
+            throw findingStatusFailure
+        }
+    }
+
+    func releaseFindingStatusWrite() {
+        shouldBlockFindingStatusWrite = false
+        let continuation = findingStatusContinuation
+        findingStatusContinuation = nil
+        continuation?.resume()
+    }
 
     func deleteFinding(
         sessionID: UUID,
@@ -1160,6 +1321,7 @@ private enum FieldCheckSessionDetailTestError: LocalizedError {
     case quickCountFailure
     case notesFailure
     case setCountedFailure
+    case findingStatusFailure
 
     var errorDescription: String? {
         switch self {
@@ -1169,6 +1331,8 @@ private enum FieldCheckSessionDetailTestError: LocalizedError {
             return "Injected notes failure."
         case .setCountedFailure:
             return "Injected set-counted failure."
+        case .findingStatusFailure:
+            return "Injected finding-status failure."
         }
     }
 }
