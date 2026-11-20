@@ -48,6 +48,8 @@ struct AnimalListView: View {
     @State private var selectedAnimalIDs: Set<UUID> = []
     @State private var collapsedSectionIDs: Set<String> = []
     @State private var showingPasturePicker = false
+    @State private var batchMoveOriginHerdID: UUID?
+    @State private var batchMoveOriginRevision: UInt64?
     @State private var inlineEntry = AnimalInlineEntryViewModel()
     @State private var isShowingInlineBirthDatePicker = false
     @State private var activeInlineParentPicker: ParentPickerType?
@@ -345,7 +347,7 @@ struct AnimalListView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
-        .task(id: herdSelection.currentHerdID) {
+        .task(id: herdSelection.selectionRevision) {
             viewModel.configure(selection: herdSelection)
             refreshDerivedState()
             await viewModel.observe(
@@ -355,8 +357,13 @@ struct AnimalListView: View {
                 snapshotReader: animalDependencies.listSnapshotReader
             )
         }
-        .onChange(of: herdSelection.currentHerdID) { _, _ in
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
             inlineEntry.cancel()
+            selectedAnimalIDs.removeAll()
+            batchMode = false
+            showingPasturePicker = false
+            batchMoveOriginHerdID = nil
+            batchMoveOriginRevision = nil
             viewModel.configure(selection: herdSelection)
             refreshDerivedState()
         }
@@ -534,7 +541,7 @@ struct AnimalListView: View {
             selectedCount: selectedAnimalIDs.count,
             allVisibleAnimalsSelected: allVisibleAnimalsSelected,
             onToggleSelectAllVisible: toggleSelectAllVisible,
-            onMove: { showingPasturePicker = true }
+            onMove: presentBatchMove
         )
     }
 
@@ -563,13 +570,33 @@ struct AnimalListView: View {
         || showArchivedRecordsValue
     }
 
+    private func presentBatchMove() {
+        guard let herdID = herdSelection.currentHerdID,
+              !selectedAnimalIDs.isEmpty else { return }
+        batchMoveOriginHerdID = herdID
+        batchMoveOriginRevision = herdSelection.selectionRevision
+        showingPasturePicker = true
+    }
+
     private func moveSelectedAnimals(toPastureID pastureID: UUID?) {
+        guard let originHerdID = batchMoveOriginHerdID,
+              let originRevision = batchMoveOriginRevision,
+              herdSelection.currentHerdID == originHerdID,
+              herdSelection.selectionRevision == originRevision else {
+            showingPasturePicker = false
+            return
+        }
+
         viewModel.move(
             ids: Array(selectedAnimalIDs),
             toPastureID: pastureID,
+            originatingHerdID: originHerdID,
+            originatingSelectionRevision: originRevision,
             using: repository,
             pastureRepository: pastureReferenceDataReader
         )
+        batchMoveOriginHerdID = nil
+        batchMoveOriginRevision = nil
         refreshDerivedState()
         selectedAnimalIDs.removeAll()
         batchMode = false
