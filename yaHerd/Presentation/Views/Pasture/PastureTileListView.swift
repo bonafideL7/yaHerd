@@ -157,7 +157,8 @@ struct PastureTileListView: View {
                 Text("Historical pasture checks will remain available under Archived Pastures.")
             }
         }
-        .task {
+        .task(id: herdSelection.selectionRevision) {
+            model.configure(selection: herdSelection)
             await model.observe(
                 using: repository,
                 mutationStream: pastureDependencies.mutationStream
@@ -172,7 +173,7 @@ struct PastureTileListView: View {
 
     @ViewBuilder
     private func pastureContent(draggedPasture: Binding<PastureSummary?>) -> some View {
-        if !model.hasLoaded {
+        if !model.hasLoaded || !model.isCurrentHerdSelection {
             initialContentView
         } else if model.items.isEmpty {
             PastureEmptyStateView(onAddPasture: model.requestAddPasture)
