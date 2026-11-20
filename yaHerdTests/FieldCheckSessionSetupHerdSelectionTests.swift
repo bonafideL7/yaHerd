@@ -7,6 +7,7 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
     func testStartIsNotSubmittedAfterHerdChanges() async throws {
         let originalHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let originatingSelectionRevision = selection.selectionRevision
         let repository = SuspendedFieldCheckSessionCreator()
         let model = FieldCheckSessionSetupViewModel()
 
@@ -17,6 +18,9 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
             notes: "",
             originatingHerdID: originalHerdID,
             currentHerdSelection: selection,
+            selectionIsUnchanged: {
+                selection.selectionRevision == originatingSelectionRevision
+            },
             using: repository
         )
 
@@ -24,9 +28,36 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
         XCTAssertEqual(repository.createCallCount, 0)
     }
 
+    func testStartIsNotSubmittedAfterHerdSelectionRoundTrip() async throws {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let originatingSelectionRevision = selection.selectionRevision
+        let repository = SuspendedFieldCheckSessionCreator()
+        let model = FieldCheckSessionSetupViewModel()
+
+        selection.select(UUID())
+        selection.select(originalHerdID)
+
+        let result = try await model.createSession(
+            pastureID: UUID(),
+            startedAt: .now,
+            notes: "",
+            originatingHerdID: originalHerdID,
+            currentHerdSelection: selection,
+            selectionIsUnchanged: {
+                selection.selectionRevision == originatingSelectionRevision
+            },
+            using: repository
+        )
+
+        XCTAssertNil(result)
+        XCTAssertEqual(repository.createCallCount, 0, "An obsolete queued submit must not create a session.")
+    }
+
     func testCompletedSaveDoesNotNavigateIntoAnotherHerd() async throws {
         let originalHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let originatingSelectionRevision = selection.selectionRevision
         let repository = SuspendedFieldCheckSessionCreator()
         let model = FieldCheckSessionSetupViewModel()
         let savedID = UUID()
@@ -38,6 +69,9 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
                 notes: "",
                 originatingHerdID: originalHerdID,
                 currentHerdSelection: selection,
+                selectionIsUnchanged: {
+                    selection.selectionRevision == originatingSelectionRevision
+                },
                 using: repository
             )
         }
@@ -53,6 +87,7 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
     func testCompletedSaveDoesNotNavigateAfterHerdSelectionRoundTrip() async throws {
         let originalHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let originatingSelectionRevision = selection.selectionRevision
         let repository = SuspendedFieldCheckSessionCreator()
         let model = FieldCheckSessionSetupViewModel()
         let savedID = UUID()
@@ -64,6 +99,9 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
                 notes: "",
                 originatingHerdID: originalHerdID,
                 currentHerdSelection: selection,
+                selectionIsUnchanged: {
+                    selection.selectionRevision == originatingSelectionRevision
+                },
                 using: repository
             )
         }
@@ -80,6 +118,7 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
     func testCancelledSaveDoesNotPublishNavigation() async throws {
         let originalHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let originatingSelectionRevision = selection.selectionRevision
         let repository = SuspendedFieldCheckSessionCreator()
         let model = FieldCheckSessionSetupViewModel()
 
@@ -90,6 +129,9 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
                 notes: "",
                 originatingHerdID: originalHerdID,
                 currentHerdSelection: selection,
+                selectionIsUnchanged: {
+                    selection.selectionRevision == originatingSelectionRevision
+                },
                 using: repository
             )
         }
@@ -105,6 +147,7 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
     func testSuccessfulSaveReturnsItsSessionInUnchangedHerd() async throws {
         let originalHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let originatingSelectionRevision = selection.selectionRevision
         let repository = SuspendedFieldCheckSessionCreator()
         let model = FieldCheckSessionSetupViewModel()
         let savedID = UUID()
@@ -116,6 +159,9 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
                 notes: "Note",
                 originatingHerdID: originalHerdID,
                 currentHerdSelection: selection,
+                selectionIsUnchanged: {
+                    selection.selectionRevision == originatingSelectionRevision
+                },
                 using: repository
             )
         }
