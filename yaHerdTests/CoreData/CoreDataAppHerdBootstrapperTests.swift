@@ -1383,9 +1383,15 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         ]
 
         for (isLarge, expectedAnimals) in [(false, 18), (true, 480)] {
+            // Each independent SQLite fixture needs an independent remembered
+            // Herd. Preserve the preference only across that fixture's reopen.
+            let fixtureSuite = "\(preferenceSuite).\(isLarge ? "large" : "compact")"
+            let fixturePreferences = try XCTUnwrap(UserDefaults(suiteName: fixtureSuite))
+            defer { fixturePreferences.removePersistentDomain(forName: fixtureSuite) }
+
             let harness = try CoreDataPersistenceHarness()
             try await seedExplicitLocalHerd(at: harness.storeURL)
-            let app = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL, selectionPreferences: testSelectionPreferences)
+            let app = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL, selectionPreferences: fixturePreferences)
             let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
             let originalHerdID = try dependencies.herdRepository.fetchCurrentHerd().id
             guard let seeder = dependencies.animalFeatureDependencies.sampleDataSeeder else {
@@ -1450,7 +1456,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
                 expectedAnimals
             )
 
-            let reopened = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL, selectionPreferences: testSelectionPreferences)
+            let reopened = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL, selectionPreferences: fixturePreferences)
             let reopenedDependencies = reopened.makeDependencies(dataAccessMode: .readWrite)
             XCTAssertEqual(
                 try reopenedDependencies.herdRepository.fetchCurrentHerd().id,
