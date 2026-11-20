@@ -24,11 +24,13 @@ final class WorkingFinishSessionViewModel: ObservableObject {
     func finishSession(
         assignments: [WorkingQueueDestinationAssignment],
         originatingHerdID: UUID,
-        currentHerdSelection: any CurrentHerdSelectionReading,
+        originatingSelectionRevision: UInt64,
+        currentHerdSelection: AppCurrentHerdSelection,
         repository: any WorkingFinishSessionRepository
     ) async throws -> Bool {
         guard !Task.isCancelled,
-              currentHerdSelection.currentHerdID == originatingHerdID else {
+              currentHerdSelection.currentHerdID == originatingHerdID,
+              currentHerdSelection.selectionRevision == originatingSelectionRevision else {
             return false
         }
 
@@ -39,6 +41,7 @@ final class WorkingFinishSessionViewModel: ObservableObject {
 
         return !Task.isCancelled
             && currentHerdSelection.currentHerdID == originatingHerdID
+            && currentHerdSelection.selectionRevision == originatingSelectionRevision
     }
 
     var needsPastureOptionsRetry: Bool {
