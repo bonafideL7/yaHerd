@@ -25,19 +25,28 @@ struct PastureTilePickerView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    if !model.recentPastures.isEmpty {
-                        pastureSection(
-                            title: "Recent",
-                            pastures: model.recentPastures,
-                            layout: .horizontal
-                        )
-                    }
+                    if isShowingCurrentHerdPastures {
+                        if !model.recentPastures.isEmpty {
+                            pastureSection(
+                                title: "Recent",
+                                pastures: model.recentPastures,
+                                layout: .horizontal
+                            )
+                        }
 
-                    pastureSection(
-                        title: "All Pastures",
-                        pastures: model.pastures,
-                        layout: .grid
-                    )
+                        pastureSection(
+                            title: "All Pastures",
+                            pastures: model.pastures,
+                            layout: .grid
+                        )
+                    } else if herdSelection.currentHerdID == nil {
+                        ContentUnavailableView(
+                            "Select a Herd",
+                            systemImage: "square.stack.3d.up"
+                        )
+                    } else {
+                        ProgressView("Loading Pastures")
+                    }
                 }
                 .padding(.top)
             }
@@ -95,9 +104,16 @@ struct PastureTilePickerView: View {
         }
     }
 
+    private var isShowingCurrentHerdPastures: Bool {
+        guard let herdID = herdSelection.currentHerdID else { return false }
+        return loadedHerdID == herdID &&
+            loadedSelectionRevision == herdSelection.selectionRevision
+    }
+
     private func loadPastures() {
         loadedHerdID = nil
         loadedSelectionRevision = nil
+        model.reset()
         guard let herdID = herdSelection.currentHerdID else { return }
         // A device-wide legacy recent name has no trustworthy Herd owner.
         // Never map its name onto a different Herd's pasture.
