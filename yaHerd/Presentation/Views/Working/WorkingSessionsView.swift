@@ -9,6 +9,7 @@ struct WorkingSessionsView: View {
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
     private var repository: any WorkingSessionsRepository { workingDependencies.sessionsRepository }
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @StateObject private var viewModel: WorkingSessionsViewModel
 
     @State private var sessionPendingDeleteID: UUID?
@@ -147,17 +148,24 @@ struct WorkingSessionsView: View {
     }
 
     private func deleteSession(_ session: WorkingSessionSummary) {
-        guard !isDeletingSession else { return }
+        guard !isDeletingSession,
+              let originatingHerdID = herdSelection.currentHerdID else { return }
         isDeletingSession = true
 
         Task { @MainActor in
             defer { isDeletingSession = false }
 
             do {
-                try await repository.deleteSession(id: session.id)
+                guard try await viewModel.deleteSession(
+                    id: session.id,
+                    originatingHerdID: originatingHerdID,
+                    currentHerdSelection: herdSelection
+                ) else { return }
                 sessionPendingDeleteID = nil
-                viewModel.load()
+                errorMessage = nil
             } catch {
+                guard !Task.isCancelled,
+                      herdSelection.currentHerdID == originatingHerdID else { return }
                 errorMessage = UserVisibleErrorMessage.make(error)
                 showingError = true
             }
