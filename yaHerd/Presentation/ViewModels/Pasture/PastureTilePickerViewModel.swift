@@ -10,6 +10,14 @@ final class PastureTilePickerViewModel {
 
     private var recentPastureIDs: [UUID] = []
 
+    /// Drop every record from the preceding Herd before a new selection loads.
+    func reset() {
+        pastures = []
+        recentPastures = []
+        recentPastureIDs = []
+        errorMessage = nil
+    }
+
     func load(
         using repository: any PastureListReader,
         recentPastureIDs: [UUID],
