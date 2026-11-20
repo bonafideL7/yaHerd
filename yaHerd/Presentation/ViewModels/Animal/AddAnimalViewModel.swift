@@ -19,7 +19,15 @@ final class AddAnimalViewModel {
         form.loadSupportData(using: animalRepository, pastureRepository: pastureRepository)
     }
 
-    func save(defaultTagColorID: UUID?, using repository: any AnimalEditorRepository) throws -> AnimalDetailSnapshot {
+    func save(
+        defaultTagColorID: UUID?,
+        using repository: any AnimalEditorRepository,
+        expectedHerdID: UUID,
+        selection: any CurrentHerdSelectionReading
+    ) throws -> AnimalDetailSnapshot {
+        guard selection.currentHerdID == expectedHerdID else {
+            throw CancellationError()
+        }
         let input = try form.makeInput(defaultTagColorID: defaultTagColorID)
         return try CreateAnimalWithTagsUseCase(repository: repository).execute(
             input: input,
