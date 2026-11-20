@@ -42,6 +42,16 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
         currentHerdID = accessibleHerds.count == 1 ? accessibleHerds[0].id : nil
     }
 
+    /// Reconcile only an already active Herd after a successful inventory read.
+    /// Keep the saved preference when its root is temporarily absent, but never
+    /// reselect it here: re-entry must pass the chooser's graph-readiness check.
+    func revalidateActiveHerd(from accessibleHerds: [AccessibleHerd]) {
+        guard let activeID = currentHerdID else { return }
+        if accessibleHerds.filter({ $0.id == activeID }).count != 1 {
+            currentHerdID = nil
+        }
+    }
+
     /// Only an accessible, unambiguous root can become the current Herd.
     func selectAccessibleHerd(_ id: UUID, from accessibleHerds: [AccessibleHerd]) throws {
         guard accessibleHerds.filter({ $0.id == id }).count == 1 else {
