@@ -172,4 +172,55 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         )
         XCTAssertEqual(try repository.fetchAccessibleHerds().map(\.id), [validID])
     }
+
+    func testDeferredSampleSeedDoesNotWriteToNewlySelectedHerd() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let repository = CoreDataHerdRepository(
+            selection: AppCurrentHerdSelection(), assembly: assembly
+        )
+        let origin = try await repository.createOwnedHerd(named: "Original")
+        let destination = try await repository.createOwnedHerd(named: "New selection")
+        let app = CoreDataAppPersistenceAssembly(
+            assembly: assembly, currentHerdID: origin.id
+        )
+        let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
+        let seeder = try XCTUnwrap(dependencies.animalFeatureDependencies.sampleDataSeeder)
+
+        // The empty-state action began in the original Herd, but its Task was
+        // scheduled after navigation switched to another empty Herd.
+        app.currentHerdSelection.select(destination.id)
+        for useLargeFixture in [false, true] {
+            do {
+                if useLargeFixture {
+                    _ = try await seeder.seedLargeSampleDataIfNeeded(for: origin.id)
+                } else {
+                    _ = try await seeder.seedSampleDataIfNeeded(for: origin.id)
+                }
+                XCTFail("An old-Herd request must not seed the newly selected Herd.")
+            } catch {
+                XCTAssertEqual(error as? HerdRepositoryError, .missingHerd)
+            }
+        }
+
+        XCTAssertTrue(
+            try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().isEmpty
+        )
+        app.currentHerdSelection.select(origin.id)
+        XCTAssertTrue(
+            try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().isEmpty
+        )
+
+        // A valid request still seeds its own selected Herd without touching
+        // the other Herd's empty records.
+        let inserted = try await seeder.seedSampleDataIfNeeded(for: origin.id)
+        XCTAssertTrue(inserted)
+        XCTAssertEqual(
+            try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().count, 18
+        )
+        app.currentHerdSelection.select(destination.id)
+        XCTAssertTrue(
+            try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().isEmpty
+        )
+    }
+
 }
