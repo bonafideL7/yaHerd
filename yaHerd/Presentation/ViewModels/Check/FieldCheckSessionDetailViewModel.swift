@@ -217,10 +217,12 @@ final class FieldCheckSessionDetailViewModel {
     func updateQuickAnimalTypeCounts(
         sessionID: UUID,
         counts: [AnimalType: Int],
-        using repository: any FieldCheckSessionDetailRepository
+        using repository: any FieldCheckSessionDetailRepository,
+        mayContinue: @escaping @MainActor () -> Bool = { true }
     ) {
         guard !isCompletingSession,
-              detail?.isCompleted == false else {
+              detail?.isCompleted == false,
+              mayContinue() else {
             return
         }
 
@@ -234,17 +236,26 @@ final class FieldCheckSessionDetailViewModel {
         quickCountMutationTask = Task { @MainActor in
             await drainQuickAnimalTypeCountUpdates(
                 sessionID: sessionID,
-                using: repository
+                using: repository,
+                mayContinue: mayContinue
             )
         }
     }
 
     private func drainQuickAnimalTypeCountUpdates(
         sessionID: UUID,
-        using repository: any FieldCheckSessionDetailRepository
+        using repository: any FieldCheckSessionDetailRepository,
+        mayContinue: @escaping @MainActor () -> Bool
     ) async -> Bool {
         do {
             while let counts = pendingQuickAnimalTypeCounts {
+                // The repository resolves the selected Herd per write. An old
+                // queue must not send another mutation after selection changes.
+                guard !Task.isCancelled, mayContinue() else {
+                    pendingQuickAnimalTypeCounts = nil
+                    quickCountMutationTask = nil
+                    return false
+                }
                 pendingQuickAnimalTypeCounts = nil
                 try await repository.updateQuickAnimalTypeCounts(
                     sessionID: sessionID,
@@ -252,12 +263,19 @@ final class FieldCheckSessionDetailViewModel {
                 )
             }
 
+            let canPublish = !Task.isCancelled && mayContinue()
             quickCountMutationTask = nil
+            guard canPublish else {
+                pendingQuickAnimalTypeCounts = nil
+                return false
+            }
             _ = refresh(sessionID: sessionID, using: repository)
             return true
         } catch {
             pendingQuickAnimalTypeCounts = nil
             quickCountMutationTask = nil
+            // An old session cannot overwrite the new Herd's error state.
+            guard !Task.isCancelled, mayContinue() else { return false }
             let message = UserVisibleErrorMessage.make(error)
             _ = refresh(sessionID: sessionID, using: repository)
             errorMessage = message
