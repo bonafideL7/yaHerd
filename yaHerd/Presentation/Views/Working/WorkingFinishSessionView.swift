@@ -431,7 +431,6 @@ struct WorkingFinishSessionView: View {
 
     private func completeSession() {
         guard !isFinishing,
-              let session,
               canFinish,
               let originatingHerdID = herdSelection.currentHerdID else { return }
 
