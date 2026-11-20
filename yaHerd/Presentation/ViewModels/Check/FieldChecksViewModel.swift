@@ -11,6 +11,10 @@ final class FieldChecksViewModel {
     private var isLoading = false
     private var lastLoadedRevision: UInt64 = 0
 
+    @ObservationIgnored private var selection: AppCurrentHerdSelection?
+    @ObservationIgnored private var selectedHerdID: UUID?
+    @ObservationIgnored private var selectedRevision: UInt64?
+
     var activeSessions: [FieldCheckSessionSummary] {
         sessions.filter { !$0.isCompleted && !$0.isPastureArchived }
     }
@@ -29,10 +33,36 @@ final class FieldChecksViewModel {
         )
     }
 
+    /// A list retained by SwiftUI cannot carry the previous Herd's records
+    /// or mutation revision into the next selection incarnation.
+    func configure(selection: AppCurrentHerdSelection) {
+        let changed = self.selection !== selection
+            || selectedHerdID != selection.currentHerdID
+            || selectedRevision != selection.selectionRevision
+        self.selection = selection
+        selectedHerdID = selection.currentHerdID
+        selectedRevision = selection.selectionRevision
+
+        if changed {
+            sessions = []
+            openFindings = []
+            errorMessage = nil
+            hasLoaded = false
+            lastLoadedRevision = 0
+        }
+    }
+
     func observe(
         using repository: any FieldCheckOverviewReading,
         mutationStream: any ApplicationMutationStreaming
     ) async {
+        let originatingHerdID = selectedHerdID
+        let originatingRevision = selectedRevision
+        guard !Task.isCancelled,
+              isCurrentSelection(herdID: originatingHerdID, revision: originatingRevision) else {
+            return
+        }
+
         let startingRevision = mutationStream.fieldCheckRevision
         if !hasLoaded || lastLoadedRevision < startingRevision {
             if load(using: repository) {
@@ -44,7 +74,10 @@ final class FieldChecksViewModel {
             for: .fieldChecks,
             after: lastLoadedRevision
         ) {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled,
+                  isCurrentSelection(herdID: originatingHerdID, revision: originatingRevision) else {
+                return
+            }
             if load(using: repository) {
                 lastLoadedRevision = revision
             }
@@ -58,7 +91,9 @@ final class FieldChecksViewModel {
 
     @discardableResult
     func load(using repository: any FieldCheckOverviewReading) -> Bool {
-        guard !isLoading else { return false }
+        guard !Task.isCancelled,
+              isCurrentSelection(herdID: selectedHerdID, revision: selectedRevision),
+              !isLoading else { return false }
         isLoading = true
         defer {
             isLoading = false
@@ -74,5 +109,15 @@ final class FieldChecksViewModel {
             errorMessage = UserVisibleErrorMessage.make(error)
             return false
         }
+    }
+
+    private func isCurrentSelection(herdID: UUID?, revision: UInt64?) -> Bool {
+        guard let selection else {
+            return herdID == nil && revision == nil
+        }
+        return selectedHerdID == herdID
+            && selectedRevision == revision
+            && selection.currentHerdID == herdID
+            && selection.selectionRevision == revision
     }
 }
