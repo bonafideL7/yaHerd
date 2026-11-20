@@ -70,6 +70,8 @@ final class PastureTileListViewModel {
     @discardableResult
     func load(using repository: any PastureListReader) -> Bool {
         refreshHerdSelection()
+        // A missing active Herd is not permission to query stale cached records.
+        guard !hasConfiguredHerdSelection || selectedHerdID != nil else { return false }
         if !hasLoaded { hasInitialLoadFailure = false }
         do {
             items = try repository.fetchPastures()
@@ -105,6 +107,7 @@ final class PastureTileListViewModel {
 
     func requestAddPasture() {
         refreshHerdSelection()
+        guard !hasConfiguredHerdSelection || selectedHerdID != nil else { return }
         isPresentingAddPasture = true
     }
 
@@ -114,8 +117,13 @@ final class PastureTileListViewModel {
         selectedPasture = pasture
     }
 
-    func requestDelete(_ pasture: PastureSummary) {
+    func requestDelete(
+        _ pasture: PastureSummary,
+        originatingSelectionRevision: UInt64? = nil
+    ) {
         refreshHerdSelection()
+        if let originatingSelectionRevision,
+           originatingSelectionRevision != selectedSelectionRevision { return }
         guard items.contains(where: { $0.id == pasture.id }) else { return }
         pasturePendingDeletion = pasture
         pendingDeletionHerdID = selectedHerdID
