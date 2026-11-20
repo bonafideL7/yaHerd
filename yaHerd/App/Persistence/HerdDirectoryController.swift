@@ -69,6 +69,25 @@ final class HerdDirectoryController {
                 errorMessage = nil
             }
         } catch {
+            // A duplicate active Herd UUID or unresolved owning store is not
+            // a transient inventory failure. The previous selection is unsafe
+            // because the same application ID no longer identifies one store.
+            if let activeID = selection.currentHerdID,
+               let persistenceError = error as? CoreDataPersistenceError {
+                switch persistenceError {
+                case .duplicateApplicationID(let entity, let id, _)
+                    where entity == CDHerd.coreDataEntityName && id == activeID:
+                    selection.deferCurrentHerdUntilImportReady()
+                    selectionGeneration &+= 1
+                    herds = []
+                case .unresolvedHerdStore(let id) where id == activeID:
+                    selection.deferCurrentHerdUntilImportReady()
+                    selectionGeneration &+= 1
+                    herds = []
+                default:
+                    break
+                }
+            }
             // Background import refresh must not repeatedly present error
             // dialogs; manual refresh still reports actionable failures.
             // Preserve the last good list and selection on transient errors.
