@@ -28,6 +28,11 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         selectionPreferences: UserDefaults = .standard
     ) async throws -> CoreDataAppPersistenceAssembly {
         let assembly = try await CoreDataPersistenceAssembly.load(storeURL: storeURL)
+        // A local-only store cannot be mid-CloudKit import. Preserve errors for
+        // incomplete existing roots instead of presenting them as a new install.
+        _ = try CoreDataAppHerdBootstrapper.fetchHerdIDs(
+            using: assembly.contextFactory
+        )
         let remembered = AppCurrentHerdSelection(defaults: selectionPreferences)
         let repository = CoreDataHerdRepository(selection: remembered, assembly: assembly)
         remembered.restoreAccessibleHerd(from: try repository.fetchAccessibleHerds())
