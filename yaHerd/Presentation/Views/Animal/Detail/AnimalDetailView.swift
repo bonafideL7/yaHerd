@@ -13,6 +13,7 @@ struct AnimalDetailView: View {
     private var repository: any AnimalDetailRepository { animalDependencies.detailRepository }
     private var pastureReferenceDataReader: any PastureReferenceDataReader { animalDependencies.pastureReferenceReader }
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @State private var viewModel = AnimalDetailViewModel()
@@ -233,7 +234,7 @@ struct AnimalDetailView: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         ToolbarEditButton {
                             returnsToListAfterSave = false
-                            viewModel.beginEditing()
+                            viewModel.beginEditing(selection: herdSelection)
                         }
                     }
                 }
@@ -243,7 +244,7 @@ struct AnimalDetailView: View {
             if !viewModel.hasLoaded {
                 viewModel.load(animalID: animalID, using: repository, pastureRepository: pastureReferenceDataReader)
                 if initiallyEditing && dataAccessMode.allowsDataMutations && viewModel.detail != nil {
-                    viewModel.beginEditing()
+                    viewModel.beginEditing(selection: herdSelection)
                 }
             }
         }
@@ -298,7 +299,8 @@ struct AnimalDetailView: View {
         viewModel.save(
             animalID: animalID,
             defaultTagColorID: tagColorLibrary.defaultColorID,
-            using: repository
+            using: repository,
+            selection: herdSelection
         )
         if !viewModel.isEditing && returnsToListAfterSave {
             closeDestination()
@@ -456,7 +458,7 @@ struct AnimalDetailView: View {
         AnimalDetailStatusSection(detail: detail) { status in
             guard dataAccessMode.allowsDataMutations else { return }
             returnsToListAfterSave = false
-            viewModel.beginEditingStatus(status)
+            viewModel.beginEditingStatus(status, selection: herdSelection)
         }
         AnimalDetailRecordManagementSection(
             detail: detail,
