@@ -48,6 +48,7 @@ struct WorkingSessionAnimalWorkView: View {
     @State var errorMessage: String?
     @State var showingError = false
     @State var isMutatingWork = false
+    @State var editorHerdIdentity: WorkingQueueEditorHerdIdentity?
 
     init(sessionID: UUID, queueItemID: UUID) {
         _viewModel = StateObject(
@@ -78,8 +79,15 @@ struct WorkingSessionAnimalWorkView: View {
         snapshot?.sessionStatus != .active
     }
 
+    var isPresentingCurrentHerd: Bool {
+        editorHerdIdentity?.isCurrent(in: herdSelection) == true
+    }
+
     var allowsEditing: Bool {
-        dataAccessMode.allowsDataMutations && !isSessionLocked && !isMutatingWork
+        isPresentingCurrentHerd
+            && dataAccessMode.allowsDataMutations
+            && !isSessionLocked
+            && !isMutatingWork
     }
 
     var isFemale: Bool {
@@ -111,7 +119,10 @@ struct WorkingSessionAnimalWorkView: View {
 
     var body: some View {
         Group {
-            if let snapshot {
+            if !isPresentingCurrentHerd {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let snapshot {
                 workForm(snapshot)
             } else if viewModel.errorMessage == nil {
                 ProgressView()
@@ -134,6 +145,10 @@ struct WorkingSessionAnimalWorkView: View {
             }
         }
         .task {
+            if editorHerdIdentity == nil {
+                editorHerdIdentity = WorkingQueueEditorHerdIdentity(selection: herdSelection)
+            }
+            guard isPresentingCurrentHerd else { return }
             let mutationStream = workingDependencies.mutationStream
             let startingSequence = mutationStream.currentSequence
 
@@ -214,7 +229,7 @@ struct WorkingSessionAnimalWorkView: View {
         after startingSequence: UInt64
     ) async {
         for await event in mutationStream.events(after: startingSequence) {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, isPresentingCurrentHerd else { return }
 
             switch event.source {
             case .local(.pasture):
@@ -338,6 +353,7 @@ struct WorkingSessionAnimalWorkView: View {
                 id: checkedSireID
             )
             guard !Task.isCancelled,
+                  isPresentingCurrentHerd,
                   WorkingQueueEditorIdentity.shouldClearSelectedSire(
                     checkedSireID: checkedSireID,
                     currentSireID: selectedSire?.id,

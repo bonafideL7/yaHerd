@@ -7,6 +7,7 @@ import Observation
 @Observable
 final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
     private(set) var currentHerdID: UUID?
+    private(set) var selectionRevision: UInt64 = 0
 
     @ObservationIgnored private let defaults: UserDefaults?
     @ObservationIgnored private let preferenceKey: String
@@ -31,15 +32,15 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
         }
         if let stored = defaults?.string(forKey: preferenceKey) {
             if let storedID = UUID(uuidString: stored), ids.contains(storedID) {
-                currentHerdID = storedID
+                setCurrentHerdID(storedID)
             } else {
                 // An incomplete import or unavailable account must not cause
                 // a different Herd to become selected automatically.
-                currentHerdID = nil
+                setCurrentHerdID(nil)
             }
             return
         }
-        currentHerdID = accessibleHerds.count == 1 ? accessibleHerds[0].id : nil
+        setCurrentHerdID(accessibleHerds.count == 1 ? accessibleHerds[0].id : nil)
     }
 
     /// Reconcile only an already active Herd after a successful inventory read.
@@ -48,7 +49,7 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
     func revalidateActiveHerd(from accessibleHerds: [AccessibleHerd]) {
         guard let activeID = currentHerdID else { return }
         if accessibleHerds.filter({ $0.id == activeID }).count != 1 {
-            currentHerdID = nil
+            setCurrentHerdID(nil)
         }
     }
 
@@ -56,7 +57,7 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
     /// are ready. Show the chooser without erasing the user's saved preference.
     /// The next activation must pass Herd-directory readiness validation.
     func deferCurrentHerdUntilImportReady() {
-        currentHerdID = nil
+        setCurrentHerdID(nil)
     }
 
     /// Only an accessible, unambiguous root can become the current Herd.
@@ -67,10 +68,18 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
         select(id)
     }
 
+    /// A revision distinguishes a new selection from a previously opened editor,
+    /// even when the user switches away and back to the same Herd UUID.
+    private func setCurrentHerdID(_ herdID: UUID?) {
+        guard currentHerdID != herdID else { return }
+        currentHerdID = herdID
+        selectionRevision &+= 1
+    }
+
     /// Direct selection is for already validated identities or clearing state.
     /// This preference is not a CloudKit operation or permission grant.
     func select(_ herdID: UUID?) {
-        currentHerdID = herdID
+        setCurrentHerdID(herdID)
         if let herdID {
             defaults?.set(herdID.uuidString, forKey: preferenceKey)
         } else {
