@@ -5,6 +5,43 @@ import XCTest
 
 @MainActor
 final class CoreDataStage3StartupSelectionTests: XCTestCase {
+    func testEmptyLocalLaunchRequiresExplicitHerdCreation() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let suiteName = "yaHerd.stage3.empty-local.\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let first = try await CoreDataAppPersistenceAssembly.load(
+            at: harness.storeURL, selectionPreferences: defaults
+        )
+        XCTAssertNil(first.currentHerdSelection.currentHerdID)
+        XCTAssertTrue(try first.makeDependencies(dataAccessMode: .readWrite)
+            .herdRepository.fetchAccessibleHerds().isEmpty)
+
+        let reopened = try await CoreDataAppPersistenceAssembly.load(
+            at: harness.storeURL, selectionPreferences: defaults
+        )
+        let repository = reopened.makeDependencies(dataAccessMode: .readWrite).herdRepository
+        XCTAssertNil(reopened.currentHerdSelection.currentHerdID)
+        XCTAssertTrue(try repository.fetchAccessibleHerds().isEmpty)
+
+        let created = try await repository.createOwnedHerd(named: "My Herd")
+        XCTAssertNil(reopened.currentHerdSelection.currentHerdID)
+        XCTAssertEqual(try repository.fetchAccessibleHerds().map(\.id), [created.id])
+
+        let directory = HerdDirectoryController(
+            repository: repository, selection: reopened.currentHerdSelection
+        )
+        try directory.selectHerd(id: created.id)
+
+        let restored = try await CoreDataAppPersistenceAssembly.load(
+            at: harness.storeURL, selectionPreferences: defaults
+        )
+        XCTAssertEqual(restored.currentHerdSelection.currentHerdID, created.id)
+        XCTAssertEqual(try restored.makeDependencies(dataAccessMode: .readWrite)
+            .herdRepository.fetchAccessibleHerds().count, 1)
+    }
+
     func testLocalMultiHerdLaunchUsesChooserWithoutCreatingAnotherRoot() async throws {
         let harness = try CoreDataPersistenceHarness()
         let suiteName = "yaHerd.stage3.startup.\(UUID())"
@@ -15,7 +52,7 @@ final class CoreDataStage3StartupSelectionTests: XCTestCase {
             at: harness.storeURL, selectionPreferences: defaults
         )
         let repository = first.makeDependencies(dataAccessMode: .readWrite).herdRepository
-        let original = try repository.fetchCurrentHerd()
+        let original = try await repository.createOwnedHerd(named: "Original")
         let other = try await repository.createOwnedHerd(named: "Other")
 
         let reopened = try await CoreDataAppPersistenceAssembly.load(
