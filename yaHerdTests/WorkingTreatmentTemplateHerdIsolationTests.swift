@@ -105,7 +105,7 @@ final class WorkingTreatmentTemplateHerdIsolationTests: XCTestCase {
         ]
         model.load()
         XCTAssertEqual(
-            model.visibleTemplates(identity: newIdentity, selection: selection).map(\\.name),
+            model.visibleTemplates(identity: newIdentity, selection: selection).map(\.name),
             ["Current Herd Treatment"]
         )
     }
@@ -134,7 +134,6 @@ final class WorkingTreatmentTemplateHerdIsolationTests: XCTestCase {
         model.clear()
         XCTAssertNil(model.template)
     }
-
 }
 
 @MainActor
