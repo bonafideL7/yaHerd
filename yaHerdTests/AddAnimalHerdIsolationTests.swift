@@ -65,6 +65,53 @@ final class AddAnimalHerdIsolationTests: XCTestCase {
         XCTAssertEqual(repository.createCount, 1)
     }
 
+    func testReturningToOriginalHerdDoesNotCreateAnimalFromStaleSave() {
+        let origin = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: origin)
+        let originatingRevision = selection.selectionRevision
+        let repository = CreationProbe()
+        let model = AddAnimalViewModel()
+
+        selection.select(UUID())
+        selection.select(origin)
+
+        XCTAssertThrowsError(
+            try model.save(
+                defaultTagColorID: nil,
+                using: repository,
+                expectedHerdID: origin,
+                expectedSelectionRevision: originatingRevision,
+                selection: selection
+            )
+        ) { error in
+            XCTAssertTrue(error is CancellationError)
+        }
+        XCTAssertEqual(repository.createCount, 0)
+    }
+
+    func testFreshSaveAfterReturningToOriginalHerdUsesCurrentRevision() {
+        let origin = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: origin)
+        let repository = CreationProbe()
+        let model = AddAnimalViewModel()
+
+        selection.select(UUID())
+        selection.select(origin)
+
+        XCTAssertThrowsError(
+            try model.save(
+                defaultTagColorID: nil,
+                using: repository,
+                expectedHerdID: origin,
+                expectedSelectionRevision: selection.selectionRevision,
+                selection: selection
+            )
+        ) { error in
+            XCTAssertTrue(error is CreationProbe.ProbeError)
+        }
+        XCTAssertEqual(repository.createCount, 1)
+    }
+
     @MainActor
     private final class CreationProbe: AnimalEditorRepository {
         enum ProbeError: Error {
