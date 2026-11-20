@@ -122,10 +122,19 @@ struct yaHerdApp: App {
                         privateStoreURL: storeURL,
                         requestedHerdID: selectedHerdID
                     )
-                    // A missing choice is not a corrupt import. Validate Home
-                    // only after an accessible Herd has been selected.
+                    // An imported Herd root may precede its child records.
+                    // For a remembered selection, leave other accessible Herds
+                    // usable through the chooser while this graph catches up.
                     if candidate.currentHerdSelection.currentHerdID != nil {
-                        try await CloudKitDevelopmentLaunch.validateHomeReadiness(candidate)
+                        do {
+                            try await CloudKitDevelopmentLaunch.validateHomeReadiness(candidate)
+                        } catch {
+                            guard selectedHerdID == nil,
+                                  CloudKitDevelopmentLaunch.isImportPending(error) else {
+                                throw error
+                            }
+                            candidate.currentHerdSelection.deferCurrentHerdUntilImportReady()
+                        }
                     }
                     persistence = candidate
                 } catch {
