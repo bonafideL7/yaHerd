@@ -10,6 +10,8 @@ enum CoreDataStoreAccessMode: Equatable, Sendable {
 
 final class CoreDataPersistentContainer {
     static let modelName = "yaHerdModel"
+    /// Persistence-owned notification identifier for imported store transactions.
+    static let remoteStoreChangeNotification = Notification.Name.NSPersistentStoreRemoteChange
     static let storeFileName = "yaHerd.sqlite"
     static let sharedStoreFileName = "yaHerd-shared.sqlite"
     // Must match the app's CloudKit capability when that capability is enabled.
