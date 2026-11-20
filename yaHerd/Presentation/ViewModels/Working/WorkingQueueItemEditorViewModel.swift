@@ -8,12 +8,12 @@ final class WorkingQueueItemEditorViewModel: ObservableObject {
     private let sessionID: UUID
     private let queueItemID: UUID
     private var repository: any WorkingQueueItemEditingRepository
-    private var herdSelection: (any CurrentHerdSelectionReading)?
-    private var originatingHerdID: UUID?
+    private var herdSelection: AppCurrentHerdSelection?
+    private var originatingHerdIdentity: WorkingQueueEditorHerdIdentity?
 
     private var isOriginatingHerdActive: Bool {
-        guard let herdSelection, let originatingHerdID else { return false }
-        return herdSelection.currentHerdID == originatingHerdID
+        guard let herdSelection, let originatingHerdIdentity else { return false }
+        return originatingHerdIdentity.isCurrent(in: herdSelection)
     }
 
     init(
@@ -28,14 +28,14 @@ final class WorkingQueueItemEditorViewModel: ObservableObject {
 
     func configure(
         repository: any WorkingQueueItemEditingRepository,
-        herdSelection: any CurrentHerdSelectionReading
+        herdSelection: AppCurrentHerdSelection
     ) {
         self.repository = repository
-        // The view belongs to its initial Herd even if an old task resumes
-        // after the application's active Herd has changed.
+        // Preserve the opening selection generation even if a queued task
+        // resumes after the user switches away and back to the same Herd.
         if self.herdSelection == nil {
             self.herdSelection = herdSelection
-            originatingHerdID = herdSelection.currentHerdID
+            originatingHerdIdentity = WorkingQueueEditorHerdIdentity(selection: herdSelection)
         }
     }
 
