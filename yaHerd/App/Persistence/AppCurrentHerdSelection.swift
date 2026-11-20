@@ -80,6 +80,11 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
         guard matching.count == 1, let herd = matching.first else {
             throw HerdRepositoryError.missingHerd
         }
+        if currentHerdID == id && !matchesRememberedStoreCategory(herd.category) {
+            // Equal UUIDs are not the same active selection when ownership
+            // changes. Force a new selection revision for navigation reset.
+            setCurrentHerdID(nil)
+        }
         select(id)
         rememberStoreCategory(herd.category)
     }
