@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct DashboardView: View {
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @Environment(\.homeFeatureDependencies) private var homeDependencies
     private var dashboardQueryReader: any DashboardQueryReading { homeDependencies.dashboardQueryReader }
     private var fieldCheckOverviewReader: any FieldCheckOverviewReading { homeDependencies.fieldCheckOverviewReader }
@@ -33,11 +34,12 @@ struct DashboardView: View {
         .refreshable {
             await loadDashboardData()
         }
-        .task {
+        .task(id: herdSelection.selectionRevision) {
             await viewModel.observe(
                 configuration: configuration,
                 using: dashboardQueryReader,
-                mutationStream: homeDependencies.mutationStream
+                mutationStream: homeDependencies.mutationStream,
+                selection: herdSelection
             )
         }
         .task {
@@ -76,7 +78,8 @@ struct DashboardView: View {
     private func loadDashboardData() async {
         async let dashboardLoad: Bool = viewModel.load(
             configuration: configuration,
-            using: dashboardQueryReader
+            using: dashboardQueryReader,
+            selection: herdSelection
         )
         fieldChecksModel.load(using: fieldCheckOverviewReader)
         _ = await dashboardLoad
