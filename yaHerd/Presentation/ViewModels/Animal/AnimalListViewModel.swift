@@ -195,9 +195,19 @@ final class AnimalListViewModel {
     func move(
         ids: [UUID],
         toPastureID pastureID: UUID?,
+        originatingHerdID: UUID,
+        originatingSelectionRevision: UInt64,
         using repository: any AnimalListRepository,
         pastureRepository _: any PastureReferenceDataReader
     ) {
+        // A retained pasture picker must not mutate the Herd that is currently
+        // selected after its originating Animal list has been superseded.
+        guard let herdSelection,
+              hasConfiguredHerdSelection,
+              selectedHerdID == originatingHerdID,
+              selectedSelectionRevision == originatingSelectionRevision,
+              herdSelection.currentHerdID == originatingHerdID,
+              herdSelection.selectionRevision == originatingSelectionRevision else { return }
         do {
             try repository.move(ids: ids, toPastureID: pastureID)
             invalidateCurrentLoad()
