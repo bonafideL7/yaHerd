@@ -5,6 +5,20 @@
 
 import SwiftUI
 
+/// The delete gesture owns its original Herd selection, not whatever Herd
+/// happens to be active when SwiftUI eventually dispatches the confirmation.
+@MainActor
+struct PendingWorkingSessionDeletion {
+    let session: WorkingSessionSummary
+    let herdID: UUID
+    let selectionRevision: UInt64
+
+    func isCurrent(in selection: AppCurrentHerdSelection) -> Bool {
+        selection.currentHerdID == herdID
+            && selection.selectionRevision == selectionRevision
+    }
+}
+
 struct WorkingSessionsView: View {
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
     private var repository: any WorkingSessionsRepository { workingDependencies.sessionsRepository }
@@ -12,7 +26,7 @@ struct WorkingSessionsView: View {
     @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @StateObject private var viewModel: WorkingSessionsViewModel
 
-    @State private var sessionPendingDeleteID: UUID?
+    @State private var pendingDeletion: PendingWorkingSessionDeletion?
     @State private var showingDeleteAlert = false
     @State private var errorMessage: String?
     @State private var showingError = false
@@ -101,13 +115,17 @@ struct WorkingSessionsView: View {
         .alert(
             "Delete working session?",
             isPresented: $showingDeleteAlert,
-            presenting: pendingSession
-        ) { session in
-            Button("Delete", role: .destructive) { deleteSession(session) }
-                .disabled(!dataAccessMode.allowsDataMutations || isDeletingSession)
+            presenting: pendingDeletion
+        ) { pending in
+            Button("Delete", role: .destructive) { deleteSession(pending) }
+                .disabled(
+                    !dataAccessMode.allowsDataMutations
+                    || isDeletingSession
+                    || !pending.isCurrent(in: herdSelection)
+                )
             Button("Cancel", role: .cancel) {}
-        } message: { session in
-            if session.status == .active {
+        } message: { pending in
+            if pending.session.status == .active {
                 Text("Deleting an active session removes its records and releases animals still owned by it from the working pen. They return to their collected/source pasture when it still exists; otherwise they remain without a pasture assignment.")
             } else {
                 Text("This will delete the session and its recorded work data.")
@@ -121,6 +139,11 @@ struct WorkingSessionsView: View {
         .onChange(of: viewModel.errorMessage) { _, newValue in
             if newValue != nil { showingError = true }
         }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            // A pending confirmation cannot cross Herd selection incarnations.
+            pendingDeletion = nil
+            showingDeleteAlert = false
+        }
     }
 
     private func workingSessionNavigationRow(_ session: WorkingSessionSummary) -> some View {
@@ -132,25 +155,28 @@ struct WorkingSessionsView: View {
         .disabled(isDeletingSession)
     }
 
-    private var pendingSession: WorkingSessionSummary? {
-        guard let sessionPendingDeleteID else { return nil }
-        return viewModel.sessions.first(where: { $0.id == sessionPendingDeleteID })
-    }
-
     private func requestDelete(from list: [WorkingSessionSummary], offsets: IndexSet) {
         guard !isDeletingSession,
+              let herdID = herdSelection.currentHerdID,
               let index = offsets.first,
               index < list.count else {
             return
         }
-        sessionPendingDeleteID = list[index].id
+        pendingDeletion = PendingWorkingSessionDeletion(
+            session: list[index],
+            herdID: herdID,
+            selectionRevision: herdSelection.selectionRevision
+        )
         showingDeleteAlert = true
     }
 
-    private func deleteSession(_ session: WorkingSessionSummary) {
+    private func deleteSession(_ pending: PendingWorkingSessionDeletion) {
         guard !isDeletingSession,
-              let originatingHerdID = herdSelection.currentHerdID else { return }
-        let originatingSelectionRevision = herdSelection.selectionRevision
+              dataAccessMode.allowsDataMutations,
+              pending.isCurrent(in: herdSelection) else {
+            pendingDeletion = nil
+            return
+        }
         isDeletingSession = true
 
         Task { @MainActor in
@@ -158,17 +184,16 @@ struct WorkingSessionsView: View {
 
             do {
                 guard try await viewModel.deleteSession(
-                    id: session.id,
-                    originatingHerdID: originatingHerdID,
-                    originatingSelectionRevision: originatingSelectionRevision,
+                    id: pending.session.id,
+                    originatingHerdID: pending.herdID,
+                    originatingSelectionRevision: pending.selectionRevision,
                     currentHerdSelection: herdSelection
                 ) else { return }
-                sessionPendingDeleteID = nil
+                pendingDeletion = nil
                 errorMessage = nil
             } catch {
                 guard !Task.isCancelled,
-                      herdSelection.currentHerdID == originatingHerdID,
-                      herdSelection.selectionRevision == originatingSelectionRevision else { return }
+                      pending.isCurrent(in: herdSelection) else { return }
                 errorMessage = UserVisibleErrorMessage.make(error)
                 showingError = true
             }
