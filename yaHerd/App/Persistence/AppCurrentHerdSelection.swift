@@ -70,12 +70,18 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
     func revalidateActiveHerd(from accessibleHerds: [AccessibleHerd]) {
         guard let activeID = currentHerdID else { return }
         let matching = accessibleHerds.filter { $0.id == activeID }
+        let rememberedID = UUID(uuidString: defaults?.string(forKey: preferenceKey) ?? "")
         guard matching.count == 1,
-              matchesRememberedStoreCategory(matching[0].category) else {
+              (rememberedID != activeID
+               || matchesRememberedStoreCategory(matching[0].category)) else {
             setCurrentHerdID(nil)
             return
         }
-        rememberStoreCategory(matching[0].category)
+        // A developer-explicit selection may differ from the saved Herd.
+        // Only compare or update a store category for the UUID it belongs to.
+        if rememberedID == activeID {
+            rememberStoreCategory(matching[0].category)
+        }
     }
 
     /// A remembered Herd may have an imported root before its related records
