@@ -50,7 +50,8 @@ final class WorkingCollectAnimalsHerdIsolationTests: XCTestCase {
         selection.select(UUID())
         repository.completeCollection()
 
-        XCTAssertFalse(try await task.value)
+        let completed = try await task.value
+        XCTAssertFalse(completed)
         XCTAssertEqual(repository.collectedAnimalIDs, [[animalID]])
         XCTAssertEqual(repository.fetchCount, 1)
     }
@@ -78,7 +79,8 @@ final class WorkingCollectAnimalsHerdIsolationTests: XCTestCase {
         task.cancel()
         repository.completeCollection()
 
-        XCTAssertFalse(try await task.value)
+        let completed = try await task.value
+        XCTAssertFalse(completed)
         XCTAssertEqual(repository.collectedAnimalIDs.count, 1)
     }
 
