@@ -17,6 +17,7 @@ struct TreatmentTemplatesView: View {
     )
 
     @State private var showingAdd = false
+    @State private var pendingAddHerdIdentity: WorkingQueueEditorHerdIdentity?
     @State private var herdIdentity: WorkingQueueEditorHerdIdentity?
     @State private var errorMessage: String?
     @State private var showingError = false
@@ -33,10 +34,14 @@ struct TreatmentTemplatesView: View {
                     systemImage: "syringe",
                     description: Text("Save commonly used treatment sets for future working sessions.")
                 )
-            } else {
+            } else if let originatingHerdIdentity = herdIdentity,
+                      originatingHerdIdentity.isCurrent(in: herdSelection) {
                 ForEach(visibleTemplates) { template in
                     NavigationLink {
-                        TreatmentTemplateDetailView(templateID: template.id)
+                        TreatmentTemplateDetailView(
+                            templateID: template.id,
+                            originatingHerdIdentity: originatingHerdIdentity
+                        )
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(template.name)
@@ -58,6 +63,8 @@ struct TreatmentTemplatesView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
+                    guard let identity = herdIdentity, identity.isCurrent(in: herdSelection) else { return }
+                    pendingAddHerdIdentity = identity
                     showingAdd = true
                 } label: {
                     Image(systemName: "plus")
@@ -77,11 +84,14 @@ struct TreatmentTemplatesView: View {
         }
         .onChange(of: herdSelection.selectionRevision) { _, _ in
             showingAdd = false
+            pendingAddHerdIdentity = nil
             errorMessage = nil
             showingError = false
         }
         .onChange(of: showingAdd) { _, isPresented in
-            if !isPresented, herdIdentity?.isCurrent(in: herdSelection) == true {
+            guard !isPresented else { return }
+            pendingAddHerdIdentity = nil
+            if herdIdentity?.isCurrent(in: herdSelection) == true {
                 viewModel.load()
             }
         }
@@ -94,7 +104,7 @@ struct TreatmentTemplatesView: View {
             if newValue != nil { showingError = true }
         }
         .sheet(isPresented: $showingAdd) {
-            TreatmentTemplateAddView()
+            TreatmentTemplateAddView(originatingHerdIdentity: pendingAddHerdIdentity)
         }
     }
 
@@ -128,6 +138,10 @@ private struct TreatmentTemplateAddView: View {
     ]
     @State private var errorMessage: String?
     @State private var showingError = false
+
+    init(originatingHerdIdentity: WorkingQueueEditorHerdIdentity?) {
+        _herdIdentity = State(initialValue: originatingHerdIdentity)
+    }
 
     var body: some View {
         NavigationStack {
@@ -167,11 +181,6 @@ private struct TreatmentTemplateAddView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(errorMessage ?? "")
-            }
-        }
-        .task {
-            if herdIdentity == nil {
-                herdIdentity = WorkingQueueEditorHerdIdentity(selection: herdSelection)
             }
         }
         .onChange(of: herdSelection.selectionRevision) { _, _ in
@@ -223,7 +232,8 @@ private struct TreatmentTemplateDetailView: View {
     @State private var showingError = false
     @State private var showingDiscardConfirmation = false
 
-    init(templateID: UUID) {
+    init(templateID: UUID, originatingHerdIdentity: WorkingQueueEditorHerdIdentity) {
+        _herdIdentity = State(initialValue: originatingHerdIdentity)
         _viewModel = StateObject(
             wrappedValue: WorkingTreatmentTemplateDetailViewModel(
                 templateID: templateID,
@@ -306,9 +316,6 @@ private struct TreatmentTemplateDetailView: View {
             Text("Changes to this treatment set have not been saved.")
         }
         .task {
-            if herdIdentity == nil {
-                herdIdentity = WorkingQueueEditorHerdIdentity(selection: herdSelection)
-            }
             guard herdIdentity?.isCurrent(in: herdSelection) == true else { return }
             viewModel.configure(repository: repository)
             viewModel.load()
