@@ -457,6 +457,7 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         XCTAssertTrue(repository.movedIDs.isEmpty)
 
         model.configure(selection: selection)
+        model.load(using: repository, pastureRepository: EmptyPastureReferenceDataReader())
         model.move(
             ids: [animal.id],
             toPastureID: destination,
