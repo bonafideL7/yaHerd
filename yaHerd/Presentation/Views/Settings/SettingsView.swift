@@ -352,8 +352,7 @@ struct HerdDirectoryView: View {
             Section("Available Herds") {
                 ForEach(directory.herds) { herd in
                     Button {
-                        validationTask?.cancel()
-                        validationTask = Task { @MainActor in await openHerd(id: herd.id) }
+                        beginOpeningHerd(id: herd.id)
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
@@ -440,9 +439,7 @@ struct HerdDirectoryView: View {
             while !Task.isCancelled {
                 // Do not overwrite the active validation task with a no-op
                 // retry, or Cancel could miss the in-flight Herd opening.
-                if let pendingHerdID, !isOpeningHerd {
-                    let attempt = Task { @MainActor in await openHerd(id: pendingHerdID) }
-                    validationTask = attempt
+                if let pendingHerdID, let attempt = beginOpeningHerd(id: pendingHerdID) {
                     await attempt.value
                 }
                 do {
@@ -507,11 +504,25 @@ struct HerdDirectoryView: View {
         }
     }
 
+    /// Claim the opening attempt before scheduling its task, so a rapid
+    /// second tap cannot cancel the first and lose the newer selection.
+    @discardableResult
+    @MainActor
+    private func beginOpeningHerd(id: UUID) -> Task<Void, Never>? {
+        guard !isOpeningHerd else { return nil }
+        isOpeningHerd = true
+        validationTask?.cancel()
+        let attempt = Task { @MainActor in await openHerd(id: id) }
+        validationTask = attempt
+        return attempt
+    }
+
     @MainActor
     private func openHerd(id: UUID) async {
-        guard !isOpeningHerd else { return }
-        isOpeningHerd = true
-        defer { isOpeningHerd = false }
+        defer {
+            isOpeningHerd = false
+            validationTask = nil
+        }
         do {
             try await directory.selectHerdWhenReady(id: id)
             pendingHerdID = nil
