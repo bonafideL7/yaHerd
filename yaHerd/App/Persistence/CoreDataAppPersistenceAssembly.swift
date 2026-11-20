@@ -93,15 +93,17 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         } else {
             let remembered = AppCurrentHerdSelection(defaults: selectionPreferences)
             let repository = CoreDataHerdRepository(selection: remembered, assembly: assembly)
-            let available = try repository.fetchAccessibleHerds()
-            remembered.restoreAccessibleHerd(from: available)
+            // This legacy CloudKit resolver defaults only to an owned/private Herd.
+            // Shared Herds remain selectable through the explicit Stage 3 chooser.
+            let owned = try repository.fetchAccessibleHerds().filter { $0.category == .owned }
+            remembered.restoreAccessibleHerd(from: owned)
             if let selected = remembered.currentHerdID {
                 herdID = selected
-            } else if available.isEmpty {
+            } else if owned.isEmpty {
                 throw HerdRepositoryError.missingHerd
             } else {
                 throw CoreDataAppHerdBootstrapError.multipleLocalHerds(
-                    count: available.count
+                    count: owned.count
                 )
             }
         }
