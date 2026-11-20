@@ -55,7 +55,12 @@ struct WorkingSessionsView: View {
     }
 
     var body: some View {
-        List {
+        let displayedActiveSessions = activeSessions
+        let displayedFinishedSessions = finishedSessions
+        let originatingHerdID = herdSelection.currentHerdID
+        let originatingSelectionRevision = herdSelection.selectionRevision
+
+        return List {
             Section {
                 NavigationLink {
                     TreatmentTemplatesView()
@@ -65,7 +70,7 @@ struct WorkingSessionsView: View {
                 .disabled(isDeletingSession)
             }
 
-            if activeSessions.isEmpty && finishedSessions.isEmpty {
+            if displayedActiveSessions.isEmpty && displayedFinishedSessions.isEmpty {
                 ContentUnavailableView(
                     "No working sessions",
                     systemImage: "wrench",
@@ -73,25 +78,35 @@ struct WorkingSessionsView: View {
                 )
             }
 
-            if !activeSessions.isEmpty {
+            if !displayedActiveSessions.isEmpty {
                 Section("Active") {
-                    ForEach(activeSessions) { session in
+                    ForEach(displayedActiveSessions) { session in
                         workingSessionNavigationRow(session)
                     }
                     .onDelete { offsets in
-                        requestDelete(from: activeSessions, offsets: offsets)
+                        requestDelete(
+                            from: displayedActiveSessions,
+                            offsets: offsets,
+                            originatingHerdID: originatingHerdID,
+                            originatingSelectionRevision: originatingSelectionRevision
+                        )
                     }
                     .deleteDisabled(dataAccessMode.isRecoveryMode || isDeletingSession)
                 }
             }
 
-            if !finishedSessions.isEmpty {
+            if !displayedFinishedSessions.isEmpty {
                 Section("History") {
-                    ForEach(finishedSessions) { session in
+                    ForEach(displayedFinishedSessions) { session in
                         workingSessionNavigationRow(session)
                     }
                     .onDelete { offsets in
-                        requestDelete(from: finishedSessions, offsets: offsets)
+                        requestDelete(
+                            from: displayedFinishedSessions,
+                            offsets: offsets,
+                            originatingHerdID: originatingHerdID,
+                            originatingSelectionRevision: originatingSelectionRevision
+                        )
                     }
                     .deleteDisabled(dataAccessMode.isRecoveryMode || isDeletingSession)
                 }
@@ -155,18 +170,25 @@ struct WorkingSessionsView: View {
         .disabled(isDeletingSession)
     }
 
-    private func requestDelete(from list: [WorkingSessionSummary], offsets: IndexSet) {
+    private func requestDelete(
+        from list: [WorkingSessionSummary],
+        offsets: IndexSet,
+        originatingHerdID: UUID?,
+        originatingSelectionRevision: UInt64
+    ) {
         guard !isDeletingSession,
-              let herdID = herdSelection.currentHerdID,
+              let originatingHerdID,
               let index = offsets.first,
               index < list.count else {
             return
         }
-        pendingDeletion = PendingWorkingSessionDeletion(
+        let request = PendingWorkingSessionDeletion(
             session: list[index],
-            herdID: herdID,
-            selectionRevision: herdSelection.selectionRevision
+            herdID: originatingHerdID,
+            selectionRevision: originatingSelectionRevision
         )
+        guard request.isCurrent(in: herdSelection) else { return }
+        pendingDeletion = request
         showingDeleteAlert = true
     }
 
