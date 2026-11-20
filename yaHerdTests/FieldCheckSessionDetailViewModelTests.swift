@@ -387,7 +387,8 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         repository.releaseSetCountedWrite()
         await predecessor.value
 
-        XCTAssertFalse(await save.value)
+        let succeeded = await save.value
+        XCTAssertFalse(succeeded)
         XCTAssertEqual(repository.notesWriteCount, 0)
         XCTAssertEqual(repository.detail.notes, "")
         XCTAssertNil(model.errorMessage)
@@ -421,7 +422,8 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         selection.select(herdID)
         repository.releaseNotesWrite()
 
-        XCTAssertFalse(await save.value)
+        let succeeded = await save.value
+        XCTAssertFalse(succeeded)
         XCTAssertEqual(repository.detail.notes, "Original Herd notes")
         XCTAssertEqual(model.detail?.notes, "")
         XCTAssertNil(model.errorMessage)
