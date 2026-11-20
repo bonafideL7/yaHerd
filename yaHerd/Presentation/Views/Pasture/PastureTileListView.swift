@@ -182,7 +182,12 @@ struct PastureTileListView: View {
             PastureManageGrid(
                 items: model.items,
                 draggedPasture: draggedPasture,
-                onDelete: model.requestDelete,
+                onDelete: { pasture in
+                    model.requestDelete(
+                        pasture,
+                        originatingSelectionRevision: originatingSelectionRevision
+                    )
+                },
                 onBeginDrag: { pasture in
                     model.beginDragging(
                         pasture,
