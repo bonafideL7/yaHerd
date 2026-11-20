@@ -7,11 +7,12 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         case injectedFailure
     }
 
+    @MainActor
     func testAlreadyCancelledHerdWriteDoesNotCommit() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let herdID = UUID()
 
-        let staleWrite = Task {
+        let staleWrite = Task { @MainActor in
             withUnsafeCurrentTask { $0?.cancel() }
             try await assembly.transactionExecutor.performWrite { context in
                 _ = Self.makeHerd(
@@ -33,6 +34,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testCancelledHerdWriteRollsBackStagedChangesBeforeSave() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let herdID = UUID()
@@ -41,7 +43,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             _ = Self.makeHerd(id: herdID, name: "Selected Herd", in: context)
         }
 
-        let staleWrite = Task {
+        let staleWrite = Task { @MainActor in
             try await assembly.transactionExecutor.performWrite(
                 herdID: herdID,
                 beforeSave: { _ in
