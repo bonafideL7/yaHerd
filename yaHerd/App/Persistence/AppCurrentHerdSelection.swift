@@ -44,8 +44,8 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
             } ?? []
             if storedHerds.count == 1,
                matchesRememberedStoreCategory(storedHerds[0].category) {
-                setCurrentHerdID(storedID)
-                rememberStoreCategory(storedHerd.category)
+                setCurrentHerdID(storedHerds[0].id)
+                rememberStoreCategory(storedHerds[0].category)
             } else {
                 // An incomplete import, unavailable account, or root that
                 // moved to another store must require explicit selection.
