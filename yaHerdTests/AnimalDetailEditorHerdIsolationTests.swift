@@ -10,7 +10,7 @@ final class AnimalDetailEditorHerdIsolationTests: XCTestCase {
             let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
             let animalID = UUID()
             let repository = AnimalDetailWriteProbe(animalID: animalID)
-            let model = loadedEditor(animalID: animalID, repository: repository)
+            let model = loadedEditor(animalID: animalID, repository: repository, selection: selection)
             model.beginEditing(selection: selection)
 
             change.apply(to: selection, originalHerdID: originalHerdID)
@@ -32,7 +32,7 @@ final class AnimalDetailEditorHerdIsolationTests: XCTestCase {
         let selection = AppCurrentHerdSelection(currentHerdID: herdID)
         let animalID = UUID()
         let repository = AnimalDetailWriteProbe(animalID: animalID)
-        let model = loadedEditor(animalID: animalID, repository: repository)
+        let model = loadedEditor(animalID: animalID, repository: repository, selection: selection)
         model.beginEditingStatus(.sold, selection: selection)
 
         selection.select(UUID())
@@ -52,7 +52,7 @@ final class AnimalDetailEditorHerdIsolationTests: XCTestCase {
         let selection = AppCurrentHerdSelection()
         let animalID = UUID()
         let repository = AnimalDetailWriteProbe(animalID: animalID)
-        let model = loadedEditor(animalID: animalID, repository: repository)
+        let model = loadedEditor(animalID: animalID, repository: repository, selection: selection)
 
         model.beginEditing(selection: selection)
         model.save(
@@ -71,7 +71,7 @@ final class AnimalDetailEditorHerdIsolationTests: XCTestCase {
         let selection = AppCurrentHerdSelection(currentHerdID: herdID)
         let animalID = UUID()
         let repository = AnimalDetailWriteProbe(animalID: animalID)
-        let model = loadedEditor(animalID: animalID, repository: repository)
+        let model = loadedEditor(animalID: animalID, repository: repository, selection: selection)
         model.beginEditing(selection: selection)
 
         model.save(
@@ -87,11 +87,64 @@ final class AnimalDetailEditorHerdIsolationTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testObsoleteAnimalDetailCannotEditArchiveRestoreOrDelete() {
+        for change in SelectionChange.allCases {
+            let herdID = UUID()
+            let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+            let animalID = UUID()
+            let repository = AnimalDetailWriteProbe(animalID: animalID, isArchived: true)
+            let model = loadedEditor(animalID: animalID, repository: repository, selection: selection)
+            let baselineReads = repository.fetchCount
+
+            change.apply(to: selection, originalHerdID: herdID)
+
+            model.beginEditing(selection: selection)
+            model.beginEditingStatus(.sold, selection: selection)
+            model.archive(animalID: animalID, using: repository, pastureRepository: repository, selection: selection)
+            model.restore(animalID: animalID, using: repository, pastureRepository: repository, selection: selection)
+            XCTAssertNil(model.preparePermanentDeleteReview(
+                animalID: animalID, using: repository, selection: selection
+            ))
+            model.delete(animalID: animalID, using: repository, selection: selection)
+
+            XCTAssertFalse(model.isEditing)
+            XCTAssertFalse(model.didDelete)
+            XCTAssertEqual(repository.updateCount, 0)
+            XCTAssertEqual(repository.archiveCount, 0)
+            XCTAssertEqual(repository.restoreCount, 0)
+            XCTAssertEqual(repository.deleteCount, 0)
+            XCTAssertEqual(repository.fetchCount, baselineReads)
+            XCTAssertNotNil(model.errorMessage)
+        }
+    }
+
+    func testCurrentAnimalDetailStillAllowsDestructiveActions() {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let animalID = UUID()
+        let repository = AnimalDetailWriteProbe(animalID: animalID, isArchived: true)
+        let model = loadedEditor(animalID: animalID, repository: repository, selection: selection)
+
+        model.archive(animalID: animalID, using: repository, pastureRepository: repository, selection: selection)
+        model.restore(animalID: animalID, using: repository, pastureRepository: repository, selection: selection)
+        XCTAssertNotNil(model.preparePermanentDeleteReview(
+            animalID: animalID, using: repository, selection: selection
+        ))
+        model.delete(animalID: animalID, using: repository, selection: selection)
+
+        XCTAssertEqual(repository.archiveCount, 1)
+        XCTAssertEqual(repository.restoreCount, 1)
+        XCTAssertEqual(repository.deleteCount, 1)
+        XCTAssertTrue(model.didDelete)
+    }
+
     private func loadedEditor(
         animalID: UUID,
-        repository: AnimalDetailWriteProbe
+        repository: AnimalDetailWriteProbe,
+        selection: AppCurrentHerdSelection
     ) -> AnimalDetailViewModel {
         let model = AnimalDetailViewModel()
+        model.captureViewingSelection(selection)
         model.load(animalID: animalID, using: repository, pastureRepository: repository)
         XCTAssertNotNil(model.detail)
         return model
@@ -122,8 +175,12 @@ private final class AnimalDetailWriteProbe: AnimalDetailRepository, PastureRefer
     private let detail: AnimalDetailSnapshot
     private(set) var updateCount = 0
     private(set) var lastUpdatedID: UUID?
+    private(set) var archiveCount = 0
+    private(set) var restoreCount = 0
+    private(set) var deleteCount = 0
+    private(set) var fetchCount = 0
 
-    init(animalID: UUID) {
+    init(animalID: UUID, isArchived: Bool = false) {
         detail = AnimalDetailSnapshot(
             id: animalID,
             name: "Test Cow",
@@ -147,8 +204,8 @@ private final class AnimalDetailWriteProbe: AnimalDetailRepository, PastureRefer
             causeOfDeath: nil,
             statusReferenceID: nil,
             statusReferenceName: nil,
-            isArchived: false,
-            archivedAt: nil,
+            isArchived: isArchived,
+            archivedAt: isArchived ? .now : nil,
             archiveReason: nil,
             activeTags: [],
             inactiveTags: [],
@@ -159,7 +216,8 @@ private final class AnimalDetailWriteProbe: AnimalDetailRepository, PastureRefer
     }
 
     func fetchAnimalDetail(id: UUID) throws -> AnimalDetailSnapshot? {
-        id == detail.id ? detail : nil
+        fetchCount += 1
+        return id == detail.id ? detail : nil
     }
 
     func fetchStatusReferenceOptions() throws -> [AnimalStatusReferenceOption] { [] }
@@ -172,9 +230,9 @@ private final class AnimalDetailWriteProbe: AnimalDetailRepository, PastureRefer
         return detail
     }
 
-    func delete(ids: [UUID]) throws { XCTFail("Unexpected delete") }
-    func archive(ids: [UUID]) throws { XCTFail("Unexpected archive") }
-    func restore(ids: [UUID]) throws { XCTFail("Unexpected restore") }
+    func delete(ids: [UUID]) throws { deleteCount += 1 }
+    func archive(ids: [UUID]) throws { archiveCount += 1 }
+    func restore(ids: [UUID]) throws { restoreCount += 1 }
 
     func addTag(animalID: UUID, input: AnimalTagInput) throws -> AnimalDetailSnapshot {
         XCTFail("Unexpected tag creation")
