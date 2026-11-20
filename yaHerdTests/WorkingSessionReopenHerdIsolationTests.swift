@@ -66,6 +66,45 @@ final class WorkingSessionReopenHerdIsolationTests: XCTestCase {
         XCTAssertTrue(model.hasLoaded)
     }
 
+    func testWorkingSessionObservationStopsBeforeAQueuedRevisionAfterSwitchingHerds() async {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let openingRevision = selection.selectionRevision
+        let repository = SuspendedWorkingSessionReopenRepository()
+        let model = WorkingSessionDetailViewModel(sessionID: UUID(), repository: repository)
+
+        await model.observe(
+            mutationStream: PreseededWorkingSessionRevisionStream(),
+            mayContinue: {
+                selection.currentHerdID == herdID
+                    && selection.selectionRevision == openingRevision
+            },
+            didLoad: {
+                selection.select(UUID())
+            }
+        )
+
+        XCTAssertEqual(repository.fetchCount, 1)
+    }
+
+    func testWorkingSessionObservationProcessesQueuedRevisionForUnchangedHerd() async {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let openingRevision = selection.selectionRevision
+        let repository = SuspendedWorkingSessionReopenRepository()
+        let model = WorkingSessionDetailViewModel(sessionID: UUID(), repository: repository)
+
+        await model.observe(
+            mutationStream: PreseededWorkingSessionRevisionStream(),
+            mayContinue: {
+                selection.currentHerdID == herdID
+                    && selection.selectionRevision == openingRevision
+            }
+        )
+
+        XCTAssertEqual(repository.fetchCount, 2)
+    }
+
     func testReopenDoesNotStartAfterSwitchingHerds() async {
         let originatingHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: UUID())
@@ -277,6 +316,35 @@ final class WorkingSessionReopenHerdIsolationTests: XCTestCase {
         XCTAssertFalse(completed)
         XCTAssertNil(model.errorMessage)
         XCTAssertEqual(repository.fetchCount, 0)
+    }
+}
+
+@MainActor
+private struct PreseededWorkingSessionRevisionStream: ApplicationMutationStreaming {
+    var currentSequence: UInt64 { 1 }
+    var homeRevision: UInt64 { 0 }
+    var animalRevision: UInt64 { 0 }
+    var pastureRevision: UInt64 { 0 }
+    var fieldCheckRevision: UInt64 { 0 }
+    var workingSessionRevision: UInt64 { 0 }
+
+    func revision(for area: ApplicationFeatureArea) -> UInt64 {
+        0
+    }
+
+    func revisions(for area: ApplicationFeatureArea, after revision: UInt64) -> AsyncStream<UInt64> {
+        AsyncStream { continuation in
+            if area == .workingSessions && revision < 1 {
+                continuation.yield(1)
+            }
+            continuation.finish()
+        }
+    }
+
+    func events(after sequence: UInt64) -> AsyncStream<ApplicationMutationEvent> {
+        AsyncStream { continuation in
+            continuation.finish()
+        }
     }
 }
 
