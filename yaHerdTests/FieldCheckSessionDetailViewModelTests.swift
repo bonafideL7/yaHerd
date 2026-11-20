@@ -3,6 +3,66 @@ import XCTest
 
 @MainActor
 final class FieldCheckSessionDetailViewModelTests: XCTestCase {
+    func testObsoleteAcceptedCompletionReleasesBusyStateWithoutWriting() async {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
+        let sessionID = UUID()
+        let repository = FieldCheckSessionDetailRepositorySpy(
+            detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
+        )
+        let model = FieldCheckSessionDetailViewModel()
+        XCTAssertTrue(model.load(sessionID: sessionID, using: repository))
+        XCTAssertTrue(model.beginSessionCompletion())
+
+        selection.select(UUID())
+        await model.completeSession(
+            sessionID: sessionID,
+            using: repository,
+            completionAlreadyAccepted: true,
+            mayContinue: {
+                selection.currentHerdID == herdID
+                    && selection.selectionRevision == revision
+            }
+        )
+
+        XCTAssertFalse(model.isCompletingSession)
+        XCTAssertEqual(repository.completeSessionCalls, 0)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testSelectionChangeDuringCompletionNotesWriteSkipsFinalization() async {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
+        let sessionID = UUID()
+        let repository = FieldCheckSessionDetailRepositorySpy(
+            detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
+        )
+        repository.shouldBlockNotesWrite = true
+        let model = FieldCheckSessionDetailViewModel()
+        XCTAssertTrue(model.load(sessionID: sessionID, using: repository))
+        model.updateNotesDraft("Original Herd notes")
+
+        let pending = Task {
+            await model.completeSession(
+                sessionID: sessionID,
+                using: repository,
+                mayContinue: {
+                    selection.currentHerdID == herdID
+                        && selection.selectionRevision == revision
+                }
+            )
+        }
+        await waitUntil { repository.notesWriteCount == 1 }
+        selection.select(UUID())
+        repository.releaseNotesWrite()
+        await pending.value
+
+        XCTAssertEqual(repository.completeSessionCalls, 0)
+        XCTAssertFalse(model.isCompletingSession)
+        XCTAssertNil(model.errorMessage)
+    }
 
     func testQueuedFindingStatusDoesNotRunAfterHerdSelectionRoundTrip() async throws {
         let herdID = UUID()
