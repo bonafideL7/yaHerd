@@ -43,17 +43,20 @@ final class WorkingSessionsViewModel: ObservableObject {
     func deleteSession(
         id: UUID,
         originatingHerdID: UUID,
-        currentHerdSelection: any CurrentHerdSelectionReading
+        originatingSelectionRevision: UInt64,
+        currentHerdSelection: AppCurrentHerdSelection
     ) async throws -> Bool {
         guard !Task.isCancelled,
-              currentHerdSelection.currentHerdID == originatingHerdID else {
+              currentHerdSelection.currentHerdID == originatingHerdID,
+              currentHerdSelection.selectionRevision == originatingSelectionRevision else {
             return false
         }
 
         try await repository.deleteSession(id: id)
 
         guard !Task.isCancelled,
-              currentHerdSelection.currentHerdID == originatingHerdID else {
+              currentHerdSelection.currentHerdID == originatingHerdID,
+              currentHerdSelection.selectionRevision == originatingSelectionRevision else {
             return false
         }
 
