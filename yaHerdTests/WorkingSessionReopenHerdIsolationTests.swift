@@ -4,6 +4,68 @@ import XCTest
 
 @MainActor
 final class WorkingSessionReopenHerdIsolationTests: XCTestCase {
+    func testWorkingSessionObservationRejectsAStaleHerdSelection() async {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let originalRevision = selection.selectionRevision
+        let repository = SuspendedWorkingSessionReopenRepository()
+        let model = WorkingSessionDetailViewModel(sessionID: UUID(), repository: repository)
+
+        selection.select(UUID())
+
+        await model.observe(
+            mutationStream: InactiveApplicationMutationStream(),
+            mayContinue: {
+                selection.currentHerdID == originalHerdID
+                    && selection.selectionRevision == originalRevision
+            }
+        )
+
+        XCTAssertEqual(repository.fetchCount, 0)
+        XCTAssertFalse(model.hasLoaded)
+    }
+
+    func testWorkingSessionObservationRejectsASelectionRoundTrip() async {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let originalRevision = selection.selectionRevision
+        let repository = SuspendedWorkingSessionReopenRepository()
+        let model = WorkingSessionDetailViewModel(sessionID: UUID(), repository: repository)
+
+        selection.select(UUID())
+        selection.select(originalHerdID)
+
+        await model.observe(
+            mutationStream: InactiveApplicationMutationStream(),
+            mayContinue: {
+                selection.currentHerdID == originalHerdID
+                    && selection.selectionRevision == originalRevision
+            }
+        )
+
+        XCTAssertEqual(repository.fetchCount, 0)
+        XCTAssertFalse(model.hasLoaded)
+    }
+
+    func testWorkingSessionObservationLoadsForItsOriginalSelection() async {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let originalRevision = selection.selectionRevision
+        let repository = SuspendedWorkingSessionReopenRepository()
+        let model = WorkingSessionDetailViewModel(sessionID: UUID(), repository: repository)
+
+        await model.observe(
+            mutationStream: InactiveApplicationMutationStream(),
+            mayContinue: {
+                selection.currentHerdID == originalHerdID
+                    && selection.selectionRevision == originalRevision
+            }
+        )
+
+        XCTAssertEqual(repository.fetchCount, 1)
+        XCTAssertTrue(model.hasLoaded)
+    }
+
     func testReopenDoesNotStartAfterSwitchingHerds() async {
         let originatingHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: UUID())
