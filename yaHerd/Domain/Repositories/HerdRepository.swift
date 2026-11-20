@@ -13,6 +13,8 @@ protocol CurrentHerdSelectionReading: AnyObject {
 @MainActor
 protocol HerdRepository: AnyObject {
     func fetchCurrentHerd() throws -> HerdSummary
+    func fetchAccessibleHerds() throws -> [AccessibleHerd]
+    func createOwnedHerd(named name: String) async throws -> HerdSummary
     func renameCurrentHerd(to name: String) async throws -> HerdSummary
 }
 
