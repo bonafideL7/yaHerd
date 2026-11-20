@@ -1,6 +1,17 @@
 import Foundation
 import Observation
 
+enum HerdDirectoryError: LocalizedError, Equatable {
+    case creationInProgress
+
+    var errorDescription: String? {
+        switch self {
+        case .creationInProgress:
+            return "A Herd is already being created. Finish that request before creating another."
+        }
+    }
+}
+
 enum HerdInventoryState: Equatable {
     case loading
     case available
@@ -17,6 +28,7 @@ final class HerdDirectoryController {
     @ObservationIgnored private let selection: AppCurrentHerdSelection
     @ObservationIgnored private let validateReadiness: (@MainActor (UUID) async throws -> Void)?
     @ObservationIgnored private var selectionGeneration: UInt64 = 0
+    @ObservationIgnored private var isCreatingHerd = false
 
     private(set) var herds: [AccessibleHerd] = []
     private(set) var inventoryState: HerdInventoryState = .loading
@@ -115,6 +127,10 @@ final class HerdDirectoryController {
 
     @discardableResult
     func createOwnedHerd(named name: String) async throws -> HerdSummary {
+        guard !isCreatingHerd else { throw HerdDirectoryError.creationInProgress }
+        isCreatingHerd = true
+        defer { isCreatingHerd = false }
+
         try Task.checkCancellation()
         // A failed first inventory read is not proof that the cloud or local
         // database contains no Herds. Never create a new root in that state.
