@@ -402,6 +402,49 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertNil(navigation.presentedSheet)
     }
 
+    func testNewSelectionRevisionClearsRoutesAndDraftPresentationsAfterHerdRoundTrip() {
+        let herdID = UUID()
+        let navigation = AppNavigationState()
+        navigation.selectedHerdID = herdID
+        navigation.selectedTab = .search
+        navigation.herdRouter.path = [.pasture(UUID())]
+        navigation.herdRouter.searchPath = [.animal(UUID())]
+        navigation.herdRouter.searchText = "previous selection"
+        navigation.herdRouter.filter = AnimalFilter(recordIssue: .missingTag)
+        navigation.herdRouter.pastureFilter = .overCapacity
+        navigation.openWorkArea(.session(UUID()))
+        navigation.present(.settings)
+
+        // SwiftUI may observe A -> B -> A as one final UUID update. The
+        // selection revision still changed and must invalidate old routes.
+        navigation.resetForHerdChange(to: herdID, force: true)
+
+        XCTAssertEqual(navigation.selectedHerdID, herdID)
+        XCTAssertEqual(navigation.selectedTab, .home)
+        XCTAssertTrue(navigation.herdRouter.path.isEmpty)
+        XCTAssertTrue(navigation.herdRouter.searchPath.isEmpty)
+        XCTAssertEqual(navigation.herdRouter.searchText, "")
+        XCTAssertEqual(navigation.herdRouter.filter, AnimalFilter())
+        XCTAssertEqual(navigation.herdRouter.pastureFilter, .all)
+        XCTAssertNil(navigation.fullScreenWorkflow)
+        XCTAssertNil(navigation.workflowRouter.route)
+        XCTAssertNil(navigation.presentedSheet)
+    }
+
+    func testSameHerdWithoutSelectionChangeDoesNotDiscardNavigation() {
+        let herdID = UUID()
+        let navigation = AppNavigationState()
+        navigation.selectedHerdID = herdID
+        navigation.selectedTab = .herd
+        navigation.herdRouter.path = [.animal(UUID())]
+        let originalPath = navigation.herdRouter.path
+
+        navigation.resetForHerdChange(to: herdID)
+
+        XCTAssertEqual(navigation.herdRouter.path, originalPath)
+        XCTAssertEqual(navigation.selectedTab, .herd)
+    }
+
     func testRestoringAnotherHerdDoesNotCarrySearchFiltersOrRecordRoutes() throws {
         let original = AppNavigationState()
         original.selectedHerdID = UUID()
