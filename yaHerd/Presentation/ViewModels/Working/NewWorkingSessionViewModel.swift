@@ -124,9 +124,10 @@ final class NewWorkingSessionViewModel: ObservableObject {
             try Task.checkCancellation()
 
             guard candidateLoadToken == loadToken,
-                  requestedPastureID == pastureID,
-                  currentHerdSelection.currentHerdID == originatingHerdID,
+                  requestedPastureID == pastureID else { return }
+            guard currentHerdSelection.currentHerdID == originatingHerdID,
                   currentHerdSelection.selectionRevision == originatingSelectionRevision else {
+                isLoadingAnimals = false
                 return
             }
             animals = candidates
@@ -138,16 +139,16 @@ final class NewWorkingSessionViewModel: ObservableObject {
             // or session errors and must never clear those alerts.
         } catch is CancellationError {
             if candidateLoadToken == loadToken,
-               currentHerdSelection.currentHerdID == originatingHerdID,
-               currentHerdSelection.selectionRevision == originatingSelectionRevision {
+               requestedPastureID == pastureID {
                 isLoadingAnimals = false
             }
         } catch {
             guard !Task.isCancelled,
                   candidateLoadToken == loadToken,
-                  requestedPastureID == pastureID,
-                  currentHerdSelection.currentHerdID == originatingHerdID,
+                  requestedPastureID == pastureID else { return }
+            guard currentHerdSelection.currentHerdID == originatingHerdID,
                   currentHerdSelection.selectionRevision == originatingSelectionRevision else {
+                isLoadingAnimals = false
                 return
             }
             isLoadingAnimals = false
