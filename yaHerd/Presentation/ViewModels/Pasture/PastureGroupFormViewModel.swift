@@ -24,7 +24,17 @@ final class PastureGroupFormViewModel {
         errorMessage = nil
     }
 
-    func create(using repository: any PastureGroupCreateRepository) throws {
+    func create(
+        using repository: any PastureGroupCreateRepository,
+        expectedHerdID: UUID,
+        expectedSelectionRevision: UInt64,
+        selection: AppCurrentHerdSelection
+    ) throws {
+        try validateSelection(
+            expectedHerdID: expectedHerdID,
+            expectedSelectionRevision: expectedSelectionRevision,
+            selection: selection
+        )
         _ = try CreatePastureGroupUseCase(repository: repository).execute(
             name: name,
             grazeDays: grazeDays,
@@ -32,12 +42,34 @@ final class PastureGroupFormViewModel {
         )
     }
 
-    func update(id: UUID, using repository: any PastureGroupUpdateRepository) throws {
+    func update(
+        id: UUID,
+        using repository: any PastureGroupUpdateRepository,
+        expectedHerdID: UUID,
+        expectedSelectionRevision: UInt64,
+        selection: AppCurrentHerdSelection
+    ) throws {
+        try validateSelection(
+            expectedHerdID: expectedHerdID,
+            expectedSelectionRevision: expectedSelectionRevision,
+            selection: selection
+        )
         _ = try UpdatePastureGroupUseCase(repository: repository).execute(
             id: id,
             name: name,
             grazeDays: grazeDays,
             restDays: restDays
         )
+    }
+
+    private func validateSelection(
+        expectedHerdID: UUID,
+        expectedSelectionRevision: UInt64,
+        selection: AppCurrentHerdSelection
+    ) throws {
+        guard selection.currentHerdID == expectedHerdID,
+              selection.selectionRevision == expectedSelectionRevision else {
+            throw CancellationError()
+        }
     }
 }
