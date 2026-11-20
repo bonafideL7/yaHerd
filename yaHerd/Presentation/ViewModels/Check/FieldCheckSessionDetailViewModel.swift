@@ -200,20 +200,23 @@ final class FieldCheckSessionDetailViewModel {
     func persistNotes(
         sessionID: UUID,
         originatingHerdID: UUID,
+        originatingSelectionRevision: UInt64,
         currentHerdSelection: any CurrentHerdSelectionReading,
         using repository: any FieldCheckSessionDetailRepository
     ) async -> Bool {
-        guard currentHerdSelection.currentHerdID == originatingHerdID else {
+        let selectionIsUnchanged: @MainActor () -> Bool = {
+            currentHerdSelection.currentHerdID == originatingHerdID
+                && currentHerdSelection.selectionRevision == originatingSelectionRevision
+        }
+        guard selectionIsUnchanged() else {
             return false
         }
 
-        return await performOrderedMutation {
+        return await performOrderedMutation(mayContinue: selectionIsUnchanged) {
             await self.persistNotesOperation(
                 sessionID: sessionID,
                 using: repository,
-                mayContinue: {
-                    currentHerdSelection.currentHerdID == originatingHerdID
-                }
+                mayContinue: selectionIsUnchanged
             )
         }
     }
