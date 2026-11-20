@@ -35,8 +35,8 @@ final class ApplicationSettingsTests: XCTestCase {
         XCTAssertEqual(settings.usableAcreagePercentDefault, 85)
         // An unscoped legacy preference cannot be assigned to an arbitrary Herd.
         XCTAssertEqual(settings.recentPastureIDs(for: UUID()), [])
-        XCTAssertEqual(settings.dismissedHomeSetupSuggestionIDs(for: UUID()), [])
         // Legacy device-wide dismissals cannot be attributed to a particular Herd.
+        XCTAssertEqual(settings.dismissedHomeSetupSuggestionIDs(for: UUID()), [])
         XCTAssertFalse(settings.isHomeSetupSuggestionsExpanded)
         XCTAssertEqual(settings.legacyRecentPastureNames, ["North", "South"])
 
@@ -186,12 +186,14 @@ final class ApplicationSettingsTests: XCTestCase {
     func testResetToDefaultsRestoresLocalPreferences() {
         let settings = ApplicationSettings(store: InMemoryApplicationSettingsStore())
         let herdID = UUID()
+        let otherHerdID = UUID()
         settings.isDashboardEnabled = true
         settings.hardDeleteAnimals = false
         settings.targetAcresPerHeadDefault = 8.0
         settings.usableAcreagePercentDefault = 60
         settings.setRecentPastureIDs([UUID()], for: herdID)
         settings.setDismissedHomeSetupSuggestionIDs(["addFirstPasture"], for: herdID)
+        settings.setDismissedHomeSetupSuggestionIDs(["addFirstAnimal"], for: otherHerdID)
         settings.isHomeSetupSuggestionsExpanded = false
 
         settings.resetToDefaults()
@@ -202,6 +204,7 @@ final class ApplicationSettingsTests: XCTestCase {
         XCTAssertEqual(settings.usableAcreagePercentDefault, 100)
         XCTAssertEqual(settings.recentPastureIDs(for: herdID), [])
         XCTAssertEqual(settings.dismissedHomeSetupSuggestionIDs(for: herdID), [])
+        XCTAssertEqual(settings.dismissedHomeSetupSuggestionIDs(for: otherHerdID), [])
         XCTAssertTrue(settings.isHomeSetupSuggestionsExpanded)
     }
 }
