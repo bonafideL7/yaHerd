@@ -173,6 +173,7 @@ struct PastureTileListView: View {
 
     @ViewBuilder
     private func pastureContent(draggedPasture: Binding<PastureSummary?>) -> some View {
+        let originatingSelectionRevision = herdSelection.selectionRevision
         if !model.hasLoaded || !model.isCurrentHerdSelection {
             initialContentView
         } else if model.items.isEmpty {
@@ -182,14 +183,26 @@ struct PastureTileListView: View {
                 items: model.items,
                 draggedPasture: draggedPasture,
                 onDelete: model.requestDelete,
-                onBeginDrag: model.beginDragging,
+                onBeginDrag: { pasture in
+                    model.beginDragging(
+                        pasture,
+                        originatingSelectionRevision: originatingSelectionRevision
+                    )
+                },
                 onMove: { source, destination in
                     withAnimation(.snappy) {
-                        model.moveDraggedPasture(from: source, to: destination)
+                        model.moveDraggedPasture(
+                            from: source,
+                            to: destination,
+                            originatingSelectionRevision: originatingSelectionRevision
+                        )
                     }
                 },
                 onCommitMove: {
-                    model.commitDragOrder(using: repository)
+                    model.commitDragOrder(
+                        using: repository,
+                        originatingSelectionRevision: originatingSelectionRevision
+                    )
                 }
             )
         } else if filteredItems.isEmpty {
