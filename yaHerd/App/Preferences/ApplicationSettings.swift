@@ -19,7 +19,7 @@ final class ApplicationSettings {
     private var targetAcresPerHeadDefaultValue: Double
     private var usableAcreagePercentDefaultValue: Int
     private var recentPastureIDsByHerdValue: [UUID: [UUID]]
-    private var homeDismissedSetupSuggestionIDsValue: Set<String>
+    private var homeDismissedSetupSuggestionIDsByHerdValue: [UUID: Set<String>]
     private var homeSetupSuggestionsExpandedValue: Bool
     private var legacyRecentPastureNamesValue: [String]
 
@@ -65,11 +65,8 @@ final class ApplicationSettings {
         self.recentPastureIDsByHerdValue = Self.decodeRecentPasturesByHerd(
             store.object(forKey: ApplicationSettingKey.recentPastureIDs.rawValue)
         )
-        self.homeDismissedSetupSuggestionIDsValue = Self.validatedStringSet(
-            Self.decodeStrings(
-                store.object(forKey: ApplicationSettingKey.homeDismissedSetupSuggestionIDs.rawValue),
-                legacySeparator: ","
-            )
+        self.homeDismissedSetupSuggestionIDsByHerdValue = Self.decodeHomeDismissalsByHerd(
+            store.object(forKey: ApplicationSettingKey.homeDismissedSetupSuggestionIDs.rawValue)
         )
         self.homeSetupSuggestionsExpandedValue = Self.decodeBool(
             store.object(forKey: ApplicationSettingKey.homeSetupSuggestionsExpanded.rawValue),
@@ -169,17 +166,24 @@ final class ApplicationSettings {
         persistChange(key: .recentPastureIDs, encodedValue: encodedRecentPasturesByHerd())
     }
 
-    var homeDismissedSetupSuggestionIDs: Set<String> {
-        get { homeDismissedSetupSuggestionIDsValue }
-        set {
-            let validatedValue = Self.validatedStringSet(newValue)
-            guard homeDismissedSetupSuggestionIDsValue != validatedValue else { return }
-            homeDismissedSetupSuggestionIDsValue = validatedValue
-            persistChange(
-                key: .homeDismissedSetupSuggestionIDs,
-                encodedValue: validatedValue.sorted()
-            )
+    /// Setup guidance is evaluated against one Herd's records. Dismissing a
+    /// suggestion in that Herd must not suppress it in another.
+    func dismissedHomeSetupSuggestionIDs(for herdID: UUID) -> Set<String> {
+        homeDismissedSetupSuggestionIDsByHerdValue[herdID] ?? []
+    }
+
+    func setDismissedHomeSetupSuggestionIDs(_ ids: Set<String>, for herdID: UUID) {
+        let validated = Self.validatedStringSet(ids)
+        guard dismissedHomeSetupSuggestionIDs(for: herdID) != validated else { return }
+        if validated.isEmpty {
+            homeDismissedSetupSuggestionIDsByHerdValue.removeValue(forKey: herdID)
+        } else {
+            homeDismissedSetupSuggestionIDsByHerdValue[herdID] = validated
         }
+        persistChange(
+            key: .homeDismissedSetupSuggestionIDs,
+            encodedValue: encodedHomeDismissalsByHerd()
+        )
     }
 
     var isHomeSetupSuggestionsExpanded: Bool {
@@ -213,7 +217,8 @@ final class ApplicationSettings {
         usableAcreagePercentDefault = Self.defaultUsableAcreagePercent
         recentPastureIDsByHerdValue = [:]
         persistChange(key: .recentPastureIDs, encodedValue: encodedRecentPasturesByHerd())
-        homeDismissedSetupSuggestionIDs = []
+        homeDismissedSetupSuggestionIDsByHerdValue = [:]
+        persistChange(key: .homeDismissedSetupSuggestionIDs, encodedValue: encodedHomeDismissalsByHerd())
         isHomeSetupSuggestionsExpanded = true
         clearLegacyRecentPastureNames()
     }
@@ -249,7 +254,7 @@ final class ApplicationSettings {
         case .recentPastureIDs:
             encodedRecentPasturesByHerd()
         case .homeDismissedSetupSuggestionIDs:
-            homeDismissedSetupSuggestionIDs.sorted()
+            encodedHomeDismissalsByHerd()
         case .homeSetupSuggestionsExpanded:
             isHomeSetupSuggestionsExpanded
         case .legacyRecentPastureNames:
@@ -310,6 +315,29 @@ final class ApplicationSettings {
         var encoded: [String: [String]] = [:]
         for (herdID, pastureIDs) in recentPastureIDsByHerdValue {
             encoded[herdID.uuidString] = pastureIDs.map(\.uuidString)
+        }
+        return encoded
+    }
+
+    private static func decodeHomeDismissalsByHerd(_ value: Any?) -> [UUID: Set<String>] {
+        // Previous unscoped dismissals do not identify which Herd owns the
+        // guidance. Do not let them suppress setup steps in unrelated Herds.
+        guard let values = value as? [String: [String]] else { return [:] }
+        var dismissedByHerd: [UUID: Set<String>] = [:]
+        for (herdKey, identifiers) in values {
+            guard let herdID = UUID(uuidString: herdKey) else { continue }
+            let dismissed = validatedStringSet(Set(identifiers))
+            if !dismissed.isEmpty {
+                dismissedByHerd[herdID] = dismissed
+            }
+        }
+        return dismissedByHerd
+    }
+
+    private func encodedHomeDismissalsByHerd() -> [String: [String]] {
+        var encoded: [String: [String]] = [:]
+        for (herdID, identifiers) in homeDismissedSetupSuggestionIDsByHerdValue {
+            encoded[herdID.uuidString] = identifiers.sorted()
         }
         return encoded
     }
