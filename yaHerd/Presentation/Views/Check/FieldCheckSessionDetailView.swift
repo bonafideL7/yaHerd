@@ -1010,7 +1010,8 @@ struct FieldCheckSessionDetailView: View {
 
     private func persistNotesForOriginatingHerd() {
         guard let originatingHerdID,
-              herdSelection.currentHerdID == originatingHerdID else {
+              let originatingHerdSelectionRevision,
+              isPresentingOriginatingHerd else {
             return
         }
 
@@ -1018,6 +1019,7 @@ struct FieldCheckSessionDetailView: View {
             await model.persistNotes(
                 sessionID: sessionID,
                 originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: originatingHerdSelectionRevision,
                 currentHerdSelection: herdSelection,
                 using: repository
             )
