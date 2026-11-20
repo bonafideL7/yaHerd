@@ -55,6 +55,68 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         XCTAssertNil(directory.errorMessage)
     }
 
+    func testRefreshInvalidatesSelectedHerdWhoseStoreOwnershipChanges() throws {
+        for originalCategory: AccessibleHerd.Category in [.owned, .shared] {
+            let suite = "stage3-store-ownership-\(UUID())"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+
+            let selectedID = UUID()
+            let selection = AppCurrentHerdSelection(defaults: defaults, preferenceKey: "selected")
+            selection.select(selectedID)
+            let original = AccessibleHerd(
+                summary: herd(selectedID).summary,
+                category: originalCategory
+            )
+            let repository = StubHerdRepository(available: [original])
+            let directory = HerdDirectoryController(repository: repository, selection: selection)
+
+            directory.refresh()
+            let originalRevision = selection.selectionRevision
+            let replacement = AccessibleHerd(
+                summary: original.summary,
+                category: originalCategory == .owned ? .shared : .owned
+            )
+            repository.available = [replacement]
+
+            directory.refresh(reportErrors: false)
+
+            XCTAssertNil(directory.selectedHerdID)
+            XCTAssertEqual(selection.selectionRevision, originalRevision + 1)
+            XCTAssertEqual(defaults.string(forKey: "selected"), selectedID.uuidString)
+            XCTAssertEqual(directory.herds.first?.category, replacement.category)
+            XCTAssertEqual(directory.inventoryState, .available)
+        }
+    }
+
+    func testRefreshPreservesSelectedHerdAfterSameStoreRename() {
+        let selectedID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: selectedID)
+        let original = herd(selectedID)
+        let repository = StubHerdRepository(available: [original])
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+
+        directory.refresh()
+        let originalRevision = selection.selectionRevision
+        repository.available = [
+            AccessibleHerd(
+                summary: HerdSummary(
+                    publicID: selectedID,
+                    name: "Renamed Herd",
+                    createdAt: original.summary.createdAt,
+                    updatedAt: original.summary.updatedAt.addingTimeInterval(1)
+                ),
+                category: original.category
+            )
+        ]
+
+        directory.refresh(reportErrors: false)
+
+        XCTAssertEqual(directory.selectedHerdID, selectedID)
+        XCTAssertEqual(selection.selectionRevision, originalRevision)
+        XCTAssertEqual(directory.herds.first?.name, "Renamed Herd")
+    }
+
     func testInitialInventoryFailureIsNotReportedAsAConfirmedEmptyInventory() {
         let selection = AppCurrentHerdSelection()
         let repository = StubHerdRepository()
