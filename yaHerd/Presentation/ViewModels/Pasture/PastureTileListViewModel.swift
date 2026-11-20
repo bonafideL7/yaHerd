@@ -128,8 +128,13 @@ final class PastureTileListViewModel {
         pendingDeletionSelectionRevision = nil
     }
 
-    func beginDragging(_ pasture: PastureSummary) {
+    func beginDragging(
+        _ pasture: PastureSummary,
+        originatingSelectionRevision: UInt64? = nil
+    ) {
         refreshHerdSelection()
+        if let originatingSelectionRevision,
+           originatingSelectionRevision != selectedSelectionRevision { return }
         guard selectedHerdID != nil,
               isCurrentHerdSelection,
               items.contains(where: { $0.id == pasture.id }) else { return }
@@ -149,16 +154,28 @@ final class PastureTileListViewModel {
         items = movedItems(from: source, to: destination)
     }
 
-    func moveDraggedPasture(from source: Int, to destination: Int) {
+    func moveDraggedPasture(
+        from source: Int,
+        to destination: Int,
+        originatingSelectionRevision: UInt64? = nil
+    ) {
         refreshHerdSelection()
+        if let originatingSelectionRevision,
+           originatingSelectionRevision != selectedSelectionRevision { return }
         guard dragSelectionRevision == selectedSelectionRevision,
               dragSelectionRevision != nil,
               isCurrentHerdSelection else { return }
         movePasturesInMemory(from: IndexSet(integer: source), to: destination)
     }
 
-    func commitDragOrder(using repository: any PastureOrdering) {
+    func commitDragOrder(
+        using repository: any PastureOrdering,
+        originatingSelectionRevision: UInt64? = nil
+    ) {
         refreshHerdSelection()
+        // An old DropDelegate must not consume a newer Herd's active drag.
+        if let originatingSelectionRevision,
+           originatingSelectionRevision != selectedSelectionRevision { return }
         guard selectedHerdID != nil,
               isCurrentHerdSelection,
               dragSelectionRevision == selectedSelectionRevision,
