@@ -149,7 +149,7 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         let model = FieldCheckSessionDetailViewModel()
         XCTAssertTrue(model.load(sessionID: sessionID, using: repository))
 
-        let isOriginatingHerd = {
+        let isOriginatingHerd: @MainActor @Sendable () -> Bool = {
             selection.currentHerdID == herdID && selection.selectionRevision == revision
         }
         model.updateQuickAnimalTypeCounts(
@@ -183,7 +183,7 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         let model = FieldCheckSessionDetailViewModel()
         XCTAssertTrue(model.load(sessionID: sessionID, using: repository))
 
-        let isOriginatingHerd = {
+        let isOriginatingHerd: @MainActor @Sendable () -> Bool = {
             selection.currentHerdID == herdID && selection.selectionRevision == revision
         }
         model.updateQuickAnimalTypeCounts(
