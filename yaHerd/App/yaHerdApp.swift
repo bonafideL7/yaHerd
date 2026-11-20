@@ -200,7 +200,8 @@ struct yaHerdApp: App {
                             startupError: startupMessage
                         ),
                         storageError: startupMessage,
-                        herdSelection: persistence.currentHerdSelection
+                        herdSelection: persistence.currentHerdSelection,
+                        validateHerdReadiness: nil
                     )
                 )
             } catch {
@@ -230,13 +231,29 @@ struct yaHerdApp: App {
         #if DEBUG
         NSLog("yaHerd active storage mode: %@", storageMode.displayName)
         #endif
+        let validateReadiness: (@MainActor (UUID) async throws -> Void)?
+        #if DEBUG
+        if storageMode == .cloudKitDevelopment {
+            validateReadiness = { herdID in
+                // The probe uses existing stores without changing the live selection.
+                try await CloudKitDevelopmentLaunch.validateHomeReadiness(
+                    persistence.makeReadinessCandidate(for: herdID)
+                )
+            }
+        } else {
+            validateReadiness = nil
+        }
+        #else
+        validateReadiness = nil
+        #endif
         return AppRuntime(
             persistenceLifetime: persistence,
             dependencies: dependencies,
             dataAccessMode: .readWrite,
             recoveryContext: nil,
             storageError: nil,
-            herdSelection: persistence.currentHerdSelection
+            herdSelection: persistence.currentHerdSelection,
+            validateHerdReadiness: validateReadiness
         )
     }
 
@@ -307,6 +324,7 @@ private struct AppRuntime {
     let recoveryContext: RecoveryModeContext?
     let storageError: String?
     let herdSelection: AppCurrentHerdSelection
+    let validateHerdReadiness: (@MainActor (UUID) async throws -> Void)?
 }
 
 private struct RunningAppView: View {
@@ -326,7 +344,8 @@ private struct RunningAppView: View {
         self.applicationSettings = applicationSettings
         self._herdDirectory = State(initialValue: HerdDirectoryController(
             repository: runtime.dependencies.herdRepository,
-            selection: runtime.herdSelection
+            selection: runtime.herdSelection,
+            validateReadiness: runtime.validateHerdReadiness
         ))
         self._tagColorLibrary = StateObject(
             wrappedValue: TagColorLibraryStore(

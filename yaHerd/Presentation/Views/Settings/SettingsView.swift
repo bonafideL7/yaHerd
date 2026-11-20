@@ -340,6 +340,9 @@ struct HerdDirectoryView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var isCreating = false
+    @State private var isOpeningHerd = false
+    @State private var pendingHerdID: UUID?
+    @State private var validationTask: Task<Void, Never>?
     @State private var showsCreatePrompt = false
     @State private var newHerdName = ""
 
@@ -348,13 +351,8 @@ struct HerdDirectoryView: View {
             Section("Available Herds") {
                 ForEach(directory.herds) { herd in
                     Button {
-                        do {
-                            try directory.selectHerd(id: herd.id)
-                            navigation.resetForHerdChange(to: herd.id)
-                            navigation.dismissSheet()
-                        } catch {
-                            directory.report(error)
-                        }
+                        validationTask?.cancel()
+                        validationTask = Task { @MainActor in await openHerd(id: herd.id) }
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
@@ -372,12 +370,25 @@ struct HerdDirectoryView: View {
                         }
                         .contentShape(Rectangle())
                     }
-                    .disabled(dataAccessMode.isRecoveryMode || isCreating)
+                    .disabled(dataAccessMode.isRecoveryMode || isCreating || isOpeningHerd)
                 }
 
                 if directory.herds.isEmpty {
                     Text("No complete Herds are available. iCloud records may still be importing; refresh before creating a new Herd.")
                         .foregroundStyle(.secondary)
+                }
+
+                if pendingHerdID != nil {
+                    HStack {
+                        ProgressView()
+                        Text("Waiting for the selected Herd's records to finish importing.")
+                            .font(.callout)
+                        Spacer()
+                        Button("Cancel") {
+                            validationTask?.cancel()
+                            pendingHerdID = nil
+                        }
+                    }
                 }
             }
 
@@ -404,11 +415,14 @@ struct HerdDirectoryView: View {
             }
         }
         .task {
-            directory.refresh()
-            // CloudKit can import a shared or owned Herd after the chooser
-            // appears. Refresh while this view remains visible, without
-            // reopening stores or creating replacement records.
+            directory.refresh(reportErrors: false)
+            // Keep the original stores active while imported relationships arrive.
             while !Task.isCancelled {
+                if let pendingHerdID {
+                    let attempt = Task { @MainActor in await openHerd(id: pendingHerdID) }
+                    validationTask = attempt
+                    await attempt.value
+                }
                 do {
                     try await Task.sleep(for: .seconds(5))
                 } catch {
@@ -418,7 +432,7 @@ struct HerdDirectoryView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { directory.refresh() }
+            if phase == .active { directory.refresh(reportErrors: false) }
         }
         .alert("Create Herd", isPresented: $showsCreatePrompt) {
             TextField("Herd name", text: $newHerdName)
@@ -447,6 +461,29 @@ struct HerdDirectoryView: View {
             Button("OK", role: .cancel) { directory.dismissError() }
         } message: {
             Text(directory.errorMessage ?? "The Herd cannot be opened.")
+        }
+    }
+
+    @MainActor
+    private func openHerd(id: UUID) async {
+        guard !isOpeningHerd else { return }
+        isOpeningHerd = true
+        defer { isOpeningHerd = false }
+        do {
+            try await directory.selectHerdWhenReady(id: id)
+            pendingHerdID = nil
+            navigation.resetForHerdChange(to: id)
+            navigation.dismissSheet()
+        } catch {
+            if error is CancellationError { return }
+            #if DEBUG
+            if CloudKitDevelopmentLaunch.isImportPending(error) {
+                pendingHerdID = id
+                return
+            }
+            #endif
+            pendingHerdID = nil
+            directory.report(error)
         }
     }
 }

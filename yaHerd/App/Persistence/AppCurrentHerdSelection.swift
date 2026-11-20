@@ -29,10 +29,14 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
         if let currentHerdID, ids.contains(currentHerdID) {
             return
         }
-        if let stored = defaults?.string(forKey: preferenceKey),
-           let storedID = UUID(uuidString: stored),
-           ids.contains(storedID) {
-            currentHerdID = storedID
+        if let stored = defaults?.string(forKey: preferenceKey) {
+            if let storedID = UUID(uuidString: stored), ids.contains(storedID) {
+                currentHerdID = storedID
+            } else {
+                // An incomplete import or unavailable account must not cause
+                // a different Herd to become selected automatically.
+                currentHerdID = nil
+            }
             return
         }
         currentHerdID = accessibleHerds.count == 1 ? accessibleHerds[0].id : nil

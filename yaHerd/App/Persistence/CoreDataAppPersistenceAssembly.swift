@@ -176,6 +176,12 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         )
     }
 
+    /// Probe the chosen Herd through the same loaded stores without changing
+    /// the active Herd or writing a selected-Herd preference.
+    func makeReadinessCandidate(for herdID: UUID) -> CoreDataAppPersistenceAssembly {
+        CoreDataAppPersistenceAssembly(assembly: assembly, currentHerdID: herdID)
+    }
+
     func makeDependencies(dataAccessMode: AppDataAccessMode) -> AppDependencies {
         let mutationCenter = ApplicationMutationCenter()
         let recorder = ApplicationMutationPipeline(center: mutationCenter)
