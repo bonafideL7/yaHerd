@@ -433,6 +433,7 @@ struct WorkingFinishSessionView: View {
         guard !isFinishing,
               canFinish,
               let originatingHerdID = herdSelection.currentHerdID else { return }
+        let originatingSelectionRevision = herdSelection.selectionRevision
 
         let assignments = orderedItems.map { item in
             let destinationPastureID = exceptionAnimalIDs.contains(item.id)
@@ -453,13 +454,15 @@ struct WorkingFinishSessionView: View {
                 guard try await viewModel.finishSession(
                     assignments: assignments,
                     originatingHerdID: originatingHerdID,
+                    originatingSelectionRevision: originatingSelectionRevision,
                     currentHerdSelection: herdSelection,
                     repository: repository
                 ) else { return }
                 dismiss()
             } catch {
                 guard !Task.isCancelled,
-                      herdSelection.currentHerdID == originatingHerdID else { return }
+                      herdSelection.currentHerdID == originatingHerdID,
+                      herdSelection.selectionRevision == originatingSelectionRevision else { return }
                 errorMessage = UserVisibleErrorMessage.make(error)
                 showingError = true
             }
