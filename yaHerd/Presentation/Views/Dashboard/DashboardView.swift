@@ -42,11 +42,15 @@ struct DashboardView: View {
                 selection: herdSelection
             )
         }
-        .task {
+        .task(id: herdSelection.selectionRevision) {
+            fieldChecksModel.configure(selection: herdSelection)
             await fieldChecksModel.observe(
                 using: fieldCheckOverviewReader,
                 mutationStream: homeDependencies.mutationStream
             )
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            fieldChecksModel.configure(selection: herdSelection)
         }
         .alert("Dashboard Error", isPresented: errorBinding) {
             Button("OK", role: .cancel) {
@@ -81,6 +85,7 @@ struct DashboardView: View {
             using: dashboardQueryReader,
             selection: herdSelection
         )
+        fieldChecksModel.configure(selection: herdSelection)
         fieldChecksModel.load(using: fieldCheckOverviewReader)
         _ = await dashboardLoad
     }
