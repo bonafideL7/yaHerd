@@ -409,6 +409,67 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         XCTAssertEqual(viewModel.items.first?.isArchived, true)
     }
 
+    func testBatchMoveRejectsCallbackAfterHerdSwitch() {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let animal = makeAnimal(name: "Original Herd", tagNumber: "600")
+        let repository = RecordingAnimalListRepository(animals: [animal])
+        let model = AnimalListViewModel()
+        model.configure(selection: selection)
+        model.load(using: repository, pastureRepository: EmptyPastureReferenceDataReader())
+        let originatingRevision = selection.selectionRevision
+
+        selection.select(UUID())
+        model.move(
+            ids: [animal.id],
+            toPastureID: UUID(),
+            originatingHerdID: originalHerdID,
+            originatingSelectionRevision: originatingRevision,
+            using: repository,
+            pastureRepository: EmptyPastureReferenceDataReader()
+        )
+
+        XCTAssertTrue(repository.movedIDs.isEmpty)
+        XCTAssertEqual(model.items.first?.pastureID, nil)
+    }
+
+    func testBatchMoveRejectsHerdRoundTripButAllowsCurrentSelection() {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let animal = makeAnimal(name: "Original Herd", tagNumber: "601")
+        let repository = RecordingAnimalListRepository(animals: [animal])
+        let model = AnimalListViewModel()
+        model.configure(selection: selection)
+        model.load(using: repository, pastureRepository: EmptyPastureReferenceDataReader())
+        let obsoleteRevision = selection.selectionRevision
+        let destination = UUID()
+
+        selection.select(UUID())
+        selection.select(originalHerdID)
+        model.move(
+            ids: [animal.id],
+            toPastureID: destination,
+            originatingHerdID: originalHerdID,
+            originatingSelectionRevision: obsoleteRevision,
+            using: repository,
+            pastureRepository: EmptyPastureReferenceDataReader()
+        )
+        XCTAssertTrue(repository.movedIDs.isEmpty)
+
+        model.configure(selection: selection)
+        model.move(
+            ids: [animal.id],
+            toPastureID: destination,
+            originatingHerdID: originalHerdID,
+            originatingSelectionRevision: selection.selectionRevision,
+            using: repository,
+            pastureRepository: EmptyPastureReferenceDataReader()
+        )
+        XCTAssertEqual(repository.movedIDs, [animal.id])
+        XCTAssertEqual(repository.movedPastureID, destination)
+        XCTAssertEqual(model.items.first?.pastureID, destination)
+    }
+
     private func waitForRequestCount(
         _ expectedCount: Int,
         reader: ControlledAnimalListQueryReader
@@ -600,6 +661,8 @@ private final class RecordingAnimalListRepository: AnimalListRepository {
     private let animals: [AnimalSummary]
     private(set) var deletedIDs: [UUID] = []
     private(set) var archivedIDs: [UUID] = []
+    private(set) var movedIDs: [UUID] = []
+    private(set) var movedPastureID: UUID?
 
     init(animals: [AnimalSummary]) {
         self.animals = animals
@@ -612,7 +675,10 @@ private final class RecordingAnimalListRepository: AnimalListRepository {
     func delete(ids: [UUID]) throws { deletedIDs.append(contentsOf: ids) }
     func archive(ids: [UUID]) throws { archivedIDs.append(contentsOf: ids) }
     func restore(ids _: [UUID]) throws {}
-    func move(ids _: [UUID], toPastureID _: UUID?) throws {}
+    func move(ids: [UUID], toPastureID: UUID?) throws {
+        movedIDs.append(contentsOf: ids)
+        movedPastureID = toPastureID
+    }
 }
 
 
