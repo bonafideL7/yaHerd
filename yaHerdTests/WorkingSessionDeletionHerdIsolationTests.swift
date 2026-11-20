@@ -4,6 +4,61 @@ import XCTest
 
 @MainActor
 final class WorkingSessionDeletionHerdIsolationTests: XCTestCase {
+
+    func testPendingConfirmationRetainsOriginalSessionAndRejectsSwitchedHerd() {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let session = workingSessionSummary()
+        let pending = PendingWorkingSessionDeletion(
+            session: session,
+            herdID: originalHerdID,
+            selectionRevision: selection.selectionRevision
+        )
+
+        selection.select(UUID())
+
+        XCTAssertFalse(pending.isCurrent(in: selection))
+        XCTAssertEqual(pending.session, session, "The confirmation must not resolve a session from the newly selected Herd.")
+    }
+
+    func testPendingConfirmationRejectsSwitchAwayAndBack() {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let pending = PendingWorkingSessionDeletion(
+            session: workingSessionSummary(),
+            herdID: originalHerdID,
+            selectionRevision: selection.selectionRevision
+        )
+
+        selection.select(UUID())
+        selection.select(originalHerdID)
+
+        XCTAssertFalse(pending.isCurrent(in: selection))
+    }
+
+    func testPendingConfirmationAcceptsUnchangedSelection() {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let pending = PendingWorkingSessionDeletion(
+            session: workingSessionSummary(),
+            herdID: herdID,
+            selectionRevision: selection.selectionRevision
+        )
+
+        XCTAssertTrue(pending.isCurrent(in: selection))
+    }
+
+    private func workingSessionSummary() -> WorkingSessionSummary {
+        WorkingSessionSummary(
+            id: UUID(),
+            date: .now,
+            status: .active,
+            sourcePastureName: "North Pasture",
+            treatmentTemplateName: "",
+            totalQueueItems: 0,
+            completedQueueItems: 0
+        )
+    }
     func testDeletionDoesNotStartAfterTheOriginatingHerdChanges() async throws {
         let originatingHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: UUID())
