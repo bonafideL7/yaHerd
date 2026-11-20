@@ -37,6 +37,11 @@ final class AnimalDetailViewModel {
             && selection.selectionRevision == viewingSelectionRevision
     }
 
+    var viewingSelectionIdentity: (herdID: UUID, revision: UInt64)? {
+        guard let viewingHerdID, let viewingSelectionRevision else { return nil }
+        return (viewingHerdID, viewingSelectionRevision)
+    }
+
     private func validateViewingSelection(_ selection: AppCurrentHerdSelection) -> Bool {
         guard isViewingSelectionCurrent(selection) else {
             errorMessage = "The selected Herd changed. Reopen this animal before making changes."
