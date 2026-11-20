@@ -116,9 +116,10 @@ struct WorkingSessionDetailView: View {
             }
         }
         .task {
-            guard originatingHerdSelectionRevision == nil else { return }
-            originatingHerdID = herdSelection.currentHerdID
-            originatingHerdSelectionRevision = herdSelection.selectionRevision
+            if originatingHerdSelectionRevision == nil {
+                originatingHerdID = herdSelection.currentHerdID
+                originatingHerdSelectionRevision = herdSelection.selectionRevision
+            }
             guard isViewingOriginatingHerd else { return }
 
             viewModel.configure(repository: repository)
