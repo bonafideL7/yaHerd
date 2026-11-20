@@ -633,6 +633,46 @@ final class PastureTileListViewModelTests: XCTestCase {
         XCTAssertEqual(ordering.reorderedIDs, [[secondB.id, firstB.id]])
     }
 
+    func testUnselectedHerdCannotLoadOldPasturesOrStartAddFlow() {
+        let old = PastureTestSupport.makeSummary(name: "Original Herd")
+        let reader = PastureListReaderStub(result: .success([old]))
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let model = PastureTileListViewModel()
+        model.configure(selection: selection)
+        XCTAssertTrue(model.load(using: reader))
+
+        selection.select(nil)
+
+        XCTAssertFalse(model.load(using: reader))
+        XCTAssertTrue(model.items.isEmpty)
+        XCTAssertFalse(model.hasLoaded)
+        model.requestAddPasture()
+        XCTAssertFalse(model.isPresentingAddPasture)
+    }
+
+    func testOldDeleteGestureCannotTargetMatchingIDInNewHerd() {
+        let id = UUID()
+        let a = PastureTestSupport.makeSummary(id: id, name: "Herd A")
+        let b = PastureTestSupport.makeSummary(id: id, name: "Herd B")
+        let reader = PastureListReaderStub(result: .success([a]))
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let model = PastureTileListViewModel()
+        model.configure(selection: selection)
+        XCTAssertTrue(model.load(using: reader))
+        let oldRevision = selection.selectionRevision
+
+        selection.select(UUID())
+        model.configure(selection: selection)
+        reader.result = .success([b])
+        XCTAssertTrue(model.load(using: reader))
+
+        model.requestDelete(a, originatingSelectionRevision: oldRevision)
+        XCTAssertNil(model.pasturePendingDeletion)
+
+        model.requestDelete(b, originatingSelectionRevision: selection.selectionRevision)
+        XCTAssertEqual(model.pasturePendingDeletion, b)
+    }
+
     func testDragCommitWithinUnchangedHerdPersistsNewOrder() {
         let first = PastureTestSupport.makeSummary(name: "First")
         let second = PastureTestSupport.makeSummary(name: "Second")
