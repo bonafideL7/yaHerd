@@ -244,30 +244,30 @@ private struct TreatmentTemplateDetailView: View {
         Group {
             if herdIdentity?.isCurrent(in: herdSelection) == true {
                 Form {
-            Section("Name") {
-                TextField("Treatment set name", text: $nameDraft)
-            }
+                    Section("Name") {
+                        TextField("Treatment set name", text: $nameDraft)
+                    }
 
-            Section("Treatments") {
-                if plannedTreatments.isEmpty {
-                    Text("No treatments")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach($plannedTreatments) { $treatment in
-                        VStack(alignment: .leading, spacing: 10) {
-                            TextField("Vaccination, medication, or treatment", text: $treatment.name)
-                            WorkingTreatmentDoseEditor(dose: $treatment.suggestedDose)
+                    Section("Treatments") {
+                        if plannedTreatments.isEmpty {
+                            Text("No treatments")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach($plannedTreatments) { $treatment in
+                                VStack(alignment: .leading, spacing: 10) {
+                                    TextField("Vaccination, medication, or treatment", text: $treatment.name)
+                                    WorkingTreatmentDoseEditor(dose: $treatment.suggestedDose)
+                                }
+                            }
+                            .onDelete { plannedTreatments.remove(atOffsets: $0) }
+                        }
+
+                        Button {
+                            plannedTreatments.append(WorkingTreatmentPlanItem(name: ""))
+                        } label: {
+                            Label("Add Treatment", systemImage: "plus")
                         }
                     }
-                    .onDelete { plannedTreatments.remove(atOffsets: $0) }
-                }
-
-                Button {
-                    plannedTreatments.append(WorkingTreatmentPlanItem(name: ""))
-                } label: {
-                    Label("Add Treatment", systemImage: "plus")
-                }
-            }
                 }
             } else {
                 ContentUnavailableView(
