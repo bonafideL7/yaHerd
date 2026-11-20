@@ -63,6 +63,7 @@ final class HerdDirectoryController {
             throw HerdRepositoryError.missingHerd
         }
         let previousSelection = selection.currentHerdID
+        let originatingSelectionRevision = selection.selectionRevision
         let originatingGeneration = selectionGeneration
         do {
             try await validateReadiness?(id)
@@ -74,6 +75,7 @@ final class HerdDirectoryController {
         }
         try Task.checkCancellation()
         guard selection.currentHerdID == previousSelection,
+              selection.selectionRevision == originatingSelectionRevision,
               selectionGeneration == originatingGeneration else {
             throw CancellationError()
         }
@@ -89,6 +91,7 @@ final class HerdDirectoryController {
     func createOwnedHerd(named name: String) async throws -> HerdSummary {
         try Task.checkCancellation()
         let originatingSelection = selection.currentHerdID
+        let originatingSelectionRevision = selection.selectionRevision
         let originatingGeneration = selectionGeneration
         let created = try await repository.createOwnedHerd(named: name)
 
@@ -97,6 +100,7 @@ final class HerdDirectoryController {
         // active Herd for an obsolete request.
         guard !Task.isCancelled,
               selection.currentHerdID == originatingSelection,
+              selection.selectionRevision == originatingSelectionRevision,
               selectionGeneration == originatingGeneration else {
             refresh(reportErrors: false)
             return created
