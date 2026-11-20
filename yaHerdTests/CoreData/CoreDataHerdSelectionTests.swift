@@ -83,4 +83,19 @@ final class CoreDataHerdSelectionTests: XCTestCase {
         XCTAssertEqual(selection.currentHerdID, existing.id)
         XCTAssertEqual(try repository.fetchAccessibleHerds().map(\.id), [existing.id])
     }
+    func testRefreshingDirectoryFindsNewlyAvailableHerdWithoutChangingSelection() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let selection = AppCurrentHerdSelection()
+        let repository = CoreDataHerdRepository(selection: selection, assembly: assembly)
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+
+        directory.refresh()
+        XCTAssertTrue(directory.herds.isEmpty)
+        let arrived = try await repository.createOwnedHerd(named: "Arrived")
+        directory.refresh(reportErrors: false)
+
+        XCTAssertEqual(directory.herds.map(\.id), [arrived.id])
+        XCTAssertNil(selection.currentHerdID)
+    }
+
 }

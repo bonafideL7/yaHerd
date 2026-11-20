@@ -403,7 +403,20 @@ struct HerdDirectoryView: View {
                 }
             }
         }
-        .task { directory.refresh() }
+        .task {
+            directory.refresh()
+            // CloudKit can import a shared or owned Herd after the chooser
+            // appears. Refresh while this view remains visible, without
+            // reopening stores or creating replacement records.
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(5))
+                } catch {
+                    break
+                }
+                directory.refresh(reportErrors: false)
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { directory.refresh() }
         }
