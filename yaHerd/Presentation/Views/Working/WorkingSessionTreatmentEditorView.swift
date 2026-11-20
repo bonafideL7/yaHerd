@@ -4,6 +4,7 @@ struct WorkingSessionTreatmentEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
 
     private var repository: any WorkingSessionDetailRepository {
         workingDependencies.sessionDetailRepository
@@ -17,6 +18,7 @@ struct WorkingSessionTreatmentEditorView: View {
     @State private var showingDiscardConfirmation = false
     @State private var showingError = false
     @State private var errorMessage: String?
+    @State private var editorHerdIdentity: WorkingQueueEditorHerdIdentity?
 
     init(session: WorkingSessionDetailSnapshot) {
         sessionID = session.id
@@ -30,6 +32,7 @@ struct WorkingSessionTreatmentEditorView: View {
 
     private var canSave: Bool {
         dataAccessMode.allowsDataMutations
+            && editorHerdIdentity?.isCurrent(in: herdSelection) == true
             && !isSaving
             && hasUnsavedChanges
             && plannedTreatments.allSatisfy {
@@ -102,10 +105,18 @@ struct WorkingSessionTreatmentEditorView: View {
                 Text(errorMessage ?? "Unknown error")
             }
         }
+        .task {
+            // Bind a presented editor to one Herd selection generation.
+            // Returning to that same UUID must not revive an old draft.
+            if editorHerdIdentity == nil {
+                editorHerdIdentity = WorkingQueueEditorHerdIdentity(selection: herdSelection)
+            }
+        }
     }
 
     private func save() {
-        guard canSave else { return }
+        guard canSave,
+              let editorHerdIdentity else { return }
 
         let updatedTreatments = plannedTreatments.map {
             WorkingTreatmentPlanItem(
@@ -120,28 +131,71 @@ struct WorkingSessionTreatmentEditorView: View {
             defer { isSaving = false }
 
             do {
-                guard let currentSession = try repository.fetchSessionDetail(id: sessionID),
-                      currentSession.status == .active else {
-                    errorMessage = "This working session is no longer active."
-                    showingError = true
-                    return
-                }
-
-                guard currentSession.plannedTreatments == initialTreatments else {
-                    errorMessage = "This session's treatments changed while editing. Close and reopen the editor to review the latest plan."
-                    showingError = true
-                    return
-                }
-
-                try await repository.updateSessionTreatments(
-                    id: sessionID,
-                    plannedTreatments: updatedTreatments
+                let saved = try await WorkingSessionTreatmentPlanSave.execute(
+                    sessionID: sessionID,
+                    initialTreatments: initialTreatments,
+                    updatedTreatments: updatedTreatments,
+                    editorIdentity: editorHerdIdentity,
+                    selection: herdSelection,
+                    repository: repository
                 )
+                guard saved else { return }
                 dismiss()
             } catch {
+                guard !Task.isCancelled,
+                      editorHerdIdentity.isCurrent(in: herdSelection) else { return }
                 errorMessage = UserVisibleErrorMessage.make(error)
                 showingError = true
             }
         }
+    }
+}
+
+/// Applies the treatment-plan version check and mutation against the exact
+/// Herd selection that opened the editor. Persistence remains repository-owned.
+@MainActor
+enum WorkingSessionTreatmentPlanSave {
+    enum ValidationError: LocalizedError, Equatable {
+        case inactiveSession
+        case treatmentsChanged
+
+        var errorDescription: String? {
+            switch self {
+            case .inactiveSession:
+                "This working session is no longer active."
+            case .treatmentsChanged:
+                "This session's treatments changed while editing. Close and reopen the editor to review the latest plan."
+            }
+        }
+    }
+
+    static func execute(
+        sessionID: UUID,
+        initialTreatments: [WorkingTreatmentPlanItem],
+        updatedTreatments: [WorkingTreatmentPlanItem],
+        editorIdentity: WorkingQueueEditorHerdIdentity,
+        selection: AppCurrentHerdSelection,
+        repository: any WorkingSessionDetailRepository
+    ) async throws -> Bool {
+        guard !Task.isCancelled,
+              editorIdentity.isCurrent(in: selection) else { return false }
+
+        guard let currentSession = try repository.fetchSessionDetail(id: sessionID),
+              currentSession.status == .active else {
+            throw ValidationError.inactiveSession
+        }
+        guard currentSession.plannedTreatments == initialTreatments else {
+            throw ValidationError.treatmentsChanged
+        }
+
+        guard !Task.isCancelled,
+              editorIdentity.isCurrent(in: selection) else { return false }
+        try await repository.updateSessionTreatments(
+            id: sessionID,
+            plannedTreatments: updatedTreatments
+        )
+        // A save may commit during a Herd switch. Do not dismiss/publish the
+        // result into a different Herd or a later selection of the same UUID.
+        return !Task.isCancelled && editorIdentity.isCurrent(in: selection)
     }
 }
