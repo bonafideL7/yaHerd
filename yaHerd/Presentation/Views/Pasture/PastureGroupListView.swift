@@ -20,7 +20,11 @@ struct PastureGroupListView: View {
                         let rowHerdID = herdSelection.currentHerdID
                         let rowSelectionRevision = herdSelection.selectionRevision
                         NavigationLink {
-                            PastureGroupDetailView(groupID: group.id)
+                            PastureGroupDetailView(
+                                groupID: group.id,
+                                originatingHerdID: rowHerdID,
+                                originatingSelectionRevision: rowSelectionRevision
+                            )
                         } label: {
                             PastureGroupRow(group: group)
                         }
