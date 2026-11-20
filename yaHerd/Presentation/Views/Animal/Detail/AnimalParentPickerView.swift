@@ -9,6 +9,7 @@ import SwiftUI
 
 struct AnimalParentPickerView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @Environment(\.animalFeatureDependencies) private var animalDependencies
     private var parentOptionQueryReader: (any AnimalParentOptionQueryReading)? {
         animalDependencies.parentOptionQueryReader
@@ -16,6 +17,7 @@ struct AnimalParentPickerView: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @State private var viewModel = AnimalParentPickerViewModel()
+    @State private var openedSelectionRevision: UInt64?
 
     let title: String
     let excludeAnimalID: UUID?
@@ -24,7 +26,12 @@ struct AnimalParentPickerView: View {
 
 
     private var filtered: [AnimalParentOption] {
-        viewModel.filtered(suggestedSexes: suggestedSexes) { animal in
+        guard let openedSelectionRevision,
+              viewModel.hasCurrentOptions(
+                for: herdSelection,
+                originatingSelectionRevision: openedSelectionRevision
+              ) else { return [] }
+        return viewModel.filtered(suggestedSexes: suggestedSexes) { animal in
             tagColorLibrary.formattedTag(tagNumber: animal.displayTagNumber, colorID: animal.displayTagColorID)
         }
     }
@@ -59,6 +66,11 @@ struct AnimalParentPickerView: View {
                     } else if viewModel.hasLoaded {
                         ForEach(filtered) { animal in
                             Button {
+                                guard let openedSelectionRevision,
+                                      viewModel.hasCurrentOptions(
+                                        for: herdSelection,
+                                        originatingSelectionRevision: openedSelectionRevision
+                                      ) else { return }
                                 onSelect(animal)
                                 dismiss()
                             } label: {
@@ -108,14 +120,34 @@ struct AnimalParentPickerView: View {
                 }
             }
         }
-        .task(id: excludeAnimalID) {
-            await viewModel.load(excluding: excludeAnimalID, using: parentOptionQueryReader)
+        .task {
+            // The lifetime of this sheet is tied to its opening Herd, not to
+            // whatever Herd becomes current while an asynchronous read runs.
+            let revision = openedSelectionRevision ?? herdSelection.selectionRevision
+            openedSelectionRevision = revision
+            await viewModel.load(
+                excluding: excludeAnimalID,
+                using: parentOptionQueryReader,
+                selection: herdSelection,
+                originatingSelectionRevision: revision
+            )
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, revision in
+            if let openedSelectionRevision, revision != openedSelectionRevision {
+                dismiss()
+            }
         }
     }
 
     private func refreshOptions() {
+        guard let openedSelectionRevision else { return }
         Task { @MainActor in
-            await viewModel.load(excluding: excludeAnimalID, using: parentOptionQueryReader)
+            await viewModel.load(
+                excluding: excludeAnimalID,
+                using: parentOptionQueryReader,
+                selection: herdSelection,
+                originatingSelectionRevision: openedSelectionRevision
+            )
         }
     }
 }
