@@ -88,6 +88,27 @@ final class WorkingSessionReopenHerdIsolationTests: XCTestCase {
         XCTAssertEqual(repository.fetchCount, 0)
     }
 
+    func testFailureInOriginalHerdStillSurfacesError() async {
+        let originatingHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
+        let repository = SuspendedWorkingSessionReopenRepository()
+        let model = WorkingSessionDetailViewModel(sessionID: UUID(), repository: repository)
+
+        let reopening = Task {
+            await model.reopenSession(
+                originatingHerdID: originatingHerdID,
+                currentHerdSelection: selection
+            )
+        }
+        await repository.waitForReopen()
+        repository.failReopen()
+
+        let completed = await reopening.value
+        XCTAssertFalse(completed)
+        XCTAssertNotNil(model.errorMessage)
+        XCTAssertEqual(repository.fetchCount, 0)
+    }
+
     func testCancelledReopenDoesNotReloadAfterCommit() async {
         let originatingHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
