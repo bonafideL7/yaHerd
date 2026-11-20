@@ -10,6 +10,8 @@ final class PastureTileListViewModel {
     var internalFilter: PastureListFilter = .all
     var draggedPasture: PastureSummary?
     var pasturePendingDeletion: PastureSummary?
+    private(set) var pendingDeletionHerdID: UUID?
+    private(set) var pendingDeletionSelectionRevision: UInt64?
     var errorMessage: String?
     private(set) var isDeletingPastures = false
 
@@ -116,10 +118,14 @@ final class PastureTileListViewModel {
         refreshHerdSelection()
         guard items.contains(where: { $0.id == pasture.id }) else { return }
         pasturePendingDeletion = pasture
+        pendingDeletionHerdID = selectedHerdID
+        pendingDeletionSelectionRevision = selectedSelectionRevision
     }
 
     func clearPendingDeletion() {
         pasturePendingDeletion = nil
+        pendingDeletionHerdID = nil
+        pendingDeletionSelectionRevision = nil
     }
 
     func beginDragging(_ pasture: PastureSummary) {
@@ -265,7 +271,7 @@ final class PastureTileListViewModel {
         selectedPasture = nil
         isPresentingAddPasture = false
         internalFilter = .all
-        pasturePendingDeletion = nil
+        clearPendingDeletion()
         clearDrag()
         errorMessage = nil
         hasLoaded = false
