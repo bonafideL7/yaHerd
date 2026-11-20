@@ -8,6 +8,8 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
     private let assembly: CoreDataPersistenceAssembly
     private let selection: AppCurrentHerdSelection
 
+    var currentHerdSelection: AppCurrentHerdSelection { selection }
+
     init(assembly: CoreDataPersistenceAssembly, currentHerdID: UUID) {
         self.assembly = assembly
         self.selection = AppCurrentHerdSelection(currentHerdID: currentHerdID)
