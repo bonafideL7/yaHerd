@@ -24,6 +24,8 @@ struct WorkingSessionDetailView: View {
     @State private var showingReopenConfirmation = false
     @State private var showingError = false
     @State private var isMutatingSession = false
+    @State private var originatingHerdID: UUID?
+    @State private var originatingHerdSelectionRevision: UInt64?
 
     init(sessionID: UUID) {
         _viewModel = StateObject(
@@ -32,6 +34,14 @@ struct WorkingSessionDetailView: View {
                 repository: EmptyWorkingRepository()
             )
         )
+    }
+
+    private var isViewingOriginatingHerd: Bool {
+        guard let originatingHerdID, let originatingHerdSelectionRevision else {
+            return false
+        }
+        return herdSelection.currentHerdID == originatingHerdID
+            && herdSelection.selectionRevision == originatingHerdSelectionRevision
     }
 
     private var trimmedSearchText: String {
@@ -54,7 +64,13 @@ struct WorkingSessionDetailView: View {
 
     var body: some View {
         Group {
-            if let session = viewModel.session {
+            if originatingHerdSelectionRevision != nil && !isViewingOriginatingHerd {
+                ContentUnavailableView(
+                    "Working Session Unavailable",
+                    systemImage: "arrow.left.arrow.right",
+                    description: Text("The selected Herd changed. Reopen the session to continue.")
+                )
+            } else if let session = viewModel.session {
                 sessionContent(session)
             } else if viewModel.hasLoaded {
                 ContentUnavailableView(
@@ -67,25 +83,26 @@ struct WorkingSessionDetailView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .navigationTitle(viewModel.session?.sourcePastureName ?? "Working Session")
+        .navigationTitle(isViewingOriginatingHerd ? (viewModel.session?.sourcePastureName ?? "Working Session") : "Working Session")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isMutatingSession)
         .interactiveDismissDisabled(isMutatingSession)
         .navigationSubtitle(navigationSubtitle)
         .toolbar {
-            if let session = viewModel.session {
+            if isViewingOriginatingHerd, let session = viewModel.session {
                 sessionToolbar(session)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if viewModel.session?.status == .active {
+            if isViewingOriginatingHerd, viewModel.session?.status == .active {
                 Color.clear
                     .frame(height: 104)
                     .allowsHitTesting(false)
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            if let session = viewModel.session,
+            if isViewingOriginatingHerd,
+               let session = viewModel.session,
                session.status == .active,
                dataAccessMode.allowsDataMutations,
                !isMutatingSession {
@@ -99,25 +116,38 @@ struct WorkingSessionDetailView: View {
             }
         }
         .task {
+            guard originatingHerdSelectionRevision == nil else { return }
+            originatingHerdID = herdSelection.currentHerdID
+            originatingHerdSelectionRevision = herdSelection.selectionRevision
+            guard isViewingOriginatingHerd else { return }
+
             viewModel.configure(repository: repository)
             await viewModel.observe(
                 mutationStream: workingDependencies.mutationStream,
+                mayContinue: { isViewingOriginatingHerd },
                 didLoad: resetFilterForCompletedSession
             )
         }
         .sheet(isPresented: $showingAddAnimals, onDismiss: reload) {
-            if let session = viewModel.session {
+            if isViewingOriginatingHerd, let session = viewModel.session {
                 WorkingCollectAnimalsView(sessionID: session.id)
             }
         }
         .sheet(isPresented: $showingEditTreatments, onDismiss: reload) {
-            if let session = viewModel.session {
+            if isViewingOriginatingHerd, let session = viewModel.session {
                 WorkingSessionTreatmentEditorView(session: session)
             }
         }
         .sheet(isPresented: $showingFinish, onDismiss: reload) {
-            if let session = viewModel.session {
-                WorkingFinishSessionView(sessionID: session.id)
+            if isViewingOriginatingHerd,
+               let session = viewModel.session,
+               let originatingHerdID,
+               let originatingHerdSelectionRevision {
+                WorkingFinishSessionView(
+                    sessionID: session.id,
+                    originatingHerdID: originatingHerdID,
+                    originatingSelectionRevision: originatingHerdSelectionRevision
+                )
             }
         }
         .confirmationDialog(
@@ -128,7 +158,7 @@ struct WorkingSessionDetailView: View {
             Button("Reopen Session") {
                 reopenSession()
             }
-            .disabled(!dataAccessMode.allowsDataMutations || isMutatingSession)
+            .disabled(!dataAccessMode.allowsDataMutations || isMutatingSession || !isViewingOriginatingHerd)
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("The session will become editable again. Animals remain in their current pastures and are not automatically returned to the working pen.")
@@ -139,14 +169,24 @@ struct WorkingSessionDetailView: View {
             Text(viewModel.errorMessage ?? "Unknown error")
         }
         .onChange(of: viewModel.errorMessage) { _, newValue in
-            if newValue != nil {
+            if newValue != nil && isViewingOriginatingHerd {
                 showingError = true
             }
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            guard !isViewingOriginatingHerd else { return }
+            showingAddAnimals = false
+            showingEditTreatments = false
+            showingFinish = false
+            showingReopenConfirmation = false
+            showingError = false
+            searchText = ""
         }
     }
 
     private var navigationSubtitle: String {
-        guard let session = viewModel.session else { return "" }
+        guard isViewingOriginatingHerd,
+              let session = viewModel.session else { return "" }
         let dateText = session.date.formatted(date: .abbreviated, time: .omitted)
         switch session.status {
         case .active:
@@ -387,7 +427,7 @@ struct WorkingSessionDetailView: View {
                 } label: {
                     Label("Reopen Session", systemImage: "lock.open")
                 }
-                .disabled(!dataAccessMode.allowsDataMutations || isMutatingSession)
+                .disabled(!dataAccessMode.allowsDataMutations || isMutatingSession || !isViewingOriginatingHerd)
             }
         }
 
@@ -396,7 +436,7 @@ struct WorkingSessionDetailView: View {
                 ToolbarSaveButton(accessibilityLabel: "Review") {
                     showingFinish = true
                 }
-                .disabled(session.queueItems.isEmpty || isMutatingSession)
+                .disabled(session.queueItems.isEmpty || isMutatingSession || !isViewingOriginatingHerd)
             }
         }
     }
@@ -447,8 +487,9 @@ struct WorkingSessionDetailView: View {
 
     private func reopenSession() {
         guard !isMutatingSession,
-              let originatingHerdID = herdSelection.currentHerdID else { return }
-        let originatingRevision = herdSelection.selectionRevision
+              isViewingOriginatingHerd,
+              let originatingHerdID,
+              let originatingHerdSelectionRevision else { return }
         isMutatingSession = true
 
         Task { @MainActor in
@@ -456,12 +497,12 @@ struct WorkingSessionDetailView: View {
             let reopened = await viewModel.reopenSession(
                 originatingHerdID: originatingHerdID,
                 currentHerdSelection: herdSelection,
-                selectionIsUnchanged: { herdSelection.selectionRevision == originatingRevision }
+                selectionIsUnchanged: { isViewingOriginatingHerd }
             )
             guard reopened,
                   !Task.isCancelled,
                   herdSelection.currentHerdID == originatingHerdID,
-                  herdSelection.selectionRevision == originatingRevision else { return }
+                  herdSelection.selectionRevision == originatingHerdSelectionRevision else { return }
             animalFilter = .all
             searchText = ""
         }
@@ -474,6 +515,7 @@ struct WorkingSessionDetailView: View {
     }
 
     private func reload() {
+        guard isViewingOriginatingHerd else { return }
         viewModel.load()
         resetFilterForCompletedSession()
     }
