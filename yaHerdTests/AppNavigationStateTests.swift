@@ -486,6 +486,35 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertNil(restored.fullScreenWorkflow)
     }
 
+    func testUnselectedHerdCannotRestoreUnscopedRoutesOrFilters() throws {
+        let saved = AppNavigationState()
+        saved.selectedTab = .search
+        saved.herdRouter.path = [.animal(UUID())]
+        saved.herdRouter.searchPath = [.pasture(UUID())]
+        saved.herdRouter.searchText = "old Herd animals"
+        saved.herdRouter.filter = AnimalFilter(recordIssue: .missingTag)
+        saved.herdRouter.pastureFilter = .overCapacity
+        saved.herdRouter.isSearchPresented = true
+        saved.openWorkArea(.session(UUID()))
+
+        let restored = AppNavigationState()
+        restored.restore(
+            from: try XCTUnwrap(saved.restorationPayload()),
+            using: RestorableTestNavigationValidator(herdID: nil)
+        )
+
+        XCTAssertNil(restored.selectedHerdID)
+        XCTAssertEqual(restored.selectedTab, .home)
+        XCTAssertTrue(restored.herdRouter.path.isEmpty)
+        XCTAssertTrue(restored.herdRouter.searchPath.isEmpty)
+        XCTAssertEqual(restored.herdRouter.searchText, "")
+        XCTAssertEqual(restored.herdRouter.filter, AnimalFilter())
+        XCTAssertEqual(restored.herdRouter.pastureFilter, .all)
+        XCTAssertFalse(restored.herdRouter.isSearchPresented)
+        XCTAssertNil(restored.fullScreenWorkflow)
+        XCTAssertNil(restored.workflowRouter.route)
+    }
+
     func testInvalidRestorationPayloadLeavesDefaultStateUnchanged() {
         let navigation = AppNavigationState()
         navigation.restore(from: "not-base64")
