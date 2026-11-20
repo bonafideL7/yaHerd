@@ -135,13 +135,15 @@ struct PastureTileListView: View {
             if let pasture = model.pasturePendingDeletion {
                 Button("Delete \(pasture.name)", role: .destructive) {
                     guard let originatingHerdID = herdSelection.currentHerdID else { return }
+                    let originatingSelectionRevision = herdSelection.selectionRevision
                     Task { @MainActor in
                         await model.deletePasture(
                             id: pasture.id,
                             deletionCommand: deletionCommand,
                             orderingRepository: repository,
                             selection: herdSelection,
-                            originatingHerdID: originatingHerdID
+                            originatingHerdID: originatingHerdID,
+                            originatingSelectionRevision: originatingSelectionRevision
                         )
                     }
                 }
