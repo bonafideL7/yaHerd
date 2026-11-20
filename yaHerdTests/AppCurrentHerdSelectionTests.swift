@@ -301,4 +301,47 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
         XCTAssertEqual(selection.currentHerdID, otherID)
         XCTAssertEqual(defaults.string(forKey: "selected"), otherID.uuidString)
     }
+
+    func testRefreshPreservesExplicitSelectionWhenRememberedCategoryBelongsToAnotherHerd() throws {
+        let suite = "stage3-explicit-refresh-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let explicitID = UUID()
+        let rememberedID = UUID()
+        defaults.set(rememberedID.uuidString, forKey: "selected")
+        defaults.set("shared", forKey: "selected.storeCategory")
+        let selection = AppCurrentHerdSelection(
+            currentHerdID: explicitID, defaults: defaults, preferenceKey: "selected"
+        )
+        let originalRevision = selection.selectionRevision
+
+        // An explicit development selection is already resolved against the
+        // current stores. A different Herd's persisted category is irrelevant.
+        selection.revalidateActiveHerd(from: [herd(explicitID), herd(rememberedID)])
+
+        XCTAssertEqual(selection.currentHerdID, explicitID)
+        XCTAssertEqual(selection.selectionRevision, originalRevision)
+        XCTAssertEqual(defaults.string(forKey: "selected"), rememberedID.uuidString)
+        XCTAssertEqual(defaults.string(forKey: "selected.storeCategory"), "shared")
+    }
+
+    func testRefreshRejectsStoreReplacementWhenRememberedIdentityMatchesActiveHerd() throws {
+        let suite = "stage3-matching-category-refresh-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(defaults: defaults, preferenceKey: "selected")
+        try selection.selectAccessibleHerd(herdID, from: [herd(herdID)])
+        let originalRevision = selection.selectionRevision
+        let sharedReplacement = AccessibleHerd(summary: herd(herdID).summary, category: .shared)
+
+        selection.revalidateActiveHerd(from: [sharedReplacement])
+
+        XCTAssertNil(selection.currentHerdID)
+        XCTAssertEqual(selection.selectionRevision, originalRevision + 1)
+        XCTAssertEqual(defaults.string(forKey: "selected"), herdID.uuidString)
+        XCTAssertEqual(defaults.string(forKey: "selected.storeCategory"), "owned")
+    }
 }
