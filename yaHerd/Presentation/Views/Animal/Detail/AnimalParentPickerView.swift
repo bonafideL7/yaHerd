@@ -120,7 +120,7 @@ struct AnimalParentPickerView: View {
                 }
             }
         }
-        .task {
+        .task(id: excludeAnimalID) {
             // The lifetime of this sheet is tied to its opening Herd, not to
             // whatever Herd becomes current while an asynchronous read runs.
             let revision = openedSelectionRevision ?? herdSelection.selectionRevision
