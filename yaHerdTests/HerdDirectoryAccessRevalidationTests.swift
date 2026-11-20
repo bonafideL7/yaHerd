@@ -55,6 +55,70 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         XCTAssertNil(directory.errorMessage)
     }
 
+    func testDuplicateSelectedHerdRootInvalidatesSelectionWithoutErasingPreference() throws {
+        let suite = "stage3-duplicate-root-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let selectedID = UUID()
+        let selection = AppCurrentHerdSelection(defaults: defaults, preferenceKey: "selected")
+        selection.select(selectedID)
+        let repository = StubHerdRepository(available: [herd(selectedID)])
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+        directory.refresh()
+        let previousRevision = selection.selectionRevision
+
+        // CloudKit imports a second root with the same application UUID.
+        repository.inventoryError = .duplicateApplicationID(
+            entity: CDHerd.coreDataEntityName, id: selectedID, herdID: nil
+        )
+        directory.refresh(reportErrors: false)
+
+        XCTAssertNil(directory.selectedHerdID)
+        XCTAssertEqual(selection.selectionRevision, previousRevision + 1)
+        XCTAssertEqual(defaults.string(forKey: "selected"), selectedID.uuidString)
+        XCTAssertEqual(directory.inventoryState, .unavailable)
+        XCTAssertTrue(directory.herds.isEmpty)
+        XCTAssertNil(directory.errorMessage)
+
+        // A successful later inventory does not silently reactivate an unverified root.
+        repository.inventoryError = nil
+        directory.refresh(reportErrors: false)
+        XCTAssertNil(directory.selectedHerdID)
+        XCTAssertEqual(directory.herds.map(\.id), [selectedID])
+    }
+
+    func testUnresolvedSelectedHerdStoreInvalidatesSelection() {
+        let selectedID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: selectedID)
+        let repository = StubHerdRepository(available: [herd(selectedID)])
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+        directory.refresh()
+
+        repository.inventoryError = .unresolvedHerdStore(id: selectedID)
+        directory.refresh(reportErrors: false)
+
+        XCTAssertNil(directory.selectedHerdID)
+        XCTAssertEqual(directory.inventoryState, .unavailable)
+        XCTAssertTrue(directory.herds.isEmpty)
+    }
+
+    func testOtherHerdCollisionDoesNotInvalidateSelectedHerd() {
+        let selectedID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: selectedID)
+        let repository = StubHerdRepository(available: [herd(selectedID)])
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+        directory.refresh()
+
+        repository.inventoryError = .duplicateApplicationID(
+            entity: CDHerd.coreDataEntityName, id: UUID(), herdID: nil
+        )
+        directory.refresh(reportErrors: false)
+
+        XCTAssertEqual(directory.selectedHerdID, selectedID)
+        XCTAssertEqual(directory.herds.map(\.id), [selectedID])
+    }
+
     func testRefreshInvalidatesSelectedHerdWhoseStoreOwnershipChanges() async throws {
         for originalCategory: AccessibleHerd.Category in [.owned, .shared] {
             let suite = "stage3-store-ownership-\(UUID())"
@@ -551,6 +615,7 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
     private final class StubHerdRepository: HerdRepository {
         var available: [AccessibleHerd]
         var shouldFail = false
+        var inventoryError: CoreDataPersistenceError?
         var createdHerd: AccessibleHerd?
         var createInvocationCount = 0
         private var pendingCreation: CheckedContinuation<HerdSummary, Never>?
@@ -564,6 +629,7 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         }
 
         func fetchAccessibleHerds() throws -> [AccessibleHerd] {
+            if let inventoryError { throw inventoryError }
             if shouldFail { throw HerdRepositoryError.missingHerd }
             return available
         }
