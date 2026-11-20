@@ -130,6 +130,9 @@ final class WorkingTreatmentTemplateHerdIsolationTests: XCTestCase {
         XCTAssertEqual(model.visibleTemplate(identity: identity, selection: selection)?.name, "Original Herd Detail")
 
         selection.select(UUID())
+        // Even if a delayed detail read completes under the newly selected
+        // Herd, the original route must not adopt that Herd's template ID.
+        model.load()
         XCTAssertNil(model.visibleTemplate(identity: identity, selection: selection))
         model.clear()
         XCTAssertNil(model.template)
