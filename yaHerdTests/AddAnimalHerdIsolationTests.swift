@@ -7,6 +7,7 @@ final class AddAnimalHerdIsolationTests: XCTestCase {
     func testDelayedSaveDoesNotCreateAnimalAfterHerdSwitch() {
         let origin = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: origin)
+        let originatingRevision = selection.selectionRevision
         let repository = CreationProbe()
         let model = AddAnimalViewModel()
 
@@ -17,7 +18,7 @@ final class AddAnimalHerdIsolationTests: XCTestCase {
                 defaultTagColorID: nil,
                 using: repository,
                 expectedHerdID: origin,
-                expectedSelectionRevision: selection.selectionRevision,
+                expectedSelectionRevision: originatingRevision,
                 selection: selection
             )
         ) { error in
@@ -29,6 +30,7 @@ final class AddAnimalHerdIsolationTests: XCTestCase {
     func testRevokedSelectionDoesNotCreateAnimal() {
         let origin = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: origin)
+        let originatingRevision = selection.selectionRevision
         let repository = CreationProbe()
         let model = AddAnimalViewModel()
 
@@ -39,7 +41,7 @@ final class AddAnimalHerdIsolationTests: XCTestCase {
                 defaultTagColorID: nil,
                 using: repository,
                 expectedHerdID: origin,
-                expectedSelectionRevision: selection.selectionRevision,
+                expectedSelectionRevision: originatingRevision,
                 selection: selection
             )
         ) { error in
