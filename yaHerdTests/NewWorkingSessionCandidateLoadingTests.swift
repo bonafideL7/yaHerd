@@ -195,8 +195,8 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
 
         let olderRequest = Task {
             await model.loadEligibleAnimals(
-            pastureID: firstPastureID, currentHerdSelection: unchangedSelection
-        )
+                pastureID: firstPastureID, currentHerdSelection: unchangedSelection
+            )
         }
         await reader.waitForPausedRequest()
         model.clearCandidates(for: secondPastureID)
@@ -211,7 +211,6 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
         XCTAssertEqual(model.animals.map(\.id), [second.id])
         XCTAssertTrue(model.eligibleAnimals(pastureID: firstPastureID).isEmpty)
     }
-
 
     func testObsoleteCandidateReadCannotPublishAfterHerdSelectionRoundTrip() async {
         let originalHerdID = UUID()
