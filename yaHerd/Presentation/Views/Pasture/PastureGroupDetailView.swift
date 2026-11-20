@@ -5,19 +5,32 @@ struct PastureGroupDetailView: View {
     @Environment(\.pastureFeatureDependencies) private var pastureDependencies
     private var repository: any PastureGroupDetailRepository { pastureDependencies.groupDetailRepository }
     @State private var model = PastureGroupDetailViewModel()
-    @State private var originatingHerdID: UUID?
-    @State private var originatingSelectionRevision: UInt64 = 0
-
     private let groupID: UUID
+    private let originatingHerdID: UUID?
+    private let originatingSelectionRevision: UInt64
 
-    init(groupID: UUID) {
+    init(groupID: UUID, originatingHerdID: UUID?, originatingSelectionRevision: UInt64) {
         self.groupID = groupID
+        self.originatingHerdID = originatingHerdID
+        self.originatingSelectionRevision = originatingSelectionRevision
+    }
+
+    private var isSelectionCurrent: Bool {
+        guard let originatingHerdID else { return false }
+        return herdSelection.currentHerdID == originatingHerdID
+            && herdSelection.selectionRevision == originatingSelectionRevision
     }
 
 
     var body: some View {
         Group {
-            if let detail = model.detail {
+            if !isSelectionCurrent {
+                ContentUnavailableView(
+                    "Pasture Group unavailable",
+                    systemImage: "rectangle.3.group",
+                    description: Text("The selected Herd changed. Reopen this group to view its records.")
+                )
+            } else if let detail = model.detail {
                 Form {
                     Section("Group Info") {
                         LabeledContent("Graze Days", value: "\(detail.grazeDays)")
@@ -63,23 +76,37 @@ struct PastureGroupDetailView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 ToolbarEditButton {
-                    model.beginEditing()
+                    model.beginEditing(
+                        expectedHerdID: originatingHerdID,
+                        expectedSelectionRevision: originatingSelectionRevision,
+                        selection: herdSelection
+                    )
                 }
-                .disabled(model.detail == nil)
+                .disabled(model.detail == nil || !isSelectionCurrent)
             }
         }
         .sheet(isPresented: $model.isPresentingEditGroup) {
-            if let detail = model.detail {
+            if isSelectionCurrent, let detail = model.detail {
                 PastureGroupEditorView(group: detail) {
-                    model.reloadAfterSave(groupID: groupID, using: repository)
+                    model.reloadAfterSave(
+                        groupID: groupID, using: repository,
+                        expectedHerdID: originatingHerdID,
+                        expectedSelectionRevision: originatingSelectionRevision,
+                        selection: herdSelection
+                    )
                 }
             }
         }
         .task(id: groupID) {
-            // Bind this detail instance to the Herd incarnation it loaded.
-            originatingHerdID = herdSelection.currentHerdID
-            originatingSelectionRevision = herdSelection.selectionRevision
-            model.load(groupID: groupID, using: repository)
+            model.load(
+                groupID: groupID, using: repository,
+                expectedHerdID: originatingHerdID,
+                expectedSelectionRevision: originatingSelectionRevision,
+                selection: herdSelection
+            )
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            model.resetForHerdChange()
         }
         .alert("Can’t Complete Request", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
