@@ -158,11 +158,11 @@ final class AnimalParentPickerViewModelTests: XCTestCase {
 
         let older = Task { @MainActor in
             await model.load(
-            excluding: nil,
-            using: reader,
-            selection: selection,
-            originatingSelectionRevision: selection.selectionRevision
-        )
+                excluding: nil,
+                using: reader,
+                selection: selection,
+                originatingSelectionRevision: selection.selectionRevision
+            )
         }
         await reader.waitForFirstRequest()
         await model.load(
@@ -213,11 +213,11 @@ final class AnimalParentPickerViewModelTests: XCTestCase {
 
         let load = Task { @MainActor in
             await model.load(
-            excluding: nil,
-            using: reader,
-            selection: selection,
-            originatingSelectionRevision: revision
-        )
+                excluding: nil,
+                using: reader,
+                selection: selection,
+                originatingSelectionRevision: revision
+            )
         }
         await reader.waitForFirstRequest()
         selection.select(UUID())
