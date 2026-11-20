@@ -484,6 +484,58 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         XCTAssertEqual(Set(directory.herds.map(\.id)), [selectedID, createdID])
     }
 
+    func testConcurrentCreateIsRejectedBeforeSecondRepositoryWrite() async throws {
+        let selectedID = UUID()
+        let createdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: selectedID)
+        let repository = StubHerdRepository(available: [herd(selectedID)])
+        repository.createdHerd = herd(createdID)
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+
+        let firstCreation = Task { try await directory.createOwnedHerd(named: "First") }
+        await repository.waitForPendingCreation()
+
+        do {
+            _ = try await directory.createOwnedHerd(named: "Second")
+            XCTFail("Only one Create Herd transaction may be in progress.")
+        } catch let error as HerdDirectoryError {
+            XCTAssertEqual(error, .creationInProgress)
+        } catch {
+            XCTFail("Expected the directory's in-progress error, received: \\(error)")
+        }
+        XCTAssertEqual(repository.createInvocationCount, 1)
+
+        repository.completeCreation()
+        let result = try await firstCreation.value
+        XCTAssertEqual(result.id, createdID)
+        XCTAssertEqual(directory.selectedHerdID, createdID)
+        XCTAssertEqual(repository.createInvocationCount, 1)
+    }
+
+    func testCreateGuardReleasesAfterRepositoryFailure() async throws {
+        let originalID = UUID()
+        let createdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalID)
+        let repository = StubHerdRepository(available: [herd(originalID)])
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+
+        do {
+            _ = try await directory.createOwnedHerd(named: "Failed")
+            XCTFail("Expected the repository failure.")
+        } catch let error as HerdRepositoryError {
+            XCTAssertEqual(error, .missingHerd)
+        }
+        repository.createdHerd = herd(createdID)
+        let retry = Task { try await directory.createOwnedHerd(named: "Retry") }
+        await repository.waitForPendingCreation()
+        repository.completeCreation()
+
+        let result = try await retry.value
+        XCTAssertEqual(result.id, createdID)
+        XCTAssertEqual(directory.selectedHerdID, createdID)
+        XCTAssertEqual(repository.createInvocationCount, 2)
+    }
+
     private func herd(_ id: UUID) -> AccessibleHerd {
         AccessibleHerd(
             summary: HerdSummary(
@@ -518,7 +570,9 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
 
         func createOwnedHerd(named name: String) async throws -> HerdSummary {
             createInvocationCount += 1
-            guard createdHerd != nil else { throw HerdRepositoryError.missingHerd }
+            guard createdHerd != nil, pendingCreation == nil else {
+                throw HerdRepositoryError.missingHerd
+            }
             return await withCheckedContinuation { continuation in
                 pendingCreation = continuation
             }
