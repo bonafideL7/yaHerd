@@ -126,13 +126,20 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
             )
             try selection.selectAccessibleHerd(herdID, from: [original])
             let revision = selection.selectionRevision
+            if originalCategory == .shared {
+                // A legacy persisted UUID may use lowercase hex characters.
+                defaults.set(herdID.uuidString.lowercased(), forKey: "selected")
+            }
 
             // An active UUID is not proof that its owning store is unchanged.
             selection.restoreAccessibleHerd(from: [replacement])
 
             XCTAssertNil(selection.currentHerdID)
             XCTAssertEqual(selection.selectionRevision, revision + 1)
-            XCTAssertEqual(defaults.string(forKey: "selected"), herdID.uuidString)
+            XCTAssertEqual(
+                UUID(uuidString: defaults.string(forKey: "selected") ?? ""),
+                herdID
+            )
             XCTAssertEqual(
                 defaults.string(forKey: "selected.storeCategory"),
                 originalCategory == .owned ? "owned" : "shared"
