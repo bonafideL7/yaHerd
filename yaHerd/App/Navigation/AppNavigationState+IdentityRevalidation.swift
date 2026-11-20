@@ -45,6 +45,16 @@ extension AppNavigationState {
             )
             let workflowPlan = try liveWorkflowRevalidationPlan(using: validator)
 
+            // Once all required reads succeed, a different authoritative Herd
+            // identity invalidates the entire prior navigation snapshot. Matching
+            // record UUIDs in another Herd are not proof of the same navigation
+            // target. Use the established Herd-switch reset rather than retaining
+            // old filters, routes, or workflows.
+            if let previousHerdID = selectedHerdID, previousHerdID != currentHerdID {
+                resetForHerdChange(to: currentHerdID)
+                return
+            }
+
             selectedHerdID = currentHerdID
             herdRouter.path = validatedPath
             herdRouter.searchPath = validatedSearchPath
