@@ -226,13 +226,20 @@ struct AnimalDetailView: View {
             }
 
             if viewModel.detail != nil {
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        AnimalTimelineContainerView(animalID: animalID)
-                    } label: {
-                        Image(systemName: "clock.arrow.circlepath")
+                if let identity = viewModel.viewingSelectionIdentity {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        NavigationLink {
+                            AnimalTimelineContainerView(
+                                animalID: animalID,
+                                originatingHerdID: identity.herdID,
+                                originatingSelectionRevision: identity.revision
+                            )
+                        } label: {
+                            Image(systemName: "clock.arrow.circlepath")
+                        }
+                        .accessibilityLabel("Animal Timeline")
+                        .disabled(!isViewingCurrentHerd)
                     }
-                    .accessibilityLabel("Animal Timeline")
                 }
 
                 if !viewModel.isEditing {
