@@ -240,7 +240,8 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
         selection.select(UUID())
         repository.complete(with: savedSessionID)
 
-        XCTAssertNil(try await start.value)
+        let result = try await start.value
+        XCTAssertNil(result)
         XCTAssertEqual(repository.startCallCount, 1, "The initial Herd transaction must not be duplicated.")
     }
 
@@ -268,7 +269,8 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
         await repository.waitUntilStarted()
         repository.complete(with: savedSessionID)
 
-        XCTAssertEqual(try await start.value, savedSessionID)
+        let result = try await start.value
+        XCTAssertEqual(result, savedSessionID)
         XCTAssertEqual(repository.startCallCount, 1)
     }
 
