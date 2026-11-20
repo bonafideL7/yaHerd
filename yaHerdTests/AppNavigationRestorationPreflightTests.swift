@@ -292,6 +292,43 @@ final class AppNavigationRestorationPreflightTests: XCTestCase {
     }
 
     @MainActor
+    func testUnscopedSnapshotCannotRestoreAnotherHerdsRoutesOrCriteria() throws {
+        // Older scene snapshots have no selected Herd identity. They cannot
+        // establish ownership of their navigation state after a Herd is selected.
+        let activeHerdID = UUID()
+        let saved = AppNavigationState()
+        saved.selectedTab = .search
+        saved.herdRouter.searchText = "Old Herd records"
+        saved.herdRouter.filter = AnimalFilter(recordIssue: .missingTag)
+        saved.herdRouter.path = [.animal(UUID())]
+        saved.herdRouter.searchPath = [.animal(UUID())]
+        saved.openWorkArea(.session(UUID()))
+        let payload = try XCTUnwrap(saved.restorationPayload())
+
+        let restored = AppNavigationState()
+        let validator = PreflightStubNavigationValidator(
+            currentHerdResult: .success(activeHerdID),
+            animalResult: .failure(.readFailed),
+            workingSessionResult: .failure(.readFailed)
+        )
+
+        // An unscoped snapshot must not query or reinstate saved records
+        // from a different Herd, even when those reads are unavailable.
+        XCTAssertEqual(
+            restored.restorePreservingStoredSnapshot(from: payload, using: validator),
+            .applied
+        )
+        XCTAssertEqual(restored.selectedHerdID, activeHerdID)
+        XCTAssertEqual(restored.selectedTab, .home)
+        XCTAssertTrue(restored.herdRouter.path.isEmpty)
+        XCTAssertTrue(restored.herdRouter.searchPath.isEmpty)
+        XCTAssertEqual(restored.herdRouter.searchText, "")
+        XCTAssertEqual(restored.herdRouter.filter, AnimalFilter())
+        XCTAssertNil(restored.workflowRouter.route)
+        XCTAssertNil(restored.fullScreenWorkflow)
+    }
+
+    @MainActor
     private func makePayload(
         herdID: UUID,
         animalID: UUID? = nil,
