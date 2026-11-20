@@ -74,6 +74,38 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         XCTAssertEqual(model.items, [currentAnimal])
     }
 
+    func testHerdRoundTripWithoutIntermediateObservationDiscardsStaleRead() async {
+        let originalHerdID = UUID()
+        let staleAnimal = makeAnimal(name: "Prior selection", tagNumber: "100")
+        let freshAnimal = makeAnimal(name: "New selection incarnation", tagNumber: "200")
+        let reader = ControlledAnimalListQueryReader(
+            staleAnimal: staleAnimal, freshAnimal: freshAnimal
+        )
+        let repository = BackgroundQueryingAnimalListRepository(
+            base: StubAnimalListRepository(), queryReader: reader
+        )
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let model = AnimalListViewModel()
+        model.configure(selection: selection)
+        model.load(using: repository, pastureRepository: EmptyPastureReferenceDataReader())
+        XCTAssertTrue(await waitForRequestCount(1, reader: reader))
+
+        // SwiftUI may coalesce both selection updates while the asynchronous
+        // reader is suspended. An equal Herd UUID is not the same selection.
+        selection.select(UUID())
+        selection.select(originalHerdID)
+        await reader.releaseFirstRequest()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertTrue(model.items.isEmpty)
+        XCTAssertNil(model.errorMessage)
+
+        model.load(using: repository, pastureRepository: EmptyPastureReferenceDataReader())
+        XCTAssertTrue(await waitForAnimal(freshAnimal.id, in: model))
+        XCTAssertEqual(model.items, [freshAnimal])
+    }
+
     func testFailedPriorHerdReadCannotPublishErrorAfterSelectionChanges() async {
         let staleAnimal = makeAnimal(name: "Old Herd", tagNumber: "101")
         let freshAnimal = makeAnimal(name: "New Herd", tagNumber: "201")
