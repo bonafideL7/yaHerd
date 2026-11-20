@@ -229,6 +229,9 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         let repository = CoreDataHerdRepository(
             selection: AppCurrentHerdSelection(), assembly: assembly
         )
+        let inventory = try repository.fetchHerdInventory()
+        XCTAssertEqual(inventory.herds.map(\.id), [validID])
+        XCTAssertTrue(inventory.hasIncompleteRoots)
         XCTAssertEqual(try repository.fetchAccessibleHerds().map(\.id), [validID])
     }
 
