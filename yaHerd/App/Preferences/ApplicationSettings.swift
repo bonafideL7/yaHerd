@@ -218,7 +218,10 @@ final class ApplicationSettings {
         recentPastureIDsByHerdValue = [:]
         persistChange(key: .recentPastureIDs, encodedValue: encodedRecentPasturesByHerd())
         homeDismissedSetupSuggestionIDsByHerdValue = [:]
-        persistChange(key: .homeDismissedSetupSuggestionIDs, encodedValue: encodedHomeDismissalsByHerd())
+        persistChange(
+            key: .homeDismissedSetupSuggestionIDs,
+            encodedValue: encodedHomeDismissalsByHerd()
+        )
         isHomeSetupSuggestionsExpanded = true
         clearLegacyRecentPastureNames()
     }
