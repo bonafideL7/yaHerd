@@ -8,22 +8,20 @@ struct PastureGroupListView: View {
 
     var body: some View {
         Group {
-            if model.groups.isEmpty {
+            if model.groups.isEmpty || !model.isLoadedForCurrentSelection(herdSelection) {
                 ContentUnavailableView(
                     "No Pasture Groups",
                     systemImage: "rectangle.3.group",
                     description: Text("Create groups to organize pastures by grazing and rest schedules.")
                 )
-            } else {
+            } else if let rowOrigin = model.loadedSelectionIdentity {
                 List {
                     ForEach(model.groups) { group in
-                        let rowHerdID = herdSelection.currentHerdID
-                        let rowSelectionRevision = herdSelection.selectionRevision
                         NavigationLink {
                             PastureGroupDetailView(
                                 groupID: group.id,
-                                originatingHerdID: rowHerdID,
-                                originatingSelectionRevision: rowSelectionRevision
+                                originatingHerdID: rowOrigin.herdID,
+                                originatingSelectionRevision: rowOrigin.revision
                             )
                         } label: {
                             PastureGroupRow(group: group)
@@ -32,8 +30,8 @@ struct PastureGroupListView: View {
                             Button("Delete", role: .destructive) {
                                 model.requestDelete(
                                     group,
-                                    originatingHerdID: rowHerdID,
-                                    originatingSelectionRevision: rowSelectionRevision,
+                                    originatingHerdID: rowOrigin.herdID,
+                                    originatingSelectionRevision: rowOrigin.revision,
                                     selection: herdSelection
                                 )
                             }
