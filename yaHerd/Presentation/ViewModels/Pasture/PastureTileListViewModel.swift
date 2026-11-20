@@ -17,11 +17,36 @@ final class PastureTileListViewModel {
     private(set) var hasLoaded = false
     private(set) var hasInitialLoadFailure = false
     private var lastLoadedRevision: UInt64 = 0
+    @ObservationIgnored private var herdSelection: AppCurrentHerdSelection?
+    private var selectedHerdID: UUID?
+    private var selectedSelectionRevision: UInt64 = 0
+    private var hasConfiguredHerdSelection = false
+    private var dragSelectionRevision: UInt64?
+
+    var isCurrentHerdSelection: Bool {
+        guard let herdSelection else { return true }
+        return selectedHerdID == herdSelection.currentHerdID
+            && selectedSelectionRevision == herdSelection.selectionRevision
+    }
+
+    func configure(selection: AppCurrentHerdSelection) {
+        herdSelection = selection
+        let herdID = selection.currentHerdID
+        let revision = selection.selectionRevision
+        guard !hasConfiguredHerdSelection
+                || selectedHerdID != herdID
+                || selectedSelectionRevision != revision else { return }
+        hasConfiguredHerdSelection = true
+        selectedHerdID = herdID
+        selectedSelectionRevision = revision
+        resetForHerdChange()
+    }
 
     func observe(
         using repository: any PastureListReader,
         mutationStream: any ApplicationMutationStreaming
     ) async {
+        refreshHerdSelection()
         let startingRevision = mutationStream.pastureRevision
         if !hasLoaded || lastLoadedRevision < startingRevision {
             if load(using: repository) {
@@ -42,6 +67,7 @@ final class PastureTileListViewModel {
 
     @discardableResult
     func load(using repository: any PastureListReader) -> Bool {
+        refreshHerdSelection()
         if !hasLoaded { hasInitialLoadFailure = false }
         do {
             items = try repository.fetchPastures()
@@ -76,14 +102,19 @@ final class PastureTileListViewModel {
     }
 
     func requestAddPasture() {
+        refreshHerdSelection()
         isPresentingAddPasture = true
     }
 
     func select(_ pasture: PastureSummary) {
+        refreshHerdSelection()
+        guard items.contains(where: { $0.id == pasture.id }) else { return }
         selectedPasture = pasture
     }
 
     func requestDelete(_ pasture: PastureSummary) {
+        refreshHerdSelection()
+        guard items.contains(where: { $0.id == pasture.id }) else { return }
         pasturePendingDeletion = pasture
     }
 
@@ -92,8 +123,13 @@ final class PastureTileListViewModel {
     }
 
     func beginDragging(_ pasture: PastureSummary) {
+        refreshHerdSelection()
+        guard selectedHerdID != nil,
+              isCurrentHerdSelection,
+              items.contains(where: { $0.id == pasture.id }) else { return }
         dragStartOrder = items
         draggedPasture = pasture
+        dragSelectionRevision = selectedSelectionRevision
     }
 
     func movePastures(from source: IndexSet, to destination: Int, using repository: any PastureOrdering) {
@@ -108,13 +144,25 @@ final class PastureTileListViewModel {
     }
 
     func moveDraggedPasture(from source: Int, to destination: Int) {
+        refreshHerdSelection()
+        guard dragSelectionRevision == selectedSelectionRevision,
+              dragSelectionRevision != nil,
+              isCurrentHerdSelection else { return }
         movePasturesInMemory(from: IndexSet(integer: source), to: destination)
     }
 
     func commitDragOrder(using repository: any PastureOrdering) {
-        guard !dragStartOrder.isEmpty else { return }
+        refreshHerdSelection()
+        guard selectedHerdID != nil,
+              isCurrentHerdSelection,
+              dragSelectionRevision == selectedSelectionRevision,
+              dragSelectionRevision != nil,
+              !dragStartOrder.isEmpty else {
+            clearDrag()
+            return
+        }
         commitPastureOrder(using: repository, rollbackTo: dragStartOrder)
-        dragStartOrder = []
+        clearDrag()
     }
 
     func persistPastureOrder(using repository: any PastureOrdering) throws {
@@ -138,6 +186,7 @@ final class PastureTileListViewModel {
         originatingHerdID: UUID,
         originatingSelectionRevision: UInt64
     ) async {
+        refreshHerdSelection()
         guard !isDeletingPastures,
               selection.currentHerdID == originatingHerdID,
               selection.selectionRevision == originatingSelectionRevision else { return }
@@ -191,6 +240,7 @@ final class PastureTileListViewModel {
         originatingHerdID: UUID,
         originatingSelectionRevision: UInt64
     ) async {
+        refreshHerdSelection()
         guard !isDeletingPastures,
               let index = items.firstIndex(where: { $0.id == id }) else { return }
         await deletePastures(
@@ -201,6 +251,32 @@ final class PastureTileListViewModel {
             originatingHerdID: originatingHerdID,
             originatingSelectionRevision: originatingSelectionRevision
         )
+    }
+
+    private func refreshHerdSelection() {
+        guard let herdSelection,
+              selectedHerdID != herdSelection.currentHerdID
+                || selectedSelectionRevision != herdSelection.selectionRevision else { return }
+        configure(selection: herdSelection)
+    }
+
+    private func resetForHerdChange() {
+        items = []
+        selectedPasture = nil
+        isPresentingAddPasture = false
+        internalFilter = .all
+        pasturePendingDeletion = nil
+        clearDrag()
+        errorMessage = nil
+        hasLoaded = false
+        hasInitialLoadFailure = false
+        lastLoadedRevision = 0
+    }
+
+    private func clearDrag() {
+        dragStartOrder = []
+        draggedPasture = nil
+        dragSelectionRevision = nil
     }
 
     private func movedItems(from source: IndexSet, to destination: Int) -> [PastureSummary] {
