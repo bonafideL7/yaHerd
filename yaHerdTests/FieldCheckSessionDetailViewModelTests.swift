@@ -207,6 +207,7 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
     func testQueuedNotesPersistenceDoesNotRetargetAfterHerdChange() async throws {
         let herdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
         let sessionID = UUID()
         let repository = FieldCheckSessionDetailRepositorySpy(
             detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
@@ -232,6 +233,7 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
             await model.persistNotes(
                 sessionID: sessionID,
                 originatingHerdID: herdID,
+                originatingSelectionRevision: revision,
                 currentHerdSelection: selection,
                 using: repository
             )
@@ -252,6 +254,7 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
     func testHerdChangeDuringNotesWriteSuppressesObsoleteRefresh() async {
         let herdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
         let sessionID = UUID()
         let repository = FieldCheckSessionDetailRepositorySpy(
             detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
@@ -266,6 +269,7 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
             await model.persistNotes(
                 sessionID: sessionID,
                 originatingHerdID: herdID,
+                originatingSelectionRevision: revision,
                 currentHerdSelection: selection,
                 using: repository
             )
@@ -284,6 +288,7 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
     func testHerdChangeDuringFailedNotesWriteDoesNotPublishStaleError() async {
         let herdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
         let sessionID = UUID()
         let repository = FieldCheckSessionDetailRepositorySpy(
             detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
@@ -299,6 +304,7 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
             await model.persistNotes(
                 sessionID: sessionID,
                 originatingHerdID: herdID,
+                originatingSelectionRevision: revision,
                 currentHerdSelection: selection,
                 using: repository
             )
@@ -316,6 +322,7 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
     func testNotesPersistenceSucceedsWhenOriginatingHerdIsUnchanged() async {
         let herdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
         let sessionID = UUID()
         let repository = FieldCheckSessionDetailRepositorySpy(
             detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
@@ -328,6 +335,7 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         let succeeded = await model.persistNotes(
             sessionID: sessionID,
             originatingHerdID: herdID,
+            originatingSelectionRevision: revision,
             currentHerdSelection: selection,
             using: repository
         )
@@ -336,6 +344,87 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         XCTAssertEqual(repository.notesWriteCount, 1)
         XCTAssertEqual(repository.detail.notes, "Saved notes")
         XCTAssertEqual(model.detail?.notes, "Saved notes")
+    }
+
+    func testQueuedNotesPersistenceRejectsSelectionRoundTrip() async throws {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
+        let sessionID = UUID()
+        let repository = FieldCheckSessionDetailRepositorySpy(
+            detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
+        )
+        repository.shouldBlockSetCountedWrite = true
+        let model = FieldCheckSessionDetailViewModel()
+
+        XCTAssertTrue(model.load(sessionID: sessionID, using: repository))
+        model.updateNotesDraft("Obsolete draft")
+        let animalCheckID = try XCTUnwrap(repository.detail.animalChecks.first?.id)
+
+        let predecessor = Task {
+            await model.setAnimalCheckCounted(
+                sessionID: sessionID,
+                animalCheckID: animalCheckID,
+                isCounted: true,
+                using: repository
+            )
+        }
+        await waitUntil { repository.operationLog.contains("setCounted") }
+
+        let save = Task {
+            await model.persistNotes(
+                sessionID: sessionID,
+                originatingHerdID: herdID,
+                originatingSelectionRevision: revision,
+                currentHerdSelection: selection,
+                using: repository
+            )
+        }
+        for _ in 0..<20 { await Task.yield() }
+
+        selection.select(UUID())
+        selection.select(herdID)
+        repository.releaseSetCountedWrite()
+        await predecessor.value
+
+        XCTAssertFalse(await save.value)
+        XCTAssertEqual(repository.notesWriteCount, 0)
+        XCTAssertEqual(repository.detail.notes, "")
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testNotesWriteCompletionAfterSelectionRoundTripDoesNotRefreshObsoleteDraft() async {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
+        let sessionID = UUID()
+        let repository = FieldCheckSessionDetailRepositorySpy(
+            detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
+        )
+        repository.shouldBlockNotesWrite = true
+        let model = FieldCheckSessionDetailViewModel()
+
+        XCTAssertTrue(model.load(sessionID: sessionID, using: repository))
+        model.updateNotesDraft("Original Herd notes")
+
+        let save = Task {
+            await model.persistNotes(
+                sessionID: sessionID,
+                originatingHerdID: herdID,
+                originatingSelectionRevision: revision,
+                currentHerdSelection: selection,
+                using: repository
+            )
+        }
+        await waitUntil { repository.notesWriteCount == 1 }
+        selection.select(UUID())
+        selection.select(herdID)
+        repository.releaseNotesWrite()
+
+        XCTAssertFalse(await save.value)
+        XCTAssertEqual(repository.detail.notes, "Original Herd notes")
+        XCTAssertEqual(model.detail?.notes, "")
+        XCTAssertNil(model.errorMessage)
     }
 
     func testQueuedQuickCountsStopAfterHerdSwitch() async throws {
