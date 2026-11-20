@@ -132,6 +132,7 @@ final class WorkingSessionCompletionUseCaseTests: XCTestCase {
         let completed = try await model.finishSession(
             assignments: [],
             originatingHerdID: UUID(),
+            originatingSelectionRevision: selection.selectionRevision,
             currentHerdSelection: selection,
             repository: repository
         )
@@ -158,6 +159,7 @@ final class WorkingSessionCompletionUseCaseTests: XCTestCase {
             try await model.finishSession(
                 assignments: [],
                 originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: selection.selectionRevision,
                 currentHerdSelection: selection,
                 repository: repository
             )
@@ -190,6 +192,7 @@ final class WorkingSessionCompletionUseCaseTests: XCTestCase {
             try await model.finishSession(
                 assignments: [],
                 originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: selection.selectionRevision,
                 currentHerdSelection: selection,
                 repository: repository
             )
@@ -202,6 +205,35 @@ final class WorkingSessionCompletionUseCaseTests: XCTestCase {
         let completed = try await finishing.value
         XCTAssertFalse(completed, "An obsolete finish must not dismiss a newly opened Herd view.")
         XCTAssertEqual(repository.completionCalls.count, 1)
+    }
+
+    func testFinishViewModelDoesNotStartAfterHerdSelectionRoundTrip() async throws {
+        let sessionID = UUID()
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let originatingSelectionRevision = selection.selectionRevision
+        let repository = WorkingSessionCompletionRepositorySpy(
+            session: makeSession(id: sessionID, queueItemIDs: [])
+        )
+        let model = WorkingFinishSessionViewModel(
+            sessionID: sessionID,
+            workingRepository: repository,
+            pastureRepository: EmptyPastureRepository()
+        )
+
+        selection.select(UUID())
+        selection.select(herdID)
+
+        let completed = try await model.finishSession(
+            assignments: [],
+            originatingHerdID: herdID,
+            originatingSelectionRevision: originatingSelectionRevision,
+            currentHerdSelection: selection,
+            repository: repository
+        )
+
+        XCTAssertFalse(completed)
+        XCTAssertTrue(repository.completionCalls.isEmpty)
     }
 
     func testFinishViewModelAcknowledgesCompletionWhenHerdIsUnchanged() async throws {
@@ -220,6 +252,7 @@ final class WorkingSessionCompletionUseCaseTests: XCTestCase {
         let completed = try await model.finishSession(
             assignments: [],
             originatingHerdID: herdID,
+            originatingSelectionRevision: selection.selectionRevision,
             currentHerdSelection: selection,
             repository: repository
         )
