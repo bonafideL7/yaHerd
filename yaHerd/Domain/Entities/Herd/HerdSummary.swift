@@ -13,3 +13,19 @@ struct HerdSummary: Identifiable, Equatable, Sendable {
 
     var id: UUID { publicID }
 }
+
+/// A complete local Herd root available in an owned or joined persistent store.
+/// Shared access permissions are resolved separately; store location alone
+/// must never be interpreted as permission to edit.
+struct AccessibleHerd: Identifiable, Equatable, Sendable {
+    enum Category: Sendable {
+        case owned
+        case shared
+    }
+
+    let summary: HerdSummary
+    let category: Category
+
+    var id: UUID { summary.id }
+    var name: String { summary.name }
+}
