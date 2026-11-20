@@ -858,6 +858,114 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         )
     }
 
+    func testAnimalDetailQueuedMutationRejectsSelectionRoundTrip() async throws {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
+        let sessionID = UUID()
+        let animalID = UUID()
+        let repository = FieldCheckSessionDetailRepositorySpy(
+            detail: makeDetail(sessionID: sessionID, quickCowCount: 0, primaryAnimalID: animalID)
+        )
+        repository.shouldBlockSetCountedWrite = true
+        let animalRepository = FieldCheckAnimalDetailRepositorySpy(detail: makeAnimalDetail(id: animalID))
+        let model = FieldCheckAnimalDetailViewModel()
+        model.load(
+            animalID: animalID, sessionID: sessionID,
+            animalRepository: animalRepository, fieldCheckRepository: repository
+        )
+        let isCurrentHerd: @MainActor () -> Bool = {
+            selection.currentHerdID == herdID && selection.selectionRevision == revision
+        }
+
+        let first = Task {
+            await model.setAnimalCheckCounted(
+                animalID: animalID, sessionID: sessionID, isCounted: true,
+                animalRepository: animalRepository, fieldCheckRepository: repository,
+                mayContinue: isCurrentHerd
+            )
+        }
+        await waitUntil { repository.operationLog.contains("setCounted") }
+
+        let queued = Task {
+            await model.setAnimalCheckMissing(
+                animalID: animalID, sessionID: sessionID, isMissing: true,
+                animalRepository: animalRepository, fieldCheckRepository: repository,
+                mayContinue: isCurrentHerd
+            )
+        }
+        for _ in 0..<20 { await Task.yield() }
+        selection.select(UUID())
+        selection.select(herdID)
+        repository.releaseSetCountedWrite()
+        await first.value
+        await queued.value
+
+        XCTAssertEqual(repository.operationLog, ["setCounted"])
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testAnimalDetailInFlightFailureDoesNotPublishObsoleteError() async {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
+        let sessionID = UUID()
+        let animalID = UUID()
+        let repository = FieldCheckSessionDetailRepositorySpy(
+            detail: makeDetail(sessionID: sessionID, quickCowCount: 0, primaryAnimalID: animalID)
+        )
+        repository.shouldBlockSetCountedWrite = true
+        repository.setCountedFailure = FieldCheckSessionDetailTestError.findingStatusFailure
+        let animalRepository = FieldCheckAnimalDetailRepositorySpy(detail: makeAnimalDetail(id: animalID))
+        let model = FieldCheckAnimalDetailViewModel()
+        model.load(
+            animalID: animalID, sessionID: sessionID,
+            animalRepository: animalRepository, fieldCheckRepository: repository
+        )
+
+        let pending = Task {
+            await model.setAnimalCheckCounted(
+                animalID: animalID, sessionID: sessionID, isCounted: true,
+                animalRepository: animalRepository, fieldCheckRepository: repository,
+                mayContinue: {
+                    selection.currentHerdID == herdID
+                        && selection.selectionRevision == revision
+                }
+            )
+        }
+        await waitUntil { repository.operationLog.contains("setCounted") }
+        selection.select(UUID())
+        repository.releaseSetCountedWrite()
+        await pending.value
+
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testAnimalDetailMutationWorksWhenOriginatingHerdIsUnchanged() async {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let sessionID = UUID()
+        let animalID = UUID()
+        let repository = FieldCheckSessionDetailRepositorySpy(
+            detail: makeDetail(sessionID: sessionID, quickCowCount: 0, primaryAnimalID: animalID)
+        )
+        let animalRepository = FieldCheckAnimalDetailRepositorySpy(detail: makeAnimalDetail(id: animalID))
+        let model = FieldCheckAnimalDetailViewModel()
+        model.load(
+            animalID: animalID, sessionID: sessionID,
+            animalRepository: animalRepository, fieldCheckRepository: repository
+        )
+
+        await model.setAnimalCheckMissing(
+            animalID: animalID, sessionID: sessionID, isMissing: true,
+            animalRepository: animalRepository, fieldCheckRepository: repository,
+            mayContinue: { selection.currentHerdID == herdID }
+        )
+
+        XCTAssertEqual(repository.operationLog, ["setMissing"])
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testTrackedAnimalPickerSubmissionGateRejectsReentryUntilFinished() async {
         let model = FieldCheckTrackedAnimalPickerViewModel()
         let session = makeDetail(sessionID: UUID(), quickCowCount: 0)
