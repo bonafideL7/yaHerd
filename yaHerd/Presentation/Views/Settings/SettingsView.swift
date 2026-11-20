@@ -465,8 +465,8 @@ struct HerdDirectoryView: View {
             TextField("Herd name", text: $newHerdName)
             Button("Create") {
                 guard !isCreating, !isOpeningHerd,
-                      (directory.inventoryState == .available ||
-                       directory.inventoryState == .incomplete) else { return }
+                      directory.inventoryState == .available ||
+                      directory.inventoryState == .incomplete else { return }
                 validationTask?.cancel()
                 pendingHerdID = nil
                 isCreating = true
