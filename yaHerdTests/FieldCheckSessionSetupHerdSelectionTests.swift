@@ -50,6 +50,33 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
         XCTAssertEqual(repository.createCallCount, 1)
     }
 
+    func testCompletedSaveDoesNotNavigateAfterHerdSelectionRoundTrip() async throws {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let repository = SuspendedFieldCheckSessionCreator()
+        let model = FieldCheckSessionSetupViewModel()
+        let savedID = UUID()
+
+        let start = Task {
+            try await model.createSession(
+                pastureID: UUID(),
+                startedAt: .now,
+                notes: "",
+                originatingHerdID: originalHerdID,
+                currentHerdSelection: selection,
+                using: repository
+            )
+        }
+        await repository.waitUntilStarted()
+        selection.select(UUID())
+        selection.select(originalHerdID)
+        repository.complete(with: savedID)
+
+        let result = try await start.value
+        XCTAssertNil(result, "An obsolete setup must not open a session after switching away and back.")
+        XCTAssertEqual(repository.createCallCount, 1, "The existing save must not be repeated.")
+    }
+
     func testCancelledSaveDoesNotPublishNavigation() async throws {
         let originalHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
