@@ -7,6 +7,7 @@ import SwiftUI
 
 struct NewWorkingSessionView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
@@ -298,7 +299,8 @@ struct NewWorkingSessionView: View {
 
     private func startSession() {
         guard canStart,
-              let pastureID = selectedPastureID else {
+              let pastureID = selectedPastureID,
+              let originatingHerdID = herdSelection.currentHerdID else {
             return
         }
 
@@ -327,14 +329,19 @@ struct NewWorkingSessionView: View {
                     pastureID: pastureID,
                     treatmentTemplateName: templateName,
                     plannedTreatments: cleanedTreatments,
-                    animalIDs: submittedAnimalIDs
+                    animalIDs: submittedAnimalIDs,
+                    originatingHerdID: originatingHerdID,
+                    currentHerdSelection: herdSelection
                 )
+                guard let sessionID else { return }
                 if let onSessionCreated {
                     onSessionCreated(sessionID)
                 } else {
                     startedRoute = StartedWorkingSessionSetupRoute(id: sessionID)
                 }
             } catch {
+                guard !Task.isCancelled,
+                      herdSelection.currentHerdID == originatingHerdID else { return }
                 viewModel.errorMessage = UserVisibleErrorMessage.make(error)
             }
         }
