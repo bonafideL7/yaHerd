@@ -501,7 +501,7 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         } catch let error as HerdDirectoryError {
             XCTAssertEqual(error, .creationInProgress)
         } catch {
-            XCTFail("Expected the directory's in-progress error, received: \\(error)")
+            XCTFail("Expected the directory's in-progress error, received: \(error)")
         }
         XCTAssertEqual(repository.createInvocationCount, 1)
 
