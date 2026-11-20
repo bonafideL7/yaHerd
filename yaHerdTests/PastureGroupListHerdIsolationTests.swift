@@ -170,6 +170,42 @@ final class PastureGroupListHerdIsolationTests: XCTestCase {
         XCTAssertEqual(repository.groups.count, 1)
     }
 
+    func testLoadedRowIdentityCannotBeRestampedBySelectionChange() {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let repository = GroupListDeletionProbe(groups: [makeGroup()])
+        let model = PastureGroupListViewModel()
+        model.load(using: repository, selection: selection)
+        let initialIdentity = model.loadedSelectionIdentity
+
+        selection.select(UUID())
+
+        XCTAssertEqual(model.loadedSelectionIdentity?.herdID, originalHerdID)
+        XCTAssertEqual(model.loadedSelectionIdentity?.revision, initialIdentity?.revision)
+        XCTAssertFalse(model.isLoadedForCurrentSelection(selection))
+
+        model.resetForHerdChange()
+        model.load(using: repository, selection: selection)
+
+        XCTAssertEqual(model.loadedSelectionIdentity?.herdID, selection.currentHerdID)
+        XCTAssertTrue(model.isLoadedForCurrentSelection(selection))
+    }
+
+    func testPriorLoadedRowsRemainObsoleteAfterHerdRoundTrip() {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let repository = GroupListDeletionProbe(groups: [makeGroup()])
+        let model = PastureGroupListViewModel()
+        model.load(using: repository, selection: selection)
+        let originalRevision = selection.selectionRevision
+
+        selection.select(UUID())
+        selection.select(originalHerdID)
+
+        XCTAssertEqual(model.loadedSelectionIdentity?.revision, originalRevision)
+        XCTAssertFalse(model.isLoadedForCurrentSelection(selection))
+    }
+
     private func makeGroup() -> PastureGroupSummary {
         PastureGroupSummary(
             id: UUID(), name: "Spring Rotation",
