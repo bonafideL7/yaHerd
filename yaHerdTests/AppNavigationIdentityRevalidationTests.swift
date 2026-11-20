@@ -32,6 +32,47 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
     }
 
     @MainActor
+    func testRevalidatingDifferentHerdDiscardsPreviouslySelectedHerdNavigation() {
+        let priorHerdID = UUID()
+        let newlySelectedHerdID = UUID()
+        let animalID = UUID()
+        let pastureID = UUID()
+        let workingSessionID = UUID()
+        let navigation = AppNavigationState()
+        navigation.selectedHerdID = priorHerdID
+        navigation.selectedTab = .search
+        navigation.herdRouter.path = [.animal(animalID)]
+        navigation.herdRouter.searchPath = [.pasture(pastureID)]
+        navigation.herdRouter.searchText = "prior herd"
+        navigation.herdRouter.isSearchPresented = true
+        navigation.herdRouter.filter.pasture = .pasture(pastureID)
+        navigation.herdRouter.showArchivedRecords = true
+        navigation.openWorkArea(.session(workingSessionID))
+
+        // Equal record UUIDs can legitimately exist in different Herds. Successful
+        // lookups in the new Herd must never validate the previous Herd's routes.
+        let validator = StubNavigationValidator(
+            currentHerdResult: .success(newlySelectedHerdID),
+            animalResult: .success(true),
+            pastureResult: .success(true),
+            workingSessionExistsResult: .success(true)
+        )
+
+        navigation.revalidateIdentityBoundState(using: validator)
+
+        XCTAssertEqual(navigation.selectedHerdID, newlySelectedHerdID)
+        XCTAssertEqual(navigation.selectedTab, .home)
+        XCTAssertTrue(navigation.herdRouter.path.isEmpty)
+        XCTAssertTrue(navigation.herdRouter.searchPath.isEmpty)
+        XCTAssertEqual(navigation.herdRouter.searchText, "")
+        XCTAssertFalse(navigation.herdRouter.isSearchPresented)
+        XCTAssertEqual(navigation.herdRouter.filter, AnimalFilter())
+        XCTAssertFalse(navigation.herdRouter.showArchivedRecords)
+        XCTAssertNil(navigation.fullScreenWorkflow)
+        XCTAssertNil(navigation.workflowRouter.route)
+    }
+
+    @MainActor
     func testConfirmedMissingHerdClearsIdentityBoundState() {
         let animalID = UUID()
         let pastureID = UUID()
