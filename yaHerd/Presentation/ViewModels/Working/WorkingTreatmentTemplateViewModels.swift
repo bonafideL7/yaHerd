@@ -23,6 +23,19 @@ final class WorkingTreatmentTemplatesViewModel: ObservableObject {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
+
+    func visibleTemplates(
+        identity: WorkingQueueEditorHerdIdentity?,
+        selection: AppCurrentHerdSelection
+    ) -> [WorkingTreatmentTemplateSummary] {
+        guard identity?.isCurrent(in: selection) == true else { return [] }
+        return templates
+    }
+
+    func clear() {
+        templates = []
+        errorMessage = nil
+    }
 }
 
 @MainActor
@@ -49,5 +62,18 @@ final class WorkingTreatmentTemplateDetailViewModel: ObservableObject {
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
+    }
+
+    func visibleTemplate(
+        identity: WorkingQueueEditorHerdIdentity?,
+        selection: AppCurrentHerdSelection
+    ) -> WorkingTreatmentTemplateDetailSnapshot? {
+        guard identity?.isCurrent(in: selection) == true else { return nil }
+        return template
+    }
+
+    func clear() {
+        template = nil
+        errorMessage = nil
     }
 }
