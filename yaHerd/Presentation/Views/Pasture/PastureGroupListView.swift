@@ -17,6 +17,8 @@ struct PastureGroupListView: View {
             } else {
                 List {
                     ForEach(model.groups) { group in
+                        let rowHerdID = herdSelection.currentHerdID
+                        let rowSelectionRevision = herdSelection.selectionRevision
                         NavigationLink {
                             PastureGroupDetailView(groupID: group.id)
                         } label: {
@@ -24,12 +26,18 @@ struct PastureGroupListView: View {
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button("Delete", role: .destructive) {
-                                model.requestDelete(group, selection: herdSelection)
+                                model.requestDelete(
+                                    group,
+                                    originatingHerdID: rowHerdID,
+                                    originatingSelectionRevision: rowSelectionRevision,
+                                    selection: herdSelection
+                                )
                             }
                             .disabledWhenDataReadOnly()
                         }
                     }
                 }
+                .id(herdSelection.selectionRevision)
             }
         }
         .navigationTitle("Pasture Groups")
@@ -44,7 +52,7 @@ struct PastureGroupListView: View {
         }
         .sheet(isPresented: $model.isPresentingAddGroup) {
             AddPastureGroupView {
-                model.load(using: repository)
+                model.load(using: repository, selection: herdSelection)
             }
         }
         .confirmationDialog(
@@ -68,11 +76,11 @@ struct PastureGroupListView: View {
             }
         }
         .task {
-            model.load(using: repository)
+            model.load(using: repository, selection: herdSelection)
         }
         .onChange(of: herdSelection.selectionRevision) { _, _ in
             model.resetForHerdChange()
-            model.load(using: repository)
+            model.load(using: repository, selection: herdSelection)
         }
         .alert("Can’t Complete Request", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
