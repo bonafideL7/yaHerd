@@ -45,6 +45,30 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
         XCTAssertEqual(selection.currentHerdID, idB)
     }
 
+    func testSoleAccessibleHerdIsRememberedWithoutAStoredPreference() throws {
+        let suite = "stage3-singleton-selection-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let id = UUID()
+        let selection = AppCurrentHerdSelection(
+            defaults: defaults, preferenceKey: "selected"
+        )
+
+        selection.restoreAccessibleHerd(from: [herd(id)])
+
+        XCTAssertEqual(selection.currentHerdID, id)
+        XCTAssertEqual(defaults.string(forKey: "selected"), id.uuidString)
+
+        // A newly launched app must restore the original selection even if
+        // another Herd became available since the first launch.
+        let restored = AppCurrentHerdSelection(
+            defaults: defaults, preferenceKey: "selected"
+        )
+        restored.restoreAccessibleHerd(from: [herd(id), herd(UUID())])
+        XCTAssertEqual(restored.currentHerdID, id)
+        XCTAssertEqual(defaults.string(forKey: "selected"), id.uuidString)
+    }
+
     func testSelectingAccessibleHerdPersistsAndRejectsUnknownIdentity() throws {
         let suite = "stage3-selection-\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

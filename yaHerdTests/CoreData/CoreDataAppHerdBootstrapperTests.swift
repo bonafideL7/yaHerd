@@ -3,6 +3,16 @@ import XCTest
 @testable import yaHerd
 
 final class CoreDataAppHerdBootstrapperTests: XCTestCase {
+    // One selection preference domain per test instance; temporary SQLite
+    // fixtures must not inherit another test's remembered Herd UUID.
+    private let preferenceSuite = "yaHerd.stage3.bootstrap.\(UUID().uuidString)"
+    private lazy var testSelectionPreferences = UserDefaults(suiteName: preferenceSuite)!
+
+    override func tearDown() {
+        testSelectionPreferences.removePersistentDomain(forName: preferenceSuite)
+        super.tearDown()
+    }
+
     func testImportedHerdMissingIdentityBlocksBootstrapWithoutCreatingReplacement() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let originalCreation = Date(timeIntervalSince1970: 1_700_000_000)
@@ -289,7 +299,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     func testTwoStoreAppLoaderSelectsExistingSharedHerdWithoutChangingPrivateHerd() async throws {
         let harness = try CoreDataPersistenceHarness()
         try await seedExplicitLocalHerd(at: harness.storeURL)
-        let existing = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
+        let existing = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL, selectionPreferences: testSelectionPreferences)
         let privateHerdID = try existing.makeDependencies(dataAccessMode: .readWrite)
             .herdRepository.fetchCurrentHerd().id
 
@@ -317,7 +327,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let sharedApp = try await CoreDataAppPersistenceAssembly.loadCloudKit(
             at: harness.storeURL,
             selectedHerdID: sharedHerdID,
-            mirroringEnabled: false
+            mirroringEnabled: false,
+            selectionPreferences: testSelectionPreferences
         )
         let sharedDependencies = sharedApp.makeDependencies(dataAccessMode: .readWrite)
         XCTAssertEqual(try sharedDependencies.herdRepository.fetchCurrentHerd().id, sharedHerdID)
@@ -344,7 +355,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let privateApp = try await CoreDataAppPersistenceAssembly.loadCloudKit(
             at: harness.storeURL,
             selectedHerdID: privateHerdID,
-            mirroringEnabled: false
+            mirroringEnabled: false,
+            selectionPreferences: testSelectionPreferences
         )
         XCTAssertEqual(
             try privateApp.makeDependencies(dataAccessMode: .readWrite)
@@ -360,7 +372,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             _ = try await CoreDataAppPersistenceAssembly.loadCloudKit(
                 at: harness.storeURL,
                 selectedHerdID: UUID(),
-                mirroringEnabled: false
+                mirroringEnabled: false,
+                selectionPreferences: testSelectionPreferences
             )
             XCTFail("A missing or not-yet-imported Herd must not be replaced.")
         } catch let error as HerdRepositoryError {
@@ -408,7 +421,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             _ = try await CoreDataAppPersistenceAssembly.loadCloudKit(
                 at: harness.storeURL,
                 selectedHerdID: selectedID,
-                mirroringEnabled: false
+                mirroringEnabled: false,
+                selectionPreferences: testSelectionPreferences
             )
             XCTFail("An incomplete imported Herd must not initialize the app graph.")
         } catch let error as CoreDataHerdMappingError {
@@ -442,7 +456,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let app = try await CoreDataAppPersistenceAssembly.loadCloudKit(
             at: harness.storeURL,
             selectedHerdID: selectedID,
-            mirroringEnabled: false
+            mirroringEnabled: false,
+            selectionPreferences: testSelectionPreferences
         )
         let summary = try app.makeDependencies(dataAccessMode: .readWrite)
             .herdRepository.fetchCurrentHerd()
@@ -477,7 +492,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             _ = try await CoreDataAppPersistenceAssembly.loadCloudKit(
                 at: harness.storeURL,
                 selectedHerdID: duplicatedID,
-                mirroringEnabled: false
+                mirroringEnabled: false,
+                selectionPreferences: testSelectionPreferences
             )
             XCTFail("Duplicate selected Herd roots must never select either store.")
         } catch let error as CoreDataPersistenceError {
@@ -624,7 +640,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     func testDevelopmentTwoStoreStartupSelectsExistingPrivateHerdNotSharedHerd() async throws {
         let harness = try CoreDataPersistenceHarness()
         try await seedExplicitLocalHerd(at: harness.storeURL)
-        let local = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
+        let local = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL, selectionPreferences: testSelectionPreferences)
         let originalID = try local.makeDependencies(dataAccessMode: .readWrite)
             .herdRepository.fetchCurrentHerd().id
 
@@ -649,7 +665,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         }
 
         let reopened = try await CoreDataAppPersistenceAssembly.loadCloudKit(
-            at: harness.storeURL, mirroringEnabled: false
+            at: harness.storeURL, mirroringEnabled: false,
+            selectionPreferences: testSelectionPreferences
         )
         XCTAssertEqual(
             try reopened.makeDependencies(dataAccessMode: .readWrite)
@@ -691,7 +708,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let app = try await CoreDataAppPersistenceAssembly.loadCloudKit(
             at: harness.storeURL,
             selectedHerdID: sharedHerdID,
-            mirroringEnabled: false
+            mirroringEnabled: false,
+            selectionPreferences: testSelectionPreferences
         )
         let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
         XCTAssertEqual(
@@ -738,7 +756,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         )
 
         XCTAssertThrowsError(try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
-            using: assembly, privateStoreURL: harness.storeURL
+            using: assembly, privateStoreURL: harness.storeURL,
+            selectionPreferences: testSelectionPreferences
         )) { error in
             XCTAssertEqual(error as? HerdRepositoryError, .missingHerd)
         }
@@ -761,7 +780,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         // The same assembly now resolves the imported Herd. It must not create
         // a replacement root, swap stores, or require a new loader instance.
         let app = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
-            using: assembly, privateStoreURL: harness.storeURL
+            using: assembly, privateStoreURL: harness.storeURL,
+            selectionPreferences: testSelectionPreferences
         )
         XCTAssertEqual(
             try app.makeDependencies(dataAccessMode: .readWrite)
@@ -805,7 +825,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         }
 
         let app = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
-            using: assembly, privateStoreURL: storeURL
+            using: assembly, privateStoreURL: storeURL,
+            selectionPreferences: testSelectionPreferences
         )
         do {
             try await CloudKitDevelopmentLaunch.validateHomeReadiness(app)
@@ -865,7 +886,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
 
         do {
             _ = try await CoreDataAppPersistenceAssembly.loadCloudKit(
-                at: harness.storeURL, mirroringEnabled: false
+                at: harness.storeURL, mirroringEnabled: false,
+                selectionPreferences: testSelectionPreferences
             )
             XCTFail("A shared-only/import-pending store must not synthesize a private Herd.")
         } catch let error as HerdRepositoryError {
@@ -898,7 +920,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
 
         do {
             _ = try await CoreDataAppPersistenceAssembly.loadCloudKit(
-                at: harness.storeURL, mirroringEnabled: false
+                at: harness.storeURL, mirroringEnabled: false,
+                selectionPreferences: testSelectionPreferences
             )
             XCTFail("Auto-selection cannot choose among multiple owned Herds.")
         } catch let error as CoreDataAppHerdBootstrapError {
@@ -911,7 +934,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let harness = try CoreDataPersistenceHarness()
         try await seedExplicitLocalHerd(at: harness.storeURL)
         let first = try await CoreDataAppPersistenceAssembly.load(
-            at: harness.storeURL
+            at: harness.storeURL,
+            selectionPreferences: testSelectionPreferences
         )
         let firstDependencies = first.makeDependencies(dataAccessMode: .readWrite)
         let originalHerdID = try firstDependencies.herdRepository.fetchCurrentHerd().id
@@ -926,7 +950,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: harness.storeURL.path))
 
         let reopened = try await CoreDataAppPersistenceAssembly.load(
-            at: harness.storeURL
+            at: harness.storeURL,
+            selectionPreferences: testSelectionPreferences
         )
         let reloadedDependencies = reopened.makeDependencies(dataAccessMode: .readWrite)
         XCTAssertEqual(
@@ -1001,7 +1026,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         try marker.write(to: obsoleteJournal)
 
         try await seedExplicitLocalHerd(at: store)
-        let first = try await CoreDataAppPersistenceAssembly.load(at: store)
+        let first = try await CoreDataAppPersistenceAssembly.load(at: store, selectionPreferences: testSelectionPreferences)
         let firstHerdID = try first.makeDependencies(
             dataAccessMode: .readWrite
         ).herdRepository.fetchCurrentHerd().id
@@ -1010,7 +1035,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: obsoleteFile), marker)
         XCTAssertEqual(try Data(contentsOf: obsoleteJournal), marker)
 
-        let reopened = try await CoreDataAppPersistenceAssembly.load(at: store)
+        let reopened = try await CoreDataAppPersistenceAssembly.load(at: store, selectionPreferences: testSelectionPreferences)
         XCTAssertEqual(
             try reopened.makeDependencies(dataAccessMode: .readWrite)
                 .herdRepository.fetchCurrentHerd().id,
@@ -1360,7 +1385,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         for (isLarge, expectedAnimals) in [(false, 18), (true, 480)] {
             let harness = try CoreDataPersistenceHarness()
             try await seedExplicitLocalHerd(at: harness.storeURL)
-            let app = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
+            let app = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL, selectionPreferences: testSelectionPreferences)
             let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
             let originalHerdID = try dependencies.herdRepository.fetchCurrentHerd().id
             guard let seeder = dependencies.animalFeatureDependencies.sampleDataSeeder else {
@@ -1425,7 +1450,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
                 expectedAnimals
             )
 
-            let reopened = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
+            let reopened = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL, selectionPreferences: testSelectionPreferences)
             let reopenedDependencies = reopened.makeDependencies(dataAccessMode: .readWrite)
             XCTAssertEqual(
                 try reopenedDependencies.herdRepository.fetchCurrentHerd().id,
@@ -1477,7 +1502,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     func testSampleActionsDoNotModifyExistingPastureOrStandaloneGroup() async throws {
         let harness = try CoreDataPersistenceHarness()
         try await seedExplicitLocalHerd(at: harness.storeURL)
-        let app = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
+        let app = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL, selectionPreferences: testSelectionPreferences)
         let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
         let herdID = try XCTUnwrap(app.currentHerdSelection.currentHerdID)
         let groups = dependencies.pastureFeatureDependencies.groupEditorRepository

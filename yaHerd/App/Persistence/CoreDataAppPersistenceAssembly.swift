@@ -53,14 +53,17 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
     static func loadCloudKit(
         at storeURL: URL,
         selectedHerdID: UUID? = nil,
-        mirroringEnabled: Bool
+        mirroringEnabled: Bool,
+        selectionPreferences: UserDefaults = .standard
     ) async throws -> CoreDataAppPersistenceAssembly {
         let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
             storeURL: storeURL,
             mirroringEnabled: mirroringEnabled
         )
         return try resolveCloudKitHerd(
-            using: assembly, privateStoreURL: storeURL, selectedHerdID: selectedHerdID
+            using: assembly, privateStoreURL: storeURL,
+            selectedHerdID: selectedHerdID,
+            selectionPreferences: selectionPreferences
         )
     }
 
