@@ -392,6 +392,10 @@ final class MutationPublishingHerdRepository: HerdRepository {
         try base.fetchAccessibleHerds()
     }
 
+    func fetchHerdInventory() throws -> HerdInventory {
+        try base.fetchHerdInventory()
+    }
+
     func createOwnedHerd(named name: String) async throws -> HerdSummary {
         try writePolicy.validateCanWrite()
         let created = try await base.createOwnedHerd(named: name)
