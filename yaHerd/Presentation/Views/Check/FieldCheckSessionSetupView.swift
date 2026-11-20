@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FieldCheckSessionSetupView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @Environment(\.fieldCheckFeatureDependencies) private var fieldCheckDependencies
     private var setupRepository: any FieldCheckSessionSetupRepository { fieldCheckDependencies.sessionSetupRepository }
     private var pastureReferenceDataReader: any PastureReferenceDataReader { fieldCheckDependencies.pastureReferenceReader }
@@ -157,7 +158,8 @@ struct FieldCheckSessionSetupView: View {
     private func startSession() {
         guard dataAccessMode.allowsDataMutations,
               !isStartingSession,
-              let pastureID = selectedPasture?.id else {
+              let pastureID = selectedPasture?.id,
+              let originatingHerdID = herdSelection.currentHerdID else {
             return
         }
 
@@ -173,8 +175,11 @@ struct FieldCheckSessionSetupView: View {
                     pastureID: pastureID,
                     startedAt: sessionStartedAt,
                     notes: openingNotes,
+                    originatingHerdID: originatingHerdID,
+                    currentHerdSelection: herdSelection,
                     using: setupRepository
                 )
+                guard let sessionID else { return }
                 if let onSessionStarted {
                     dismiss()
                     onSessionStarted(sessionID)
@@ -182,6 +187,8 @@ struct FieldCheckSessionSetupView: View {
                     startedRoute = StartedFieldCheckRoute(id: sessionID)
                 }
             } catch {
+                guard !Task.isCancelled,
+                      herdSelection.currentHerdID == originatingHerdID else { return }
                 model.errorMessage = UserVisibleErrorMessage.make(error)
             }
         }
