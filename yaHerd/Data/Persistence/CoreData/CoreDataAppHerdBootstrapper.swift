@@ -78,7 +78,7 @@ enum CoreDataAppHerdBootstrapper {
         }
     }
 
-    private static func fetchHerdIDs(
+    static func fetchHerdIDs(
         using contextFactory: CoreDataContextFactory
     ) throws -> [UUID] {
         let context = contextFactory.makeReadContext()
