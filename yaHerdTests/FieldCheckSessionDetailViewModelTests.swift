@@ -3,7 +3,6 @@ import XCTest
 
 @MainActor
 final class FieldCheckSessionDetailViewModelTests: XCTestCase {
-
     func testQueuedNotesPersistenceDoesNotRetargetAfterHerdChange() async throws {
         let herdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: herdID)
@@ -78,6 +77,38 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         XCTAssertFalse(succeeded)
         XCTAssertEqual(repository.detail.notes, "Written to original Herd")
         XCTAssertEqual(model.detail?.notes, "")
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testHerdChangeDuringFailedNotesWriteDoesNotPublishStaleError() async {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let sessionID = UUID()
+        let repository = FieldCheckSessionDetailRepositorySpy(
+            detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
+        )
+        repository.shouldBlockNotesWrite = true
+        repository.notesFailure = FieldCheckSessionDetailTestError.notesFailure
+        let model = FieldCheckSessionDetailViewModel()
+
+        XCTAssertTrue(model.load(sessionID: sessionID, using: repository))
+        model.updateNotesDraft("Unsaved original Herd notes")
+
+        let save = Task {
+            await model.persistNotes(
+                sessionID: sessionID,
+                originatingHerdID: herdID,
+                currentHerdSelection: selection,
+                using: repository
+            )
+        }
+        await waitUntil { repository.notesWriteCount == 1 }
+        selection.select(UUID())
+        repository.releaseNotesWrite()
+        let succeeded = await save.value
+
+        XCTAssertFalse(succeeded)
+        XCTAssertEqual(repository.detail.notes, "")
         XCTAssertNil(model.errorMessage)
     }
 
