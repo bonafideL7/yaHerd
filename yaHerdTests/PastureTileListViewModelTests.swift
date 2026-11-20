@@ -504,7 +504,6 @@ final class PastureTileListViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isDeletingPastures)
     }
 
-
     func testHerdSwitchDiscardsPreviousPastureStateBeforeLoadingNewHerd() {
         let oldPasture = PastureTestSupport.makeSummary(name: "Old Herd")
         let newPasture = PastureTestSupport.makeSummary(name: "New Herd")
@@ -599,6 +598,39 @@ final class PastureTileListViewModelTests: XCTestCase {
         XCTAssertNil(model.pasturePendingDeletion)
         XCTAssertNil(model.pendingDeletionHerdID)
         XCTAssertNil(model.pendingDeletionSelectionRevision)
+    }
+
+    func testOldDropCallbackCannotCommitANewHerdDrag() {
+        let firstA = PastureTestSupport.makeSummary(name: "A First")
+        let firstB = PastureTestSupport.makeSummary(name: "B First")
+        let secondB = PastureTestSupport.makeSummary(name: "B Second")
+        let reader = PastureListReaderStub(result: .success([firstA]))
+        let ordering = PastureOrderingSpy()
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let model = PastureTileListViewModel()
+        model.configure(selection: selection)
+        XCTAssertTrue(model.load(using: reader))
+        let oldRevision = selection.selectionRevision
+        model.beginDragging(firstA, originatingSelectionRevision: oldRevision)
+
+        selection.select(UUID())
+        model.configure(selection: selection)
+        reader.result = .success([firstB, secondB])
+        XCTAssertTrue(model.load(using: reader))
+        let currentRevision = selection.selectionRevision
+        model.beginDragging(firstB, originatingSelectionRevision: currentRevision)
+        model.moveDraggedPasture(
+            from: 0, to: 2, originatingSelectionRevision: currentRevision
+        )
+
+        model.commitDragOrder(using: ordering, originatingSelectionRevision: oldRevision)
+
+        XCTAssertTrue(ordering.reorderedIDs.isEmpty)
+        XCTAssertEqual(model.items, [secondB, firstB])
+
+        model.commitDragOrder(using: ordering, originatingSelectionRevision: currentRevision)
+
+        XCTAssertEqual(ordering.reorderedIDs, [[secondB.id, firstB.id]])
     }
 
     func testDragCommitWithinUnchangedHerdPersistsNewOrder() {
