@@ -117,6 +117,84 @@ final class WorkingSessionCompletionUseCaseTests: XCTestCase {
         XCTAssertTrue(repository.completionCalls.isEmpty)
     }
 
+    func testFinishViewModelDoesNotStartWhenOriginatingHerdIsNoLongerSelected() async throws {
+        let sessionID = UUID()
+        let repository = WorkingSessionCompletionRepositorySpy(
+            session: makeSession(id: sessionID, queueItemIDs: [])
+        )
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let model = WorkingFinishSessionViewModel(
+            sessionID: sessionID,
+            workingRepository: repository,
+            pastureRepository: EmptyPastureRepository()
+        )
+
+        let completed = try await model.finishSession(
+            assignments: [],
+            originatingHerdID: UUID(),
+            currentHerdSelection: selection,
+            repository: repository
+        )
+
+        XCTAssertFalse(completed)
+        XCTAssertTrue(repository.completionCalls.isEmpty)
+    }
+
+    func testFinishViewModelDoesNotCompleteNavigationAfterHerdSwitch() async throws {
+        let sessionID = UUID()
+        let originatingHerdID = UUID()
+        let repository = WorkingSessionCompletionRepositorySpy(
+            session: makeSession(id: sessionID, queueItemIDs: [])
+        )
+        repository.suspendCompletion = true
+        let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
+        let model = WorkingFinishSessionViewModel(
+            sessionID: sessionID,
+            workingRepository: repository,
+            pastureRepository: EmptyPastureRepository()
+        )
+
+        let finishing = Task {
+            try await model.finishSession(
+                assignments: [],
+                originatingHerdID: originatingHerdID,
+                currentHerdSelection: selection,
+                repository: repository
+            )
+        }
+        await repository.waitForPendingCompletion()
+        selection.select(UUID())
+        repository.finishPendingCompletion()
+
+        let completed = try await finishing.value
+        XCTAssertFalse(completed)
+        XCTAssertEqual(repository.completionCalls.count, 1)
+    }
+
+    func testFinishViewModelAcknowledgesCompletionWhenHerdIsUnchanged() async throws {
+        let sessionID = UUID()
+        let herdID = UUID()
+        let repository = WorkingSessionCompletionRepositorySpy(
+            session: makeSession(id: sessionID, queueItemIDs: [])
+        )
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let model = WorkingFinishSessionViewModel(
+            sessionID: sessionID,
+            workingRepository: repository,
+            pastureRepository: EmptyPastureRepository()
+        )
+
+        let completed = try await model.finishSession(
+            assignments: [],
+            originatingHerdID: herdID,
+            currentHerdSelection: selection,
+            repository: repository
+        )
+
+        XCTAssertTrue(completed)
+        XCTAssertEqual(repository.completionCalls.count, 1)
+    }
+
     private func makeSession(
         id: UUID,
         queueItemIDs: [UUID],
@@ -162,6 +240,8 @@ private final class WorkingSessionCompletionRepositorySpy: WorkingFinishSessionR
 
     let session: WorkingSessionDetailSnapshot?
     private(set) var completionCalls: [CompletionCall] = []
+    var suspendCompletion = false
+    private var pendingCompletion: CheckedContinuation<Void, Never>?
 
     init(session: WorkingSessionDetailSnapshot?) {
         self.session = session
@@ -176,6 +256,25 @@ private final class WorkingSessionCompletionRepositorySpy: WorkingFinishSessionR
         assignments: [WorkingQueueDestinationAssignment]
     ) async throws {
         completionCalls.append(CompletionCall(sessionID: id, assignments: assignments))
+        if suspendCompletion {
+            await withCheckedContinuation { continuation in
+                pendingCompletion = continuation
+            }
+        }
+    }
+
+    func waitForPendingCompletion() async {
+        while pendingCompletion == nil {
+            await Task.yield()
+        }
+    }
+
+    func finishPendingCompletion() {
+        guard let pendingCompletion else {
+            preconditionFailure("No pending Working session completion")
+        }
+        self.pendingCompletion = nil
+        pendingCompletion.resume()
     }
 }
 
