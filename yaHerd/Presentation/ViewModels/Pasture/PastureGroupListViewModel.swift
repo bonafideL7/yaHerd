@@ -14,6 +14,17 @@ final class PastureGroupListViewModel {
     private var loadedHerdID: UUID?
     private var loadedSelectionRevision: UInt64?
 
+    var loadedSelectionIdentity: (herdID: UUID, revision: UInt64)? {
+        guard let loadedHerdID, let loadedSelectionRevision else { return nil }
+        return (loadedHerdID, loadedSelectionRevision)
+    }
+
+    func isLoadedForCurrentSelection(_ selection: AppCurrentHerdSelection) -> Bool {
+        guard let identity = loadedSelectionIdentity else { return false }
+        return selection.currentHerdID == identity.herdID
+            && selection.selectionRevision == identity.revision
+    }
+
     func load(
         using repository: any PastureGroupListReader,
         selection: AppCurrentHerdSelection
