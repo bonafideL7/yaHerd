@@ -98,8 +98,8 @@ final class AnimalDetailViewModel {
             draftTags = updated.activeTags + updated.inactiveTags
             pendingScrollTarget = nil
             isEditing = false
-            editingHerdID = nil
-            editingSelectionRevision = nil
+            self.editingHerdID = nil
+            self.editingSelectionRevision = nil
             errorMessage = nil
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
