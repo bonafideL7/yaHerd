@@ -81,7 +81,6 @@ final class PastureGroupAssignmentHerdIsolationTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
-
     func testDetailLoadRejectsOtherSelectedHerdBeforeRepositoryReads() throws {
         let (_, row, repository, selection) = makeFixture()
         let origin = try XCTUnwrap(selection.currentHerdID)
@@ -184,6 +183,57 @@ final class PastureGroupAssignmentHerdIsolationTests: XCTestCase {
         XCTAssertTrue(model.allPastures.isEmpty)
         XCTAssertFalse(model.hasLoaded)
         XCTAssertFalse(model.isPresentingEditGroup)
+    }
+
+    func testDetailReloadRejectsSelectionRoundTripAfterOriginalLoad() throws {
+        let (_, row, repository, selection) = makeFixture()
+        let origin = try XCTUnwrap(selection.currentHerdID)
+        let originalRevision = selection.selectionRevision
+        let model = PastureGroupDetailViewModel()
+
+        model.load(
+            groupID: row.groupID, using: repository,
+            expectedHerdID: origin,
+            expectedSelectionRevision: originalRevision,
+            selection: selection
+        )
+        selection.select(UUID())
+        selection.select(origin)
+        model.reloadAfterSave(
+            groupID: row.groupID, using: repository,
+            expectedHerdID: origin,
+            expectedSelectionRevision: originalRevision,
+            selection: selection
+        )
+
+        XCTAssertEqual(repository.groupReads, 1)
+        XCTAssertEqual(repository.pastureReads, 1)
+        XCTAssertNil(model.detail)
+        XCTAssertTrue(model.allPastures.isEmpty)
+    }
+
+    func testDetailReloadAllowsUnchangedSelection() throws {
+        let (_, row, repository, selection) = makeFixture()
+        let origin = try XCTUnwrap(selection.currentHerdID)
+        let revision = selection.selectionRevision
+        let model = PastureGroupDetailViewModel()
+
+        model.load(
+            groupID: row.groupID, using: repository,
+            expectedHerdID: origin,
+            expectedSelectionRevision: revision,
+            selection: selection
+        )
+        model.reloadAfterSave(
+            groupID: row.groupID, using: repository,
+            expectedHerdID: origin,
+            expectedSelectionRevision: revision,
+            selection: selection
+        )
+
+        XCTAssertEqual(repository.groupReads, 2)
+        XCTAssertEqual(repository.pastureReads, 2)
+        XCTAssertEqual(model.detail?.id, row.groupID)
     }
 
     private func makeFixture() -> (
