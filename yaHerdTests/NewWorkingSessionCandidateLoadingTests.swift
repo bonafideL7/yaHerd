@@ -240,6 +240,7 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
 
         XCTAssertNil(model.loadedPastureID)
         XCTAssertTrue(model.animals.isEmpty)
+        XCTAssertFalse(model.isLoadingAnimals)
         XCTAssertFalse(model.hasCurrentCandidates(pastureID: pastureID, selection: selection))
         XCTAssertNil(model.errorMessage)
 
@@ -286,6 +287,7 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
 
         XCTAssertNil(model.loadedPastureID)
         XCTAssertTrue(model.animals.isEmpty)
+        XCTAssertFalse(model.isLoadingAnimals)
         XCTAssertNil(model.errorMessage)
         XCTAssertNil(model.candidateLoadErrorMessage)
         XCTAssertFalse(model.hasCurrentCandidates(pastureID: pastureID, selection: selection))
