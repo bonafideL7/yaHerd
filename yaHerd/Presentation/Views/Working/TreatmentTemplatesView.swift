@@ -21,16 +21,20 @@ struct TreatmentTemplatesView: View {
     @State private var errorMessage: String?
     @State private var showingError = false
 
+    private var visibleTemplates: [WorkingTreatmentTemplateSummary] {
+        viewModel.visibleTemplates(identity: herdIdentity, selection: herdSelection)
+    }
+
     var body: some View {
         List {
-            if viewModel.templates.isEmpty {
+            if visibleTemplates.isEmpty {
                 ContentUnavailableView(
                     "No Treatments",
                     systemImage: "syringe",
                     description: Text("Save commonly used treatment sets for future working sessions.")
                 )
             } else {
-                ForEach(viewModel.templates) { template in
+                ForEach(visibleTemplates) { template in
                     NavigationLink {
                         TreatmentTemplateDetailView(templateID: template.id)
                     } label: {
@@ -62,13 +66,19 @@ struct TreatmentTemplatesView: View {
                 .disabled(herdIdentity?.isCurrent(in: herdSelection) != true)
             }
         }
-        .task {
-            if herdIdentity == nil {
-                herdIdentity = WorkingQueueEditorHerdIdentity(selection: herdSelection)
-            }
+        .task(id: herdSelection.selectionRevision) {
+            // The list may remain mounted while the selected Herd changes.
+            // Never retain A's rows while loading B's template inventory.
+            viewModel.clear()
+            herdIdentity = WorkingQueueEditorHerdIdentity(selection: herdSelection)
             guard herdIdentity?.isCurrent(in: herdSelection) == true else { return }
             viewModel.configure(repository: repository)
             viewModel.load()
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            showingAdd = false
+            errorMessage = nil
+            showingError = false
         }
         .onChange(of: showingAdd) { _, isPresented in
             if !isPresented, herdIdentity?.isCurrent(in: herdSelection) == true {
@@ -93,7 +103,7 @@ struct TreatmentTemplatesView: View {
             guard try WorkingTreatmentTemplateHerdAction.performIfCurrent(
                 identity: herdIdentity,
                 selection: herdSelection,
-                { try repository.deleteTemplates(ids: offsets.map { viewModel.templates[$0].id }) }
+                { try repository.deleteTemplates(ids: offsets.map { visibleTemplates[$0].id }) }
             ) != nil else { return }
             viewModel.load()
         } catch {
@@ -164,6 +174,9 @@ private struct TreatmentTemplateAddView: View {
                 herdIdentity = WorkingQueueEditorHerdIdentity(selection: herdSelection)
             }
         }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            dismiss()
+        }
     }
 
     private func save() {
@@ -220,12 +233,17 @@ private struct TreatmentTemplateDetailView: View {
     }
 
     private var hasUnsavedChanges: Bool {
-        guard let template = viewModel.template else { return false }
+        guard let template = viewModel.visibleTemplate(
+            identity: herdIdentity,
+            selection: herdSelection
+        ) else { return false }
         return nameDraft != template.name || plannedTreatments != template.plannedTreatments
     }
 
     var body: some View {
-        Form {
+        Group {
+            if herdIdentity?.isCurrent(in: herdSelection) == true {
+                Form {
             Section("Name") {
                 TextField("Treatment set name", text: $nameDraft)
             }
@@ -249,6 +267,14 @@ private struct TreatmentTemplateDetailView: View {
                 } label: {
                     Label("Add Treatment", systemImage: "plus")
                 }
+            }
+                }
+            } else {
+                ContentUnavailableView(
+                    "Herd Changed",
+                    systemImage: "arrow.left.arrow.right",
+                    description: Text("Reopen this treatment set from the selected Herd.")
+                )
             }
         }
         .navigationTitle(nameDraft.isEmpty ? "Treatment Set" : nameDraft)
@@ -288,6 +314,13 @@ private struct TreatmentTemplateDetailView: View {
             viewModel.load()
             seedFromSnapshot()
         }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            viewModel.clear()
+            nameDraft = ""
+            plannedTreatments = []
+            showingDiscardConfirmation = false
+            dismiss()
+        }
         .onChange(of: viewModel.template?.id) { _, _ in
             seedFromSnapshot()
         }
@@ -299,13 +332,19 @@ private struct TreatmentTemplateDetailView: View {
     }
 
     private func seedFromSnapshot() {
-        guard let template = viewModel.template else { return }
+        guard let template = viewModel.visibleTemplate(
+            identity: herdIdentity,
+            selection: herdSelection
+        ) else { return }
         nameDraft = template.name
         plannedTreatments = template.plannedTreatments
     }
 
     private func save() {
-        guard let template = viewModel.template else { return }
+        guard let template = viewModel.visibleTemplate(
+            identity: herdIdentity,
+            selection: herdSelection
+        ) else { return }
         let trimmedName = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
         let cleanedTreatments = plannedTreatments
