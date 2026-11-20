@@ -190,6 +190,88 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
         XCTAssertTrue(model.eligibleAnimals(pastureID: firstPastureID).isEmpty)
     }
 
+
+    func testSessionStartDoesNotRunAfterSwitchingHerdsBeforeSubmission() async throws {
+        let originatingHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
+        let repository = SuspendedWorkingSessionStartRepository()
+        let model = NewWorkingSessionViewModel(
+            pastureRepository: EmptyPastureRepository(),
+            workingRepository: repository
+        )
+
+        selection.select(UUID())
+        let result = try await model.startSession(
+            date: .now,
+            pastureID: UUID(),
+            treatmentTemplateName: nil,
+            plannedTreatments: [],
+            animalIDs: nil,
+            originatingHerdID: originatingHerdID,
+            currentHerdSelection: selection
+        )
+
+        XCTAssertNil(result)
+        XCTAssertEqual(repository.startCallCount, 0)
+    }
+
+    func testCompletedSessionStartIsDiscardedAfterSwitchingHerds() async throws {
+        let originatingHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
+        let repository = SuspendedWorkingSessionStartRepository()
+        let model = NewWorkingSessionViewModel(
+            pastureRepository: EmptyPastureRepository(),
+            workingRepository: repository
+        )
+        let savedSessionID = UUID()
+
+        let start = Task {
+            try await model.startSession(
+                date: .now,
+                pastureID: UUID(),
+                treatmentTemplateName: nil,
+                plannedTreatments: [],
+                animalIDs: nil,
+                originatingHerdID: originatingHerdID,
+                currentHerdSelection: selection
+            )
+        }
+        await repository.waitUntilStarted()
+        selection.select(UUID())
+        repository.complete(with: savedSessionID)
+
+        XCTAssertNil(try await start.value)
+        XCTAssertEqual(repository.startCallCount, 1, "The initial Herd transaction must not be duplicated.")
+    }
+
+    func testCompletedSessionStartIsDeliveredWhenHerdRemainsSelected() async throws {
+        let originatingHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
+        let repository = SuspendedWorkingSessionStartRepository()
+        let model = NewWorkingSessionViewModel(
+            pastureRepository: EmptyPastureRepository(),
+            workingRepository: repository
+        )
+        let savedSessionID = UUID()
+
+        let start = Task {
+            try await model.startSession(
+                date: .now,
+                pastureID: UUID(),
+                treatmentTemplateName: nil,
+                plannedTreatments: [],
+                animalIDs: nil,
+                originatingHerdID: originatingHerdID,
+                currentHerdSelection: selection
+            )
+        }
+        await repository.waitUntilStarted()
+        repository.complete(with: savedSessionID)
+
+        XCTAssertEqual(try await start.value, savedSessionID)
+        XCTAssertEqual(repository.startCallCount, 1)
+    }
+
     private func makeCandidate(tag: String, pastureID: UUID) -> AnimalSummary {
         AnimalSummary(
             id: UUID(),
@@ -208,6 +290,38 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
             pastureName: "Test Pasture",
             location: .pasture
         )
+    }
+}
+
+@MainActor
+private final class SuspendedWorkingSessionStartRepository: NewWorkingSessionRepository {
+    private(set) var startCallCount = 0
+    private var startedWaiter: CheckedContinuation<Void, Never>?
+    private var pendingCompletion: CheckedContinuation<UUID, Never>?
+
+    func fetchTemplates() throws -> [WorkingTreatmentTemplateSummary] { [] }
+
+    func fetchTemplateDetail(id: UUID) throws -> WorkingTreatmentTemplateDetailSnapshot? { nil }
+
+    func startSession(input: WorkingSessionStartInput) async throws -> UUID {
+        startCallCount += 1
+        return await withCheckedContinuation { continuation in
+            pendingCompletion = continuation
+            startedWaiter?.resume()
+            startedWaiter = nil
+        }
+    }
+
+    func waitUntilStarted() async {
+        guard startCallCount == 0 else { return }
+        await withCheckedContinuation { continuation in
+            startedWaiter = continuation
+        }
+    }
+
+    func complete(with id: UUID) {
+        pendingCompletion?.resume(returning: id)
+        pendingCompletion = nil
     }
 }
 
