@@ -568,7 +568,7 @@ private final class SuspendedWorkingTreatmentPlanRepository: WorkingSessionDetai
             sourcePastureID: nil,
             sourcePastureName: "North",
             isSourcePastureAvailable: false,
-            treatmentTemplateName: nil,
+            treatmentTemplateName: "",
             plannedTreatments: plannedTreatments,
             queueItems: []
         )
