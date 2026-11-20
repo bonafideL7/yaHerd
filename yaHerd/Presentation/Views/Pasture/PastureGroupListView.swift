@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PastureGroupListView: View {
     @Environment(\.pastureFeatureDependencies) private var pastureDependencies
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     private var repository: any PastureGroupListRepository { pastureDependencies.groupListRepository }
     @State private var model = PastureGroupListViewModel()
 
@@ -23,7 +24,7 @@ struct PastureGroupListView: View {
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button("Delete", role: .destructive) {
-                                model.requestDelete(group)
+                                model.requestDelete(group, selection: herdSelection)
                             }
                             .disabledWhenDataReadOnly()
                         }
@@ -53,7 +54,9 @@ struct PastureGroupListView: View {
         ) {
             if let group = model.groupPendingDeletion {
                 Button("Delete \(group.name)", role: .destructive) {
-                    model.deleteGroup(id: group.id, using: repository)
+                    model.deleteGroup(
+                        id: group.id, using: repository, selection: herdSelection
+                    )
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -65,6 +68,10 @@ struct PastureGroupListView: View {
             }
         }
         .task {
+            model.load(using: repository)
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            model.resetForHerdChange()
             model.load(using: repository)
         }
         .alert("Can’t Complete Request", isPresented: errorBinding) {
