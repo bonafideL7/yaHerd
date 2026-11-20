@@ -117,15 +117,16 @@ struct yaHerdApp: App {
                     mirroringEnabled: true
                 )
                 do {
-                    let candidate = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
+                    let candidate = try CoreDataAppPersistenceAssembly.resolveCloudKitHerdForChoice(
                         using: cloudKitAssembly,
                         privateStoreURL: storeURL,
-                        selectedHerdID: selectedHerdID
+                        requestedHerdID: selectedHerdID
                     )
-                    // An imported root can arrive before its owned records
-                    // and relationships. Preserve the mirroring engine and
-                    // defer Home instead of presenting partial data as corrupt.
-                    try await CloudKitDevelopmentLaunch.validateHomeReadiness(candidate)
+                    // A missing choice is not a corrupt import. Validate Home
+                    // only after an accessible Herd has been selected.
+                    if candidate.currentHerdSelection.currentHerdID != nil {
+                        try await CloudKitDevelopmentLaunch.validateHomeReadiness(candidate)
+                    }
                     persistence = candidate
                 } catch {
                     if CloudKitDevelopmentLaunch.isImportPending(error) {
@@ -250,12 +251,14 @@ struct yaHerdApp: App {
         defer { developmentImportCheckInProgress = false }
 
         do {
-            let persistence = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
+            let persistence = try CoreDataAppPersistenceAssembly.resolveCloudKitHerdForChoice(
                 using: pending.assembly,
                 privateStoreURL: pending.privateStoreURL,
-                selectedHerdID: pending.selectedHerdID
+                requestedHerdID: pending.selectedHerdID
             )
-            try await CloudKitDevelopmentLaunch.validateHomeReadiness(persistence)
+            if persistence.currentHerdSelection.currentHerdID != nil {
+                try await CloudKitDevelopmentLaunch.validateHomeReadiness(persistence)
+            }
             bootstrapState = .ready(Self.makeRuntime(
                 persistence: persistence,
                 storageMode: .cloudKitDevelopment
@@ -439,10 +442,17 @@ private struct RootAppView: View {
     }
 
     var body: some View {
-        MainTabView()
-            // Remount feature views and their in-flight loaders on every Herd change.
-            // Old Herd drafts and async results cannot survive in the new view tree.
-            .id(herdSelection.currentHerdID)
+        Group {
+            if herdSelection.currentHerdID == nil && !dataAccessMode.isRecoveryMode {
+                NavigationStack {
+                    HerdDirectoryView()
+                }
+            } else {
+                MainTabView()
+                    // Discard old Herd drafts and view-owned async state.
+                    .id(herdSelection.currentHerdID)
+            }
+        }
             .environment(navigation)
             .task {
                 guard !hasRestoredNavigation else { return }
