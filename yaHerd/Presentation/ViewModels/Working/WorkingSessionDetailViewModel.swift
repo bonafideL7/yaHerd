@@ -59,12 +59,32 @@ final class WorkingSessionDetailViewModel: ObservableObject {
         }
     }
 
-    func reopenSession() async {
+    /// Ignore a queued command or completion after the originating Herd
+    /// changes. A write already started remains scoped to its original Herd.
+    @discardableResult
+    func reopenSession(
+        originatingHerdID: UUID,
+        currentHerdSelection: any CurrentHerdSelectionReading
+    ) async -> Bool {
+        guard !Task.isCancelled,
+              currentHerdSelection.currentHerdID == originatingHerdID else {
+            return false
+        }
+
         do {
             try await repository.reopenSession(id: sessionID)
-            load()
+            guard !Task.isCancelled,
+                  currentHerdSelection.currentHerdID == originatingHerdID else {
+                return false
+            }
+            return load()
         } catch {
+            guard !Task.isCancelled,
+                  currentHerdSelection.currentHerdID == originatingHerdID else {
+                return false
+            }
             errorMessage = UserVisibleErrorMessage.make(error)
+            return false
         }
     }
 }
