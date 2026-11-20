@@ -74,6 +74,26 @@ final class PastureTilePickerViewModelTests: XCTestCase {
         XCTAssertEqual(encoded, [south.id, north.id])
     }
 
+    func testResetClearsPasturesAndRecentSelectionsFromPreviousHerd() {
+        let oldPasture = PastureTestSupport.makeSummary(id: UUID(), name: "Old Herd Pasture")
+        let repository = PastureListReaderStub(result: .success([oldPasture]))
+        let viewModel = PastureTilePickerViewModel()
+
+        _ = viewModel.load(
+            using: repository,
+            recentPastureIDs: [oldPasture.id],
+            legacyRecentPastureNames: []
+        )
+        XCTAssertEqual(viewModel.pastures, [oldPasture])
+        XCTAssertEqual(viewModel.recentPastures, [oldPasture])
+
+        viewModel.reset()
+
+        XCTAssertTrue(viewModel.pastures.isEmpty)
+        XCTAssertTrue(viewModel.recentPastures.isEmpty)
+        XCTAssertNil(viewModel.errorMessage)
+    }
+
     func testLoadFailureClearsPasturesAndSetsErrorMessage() {
         let repository = PastureListReaderStub(result: .failure(PastureTestError.forced))
         let viewModel = PastureTilePickerViewModel()
