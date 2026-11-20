@@ -12,6 +12,8 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
     @ObservationIgnored private let defaults: UserDefaults?
     @ObservationIgnored private let preferenceKey: String
 
+    private var storeCategoryPreferenceKey: String { preferenceKey + ".storeCategory" }
+
     init(
         currentHerdID: UUID? = nil,
         defaults: UserDefaults? = nil,
@@ -31,17 +33,21 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
             return
         }
         if let stored = defaults?.string(forKey: preferenceKey) {
-            if let storedID = UUID(uuidString: stored), ids.contains(storedID) {
+            if let storedID = UUID(uuidString: stored),
+               let storedHerd = accessibleHerds.first(where: { $0.id == storedID }),
+               matchesRememberedStoreCategory(storedHerd.category) {
                 setCurrentHerdID(storedID)
+                rememberStoreCategory(storedHerd.category)
             } else {
-                // An incomplete import or unavailable account must not cause
-                // a different Herd to become selected automatically.
+                // An incomplete import, unavailable account, or root that
+                // moved to another store must require explicit selection.
                 setCurrentHerdID(nil)
             }
             return
         }
         if accessibleHerds.count == 1 {
             select(accessibleHerds[0].id)
+            rememberStoreCategory(accessibleHerds[0].category)
         } else {
             setCurrentHerdID(nil)
         }
@@ -52,9 +58,13 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
     /// reselect it here: re-entry must pass the chooser's graph-readiness check.
     func revalidateActiveHerd(from accessibleHerds: [AccessibleHerd]) {
         guard let activeID = currentHerdID else { return }
-        if accessibleHerds.filter({ $0.id == activeID }).count != 1 {
+        let matching = accessibleHerds.filter { $0.id == activeID }
+        guard matching.count == 1,
+              matchesRememberedStoreCategory(matching[0].category) else {
             setCurrentHerdID(nil)
+            return
         }
+        rememberStoreCategory(matching[0].category)
     }
 
     /// A remembered Herd may have an imported root before its related records
@@ -66,10 +76,12 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
 
     /// Only an accessible, unambiguous root can become the current Herd.
     func selectAccessibleHerd(_ id: UUID, from accessibleHerds: [AccessibleHerd]) throws {
-        guard accessibleHerds.filter({ $0.id == id }).count == 1 else {
+        let matching = accessibleHerds.filter { $0.id == id }
+        guard matching.count == 1, let herd = matching.first else {
             throw HerdRepositoryError.missingHerd
         }
         select(id)
+        rememberStoreCategory(herd.category)
     }
 
     /// A revision distinguishes a new selection from a previously opened editor,
@@ -83,11 +95,30 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
     /// Direct selection is for already validated identities or clearing state.
     /// This preference is not a CloudKit operation or permission grant.
     func select(_ herdID: UUID?) {
+        if currentHerdID != herdID {
+            // Direct selection does not establish a store identity; only
+            // selectAccessibleHerd or a successful inventory read can do so.
+            defaults?.removeObject(forKey: storeCategoryPreferenceKey)
+        }
         setCurrentHerdID(herdID)
         if let herdID {
             defaults?.set(herdID.uuidString, forKey: preferenceKey)
         } else {
             defaults?.removeObject(forKey: preferenceKey)
+            defaults?.removeObject(forKey: storeCategoryPreferenceKey)
         }
+    }
+
+    private func matchesRememberedStoreCategory(_ category: AccessibleHerd.Category) -> Bool {
+        guard let remembered = defaults?.string(forKey: storeCategoryPreferenceKey) else {
+            // An existing preference without a category is adopted on the
+            // first successful inventory lookup.
+            return true
+        }
+        return remembered == (category == .owned ? "owned" : "shared")
+    }
+
+    private func rememberStoreCategory(_ category: AccessibleHerd.Category) {
+        defaults?.set(category == .owned ? "owned" : "shared", forKey: storeCategoryPreferenceKey)
     }
 }
