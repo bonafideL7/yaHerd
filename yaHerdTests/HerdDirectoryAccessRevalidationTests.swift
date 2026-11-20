@@ -85,6 +85,51 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         XCTAssertEqual(directory.herds.count, 1)
     }
 
+    func testCompletedCreationDoesNotReplaceASelectionMadeWhileSaving() async throws {
+        let initialID = UUID()
+        let subsequentlySelectedID = UUID()
+        let createdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: initialID)
+        let repository = StubHerdRepository(
+            available: [herd(initialID), herd(subsequentlySelectedID)]
+        )
+        repository.createdHerd = herd(createdID)
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+
+        let creation = Task {
+            try await directory.createOwnedHerd(named: "New Herd")
+        }
+        await repository.waitForPendingCreation()
+        selection.select(subsequentlySelectedID)
+        repository.completeCreation()
+
+        let result = try await creation.value
+        XCTAssertEqual(result.id, createdID)
+        XCTAssertEqual(directory.selectedHerdID, subsequentlySelectedID)
+        XCTAssertEqual(Set(directory.herds.map(\.id)), [initialID, subsequentlySelectedID, createdID])
+    }
+
+    func testCancelledCreationPreservesSelectionAfterTheRootWasSaved() async throws {
+        let selectedID = UUID()
+        let createdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: selectedID)
+        let repository = StubHerdRepository(available: [herd(selectedID)])
+        repository.createdHerd = herd(createdID)
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+
+        let creation = Task {
+            try await directory.createOwnedHerd(named: "New Herd")
+        }
+        await repository.waitForPendingCreation()
+        creation.cancel()
+        repository.completeCreation()
+
+        let result = try await creation.value
+        XCTAssertEqual(result.id, createdID)
+        XCTAssertEqual(directory.selectedHerdID, selectedID)
+        XCTAssertEqual(Set(directory.herds.map(\.id)), [selectedID, createdID])
+    }
+
     private func herd(_ id: UUID) -> AccessibleHerd {
         AccessibleHerd(
             summary: HerdSummary(
@@ -100,6 +145,8 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
     private final class StubHerdRepository: HerdRepository {
         var available: [AccessibleHerd]
         var shouldFail = false
+        var createdHerd: AccessibleHerd?
+        private var pendingCreation: CheckedContinuation<HerdSummary, Never>?
 
         init(available: [AccessibleHerd] = []) {
             self.available = available
@@ -115,7 +162,25 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         }
 
         func createOwnedHerd(named name: String) async throws -> HerdSummary {
-            throw HerdRepositoryError.missingHerd
+            guard createdHerd != nil else { throw HerdRepositoryError.missingHerd }
+            return await withCheckedContinuation { continuation in
+                pendingCreation = continuation
+            }
+        }
+
+        func waitForPendingCreation() async {
+            while pendingCreation == nil {
+                await Task.yield()
+            }
+        }
+
+        func completeCreation() {
+            guard let createdHerd, let pendingCreation else {
+                preconditionFailure("No pending Herd creation")
+            }
+            available.append(createdHerd)
+            self.pendingCreation = nil
+            pendingCreation.resume(returning: createdHerd.summary)
         }
 
         func renameCurrentHerd(to name: String) async throws -> HerdSummary {
