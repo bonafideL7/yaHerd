@@ -161,6 +161,39 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
         XCTAssertEqual(selection.selectionRevision, revision)
     }
 
+    func testRestorationAcceptsLowercaseRememberedUUID() throws {
+        let suite = "stage3-case-insensitive-restore-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let herdID = UUID()
+        defaults.set(herdID.uuidString.lowercased(), forKey: "selected")
+        let selection = AppCurrentHerdSelection(
+            defaults: defaults, preferenceKey: "selected"
+        )
+
+        selection.restoreAccessibleHerd(from: [herd(herdID), herd(UUID())])
+
+        XCTAssertEqual(selection.currentHerdID, herdID)
+    }
+
+    func testRestorationDoesNotSelectAmbiguousRememberedUUID() throws {
+        let suite = "stage3-duplicate-restore-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let herdID = UUID()
+        defaults.set(herdID.uuidString, forKey: "selected")
+        let selection = AppCurrentHerdSelection(
+            defaults: defaults, preferenceKey: "selected"
+        )
+
+        selection.restoreAccessibleHerd(from: [herd(herdID), herd(herdID)])
+
+        XCTAssertNil(selection.currentHerdID)
+        XCTAssertEqual(defaults.string(forKey: "selected"), herdID.uuidString)
+    }
+
     func testExplicitSameIDStoreReplacementResetsSelectionRevision() throws {
         let suite = "stage3-same-id-store-switch-\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
