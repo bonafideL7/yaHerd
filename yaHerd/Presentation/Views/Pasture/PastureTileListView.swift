@@ -5,6 +5,7 @@ struct PastureTileListView: View {
     private var repository: any PastureListManagingRepository { pastureDependencies.listRepository }
     private var deletionCommand: any PastureDeletionPerforming { pastureDependencies.deletionCommand }
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
 
     private let model: PastureTileListViewModel
     @Binding private var isManaging: Bool
@@ -137,7 +138,8 @@ struct PastureTileListView: View {
                         await model.deletePasture(
                             id: pasture.id,
                             deletionCommand: deletionCommand,
-                            orderingRepository: repository
+                            orderingRepository: repository,
+                            selection: herdSelection
                         )
                     }
                 }
