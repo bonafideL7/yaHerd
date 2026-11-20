@@ -55,7 +55,14 @@ final class HerdDirectoryController {
             throw HerdRepositoryError.missingHerd
         }
         let previousSelection = selection.currentHerdID
-        try await validateReadiness?(id)
+        do {
+            try await validateReadiness?(id)
+        } catch {
+            // Cancellation may race with an import-readiness failure. Report
+            // cancellation rather than letting the chooser schedule a retry.
+            try Task.checkCancellation()
+            throw error
+        }
         try Task.checkCancellation()
         guard selection.currentHerdID == previousSelection else {
             throw CancellationError()
