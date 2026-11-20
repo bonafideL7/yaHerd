@@ -374,7 +374,7 @@ final class AppNavigationStateTests: XCTestCase {
         navigation.herdRouter.showArchivedRecords = true
         navigation.herdRouter.showRemovedStatuses = true
         navigation.herdRouter.mode = .pastures
-        navigation.herdRouter.pastureFilter = .archived
+        navigation.herdRouter.pastureFilter = .overCapacity
         navigation.openWorkArea(.session(UUID()))
         navigation.present(.settings)
 
