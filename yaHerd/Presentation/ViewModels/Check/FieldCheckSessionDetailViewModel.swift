@@ -468,7 +468,6 @@ final class FieldCheckSessionDetailViewModel {
         completionAlreadyAccepted: Bool = false,
         mayContinue: @escaping @MainActor () -> Bool = { true }
     ) async {
-        guard mayContinue() else { return }
         if completionAlreadyAccepted {
             guard isCompletingSession else {
                 return
@@ -480,6 +479,7 @@ final class FieldCheckSessionDetailViewModel {
         }
 
         defer { endSessionCompletion() }
+        guard mayContinue() else { return }
 
         _ = await performOrderedMutation(allowsDuringCompletion: true, mayContinue: mayContinue) {
             guard await self.persistNotesOperation(
