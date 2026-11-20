@@ -245,6 +245,39 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
         XCTAssertEqual(repository.startCallCount, 1, "The initial Herd transaction must not be duplicated.")
     }
 
+    func testCompletedSessionStartIsDiscardedAfterHerdSelectionRoundTrip() async throws {
+        let originatingHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
+        let repository = SuspendedWorkingSessionStartRepository()
+        let model = NewWorkingSessionViewModel(
+            pastureRepository: EmptyPastureRepository(),
+            workingRepository: repository
+        )
+        let savedSessionID = UUID()
+
+        let start = Task {
+            try await model.startSession(
+                date: .now,
+                pastureID: UUID(),
+                treatmentTemplateName: nil,
+                plannedTreatments: [],
+                animalIDs: nil,
+                originatingHerdID: originatingHerdID,
+                currentHerdSelection: selection
+            )
+        }
+        await repository.waitUntilStarted()
+
+        // A UUID-only check incorrectly treats an obsolete session start as
+        // current when the user switches to another Herd and then back.
+        selection.select(UUID())
+        selection.select(originatingHerdID)
+        repository.complete(with: savedSessionID)
+
+        XCTAssertNil(try await start.value)
+        XCTAssertEqual(repository.startCallCount, 1)
+    }
+
     func testCompletedSessionStartIsDeliveredWhenHerdRemainsSelected() async throws {
         let originatingHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
