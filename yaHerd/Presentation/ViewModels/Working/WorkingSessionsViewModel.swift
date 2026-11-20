@@ -8,6 +8,17 @@ final class WorkingSessionsViewModel: ObservableObject {
     private var repository: any WorkingSessionsRepository
     private var hasLoaded = false
     private var lastLoadedRevision: UInt64 = 0
+    private var herdSelection: AppCurrentHerdSelection?
+    private var selectedHerdID: UUID?
+    private var selectedSelectionRevision: UInt64?
+    private var hasConfiguredSelection = false
+
+    var isCurrentHerdSelection: Bool {
+        guard hasConfiguredSelection else { return true }
+        guard let herdSelection else { return false }
+        return selectedHerdID == herdSelection.currentHerdID
+            && selectedSelectionRevision == herdSelection.selectionRevision
+    }
 
     init(repository: any WorkingSessionsRepository) {
         self.repository = repository
@@ -17,7 +28,33 @@ final class WorkingSessionsViewModel: ObservableObject {
         self.repository = repository
     }
 
+    /// A retained list cannot reuse another Herd's sessions or mutation revision.
+    func configure(selection: AppCurrentHerdSelection) {
+        let changed = !hasConfiguredSelection
+            || herdSelection !== selection
+            || selectedHerdID != selection.currentHerdID
+            || selectedSelectionRevision != selection.selectionRevision
+        herdSelection = selection
+        selectedHerdID = selection.currentHerdID
+        selectedSelectionRevision = selection.selectionRevision
+        hasConfiguredSelection = true
+
+        if changed {
+            sessions = []
+            errorMessage = nil
+            hasLoaded = false
+            lastLoadedRevision = 0
+        }
+    }
+
     func observe(mutationStream: any ApplicationMutationStreaming) async {
+        let originatingHerdID = selectedHerdID
+        let originatingRevision = selectedSelectionRevision
+        guard !Task.isCancelled,
+              isCurrentObserver(herdID: originatingHerdID, revision: originatingRevision) else {
+            return
+        }
+
         let startingRevision = mutationStream.workingSessionRevision
         if !hasLoaded || lastLoadedRevision < startingRevision {
             if load() {
@@ -29,7 +66,10 @@ final class WorkingSessionsViewModel: ObservableObject {
             for: .workingSessions,
             after: lastLoadedRevision
         ) {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled,
+                  isCurrentObserver(herdID: originatingHerdID, revision: originatingRevision) else {
+                return
+            }
             if load() {
                 lastLoadedRevision = revision
             }
@@ -66,6 +106,10 @@ final class WorkingSessionsViewModel: ObservableObject {
 
     @discardableResult
     func load() -> Bool {
+        guard !Task.isCancelled,
+              !hasConfiguredSelection || (selectedHerdID != nil && isCurrentHerdSelection) else {
+            return false
+        }
         do {
             sessions = try repository.fetchSessions()
             errorMessage = nil
@@ -75,5 +119,14 @@ final class WorkingSessionsViewModel: ObservableObject {
             errorMessage = UserVisibleErrorMessage.make(error)
             return false
         }
+    }
+
+    private func isCurrentObserver(herdID: UUID?, revision: UInt64?) -> Bool {
+        !hasConfiguredSelection || (
+            herdID != nil
+            && selectedHerdID == herdID
+            && selectedSelectionRevision == revision
+            && isCurrentHerdSelection
+        )
     }
 }
