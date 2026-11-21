@@ -8,16 +8,49 @@ final class FieldCheckSessionSetupViewModel {
     var errorMessage: String?
     var hasLoaded = false
 
-    func load(using repository: any PastureReferenceDataReader) {
+    @ObservationIgnored private var selection: AppCurrentHerdSelection?
+    @ObservationIgnored private var selectedHerdID: UUID?
+    @ObservationIgnored private var selectedRevision: UInt64?
+
+    var hasCurrentHerdData: Bool {
+        hasLoaded && isCurrentSelection
+    }
+
+    func configure(selection: AppCurrentHerdSelection) {
+        let changed = self.selection !== selection
+            || selectedHerdID != selection.currentHerdID
+            || selectedRevision != selection.selectionRevision
+        self.selection = selection
+        selectedHerdID = selection.currentHerdID
+        selectedRevision = selection.selectionRevision
+
+        if changed {
+            pastures = []
+            errorMessage = nil
+            hasLoaded = false
+        }
+    }
+
+    @discardableResult
+    func load(using repository: any PastureReferenceDataReader) -> Bool {
+        guard isCurrentSelection else { return false }
         defer { hasLoaded = true }
 
         do {
             pastures = try repository.fetchPastureOptions()
                 .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             errorMessage = nil
+            return true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
+            return false
         }
+    }
+
+    private var isCurrentSelection: Bool {
+        guard let selection, let selectedHerdID else { return false }
+        return selectedHerdID == selection.currentHerdID
+            && selectedRevision == selection.selectionRevision
     }
 
     func createSession(
