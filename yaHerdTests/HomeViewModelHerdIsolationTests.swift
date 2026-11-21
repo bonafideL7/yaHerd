@@ -119,6 +119,9 @@ final class HomeViewModelHerdIsolationTests: XCTestCase {
         }
         let currentObserverFetches = await reader.fetchCount()
         XCTAssertEqual(currentObserverFetches, 2)
+        for _ in 0..<100 where !model.hasLoaded {
+            await Task.yield()
+        }
         XCTAssertTrue(model.hasLoaded)
         newObserver.cancel()
         _ = await newObserver.value
