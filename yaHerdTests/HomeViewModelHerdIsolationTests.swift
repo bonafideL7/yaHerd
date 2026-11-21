@@ -99,7 +99,8 @@ final class HomeViewModelHerdIsolationTests: XCTestCase {
         for _ in 0..<30 {
             await Task.yield()
         }
-        XCTAssertEqual(await reader.fetchCount(), 1, "The obsolete observer cannot read the replacement Herd.")
+        let obsoleteObserverFetches = await reader.fetchCount()
+        XCTAssertEqual(obsoleteObserverFetches, 1, "The obsolete observer cannot read the replacement Herd.")
 
         oldObserver.cancel()
         _ = await oldObserver.value
@@ -112,10 +113,12 @@ final class HomeViewModelHerdIsolationTests: XCTestCase {
                 selection: selection
             )
         }
-        for _ in 0..<100 where await reader.fetchCount() < 2 {
+        for _ in 0..<100 {
+            if await reader.fetchCount() >= 2 { break }
             await Task.yield()
         }
-        XCTAssertEqual(await reader.fetchCount(), 2)
+        let currentObserverFetches = await reader.fetchCount()
+        XCTAssertEqual(currentObserverFetches, 2)
         XCTAssertTrue(model.hasLoaded)
         newObserver.cancel()
         _ = await newObserver.value
