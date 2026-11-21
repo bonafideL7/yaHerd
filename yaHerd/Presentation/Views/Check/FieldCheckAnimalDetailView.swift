@@ -20,19 +20,21 @@ struct FieldCheckAnimalDetailView: View {
     let animalID: UUID
 
     private var displayedTagNumber: String {
-        model.animalDetail?.displayTagNumber ?? ""
+        guard isPresentingOriginatingHerd else { return "" }
+        return model.animalDetail?.displayTagNumber ?? ""
     }
 
     private var displayedTagColorID: UUID? {
-        model.animalDetail?.displayTagColorID
+        guard isPresentingOriginatingHerd else { return nil }
+        return model.animalDetail?.displayTagColorID
     }
 
     private var isPresentingOriginatingHerd: Bool {
-        guard let originatingHerdID, let originatingHerdSelectionRevision else {
-            return false
-        }
-        return herdSelection.currentHerdID == originatingHerdID
-            && herdSelection.selectionRevision == originatingHerdSelectionRevision
+        model.isOriginatingSelectionCurrent(
+            herdSelection,
+            originatingHerdID: originatingHerdID,
+            originatingSelectionRevision: originatingHerdSelectionRevision
+        )
     }
 
     private var isSessionEditable: Bool {
@@ -55,7 +57,13 @@ struct FieldCheckAnimalDetailView: View {
 
     var body: some View {
         Group {
-            if let detail = model.animalDetail {
+            if originatingHerdSelectionRevision != nil && !isPresentingOriginatingHerd {
+                ContentUnavailableView(
+                    "Herd Changed",
+                    systemImage: "arrow.left.arrow.right",
+                    description: Text("Reopen this animal in the selected Herd to continue.")
+                )
+            } else if isPresentingOriginatingHerd, let detail = model.animalDetail {
                 Form {
                     if let animalCheck = model.animalCheck {
                         fieldCheckStatusSection(animalCheck, isEditable: isSessionEditable)
@@ -103,7 +111,7 @@ struct FieldCheckAnimalDetailView: View {
                 fieldCheckRepository: fieldCheckRepository
             )
         }) {
-            if let preparedEditor = model.preparedOffspringEditor {
+            if isPresentingOriginatingHerd, let preparedEditor = model.preparedOffspringEditor {
                 AddAnimalView(
                     title: "Add Offspring",
                     initialDraft: preparedEditor.draft,
@@ -119,44 +127,48 @@ struct FieldCheckAnimalDetailView: View {
             }
         }
         .sheet(isPresented: $showingAddFinding) {
-            NavigationStack {
-                FieldCheckFindingEditorView(
-                    suggestedTypes: [.pinkEye, .limping, .missingAnimal],
-                    animals: model.sessionDetail?.animalChecks ?? [],
-                    initialAnimalID: animalID
-                ) { input in
-                    guard isSessionEditable else { return }
-                    Task { @MainActor in
-                        await model.addFinding(
-                            animalID: animalID,
-                            sessionID: sessionID,
-                            input: input,
-                            animalRepository: animalRepository,
-                            fieldCheckRepository: fieldCheckRepository,
-                            mayContinue: { isPresentingOriginatingHerd }
-                        )
+            if isPresentingOriginatingHerd {
+                NavigationStack {
+                    FieldCheckFindingEditorView(
+                        suggestedTypes: [.pinkEye, .limping, .missingAnimal],
+                        animals: model.sessionDetail?.animalChecks ?? [],
+                        initialAnimalID: animalID
+                    ) { input in
+                        guard isSessionEditable else { return }
+                        Task { @MainActor in
+                            await model.addFinding(
+                                animalID: animalID,
+                                sessionID: sessionID,
+                                input: input,
+                                animalRepository: animalRepository,
+                                fieldCheckRepository: fieldCheckRepository,
+                                mayContinue: { isPresentingOriginatingHerd }
+                            )
+                        }
                     }
                 }
             }
         }
         .sheet(item: $editingFinding) { finding in
-            NavigationStack {
-                FieldCheckFindingEditorView(
-                    suggestedTypes: [.pinkEye, .limping, .missingAnimal],
-                    animals: model.sessionDetail?.animalChecks ?? [],
-                    finding: finding
-                ) { input in
-                    guard isSessionEditable else { return }
-                    Task { @MainActor in
-                        await model.updateFinding(
-                            animalID: animalID,
-                            sessionID: sessionID,
-                            findingID: finding.id,
-                            input: input,
-                            animalRepository: animalRepository,
-                            fieldCheckRepository: fieldCheckRepository,
-                            mayContinue: { isPresentingOriginatingHerd }
-                        )
+            if isPresentingOriginatingHerd {
+                NavigationStack {
+                    FieldCheckFindingEditorView(
+                        suggestedTypes: [.pinkEye, .limping, .missingAnimal],
+                        animals: model.sessionDetail?.animalChecks ?? [],
+                        finding: finding
+                    ) { input in
+                        guard isSessionEditable else { return }
+                        Task { @MainActor in
+                            await model.updateFinding(
+                                animalID: animalID,
+                                sessionID: sessionID,
+                                findingID: finding.id,
+                                input: input,
+                                animalRepository: animalRepository,
+                                fieldCheckRepository: fieldCheckRepository,
+                                mayContinue: { isPresentingOriginatingHerd }
+                            )
+                        }
                     }
                 }
             }
@@ -188,6 +200,12 @@ struct FieldCheckAnimalDetailView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(model.errorMessage ?? "Unknown error")
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            guard !isPresentingOriginatingHerd else { return }
+            showingAddOffspring = false
+            showingAddFinding = false
+            editingFinding = nil
         }
     }
 
