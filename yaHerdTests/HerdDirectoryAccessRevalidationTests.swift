@@ -40,6 +40,39 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
 
     }
 
+    func testPendingHerdRetryStopsWhenTheRootDisappears() {
+        let pendingID = UUID()
+        let selection = AppCurrentHerdSelection()
+        let repository = StubHerdRepository(available: [herd(pendingID)])
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+        directory.refresh()
+
+        // A previously selectable shared root can disappear after revocation.
+        // A failed readiness check must not retry this missing UUID forever.
+        repository.available = []
+
+        XCTAssertFalse(directory.shouldContinueWaitingForHerd(id: pendingID))
+        XCTAssertEqual(directory.inventoryState, .available)
+        XCTAssertTrue(directory.herds.isEmpty)
+        XCTAssertNil(directory.selectedHerdID)
+    }
+
+    func testPendingHerdRetryPreservesWaitingOnTransientInventoryFailure() {
+        let pendingID = UUID()
+        let selection = AppCurrentHerdSelection()
+        let repository = StubHerdRepository(available: [herd(pendingID)])
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+        directory.refresh()
+
+        // A failed inventory read is not proof that the Herd was revoked.
+        repository.shouldFail = true
+
+        XCTAssertTrue(directory.shouldContinueWaitingForHerd(id: pendingID))
+        XCTAssertEqual(directory.inventoryState, .unavailable)
+        XCTAssertEqual(directory.herds.map(\\.id), [pendingID])
+        XCTAssertNil(directory.errorMessage)
+    }
+
     func testTransientInventoryFailureRetainsActiveHerd() {
         let selectedID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: selectedID)
