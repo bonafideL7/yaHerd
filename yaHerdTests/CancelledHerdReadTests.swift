@@ -7,6 +7,7 @@ import XCTest
 final class CancelledHerdReadTests: XCTestCase {
     func testCancelledHomeReadDoesNotPublishLateSuccessAndAllowsRetry() async {
         let reader = SuspendedDashboardReader()
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
         let model = HomeViewModel()
         let useCase = LoadHomeUseCase(
             dashboardRepository: reader,
@@ -14,7 +15,7 @@ final class CancelledHerdReadTests: XCTestCase {
             workingRepository: EmptyHomeWorkingReader()
         )
         let running = Task { @MainActor in
-            await model.load(configuration: DashboardConfiguration(), useCase: useCase)
+            await model.load(configuration: DashboardConfiguration(), useCase: useCase, selection: selection)
         }
 
         await reader.waitUntilStarted()
@@ -27,7 +28,7 @@ final class CancelledHerdReadTests: XCTestCase {
         XCTAssertNil(model.snapshot)
         XCTAssertNil(model.errorMessage)
 
-        let retried = await model.load(configuration: DashboardConfiguration(), useCase: useCase)
+        let retried = await model.load(configuration: DashboardConfiguration(), useCase: useCase, selection: selection)
         XCTAssertTrue(retried)
         XCTAssertTrue(model.hasLoaded)
         XCTAssertNotNil(model.snapshot)
@@ -35,6 +36,7 @@ final class CancelledHerdReadTests: XCTestCase {
 
     func testCancelledHomeReadDoesNotPresentLateError() async {
         let reader = SuspendedDashboardReader()
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
         let model = HomeViewModel()
         let useCase = LoadHomeUseCase(
             dashboardRepository: reader,
@@ -42,7 +44,7 @@ final class CancelledHerdReadTests: XCTestCase {
             workingRepository: EmptyHomeWorkingReader()
         )
         let running = Task { @MainActor in
-            await model.load(configuration: DashboardConfiguration(), useCase: useCase)
+            await model.load(configuration: DashboardConfiguration(), useCase: useCase, selection: selection)
         }
 
         await reader.waitUntilStarted()
