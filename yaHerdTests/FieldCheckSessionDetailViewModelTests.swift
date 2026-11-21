@@ -1058,16 +1058,21 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
     }
 
     func testTrackedAnimalPickerSubmissionGateRejectsReentryUntilFinished() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let revision = selection.selectionRevision
         let model = FieldCheckTrackedAnimalPickerViewModel()
         let session = makeDetail(sessionID: UUID(), quickCowCount: 0)
         let reader = FieldCheckTrackedCandidateQuerySpy(animals: [])
-        XCTAssertFalse(model.beginSelectionSubmission(), "Submission requires a complete candidate load.")
-        await model.load(for: session, using: reader)
+        XCTAssertFalse(model.beginSelectionSubmission(selection: selection, originatingSelectionRevision: revision), "Submission requires a complete candidate load.")
+        await model.load(
+            for: session, using: reader,
+            selection: selection, originatingSelectionRevision: revision
+        )
 
-        XCTAssertTrue(model.beginSelectionSubmission())
+        XCTAssertTrue(model.beginSelectionSubmission(selection: selection, originatingSelectionRevision: revision))
         XCTAssertTrue(model.isSubmittingSelection)
         XCTAssertFalse(
-            model.beginSelectionSubmission(),
+            model.beginSelectionSubmission(selection: selection, originatingSelectionRevision: revision),
             "A second tracked-animal selection must be rejected while the accepted move is pending."
         )
 
@@ -1075,12 +1080,14 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
 
         XCTAssertFalse(model.isSubmittingSelection)
         XCTAssertTrue(
-            model.beginSelectionSubmission(),
+            model.beginSelectionSubmission(selection: selection, originatingSelectionRevision: revision),
             "The picker should accept a new selection after the prior submission finishes."
         )
     }
 
     func testTrackedPickerUsesCompletePastureScopedCohortAndExcludesChecks() async throws {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let revision = selection.selectionRevision
         let session = makeDetail(sessionID: UUID(), quickCowCount: 0)
         let destinationID = try XCTUnwrap(session.pastureID)
         let checkedID = try XCTUnwrap(session.animalChecks.first?.animalID)
@@ -1107,7 +1114,10 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
             animals: sourceAnimals + [alreadyChecked, resident, unassigned, workingPen]
         )
         let model = FieldCheckTrackedAnimalPickerViewModel()
-        await model.load(for: session, using: reader)
+        await model.load(
+            for: session, using: reader,
+            selection: selection, originatingSelectionRevision: revision
+        )
         XCTAssertTrue(model.hasLoaded)
         XCTAssertFalse(model.isLoading)
         XCTAssertNil(model.loadErrorMessage)
@@ -1124,28 +1134,41 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
     }
 
     func testTrackedPickerFailureClearsCandidatesAndAllowsRefresh() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let revision = selection.selectionRevision
         let session = makeDetail(sessionID: UUID(), quickCowCount: 0)
         let candidate = makeTrackedCandidate(tag: "READY", pastureID: UUID())
         let reader = FieldCheckTrackedCandidateQuerySpy(animals: [candidate])
         let model = FieldCheckTrackedAnimalPickerViewModel()
-        await model.load(for: session, using: reader)
+        await model.load(
+            for: session, using: reader,
+            selection: selection, originatingSelectionRevision: revision
+        )
         XCTAssertEqual(model.animals.map(\.id), [candidate.id])
 
         await reader.setFailure(true)
-        await model.load(for: session, using: reader)
+        await model.load(
+            for: session, using: reader,
+            selection: selection, originatingSelectionRevision: revision
+        )
         XCTAssertFalse(model.hasLoaded)
-        XCTAssertFalse(model.beginSelectionSubmission())
+        XCTAssertFalse(model.beginSelectionSubmission(selection: selection, originatingSelectionRevision: revision))
         XCTAssertTrue(model.animals.isEmpty)
         XCTAssertNotNil(model.loadErrorMessage)
 
         await reader.setFailure(false)
-        await model.load(for: session, using: reader)
+        await model.load(
+            for: session, using: reader,
+            selection: selection, originatingSelectionRevision: revision
+        )
         XCTAssertTrue(model.hasLoaded)
         XCTAssertNil(model.loadErrorMessage)
         XCTAssertEqual(model.animals.map(\.id), [candidate.id])
     }
 
     func testTrackedPickerRejectsArchivedPastureWithoutQuery() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let revision = selection.selectionRevision
         let active = makeDetail(sessionID: UUID(), quickCowCount: 0)
         let archived = FieldCheckSessionDetailSnapshot(
             id: active.id,
@@ -1169,15 +1192,20 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
             animals: [makeTrackedCandidate(tag: "NO", pastureID: UUID())]
         )
         let model = FieldCheckTrackedAnimalPickerViewModel()
-        await model.load(for: archived, using: reader)
+        await model.load(
+            for: archived, using: reader,
+            selection: selection, originatingSelectionRevision: revision
+        )
         XCTAssertFalse(model.hasLoaded)
-        XCTAssertFalse(model.beginSelectionSubmission())
+        XCTAssertFalse(model.beginSelectionSubmission(selection: selection, originatingSelectionRevision: revision))
         XCTAssertTrue(model.animals.isEmpty)
         let count = await reader.fetchCount()
         XCTAssertEqual(count, 0)
     }
 
     func testOlderTrackedPickerQueryCannotOverwriteRefreshedCohort() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let revision = selection.selectionRevision
         let session = makeDetail(sessionID: UUID(), quickCowCount: 0)
         let candidate = makeTrackedCandidate(tag: "NEW", pastureID: UUID())
         let reader = FieldCheckTrackedCandidateQuerySpy(
@@ -1186,10 +1214,16 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         )
         let model = FieldCheckTrackedAnimalPickerViewModel()
         let old = Task { @MainActor in
-            await model.load(for: session, using: reader)
+            await model.load(
+            for: session, using: reader,
+            selection: selection, originatingSelectionRevision: revision
+        )
         }
         await reader.waitUntilPaused()
-        await model.load(for: session, using: reader)
+        await model.load(
+            for: session, using: reader,
+            selection: selection, originatingSelectionRevision: revision
+        )
         XCTAssertEqual(model.animals.map(\.id), [candidate.id])
         await reader.releasePaused()
         await old.value
