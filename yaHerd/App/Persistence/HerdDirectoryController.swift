@@ -87,9 +87,11 @@ final class HerdDirectoryController {
     func shouldContinueWaitingForHerd(id: UUID) -> Bool {
         refresh(reportErrors: false)
         switch inventoryState {
-        case .loading, .unavailable:
+        case .loading, .unavailable, .incomplete:
+            // An incomplete root may already have this UUID but cannot yet
+            // appear in the selectable list. Absence is not proof of removal.
             return true
-        case .available, .incomplete:
+        case .available:
             return herds.contains { $0.id == id }
         }
     }
