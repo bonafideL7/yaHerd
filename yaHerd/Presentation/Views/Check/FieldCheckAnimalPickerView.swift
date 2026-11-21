@@ -354,6 +354,7 @@ private struct FieldCheckAnimalPickerStatusPills: View {
 
 struct FieldCheckTrackedAnimalPickerView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @Environment(\.fieldCheckFeatureDependencies) private var fieldCheckDependencies
     private var animalReferenceQueryReader: (any AnimalReferenceQueryReading)? {
         fieldCheckDependencies.animalReferenceQueryReader
@@ -363,14 +364,26 @@ struct FieldCheckTrackedAnimalPickerView: View {
     @State private var pendingAnimal: AnimalSummary?
 
     let session: FieldCheckSessionDetailSnapshot
+    let originatingHerdID: UUID
+    let originatingSelectionRevision: UInt64
     let onSelect: (UUID) async -> Bool
+
+    private var isPresentingOriginatingHerd: Bool {
+        herdSelection.currentHerdID == originatingHerdID
+            && herdSelection.selectionRevision == originatingSelectionRevision
+    }
 
     private var existingAnimalIDs: Set<UUID> {
         Set(session.animalChecks.compactMap(\.animalID))
     }
 
     private var eligibleAnimals: [AnimalSummary] {
-        model.eligibleAnimals(
+        guard isPresentingOriginatingHerd,
+              model.hasCurrentCandidates(
+                  for: herdSelection,
+                  originatingSelectionRevision: originatingSelectionRevision
+              ) else { return [] }
+        return model.eligibleAnimals(
             forPastureID: session.pastureID,
             excluding: existingAnimalIDs
         )
@@ -383,7 +396,13 @@ struct FieldCheckTrackedAnimalPickerView: View {
     var body: some View {
         List {
             Section {
-                if model.isLoading || !model.hasLoaded {
+                if !isPresentingOriginatingHerd {
+                    ContentUnavailableView(
+                        "Herd Changed",
+                        systemImage: "arrow.left.arrow.right",
+                        description: Text("Reopen this Field Check in the selected Herd.")
+                    )
+                } else if model.isLoading || !model.hasLoaded {
                     if model.loadErrorMessage != nil {
                         ContentUnavailableView {
                             Label("Unable to Load Animals", systemImage: "exclamationmark.triangle")
@@ -440,7 +459,18 @@ struct FieldCheckTrackedAnimalPickerView: View {
         .interactiveDismissDisabled(model.isSubmittingSelection)
         .searchable(text: $model.searchText, prompt: "Search animals")
         .task {
-            await model.load(for: session, using: animalReferenceQueryReader)
+            guard isPresentingOriginatingHerd else { return }
+            await model.load(
+                for: session,
+                using: animalReferenceQueryReader,
+                selection: herdSelection,
+                originatingSelectionRevision: originatingSelectionRevision
+            )
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            guard !isPresentingOriginatingHerd else { return }
+            pendingAnimal = nil
+            dismiss()
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -479,8 +509,12 @@ struct FieldCheckTrackedAnimalPickerView: View {
     }
 
     private func selectPendingAnimal(_ animal: AnimalSummary) {
-        guard eligibleAnimals.contains(where: { $0.id == animal.id }),
-              model.beginSelectionSubmission() else {
+        guard isPresentingOriginatingHerd,
+              eligibleAnimals.contains(where: { $0.id == animal.id }),
+              model.beginSelectionSubmission(
+                  selection: herdSelection,
+                  originatingSelectionRevision: originatingSelectionRevision
+              ) else {
             return
         }
 
@@ -488,17 +522,25 @@ struct FieldCheckTrackedAnimalPickerView: View {
 
         Task { @MainActor in
             defer { model.endSelectionSubmission() }
+            guard isPresentingOriginatingHerd, !Task.isCancelled else { return }
 
-            if await onSelect(animal.id) {
+            if await onSelect(animal.id),
+               isPresentingOriginatingHerd, !Task.isCancelled {
                 dismiss()
             }
         }
     }
 
     private func refreshCandidates() {
+        guard isPresentingOriginatingHerd else { return }
         pendingAnimal = nil
         Task { @MainActor in
-            await model.load(for: session, using: animalReferenceQueryReader)
+            await model.load(
+                for: session,
+                using: animalReferenceQueryReader,
+                selection: herdSelection,
+                originatingSelectionRevision: originatingSelectionRevision
+            )
         }
     }
 
@@ -509,7 +551,7 @@ struct FieldCheckTrackedAnimalPickerView: View {
 
     private var moveConfirmationBinding: Binding<Bool> {
         Binding(
-            get: { pendingAnimal != nil && !model.isSubmittingSelection },
+            get: { isPresentingOriginatingHerd && pendingAnimal != nil && !model.isSubmittingSelection },
             set: { newValue in
                 if !newValue {
                     pendingAnimal = nil
