@@ -52,11 +52,12 @@ struct HomeView: View {
                 .padding(.trailing, 24)
                 .padding(.bottom, 12)
         }
-        .task {
+        .task(id: herdSelection.selectionRevision) {
             await viewModel.observe(
                 configuration: configuration,
                 useCase: makeLoadHomeUseCase(),
-                mutationStream: homeDependencies.mutationStream
+                mutationStream: homeDependencies.mutationStream,
+                selection: herdSelection
             )
         }
         .alert("Home Error", isPresented: errorBinding) {
