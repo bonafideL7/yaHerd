@@ -172,6 +172,88 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
         XCTAssertEqual(result, savedID)
         XCTAssertEqual(repository.createCallCount, 1)
     }
+
+    func testPastureSetupRejectsStaleReadAndReloadsOnlySelectedHerd() {
+        let firstHerdID = UUID()
+        let secondHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: firstHerdID)
+        let firstPasture = PastureOption(id: UUID(), name: "First")
+        let secondPasture = PastureOption(id: UUID(), name: "Second")
+        let repository = HerdScopedSetupPastureProbe(
+            selection: selection,
+            pasturesByHerd: [firstHerdID: [firstPasture], secondHerdID: [secondPasture]]
+        )
+        let model = FieldCheckSessionSetupViewModel()
+
+        model.configure(selection: selection)
+        XCTAssertTrue(model.load(using: repository))
+        XCTAssertTrue(model.hasCurrentHerdData)
+        XCTAssertEqual(model.pastures, [firstPasture])
+
+        selection.select(secondHerdID)
+        XCTAssertFalse(model.hasCurrentHerdData)
+        XCTAssertFalse(model.load(using: repository), "Obsolete setup must not read a newly selected Herd.")
+        XCTAssertEqual(repository.fetchCount, 1)
+
+        model.configure(selection: selection)
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertTrue(model.pastures.isEmpty)
+        XCTAssertTrue(model.load(using: repository))
+        XCTAssertEqual(model.pastures, [secondPasture])
+        XCTAssertEqual(repository.fetchCount, 2)
+    }
+
+    func testPastureSetupRoundTripDoesNotReuseOldPastureSelection() {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let before = PastureOption(id: UUID(), name: "Before")
+        let after = PastureOption(id: UUID(), name: "After")
+        let repository = HerdScopedSetupPastureProbe(
+            selection: selection,
+            pasturesByHerd: [herdID: [before]]
+        )
+        let model = FieldCheckSessionSetupViewModel()
+        model.configure(selection: selection)
+        XCTAssertTrue(model.load(using: repository))
+
+        selection.select(UUID())
+        selection.select(herdID)
+        repository.pasturesByHerd[herdID] = [after]
+
+        XCTAssertFalse(model.hasCurrentHerdData)
+        XCTAssertFalse(model.load(using: repository))
+        model.configure(selection: selection)
+        XCTAssertTrue(model.pastures.isEmpty)
+        XCTAssertTrue(model.load(using: repository))
+        XCTAssertEqual(model.pastures, [after])
+        XCTAssertEqual(repository.fetchCount, 2)
+    }
+
+    func testPastureSetupRequiresAccessibleSelectionAndClearsOldError() {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let repository = HerdScopedSetupPastureProbe(selection: selection)
+        let model = FieldCheckSessionSetupViewModel()
+        model.configure(selection: selection)
+        repository.shouldFail = true
+        XCTAssertFalse(model.load(using: repository))
+        XCTAssertNotNil(model.errorMessage)
+
+        selection.select(nil)
+        model.configure(selection: selection)
+        XCTAssertTrue(model.pastures.isEmpty)
+        XCTAssertNil(model.errorMessage)
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertFalse(model.load(using: repository))
+        XCTAssertEqual(repository.fetchCount, 1, "No Herd must not trigger an unscoped pasture read.")
+
+        selection.select(UUID())
+        repository.shouldFail = false
+        model.configure(selection: selection)
+        XCTAssertTrue(model.load(using: repository))
+        XCTAssertTrue(model.hasCurrentHerdData)
+        XCTAssertNil(model.errorMessage)
+    }
 }
 
 @MainActor
@@ -199,5 +281,30 @@ private final class SuspendedFieldCheckSessionCreator: FieldCheckSessionCreating
     func complete(with id: UUID) {
         pendingCompletion?.resume(returning: id)
         pendingCompletion = nil
+    }
+}
+
+@MainActor
+private final class HerdScopedSetupPastureProbe: PastureReferenceDataReader {
+    let selection: AppCurrentHerdSelection
+    var pasturesByHerd: [UUID: [PastureOption]]
+    var shouldFail = false
+    private(set) var fetchCount = 0
+
+    init(
+        selection: AppCurrentHerdSelection,
+        pasturesByHerd: [UUID: [PastureOption]] = [:]
+    ) {
+        self.selection = selection
+        self.pasturesByHerd = pasturesByHerd
+    }
+
+    func fetchPastureOptions() throws -> [PastureOption] {
+        fetchCount += 1
+        if shouldFail {
+            throw NSError(domain: "HerdScopedSetupPastureProbe", code: 1)
+        }
+        guard let herdID = selection.currentHerdID else { return [] }
+        return pasturesByHerd[herdID] ?? []
     }
 }
