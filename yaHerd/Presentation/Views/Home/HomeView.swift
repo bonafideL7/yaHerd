@@ -52,7 +52,7 @@ struct HomeView: View {
                 .padding(.trailing, 24)
                 .padding(.bottom, 12)
         }
-        .task(id: herdSelection.selectionRevision) {
+        .task {
             await viewModel.observe(
                 configuration: configuration,
                 useCase: makeLoadHomeUseCase(),
