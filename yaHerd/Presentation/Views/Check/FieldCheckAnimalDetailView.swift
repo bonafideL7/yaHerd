@@ -130,22 +130,22 @@ struct FieldCheckAnimalDetailView: View {
             if isPresentingOriginatingHerd {
                 NavigationStack {
                     FieldCheckFindingEditorView(
-                    suggestedTypes: [.pinkEye, .limping, .missingAnimal],
-                    animals: model.sessionDetail?.animalChecks ?? [],
-                    initialAnimalID: animalID
-                ) { input in
-                    guard isSessionEditable else { return }
-                    Task { @MainActor in
-                        await model.addFinding(
-                            animalID: animalID,
-                            sessionID: sessionID,
-                            input: input,
-                            animalRepository: animalRepository,
-                            fieldCheckRepository: fieldCheckRepository,
-                            mayContinue: { isPresentingOriginatingHerd }
-                        )
+                        suggestedTypes: [.pinkEye, .limping, .missingAnimal],
+                        animals: model.sessionDetail?.animalChecks ?? [],
+                        initialAnimalID: animalID
+                    ) { input in
+                        guard isSessionEditable else { return }
+                        Task { @MainActor in
+                            await model.addFinding(
+                                animalID: animalID,
+                                sessionID: sessionID,
+                                input: input,
+                                animalRepository: animalRepository,
+                                fieldCheckRepository: fieldCheckRepository,
+                                mayContinue: { isPresentingOriginatingHerd }
+                            )
+                        }
                     }
-                }
                 }
             }
         }
@@ -153,23 +153,23 @@ struct FieldCheckAnimalDetailView: View {
             if isPresentingOriginatingHerd {
                 NavigationStack {
                     FieldCheckFindingEditorView(
-                    suggestedTypes: [.pinkEye, .limping, .missingAnimal],
-                    animals: model.sessionDetail?.animalChecks ?? [],
-                    finding: finding
-                ) { input in
-                    guard isSessionEditable else { return }
-                    Task { @MainActor in
-                        await model.updateFinding(
-                            animalID: animalID,
-                            sessionID: sessionID,
-                            findingID: finding.id,
-                            input: input,
-                            animalRepository: animalRepository,
-                            fieldCheckRepository: fieldCheckRepository,
-                            mayContinue: { isPresentingOriginatingHerd }
-                        )
+                        suggestedTypes: [.pinkEye, .limping, .missingAnimal],
+                        animals: model.sessionDetail?.animalChecks ?? [],
+                        finding: finding
+                    ) { input in
+                        guard isSessionEditable else { return }
+                        Task { @MainActor in
+                            await model.updateFinding(
+                                animalID: animalID,
+                                sessionID: sessionID,
+                                findingID: finding.id,
+                                input: input,
+                                animalRepository: animalRepository,
+                                fieldCheckRepository: fieldCheckRepository,
+                                mayContinue: { isPresentingOriginatingHerd }
+                            )
+                        }
                     }
-                }
                 }
             }
         }
