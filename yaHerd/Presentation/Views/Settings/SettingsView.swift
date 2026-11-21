@@ -533,7 +533,12 @@ struct HerdDirectoryView: View {
             if Task.isCancelled || error is CancellationError { return }
             #if DEBUG
             if CloudKitDevelopmentLaunch.isImportPending(error) {
-                pendingHerdID = id
+                if directory.shouldContinueWaitingForHerd(id: id) {
+                    pendingHerdID = id
+                } else {
+                    pendingHerdID = nil
+                    directory.report(HerdDirectoryError.pendingHerdUnavailable)
+                }
                 return
             }
             #endif
