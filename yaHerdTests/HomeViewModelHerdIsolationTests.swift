@@ -72,6 +72,55 @@ final class HomeViewModelHerdIsolationTests: XCTestCase {
         XCTAssertEqual(fetches, 2)
     }
 
+    func testOldMutationObserverCannotReloadAfterHerdSwitch() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let reader = ControlledHomeDashboardReader()
+        let model = HomeViewModel()
+        let mutationStream = ApplicationMutationCenter()
+        let useCase = makeUseCase(reader: reader)
+
+        let oldObserver = Task {
+            await model.observe(
+                configuration: DashboardConfiguration(),
+                useCase: useCase,
+                mutationStream: mutationStream,
+                selection: selection
+            )
+        }
+        await reader.waitForFirstRead()
+        await reader.completeFirstRead()
+        for _ in 0..<100 where !model.hasLoaded {
+            await Task.yield()
+        }
+        XCTAssertTrue(model.hasLoaded)
+
+        selection.select(UUID())
+        mutationStream.recordSuccessfulMutation(reason: .animal)
+        for _ in 0..<30 {
+            await Task.yield()
+        }
+        XCTAssertEqual(await reader.fetchCount(), 1, "The obsolete observer cannot read the replacement Herd.")
+
+        oldObserver.cancel()
+        _ = await oldObserver.value
+
+        let newObserver = Task {
+            await model.observe(
+                configuration: DashboardConfiguration(),
+                useCase: useCase,
+                mutationStream: mutationStream,
+                selection: selection
+            )
+        }
+        for _ in 0..<100 where await reader.fetchCount() < 2 {
+            await Task.yield()
+        }
+        XCTAssertEqual(await reader.fetchCount(), 2)
+        XCTAssertTrue(model.hasLoaded)
+        newObserver.cancel()
+        _ = await newObserver.value
+    }
+
     private func makeUseCase(reader: ControlledHomeDashboardReader) -> LoadHomeUseCase {
         LoadHomeUseCase(
             dashboardRepository: reader,
