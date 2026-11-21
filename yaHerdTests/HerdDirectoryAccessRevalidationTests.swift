@@ -47,7 +47,7 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         let directory = HerdDirectoryController(repository: repository, selection: selection)
         directory.refresh()
 
-        // A previously selectable shared root can disappear after revocation.
+        // A previously selectable root can disappear after shared access is revoked.
         // A failed readiness check must not retry this missing UUID forever.
         repository.available = []
 
@@ -69,7 +69,7 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
 
         XCTAssertTrue(directory.shouldContinueWaitingForHerd(id: pendingID))
         XCTAssertEqual(directory.inventoryState, .unavailable)
-        XCTAssertEqual(directory.herds.map(\\.id), [pendingID])
+        XCTAssertEqual(directory.herds.map(\.id), [pendingID])
         XCTAssertNil(directory.errorMessage)
     }
 
