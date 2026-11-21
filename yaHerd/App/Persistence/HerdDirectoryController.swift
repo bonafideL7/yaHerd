@@ -3,11 +3,14 @@ import Observation
 
 enum HerdDirectoryError: LocalizedError, Equatable {
     case creationInProgress
+    case pendingHerdUnavailable
 
     var errorDescription: String? {
         switch self {
         case .creationInProgress:
             return "A Herd is already being created. Finish that request before creating another."
+        case .pendingHerdUnavailable:
+            return "This Herd is no longer available. Refresh the list to check for it or choose another Herd."
         }
     }
 }
@@ -75,6 +78,19 @@ final class HerdDirectoryController {
             if reportErrors {
                 errorMessage = error.localizedDescription
             }
+        }
+    }
+
+    /// A missing root after a successful inventory refresh is no longer an
+    /// import-readiness retry candidate. Inventory failures are inconclusive:
+    /// keep waiting rather than treating a temporary store error as revocation.
+    func shouldContinueWaitingForHerd(id: UUID) -> Bool {
+        refresh(reportErrors: false)
+        switch inventoryState {
+        case .loading, .unavailable:
+            return true
+        case .available, .incomplete:
+            return herds.contains { $0.id == id }
         }
     }
 
