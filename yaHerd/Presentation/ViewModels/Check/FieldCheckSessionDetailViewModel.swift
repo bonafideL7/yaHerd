@@ -582,6 +582,20 @@ final class FieldCheckAnimalDetailViewModel {
     var errorMessage: String?
     var hasLoaded = false
 
+    /// A mounted Field Check animal detail may outlive its navigation route.
+    /// Its cached records remain private to the selection that opened it.
+    func isOriginatingSelectionCurrent(
+        _ selection: any CurrentHerdSelectionReading,
+        originatingHerdID: UUID?,
+        originatingSelectionRevision: UInt64?
+    ) -> Bool {
+        guard let originatingHerdID, let originatingSelectionRevision else {
+            return false
+        }
+        return selection.currentHerdID == originatingHerdID
+            && selection.selectionRevision == originatingSelectionRevision
+    }
+
     var animalCheck: FieldCheckAnimalCheckSnapshot? {
         guard let animalID = animalDetail?.id else { return nil }
         return sessionDetail?.animalChecks.first(where: { $0.animalID == animalID })
