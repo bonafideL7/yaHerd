@@ -332,9 +332,15 @@ struct FieldCheckSessionDetailView: View {
             }
         }
         .sheet(isPresented: $showingAddTrackedAnimal) {
-            if let detail = model.detail {
+            if let detail = model.detail,
+               let originatingHerdID,
+               let originatingHerdSelectionRevision {
                 NavigationStack {
-                    FieldCheckTrackedAnimalPickerView(session: detail) { animalID in
+                    FieldCheckTrackedAnimalPickerView(
+                        session: detail,
+                        originatingHerdID: originatingHerdID,
+                        originatingSelectionRevision: originatingHerdSelectionRevision
+                    ) { animalID in
                         guard canEditActiveCheck else { return false }
                         return await model.addTrackedAnimalToSession(
                             sessionID: sessionID,
