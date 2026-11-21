@@ -901,12 +901,27 @@ final class FieldCheckTrackedAnimalPickerViewModel {
     var errorMessage: String?
 
     @ObservationIgnored private var loadToken = UUID()
+    @ObservationIgnored private var loadedHerdID: UUID?
+    @ObservationIgnored private var loadedSelectionRevision: UInt64?
+
+    func hasCurrentCandidates(
+        for selection: AppCurrentHerdSelection,
+        originatingSelectionRevision: UInt64
+    ) -> Bool {
+        hasLoaded
+            && loadedHerdID != nil
+            && loadedHerdID == selection.currentHerdID
+            && loadedSelectionRevision == originatingSelectionRevision
+            && selection.selectionRevision == originatingSelectionRevision
+    }
 
     /// Read the complete eligible cohort from one pinned Core Data generation.
     /// Do not publish any candidates until that snapshot has succeeded.
     func load(
         for session: FieldCheckSessionDetailSnapshot,
-        using reader: (any AnimalReferenceQueryReading)?
+        using reader: (any AnimalReferenceQueryReading)?,
+        selection: AppCurrentHerdSelection,
+        originatingSelectionRevision: UInt64
     ) async {
         guard !isSubmittingSelection else { return }
         let token = UUID()
@@ -916,6 +931,15 @@ final class FieldCheckTrackedAnimalPickerViewModel {
         hasLoaded = false
         loadErrorMessage = nil
         errorMessage = nil
+        loadedHerdID = nil
+        loadedSelectionRevision = nil
+
+        // An old picker must not start a new query against a different Herd.
+        guard let originatingHerdID = selection.currentHerdID,
+              selection.selectionRevision == originatingSelectionRevision else {
+            isLoading = false
+            return
+        }
 
         guard let destinationPastureID = session.pastureID,
               !session.isPastureArchived,
@@ -945,6 +969,11 @@ final class FieldCheckTrackedAnimalPickerViewModel {
             let snapshot = try await reader.fetchAnimalReferenceSnapshot(matching: query)
             try Task.checkCancellation()
             guard loadToken == token else { return }
+            guard selection.currentHerdID == originatingHerdID,
+                  selection.selectionRevision == originatingSelectionRevision else {
+                isLoading = false
+                return
+            }
 
             // Retain the original picker rules as a presentation-level safety
             // boundary, independent of the M9 query's filtering.
@@ -954,6 +983,8 @@ final class FieldCheckTrackedAnimalPickerViewModel {
                     && $0.pastureID != destinationPastureID
                     && !checkedIDs.contains($0.id)
             }
+            loadedHerdID = originatingHerdID
+            loadedSelectionRevision = originatingSelectionRevision
             hasLoaded = true
             isLoading = false
         } catch is CancellationError {
@@ -963,13 +994,23 @@ final class FieldCheckTrackedAnimalPickerViewModel {
         } catch {
             guard loadToken == token else { return }
             isLoading = false
+            guard selection.currentHerdID == originatingHerdID,
+                  selection.selectionRevision == originatingSelectionRevision else { return }
             loadErrorMessage = UserVisibleErrorMessage.make(error)
             errorMessage = loadErrorMessage
         }
     }
 
-    func beginSelectionSubmission() -> Bool {
-        guard !isSubmittingSelection, hasLoaded, !isLoading else {
+    func beginSelectionSubmission(
+        selection: AppCurrentHerdSelection,
+        originatingSelectionRevision: UInt64
+    ) -> Bool {
+        guard !isSubmittingSelection,
+              !isLoading,
+              hasCurrentCandidates(
+                  for: selection,
+                  originatingSelectionRevision: originatingSelectionRevision
+              ) else {
             return false
         }
         isSubmittingSelection = true
