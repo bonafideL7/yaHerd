@@ -100,6 +100,43 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         XCTAssertTrue(directory.herds.isEmpty)
     }
 
+    func testAsyncOpeningFailsClosedWhenRootCollidesAfterReadinessCheck() async throws {
+        let selectedID = UUID()
+        let otherID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: selectedID)
+        let repository = StubHerdRepository(available: [herd(selectedID), herd(otherID)])
+        var pendingReadiness: CheckedContinuation<Void, Never>?
+        let directory = HerdDirectoryController(
+            repository: repository,
+            selection: selection,
+            validateReadiness: { _ in
+                await withCheckedContinuation { pendingReadiness = $0 }
+            }
+        )
+        directory.refresh()
+        let revision = selection.selectionRevision
+
+        let opening = Task { try await directory.selectHerdWhenReady(id: otherID) }
+        while pendingReadiness == nil {
+            await Task.yield()
+        }
+        repository.inventoryError = .duplicateApplicationID(
+            entity: CDHerd.coreDataEntityName, id: selectedID, herdID: nil
+        )
+        pendingReadiness?.resume()
+
+        do {
+            try await opening.value
+            XCTFail("An import collision after readiness must invalidate the active Herd.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataPersistenceError, repository.inventoryError)
+        }
+        XCTAssertNil(directory.selectedHerdID)
+        XCTAssertEqual(selection.selectionRevision, revision + 1)
+        XCTAssertEqual(directory.inventoryState, .unavailable)
+        XCTAssertTrue(directory.herds.isEmpty)
+    }
+
     func testCreateHerdPreflightFailsClosedWhenActiveRootIdentityCollides() async throws {
         let selectedID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: selectedID)
