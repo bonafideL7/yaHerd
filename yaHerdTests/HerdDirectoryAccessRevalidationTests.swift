@@ -73,6 +73,30 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         XCTAssertNil(directory.errorMessage)
     }
 
+    func testPendingHerdRetryContinuesForAccessibleHerd() {
+        let pendingID = UUID()
+        let selection = AppCurrentHerdSelection()
+        let repository = StubHerdRepository(available: [herd(pendingID)])
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+
+        XCTAssertTrue(directory.shouldContinueWaitingForHerd(id: pendingID))
+        XCTAssertEqual(directory.inventoryState, .available)
+        XCTAssertEqual(directory.herds.map(\.id), [pendingID])
+    }
+
+    func testPendingHerdRetryDoesNotMistakeIncompleteImportForRemoval() {
+        let pendingID = UUID()
+        let selection = AppCurrentHerdSelection()
+        let repository = StubHerdRepository()
+        repository.hasIncompleteRoots = true
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+
+        // Import metadata may be missing before the root becomes selectable.
+        XCTAssertTrue(directory.shouldContinueWaitingForHerd(id: pendingID))
+        XCTAssertEqual(directory.inventoryState, .incomplete)
+        XCTAssertTrue(directory.herds.isEmpty)
+    }
+
     func testTransientInventoryFailureRetainsActiveHerd() {
         let selectedID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: selectedID)
@@ -753,6 +777,7 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
     private final class StubHerdRepository: HerdRepository {
         var available: [AccessibleHerd]
         var shouldFail = false
+        var hasIncompleteRoots = false
         var inventoryError: CoreDataPersistenceError?
         var createdHerd: AccessibleHerd?
         var createInvocationCount = 0
@@ -770,6 +795,10 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
             if let inventoryError { throw inventoryError }
             if shouldFail { throw HerdRepositoryError.missingHerd }
             return available
+        }
+
+        func fetchHerdInventory() throws -> HerdInventory {
+            HerdInventory(herds: try fetchAccessibleHerds(), hasIncompleteRoots: hasIncompleteRoots)
         }
 
         func createOwnedHerd(named name: String) async throws -> HerdSummary {
