@@ -14,6 +14,7 @@ struct FieldCheckSessionSetupView: View {
     @State private var notes = ""
     @State private var startedRoute: StartedFieldCheckRoute?
     @State private var isStartingSession = false
+    @State private var hasAppliedSuggestedPasture = false
 
     private let suggestedPastureID: UUID?
     private let onSessionStarted: ((UUID) -> Void)?
@@ -25,7 +26,7 @@ struct FieldCheckSessionSetupView: View {
     }
 
     private var selectedPasture: PastureOption? {
-        guard let selectedPastureID else { return nil }
+        guard model.hasCurrentHerdData, let selectedPastureID else { return nil }
         return model.pastures.first { $0.id == selectedPastureID }
     }
 
@@ -42,7 +43,11 @@ struct FieldCheckSessionSetupView: View {
             return "Recovery mode is read-only. New checks cannot be saved."
         }
 
-        if !model.hasLoaded {
+        if herdSelection.currentHerdID == nil {
+            return "Select a Herd to start a check."
+        }
+
+        if !model.hasCurrentHerdData {
             return "Loading pastures…"
         }
 
@@ -67,14 +72,29 @@ struct FieldCheckSessionSetupView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isStartingSession)
         .interactiveDismissDisabled(isStartingSession)
-        .task {
+        .task(id: herdSelection.selectionRevision) {
+            model.configure(selection: herdSelection)
             if !model.hasLoaded {
                 model.load(using: pastureReferenceDataReader)
             }
 
-            if selectedPastureID == nil {
-                selectedPastureID = suggestedPastureID
+            if !hasAppliedSuggestedPasture {
+                hasAppliedSuggestedPasture = true
+                if let suggestedPastureID,
+                   model.pastures.contains(where: { $0.id == suggestedPastureID }) {
+                    selectedPastureID = suggestedPastureID
+                } else {
+                    selectedPastureID = nil
+                }
             }
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            // The previous Herd's form state cannot become the new Herd's draft.
+            model.configure(selection: herdSelection)
+            selectedPastureID = nil
+            notes = ""
+            startedAt = .now
+            startedRoute = nil
         }
         .navigationDestination(item: $startedRoute) { route in
             FieldCheckSessionDetailView(sessionID: route.id)
@@ -95,7 +115,13 @@ struct FieldCheckSessionSetupView: View {
 
     private var startDetailsSection: some View {
         Section {
-            if !model.hasLoaded {
+            if herdSelection.currentHerdID == nil {
+                ContentUnavailableView(
+                    "Select a Herd",
+                    systemImage: "square.stack.3d.up",
+                    description: Text("Choose a Herd to start a pasture check.")
+                )
+            } else if !model.hasCurrentHerdData {
                 HStack {
                     ProgressView()
                     Text("Loading pastures…")
