@@ -55,6 +55,74 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         XCTAssertNil(directory.errorMessage)
     }
 
+    func testDirectHerdSelectionFailsClosedWhenActiveRootIdentityCollides() throws {
+        let selectedID = UUID()
+        let otherID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: selectedID)
+        let repository = StubHerdRepository(available: [herd(selectedID), herd(otherID)])
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+        directory.refresh()
+        let revision = selection.selectionRevision
+
+        repository.inventoryError = .duplicateApplicationID(
+            entity: CDHerd.coreDataEntityName, id: selectedID, herdID: nil
+        )
+        XCTAssertThrowsError(try directory.selectHerd(id: otherID)) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, repository.inventoryError)
+        }
+
+        XCTAssertNil(directory.selectedHerdID)
+        XCTAssertEqual(selection.selectionRevision, revision + 1)
+        XCTAssertEqual(directory.inventoryState, .unavailable)
+        XCTAssertTrue(directory.herds.isEmpty)
+    }
+
+    func testAsyncHerdOpeningFailsClosedWhenActiveStoreCannotBeResolved() async throws {
+        let selectedID = UUID()
+        let otherID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: selectedID)
+        let repository = StubHerdRepository(available: [herd(selectedID), herd(otherID)])
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+        directory.refresh()
+        let revision = selection.selectionRevision
+
+        repository.inventoryError = .unresolvedHerdStore(id: selectedID)
+        do {
+            try await directory.selectHerdWhenReady(id: otherID)
+            XCTFail("An unsafe active Herd store must prevent opening another Herd.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataPersistenceError, repository.inventoryError)
+        }
+
+        XCTAssertNil(directory.selectedHerdID)
+        XCTAssertEqual(selection.selectionRevision, revision + 1)
+        XCTAssertEqual(directory.inventoryState, .unavailable)
+        XCTAssertTrue(directory.herds.isEmpty)
+    }
+
+    func testCreateHerdPreflightFailsClosedWhenActiveRootIdentityCollides() async throws {
+        let selectedID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: selectedID)
+        let repository = StubHerdRepository(available: [herd(selectedID)])
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+        directory.refresh()
+
+        repository.inventoryError = .duplicateApplicationID(
+            entity: CDHerd.coreDataEntityName, id: selectedID, herdID: nil
+        )
+        do {
+            _ = try await directory.createOwnedHerd(named: "Must Not Create")
+            XCTFail("An unsafe inventory must not start a Herd creation.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataPersistenceError, repository.inventoryError)
+        }
+
+        XCTAssertNil(directory.selectedHerdID)
+        XCTAssertEqual(repository.createInvocationCount, 0)
+        XCTAssertEqual(directory.inventoryState, .unavailable)
+        XCTAssertTrue(directory.herds.isEmpty)
+    }
+
     func testDuplicateSelectedHerdRootInvalidatesSelectionWithoutErasingPreference() throws {
         let suite = "stage3-duplicate-root-\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
