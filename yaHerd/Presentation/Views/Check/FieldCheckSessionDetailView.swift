@@ -179,7 +179,13 @@ struct FieldCheckSessionDetailView: View {
 
     var body: some View {
         Group {
-            if let detail = model.detail {
+            if !isPresentingOriginatingHerd && originatingHerdSelectionRevision != nil {
+                ContentUnavailableView(
+                    "Check unavailable",
+                    systemImage: "checklist",
+                    description: Text("This check belongs to the previously selected Herd.")
+                )
+            } else if let detail = model.detail {
                 detailContent(detail)
             } else if model.hasLoaded {
                 ContentUnavailableView(
@@ -192,7 +198,7 @@ struct FieldCheckSessionDetailView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .navigationTitle(model.detail?.displayTitle ?? "Check")
+        .navigationTitle(isPresentingOriginatingHerd ? (model.detail?.displayTitle ?? "Check") : "Check")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(model.isCompletingSession)
         .interactiveDismissDisabled(model.isCompletingSession)
@@ -249,7 +255,7 @@ struct FieldCheckSessionDetailView: View {
                         ToolbarSaveButton(accessibilityLabel: "Review") {
                             showingFinishReview = true
                         }
-                        .disabled(model.isCompletingSession)
+                        .disabled(!canEditActiveCheck)
                     }
                 }
             }
@@ -282,11 +288,31 @@ struct FieldCheckSessionDetailView: View {
             }
         }
         .task(id: sessionID) {
-            originatingHerdID = herdSelection.currentHerdID
-            originatingHerdSelectionRevision = herdSelection.selectionRevision
-            model.load(sessionID: sessionID, using: repository)
+            if originatingHerdSelectionRevision == nil {
+                originatingHerdID = herdSelection.currentHerdID
+                originatingHerdSelectionRevision = herdSelection.selectionRevision
+            }
+            guard isPresentingOriginatingHerd else { return }
+            model.load(
+                sessionID: sessionID,
+                using: repository,
+                mayContinue: { isPresentingOriginatingHerd }
+            )
             syncSelectedPane()
             applyInitialFindingRouteIfNeeded()
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            guard !isPresentingOriginatingHerd else { return }
+            model.invalidateForHerdChange()
+            selectedAnimalID = nil
+            editingFinding = nil
+            showingFinishReview = false
+            showingAddFinding = false
+            showingAddTrackedAnimal = false
+            showingQuickCount = false
+            showingFindings = false
+            showingNotes = false
+            pendingFindingAnimalID = nil
         }
         .onDisappear {
             if dataAccessMode.allowsDataMutations
@@ -445,7 +471,11 @@ struct FieldCheckSessionDetailView: View {
         .listSectionSpacing(8)
         .contentMargins(.top, 8, for: .scrollContent)
         .refreshable {
-            model.refresh(sessionID: sessionID, using: repository)
+            model.refresh(
+                sessionID: sessionID,
+                using: repository,
+                mayContinue: { isPresentingOriginatingHerd }
+            )
         }
         .disabled(model.isCompletingSession)
         .modifier(FieldCheckRosterSearchModifier(isActive: selectedPane == .roster, text: $rosterSearchText))
@@ -461,7 +491,11 @@ struct FieldCheckSessionDetailView: View {
             completedCountBreakdownSection(detail)
         }
         .refreshable {
-            model.refresh(sessionID: sessionID, using: repository)
+            model.refresh(
+                sessionID: sessionID,
+                using: repository,
+                mayContinue: { isPresentingOriginatingHerd }
+            )
         }
     }
 
