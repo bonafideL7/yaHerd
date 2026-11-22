@@ -85,11 +85,27 @@ final class PastureDetailViewModel {
     func observe(
         pastureID: UUID,
         using repository: any PastureDetailRepository,
-        mutationStream: any ApplicationMutationStreaming
+        mutationStream: any ApplicationMutationStreaming,
+        expectedHerdID: UUID?,
+        expectedSelectionRevision: UInt64,
+        selection: AppCurrentHerdSelection
     ) async {
+        guard isOriginatingSelectionCurrent(
+            expectedHerdID: expectedHerdID,
+            expectedSelectionRevision: expectedSelectionRevision,
+            selection: selection
+        ), !Task.isCancelled else {
+            resetForHerdChange()
+            return
+        }
+
         let startingRevision = mutationStream.pastureRevision
         if loadedPastureID != pastureID || !hasLoaded || lastLoadedRevision < startingRevision {
-            if load(pastureID: pastureID, using: repository) {
+            if load(
+                pastureID: pastureID, using: repository,
+                expectedHerdID: expectedHerdID,
+                expectedSelectionRevision: expectedSelectionRevision, selection: selection
+            ) {
                 lastLoadedRevision = startingRevision
             }
         }
@@ -98,15 +114,38 @@ final class PastureDetailViewModel {
             for: .pastures,
             after: lastLoadedRevision
         ) {
-            guard !Task.isCancelled else { return }
-            if load(pastureID: pastureID, using: repository) {
+            guard !Task.isCancelled,
+                  isOriginatingSelectionCurrent(
+                    expectedHerdID: expectedHerdID,
+                    expectedSelectionRevision: expectedSelectionRevision,
+                    selection: selection
+                  ) else { return }
+            if load(
+                pastureID: pastureID, using: repository,
+                expectedHerdID: expectedHerdID,
+                expectedSelectionRevision: expectedSelectionRevision, selection: selection
+            ) {
                 lastLoadedRevision = revision
             }
         }
     }
 
     @discardableResult
-    func load(pastureID: UUID, using repository: any PastureDetailRepository) -> Bool {
+    func load(
+        pastureID: UUID,
+        using repository: any PastureDetailRepository,
+        expectedHerdID: UUID?,
+        expectedSelectionRevision: UInt64,
+        selection: AppCurrentHerdSelection
+    ) -> Bool {
+        guard isOriginatingSelectionCurrent(
+            expectedHerdID: expectedHerdID,
+            expectedSelectionRevision: expectedSelectionRevision,
+            selection: selection
+        ) else {
+            resetForHerdChange()
+            return false
+        }
         if loadedPastureID != pastureID {
             resetForPastureChange()
         }
@@ -128,7 +167,19 @@ final class PastureDetailViewModel {
         }
     }
 
-    func beginEditing() {
+    func beginEditing(
+        expectedHerdID: UUID?,
+        expectedSelectionRevision: UInt64,
+        selection: AppCurrentHerdSelection
+    ) {
+        guard isOriginatingSelectionCurrent(
+            expectedHerdID: expectedHerdID,
+            expectedSelectionRevision: expectedSelectionRevision,
+            selection: selection
+        ) else {
+            resetForHerdChange()
+            return
+        }
         guard let detail else { return }
         form.populate(from: detail)
         isEditing = true
@@ -174,6 +225,26 @@ final class PastureDetailViewModel {
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
+    }
+
+    func resetForHerdChange() {
+        resetForPastureChange()
+        lastLoadedRevision = 0
+        form.name = ""
+        form.acreageText = ""
+        form.usableAcreageText = ""
+        form.targetAcresPerHeadText = ""
+        form.errorMessage = nil
+    }
+
+    private func isOriginatingSelectionCurrent(
+        expectedHerdID: UUID?,
+        expectedSelectionRevision: UInt64,
+        selection: AppCurrentHerdSelection
+    ) -> Bool {
+        guard let expectedHerdID else { return false }
+        return selection.currentHerdID == expectedHerdID
+            && selection.selectionRevision == expectedSelectionRevision
     }
 
     private func resetForPastureChange() {
