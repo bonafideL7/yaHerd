@@ -33,25 +33,34 @@ final class FieldCheckSessionDetailViewModel {
         sessionID: UUID,
         using repository: any FieldCheckSessionDetailRepository,
         mutationStream: any ApplicationMutationStreaming,
-        didLoad: @escaping @MainActor () -> Void = {}
+        didLoad: @escaping @MainActor () -> Void = {},
+        mayContinue: @escaping @MainActor () -> Bool = { true }
     ) async {
+        guard mayContinue() else { return }
         startObservingIfNeeded(
             sessionID: sessionID,
             using: repository,
             mutationStream: mutationStream,
-            didLoad: didLoad
+            didLoad: didLoad,
+            mayContinue: mayContinue
         )
-        _ = load(sessionID: sessionID, using: repository)
+        _ = load(sessionID: sessionID, using: repository, mayContinue: mayContinue)
         await mutationObservationTask?.value
     }
 
     @discardableResult
-    func load(sessionID: UUID, using repository: any FieldCheckSessionDetailRepository) -> Bool {
-        startObservingIfNeeded(sessionID: sessionID, using: repository)
+    func load(
+        sessionID: UUID,
+        using repository: any FieldCheckSessionDetailRepository,
+        mayContinue: @escaping @MainActor () -> Bool = { true }
+    ) -> Bool {
+        guard mayContinue() else { return false }
+        startObservingIfNeeded(sessionID: sessionID, using: repository, mayContinue: mayContinue)
         defer { hasLoaded = true }
 
         do {
             let loadedDetail = try repository.fetchSessionDetail(id: sessionID)
+            guard mayContinue() else { return false }
             detail = loadedDetail
             notesDraft = loadedDetail?.notes ?? ""
             syncQuickCountDraftFromLoadedDetailIfIdle()
@@ -59,18 +68,25 @@ final class FieldCheckSessionDetailViewModel {
             markCurrentRevision(using: repository)
             return true
         } catch {
+            guard mayContinue() else { return false }
             errorMessage = UserVisibleErrorMessage.make(error)
             return false
         }
     }
 
     @discardableResult
-    func refresh(sessionID: UUID, using repository: any FieldCheckSessionDetailRepository) -> Bool {
-        startObservingIfNeeded(sessionID: sessionID, using: repository)
+    func refresh(
+        sessionID: UUID,
+        using repository: any FieldCheckSessionDetailRepository,
+        mayContinue: @escaping @MainActor () -> Bool = { true }
+    ) -> Bool {
+        guard mayContinue() else { return false }
+        startObservingIfNeeded(sessionID: sessionID, using: repository, mayContinue: mayContinue)
 
         do {
             let previousDetail = detail
             let loadedDetail = try repository.fetchSessionDetail(id: sessionID)
+            guard mayContinue() else { return false }
             if let loadedDetail {
                 notesDraft = DraftRefreshPolicy.reconciledValue(
                     draft: notesDraft,
@@ -85,9 +101,22 @@ final class FieldCheckSessionDetailViewModel {
             errorMessage = nil
             return true
         } catch {
+            guard mayContinue() else { return false }
             errorMessage = UserVisibleErrorMessage.make(error)
             return false
         }
+    }
+
+    func invalidateForHerdChange() {
+        mutationObservationTask?.cancel()
+        mutationObservationTask = nil
+        observedSessionID = nil
+        lastLoadedRevision = 0
+        detail = nil
+        quickAnimalTypeCountsDraft = [:]
+        notesDraft = ""
+        errorMessage = nil
+        hasLoaded = false
     }
 
     func countProjection(
@@ -530,8 +559,10 @@ final class FieldCheckSessionDetailViewModel {
         sessionID: UUID,
         using repository: any FieldCheckSessionDetailRepository,
         mutationStream explicitMutationStream: (any ApplicationMutationStreaming)? = nil,
-        didLoad: @escaping @MainActor () -> Void = {}
+        didLoad: @escaping @MainActor () -> Void = {},
+        mayContinue: @escaping @MainActor () -> Bool = { true }
     ) {
+        guard mayContinue() else { return }
         if observedSessionID != sessionID {
             mutationObservationTask?.cancel()
             mutationObservationTask = nil
@@ -554,8 +585,8 @@ final class FieldCheckSessionDetailViewModel {
                 for: .fieldChecks,
                 after: startingRevision
             ) {
-                guard !Task.isCancelled, let self else { return }
-                if self.refresh(sessionID: sessionID, using: repository) {
+                guard !Task.isCancelled, mayContinue(), let self else { return }
+                if self.refresh(sessionID: sessionID, using: repository, mayContinue: mayContinue) {
                     self.lastLoadedRevision = revision
                     didLoad()
                 }
