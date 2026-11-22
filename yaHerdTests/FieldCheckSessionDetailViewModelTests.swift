@@ -3,6 +3,108 @@ import XCTest
 
 @MainActor
 final class FieldCheckSessionDetailViewModelTests: XCTestCase {
+    func testObsoleteSessionObservationNeverRefreshesAnotherHerd() async {
+        for change in 0..<3 {
+            let herdID = UUID()
+            let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+            let revision = selection.selectionRevision
+            let sessionID = UUID()
+            let repository = FieldCheckSessionDetailRepositorySpy(
+                detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
+            )
+            let mutations = ApplicationMutationCenter()
+            let model = FieldCheckSessionDetailViewModel()
+
+            let observing = Task { @MainActor in
+                await model.observe(
+                    sessionID: sessionID,
+                    using: repository,
+                    mutationStream: mutations,
+                    mayContinue: {
+                        selection.currentHerdID == herdID
+                            && selection.selectionRevision == revision
+                    }
+                )
+            }
+            await waitUntil { model.hasLoaded }
+            XCTAssertEqual(repository.fetchCount, 1)
+
+            switch change {
+            case 0: selection.select(UUID())
+            case 1:
+                selection.select(UUID())
+                selection.select(herdID)
+            default: selection.select(nil)
+            }
+            repository.detail = makeDetail(sessionID: sessionID, quickCowCount: 2)
+            mutations.recordSuccessfulMutation(reason: .fieldCheck)
+            await observing.value
+
+            XCTAssertEqual(repository.fetchCount, 1, "The old observer must not query a newly selected Herd.")
+            model.invalidateForHerdChange()
+            XCTAssertNil(model.detail)
+            XCTAssertTrue(model.quickAnimalTypeCountsDraft.isEmpty)
+            XCTAssertEqual(model.notesDraft, "")
+            XCTAssertFalse(model.hasLoaded)
+        }
+    }
+
+    func testObsoleteSessionManualRefreshDoesNotReadOrPublish() {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
+        let sessionID = UUID()
+        let repository = FieldCheckSessionDetailRepositorySpy(
+            detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
+        )
+        let model = FieldCheckSessionDetailViewModel()
+        let isCurrent: @MainActor () -> Bool = {
+            selection.currentHerdID == herdID && selection.selectionRevision == revision
+        }
+
+        XCTAssertTrue(model.load(sessionID: sessionID, using: repository, mayContinue: isCurrent))
+        selection.select(UUID())
+        selection.select(herdID)
+        repository.detail = makeDetail(sessionID: sessionID, quickCowCount: 2)
+
+        XCTAssertFalse(model.refresh(sessionID: sessionID, using: repository, mayContinue: isCurrent))
+        XCTAssertEqual(repository.fetchCount, 1)
+        XCTAssertEqual(model.detail?.quickCowCount, 0)
+        model.invalidateForHerdChange()
+        XCTAssertNil(model.detail)
+    }
+
+    func testCurrentHerdSessionObservationStillRefreshesOnMutation() async {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
+        let sessionID = UUID()
+        let repository = FieldCheckSessionDetailRepositorySpy(
+            detail: makeDetail(sessionID: sessionID, quickCowCount: 0)
+        )
+        let mutations = ApplicationMutationCenter()
+        let model = FieldCheckSessionDetailViewModel()
+
+        let observing = Task { @MainActor in
+            await model.observe(
+                sessionID: sessionID,
+                using: repository,
+                mutationStream: mutations,
+                mayContinue: {
+                    selection.currentHerdID == herdID && selection.selectionRevision == revision
+                }
+            )
+        }
+        await waitUntil { model.hasLoaded }
+        repository.detail = makeDetail(sessionID: sessionID, quickCowCount: 2)
+        mutations.recordSuccessfulMutation(reason: .fieldCheck)
+        await waitUntil { model.detail?.quickCowCount == 2 }
+
+        XCTAssertEqual(repository.fetchCount, 2)
+        model.invalidateForHerdChange()
+        await observing.value
+    }
+
     func testObsoleteAcceptedCompletionReleasesBusyStateWithoutWriting() async {
         let herdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: herdID)
@@ -1350,6 +1452,7 @@ private final class FieldCheckSessionDetailRepositorySpy:
     FieldCheckAnimalDetailRepository
 {
     var detail: FieldCheckSessionDetailSnapshot
+    private(set) var fetchCount = 0
     var shouldBlockFirstQuickCountWrite = false
     var quickCountFailure: Error?
     var notesFailure: Error?
@@ -1373,7 +1476,8 @@ private final class FieldCheckSessionDetailRepositorySpy:
     }
 
     func fetchSessionDetail(id: UUID) throws -> FieldCheckSessionDetailSnapshot? {
-        detail.id == id ? detail : nil
+        fetchCount += 1
+        return detail.id == id ? detail : nil
     }
 
     func updateQuickAnimalTypeCounts(
