@@ -83,6 +83,39 @@ final class PastureDetailReadHerdIsolationTests: XCTestCase {
         XCTAssertEqual(repository.residentFetches, 0)
     }
 
+    func testCurrentHerdMutationObserverReloadsItsPasture() async {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let pastureID = UUID()
+        let repository = PastureDetailReadProbe(pastureID: pastureID)
+        let mutations = ApplicationMutationCenter()
+        let model = PastureDetailViewModel()
+
+        let observer = Task {
+            await model.observe(
+                pastureID: pastureID,
+                using: repository,
+                mutationStream: mutations,
+                expectedHerdID: herdID,
+                expectedSelectionRevision: selection.selectionRevision,
+                selection: selection
+            )
+        }
+        defer { observer.cancel() }
+
+        for _ in 0..<100 where repository.detailFetches == 0 {
+            await Task.yield()
+        }
+        XCTAssertEqual(repository.detailFetches, 1)
+        mutations.recordSuccessfulMutation(reason: .pasture)
+
+        for _ in 0..<100 where repository.detailFetches < 2 {
+            await Task.yield()
+        }
+        XCTAssertEqual(repository.detailFetches, 2)
+        XCTAssertEqual(model.detail?.name, "Original Herd pasture")
+    }
+
     func testObsoleteMutationObserverDoesNotFetchUnderNewHerd() async {
         let herdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: herdID)
