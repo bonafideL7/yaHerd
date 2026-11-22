@@ -82,9 +82,10 @@ struct PastureDetailView: View {
             } else if isSelectionCurrent {
                 ToolbarItem(placement: .primaryAction) {
                     ToolbarEditButton {
+                        guard let originatingSelectionRevision else { return }
                         model.beginEditing(
                             expectedHerdID: originatingHerdID,
-                            expectedSelectionRevision: originatingSelectionRevision ?? 0,
+                            expectedSelectionRevision: originatingSelectionRevision,
                             selection: herdSelection
                         )
                     }
