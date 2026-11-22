@@ -115,6 +115,7 @@ final class FieldCheckSessionDetailViewModel {
         detail = nil
         quickAnimalTypeCountsDraft = [:]
         notesDraft = ""
+        isCompletingSession = false
         errorMessage = nil
         hasLoaded = false
     }
