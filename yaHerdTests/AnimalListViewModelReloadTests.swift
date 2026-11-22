@@ -360,6 +360,9 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         let repository = RecordingAnimalListRepository(animals: [animal])
         let pastureRepository = EmptyPastureReferenceDataReader()
         let viewModel = AnimalListViewModel()
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        viewModel.configure(selection: selection)
 
         viewModel.load(using: repository, pastureRepository: pastureRepository)
         XCTAssertEqual(viewModel.items.map(\.id), [animal.id])
@@ -367,6 +370,8 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         viewModel.performPrimarySwipeAction(
             animalID: animal.id,
             hardDelete: true,
+            originatingHerdID: herdID,
+            originatingSelectionRevision: selection.selectionRevision,
             using: repository,
             pastureRepository: pastureRepository
         )
@@ -385,6 +390,9 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         )
         let pastureRepository = EmptyPastureReferenceDataReader()
         let viewModel = AnimalListViewModel()
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        viewModel.configure(selection: selection)
 
         viewModel.load(using: repository, pastureRepository: pastureRepository)
         let initialResultApplied = await waitForAnimal(animal.id, in: viewModel)
@@ -397,6 +405,8 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         viewModel.performPrimarySwipeAction(
             animalID: animal.id,
             hardDelete: false,
+            originatingHerdID: herdID,
+            originatingSelectionRevision: selection.selectionRevision,
             using: repository,
             pastureRepository: pastureRepository
         )
@@ -469,6 +479,90 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         XCTAssertEqual(repository.movedIDs, [animal.id])
         XCTAssertEqual(repository.movedPastureID, destination)
         XCTAssertEqual(model.items.first?.pastureID, destination)
+    }
+
+    func testStaleSwipeArchiveDeleteAndRestoreNeverMutateAfterHerdRoundTrip() {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let animal = makeAnimal(name: "Prior Herd", tagNumber: "701")
+        let repository = RecordingAnimalListRepository(animals: [animal])
+        let pastures = EmptyPastureReferenceDataReader()
+        let model = AnimalListViewModel()
+        model.configure(selection: selection)
+        model.load(using: repository, pastureRepository: pastures)
+        let revision = selection.selectionRevision
+
+        XCTAssertEqual(model.loadedSelectionIdentity?.herdID, herdID)
+        XCTAssertEqual(model.loadedSelectionIdentity?.revision, revision)
+
+        selection.select(UUID())
+        model.performPrimarySwipeAction(
+            animalID: animal.id, hardDelete: true,
+            originatingHerdID: herdID, originatingSelectionRevision: revision,
+            using: repository, pastureRepository: pastures
+        )
+        model.restore(
+            animalID: animal.id, originatingHerdID: herdID,
+            originatingSelectionRevision: revision,
+            using: repository, pastureRepository: pastures
+        )
+
+        selection.select(herdID)
+        model.performPrimarySwipeAction(
+            animalID: animal.id, hardDelete: false,
+            originatingHerdID: herdID, originatingSelectionRevision: revision,
+            using: repository, pastureRepository: pastures
+        )
+        XCTAssertTrue(repository.deletedIDs.isEmpty)
+        XCTAssertTrue(repository.archivedIDs.isEmpty)
+        XCTAssertTrue(repository.restoredIDs.isEmpty)
+    }
+
+    func testOldSwipeCallbackCannotTargetNewRowsAndCurrentSwipeStillWorks() {
+        let originalHerdID = UUID()
+        let newHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let animal = makeAnimal(name: "Same ID in new selection", tagNumber: "702")
+        let repository = RecordingAnimalListRepository(animals: [animal])
+        let pastures = EmptyPastureReferenceDataReader()
+        let model = AnimalListViewModel()
+        model.configure(selection: selection)
+        model.load(using: repository, pastureRepository: pastures)
+        let oldRevision = selection.selectionRevision
+
+        selection.select(newHerdID)
+        model.configure(selection: selection)
+        model.load(using: repository, pastureRepository: pastures)
+        model.performPrimarySwipeAction(
+            animalID: animal.id, hardDelete: true,
+            originatingHerdID: originalHerdID,
+            originatingSelectionRevision: oldRevision,
+            using: repository, pastureRepository: pastures
+        )
+        model.restore(
+            animalID: animal.id, originatingHerdID: originalHerdID,
+            originatingSelectionRevision: oldRevision,
+            using: repository, pastureRepository: pastures
+        )
+        XCTAssertTrue(repository.deletedIDs.isEmpty)
+        XCTAssertTrue(repository.restoredIDs.isEmpty)
+
+        model.performPrimarySwipeAction(
+            animalID: animal.id, hardDelete: false,
+            originatingHerdID: newHerdID,
+            originatingSelectionRevision: selection.selectionRevision,
+            using: repository, pastureRepository: pastures
+        )
+        XCTAssertEqual(repository.archivedIDs, [animal.id])
+        XCTAssertEqual(model.items.first?.isArchived, true)
+
+        model.restore(
+            animalID: animal.id, originatingHerdID: newHerdID,
+            originatingSelectionRevision: selection.selectionRevision,
+            using: repository, pastureRepository: pastures
+        )
+        XCTAssertEqual(repository.restoredIDs, [animal.id])
+        XCTAssertEqual(model.items.first?.isArchived, false)
     }
 
     private func waitForRequestCount(
@@ -662,6 +756,7 @@ private final class RecordingAnimalListRepository: AnimalListRepository {
     private let animals: [AnimalSummary]
     private(set) var deletedIDs: [UUID] = []
     private(set) var archivedIDs: [UUID] = []
+    private(set) var restoredIDs: [UUID] = []
     private(set) var movedIDs: [UUID] = []
     private(set) var movedPastureID: UUID?
 
@@ -675,7 +770,7 @@ private final class RecordingAnimalListRepository: AnimalListRepository {
     func update(id _: UUID, input _: AnimalInput) throws -> AnimalDetailSnapshot { fatalError("Not used by this test.") }
     func delete(ids: [UUID]) throws { deletedIDs.append(contentsOf: ids) }
     func archive(ids: [UUID]) throws { archivedIDs.append(contentsOf: ids) }
-    func restore(ids _: [UUID]) throws {}
+    func restore(ids: [UUID]) throws { restoredIDs.append(contentsOf: ids) }
     func move(ids: [UUID], toPastureID: UUID?) throws {
         movedIDs.append(contentsOf: ids)
         movedPastureID = toPastureID
