@@ -10,7 +10,7 @@ final class PastureDetailEditorHerdIsolationTests: XCTestCase {
         let originalRevision = selection.selectionRevision
         let pastureID = UUID()
         let repository = PastureDetailEditProbe(pastureID: pastureID)
-        let model = loadedEditor(pastureID: pastureID, repository: repository)
+        let model = loadedEditor(pastureID: pastureID, repository: repository, selection: selection)
 
         selection.select(UUID())
         model.save(
@@ -32,7 +32,7 @@ final class PastureDetailEditorHerdIsolationTests: XCTestCase {
         let originalRevision = selection.selectionRevision
         let pastureID = UUID()
         let repository = PastureDetailEditProbe(pastureID: pastureID)
-        let model = loadedEditor(pastureID: pastureID, repository: repository)
+        let model = loadedEditor(pastureID: pastureID, repository: repository, selection: selection)
 
         selection.select(UUID())
         selection.select(originalHerdID)
@@ -55,7 +55,7 @@ final class PastureDetailEditorHerdIsolationTests: XCTestCase {
         let originalRevision = selection.selectionRevision
         let pastureID = UUID()
         let repository = PastureDetailEditProbe(pastureID: pastureID)
-        let model = loadedEditor(pastureID: pastureID, repository: repository)
+        let model = loadedEditor(pastureID: pastureID, repository: repository, selection: selection)
 
         selection.select(nil)
         model.save(
@@ -75,7 +75,7 @@ final class PastureDetailEditorHerdIsolationTests: XCTestCase {
         let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
         let pastureID = UUID()
         let repository = PastureDetailEditProbe(pastureID: pastureID)
-        let model = loadedEditor(pastureID: pastureID, repository: repository)
+        let model = loadedEditor(pastureID: pastureID, repository: repository, selection: selection)
 
         model.save(
             pastureID: pastureID,
@@ -94,11 +94,19 @@ final class PastureDetailEditorHerdIsolationTests: XCTestCase {
 
     private func loadedEditor(
         pastureID: UUID,
-        repository: PastureDetailEditProbe
+        repository: PastureDetailEditProbe,
+        selection: AppCurrentHerdSelection
     ) -> PastureDetailViewModel {
         let model = PastureDetailViewModel()
-        XCTAssertTrue(model.load(pastureID: pastureID, using: repository))
-        model.beginEditing()
+        XCTAssertTrue(model.load(
+            pastureID: pastureID, using: repository,
+            expectedHerdID: selection.currentHerdID,
+            expectedSelectionRevision: selection.selectionRevision, selection: selection
+        ))
+        model.beginEditing(
+            expectedHerdID: selection.currentHerdID,
+            expectedSelectionRevision: selection.selectionRevision, selection: selection
+        )
         model.form.name = "Renamed pasture"
         return model
     }
