@@ -37,6 +37,13 @@ final class AnimalListViewModel {
     private var selectedSelectionRevision: UInt64 = 0
     private var hasConfiguredHerdSelection = false
 
+    /// Identity of the rows currently held by this model, not the selection
+    /// that may have changed before SwiftUI has discarded an old row.
+    var loadedSelectionIdentity: (herdID: UUID, revision: UInt64)? {
+        guard hasLoaded, hasConfiguredHerdSelection, let selectedHerdID else { return nil }
+        return (selectedHerdID, selectedSelectionRevision)
+    }
+
     /// Bind this model to the application selection before loading. A load that
     /// originated under another Herd cannot publish its result after a switch.
     func configure(selection: any CurrentHerdSelectionReading) {
@@ -154,9 +161,15 @@ final class AnimalListViewModel {
     func performPrimarySwipeAction(
         animalID: UUID,
         hardDelete: Bool,
+        originatingHerdID: UUID,
+        originatingSelectionRevision: UInt64,
         using repository: any AnimalListRepository,
         pastureRepository _: any PastureReferenceDataReader
     ) {
+        guard isCurrentActionSelection(
+            herdID: originatingHerdID,
+            revision: originatingSelectionRevision
+        ) else { return }
         do {
             if hardDelete {
                 try repository.delete(ids: [animalID])
@@ -178,9 +191,15 @@ final class AnimalListViewModel {
 
     func restore(
         animalID: UUID,
+        originatingHerdID: UUID,
+        originatingSelectionRevision: UInt64,
         using repository: any AnimalListRepository,
         pastureRepository _: any PastureReferenceDataReader
     ) {
+        guard isCurrentActionSelection(
+            herdID: originatingHerdID,
+            revision: originatingSelectionRevision
+        ) else { return }
         do {
             try repository.restore(ids: [animalID])
             invalidateCurrentLoad()
@@ -202,12 +221,10 @@ final class AnimalListViewModel {
     ) {
         // A retained pasture picker must not mutate the Herd that is currently
         // selected after its originating Animal list has been superseded.
-        guard let herdSelection,
-              hasConfiguredHerdSelection,
-              selectedHerdID == originatingHerdID,
-              selectedSelectionRevision == originatingSelectionRevision,
-              herdSelection.currentHerdID == originatingHerdID,
-              herdSelection.selectionRevision == originatingSelectionRevision else { return }
+        guard isCurrentActionSelection(
+            herdID: originatingHerdID,
+            revision: originatingSelectionRevision
+        ) else { return }
         do {
             try repository.move(ids: ids, toPastureID: pastureID)
             invalidateCurrentLoad()
@@ -217,6 +234,16 @@ final class AnimalListViewModel {
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
+    }
+
+    /// Both the rendered-row origin and the live selection must still agree.
+    /// The revision prevents stale actions after an A → B → A round trip.
+    private func isCurrentActionSelection(herdID: UUID, revision: UInt64) -> Bool {
+        guard let herdSelection, hasConfiguredHerdSelection else { return false }
+        return selectedHerdID == herdID
+            && selectedSelectionRevision == revision
+            && herdSelection.currentHerdID == herdID
+            && herdSelection.selectionRevision == revision
     }
 
     func pastureName(for id: UUID?) -> String? {
