@@ -441,7 +441,10 @@ struct AnimalListView: View {
     }
 
     private var herdList: some View {
-        AnimalListContentList(
+        // Capture the identity of the loaded rows when their swipe closures
+        // are created; the live selection may change before invocation.
+        let rowSelection = viewModel.loadedSelectionIdentity
+        return AnimalListContentList(
             groupedAnimals: groupedAnimals,
             shouldUseSections: shouldUseSections,
             batchMode: batchMode,
@@ -475,8 +478,22 @@ struct AnimalListView: View {
             onCancelInlineEntry: cancelInlineEntry,
             onOpenInlineDetails: openInlineDetails,
             usesHardDelete: applicationSettings.hardDeleteAnimals,
-            onPrimarySwipeAction: performPrimarySwipeAction,
-            onRestoreArchivedRecord: restoreArchivedRecord
+            onPrimarySwipeAction: { animal in
+                guard let rowSelection else { return }
+                performPrimarySwipeAction(
+                    for: animal,
+                    originatingHerdID: rowSelection.herdID,
+                    originatingSelectionRevision: rowSelection.revision
+                )
+            },
+            onRestoreArchivedRecord: { animal in
+                guard let rowSelection else { return }
+                restoreArchivedRecord(
+                    animal,
+                    originatingHerdID: rowSelection.herdID,
+                    originatingSelectionRevision: rowSelection.revision
+                )
+            }
         )
     }
 
@@ -819,18 +836,34 @@ struct AnimalListView: View {
         }
     }
 
-    private func performPrimarySwipeAction(for animal: AnimalSummary) {
+    private func performPrimarySwipeAction(
+        for animal: AnimalSummary,
+        originatingHerdID: UUID,
+        originatingSelectionRevision: UInt64
+    ) {
         viewModel.performPrimarySwipeAction(
             animalID: animal.id,
             hardDelete: applicationSettings.hardDeleteAnimals,
+            originatingHerdID: originatingHerdID,
+            originatingSelectionRevision: originatingSelectionRevision,
             using: repository,
             pastureRepository: pastureReferenceDataReader
         )
         refreshDerivedState()
     }
 
-    private func restoreArchivedRecord(_ animal: AnimalSummary) {
-        viewModel.restore(animalID: animal.id, using: repository, pastureRepository: pastureReferenceDataReader)
+    private func restoreArchivedRecord(
+        _ animal: AnimalSummary,
+        originatingHerdID: UUID,
+        originatingSelectionRevision: UInt64
+    ) {
+        viewModel.restore(
+            animalID: animal.id,
+            originatingHerdID: originatingHerdID,
+            originatingSelectionRevision: originatingSelectionRevision,
+            using: repository,
+            pastureRepository: pastureReferenceDataReader
+        )
         refreshDerivedState()
     }
 }
