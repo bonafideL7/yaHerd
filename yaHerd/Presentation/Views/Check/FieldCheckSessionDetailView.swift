@@ -177,6 +177,19 @@ struct FieldCheckSessionDetailView: View {
             && !model.isCompletingSession
     }
 
+    /// Capture only selection identity, not this View or its @State model,
+    /// since the mutation observer can retain the guard for its lifetime.
+    private var originatingHerdReadAllowed: @MainActor () -> Bool {
+        let expectedHerdID = originatingHerdID
+        let expectedRevision = originatingHerdSelectionRevision
+        let selection = herdSelection
+        return {
+            guard let expectedHerdID, let expectedRevision else { return false }
+            return selection.currentHerdID == expectedHerdID
+                && selection.selectionRevision == expectedRevision
+        }
+    }
+
     var body: some View {
         Group {
             if !isPresentingOriginatingHerd && originatingHerdSelectionRevision != nil {
@@ -296,7 +309,7 @@ struct FieldCheckSessionDetailView: View {
             model.load(
                 sessionID: sessionID,
                 using: repository,
-                mayContinue: { isPresentingOriginatingHerd }
+                mayContinue: originatingHerdReadAllowed
             )
             syncSelectedPane()
             applyInitialFindingRouteIfNeeded()
@@ -474,7 +487,7 @@ struct FieldCheckSessionDetailView: View {
             model.refresh(
                 sessionID: sessionID,
                 using: repository,
-                mayContinue: { isPresentingOriginatingHerd }
+                mayContinue: originatingHerdReadAllowed
             )
         }
         .disabled(model.isCompletingSession)
@@ -494,7 +507,7 @@ struct FieldCheckSessionDetailView: View {
             model.refresh(
                 sessionID: sessionID,
                 using: repository,
-                mayContinue: { isPresentingOriginatingHerd }
+                mayContinue: originatingHerdReadAllowed
             )
         }
     }
