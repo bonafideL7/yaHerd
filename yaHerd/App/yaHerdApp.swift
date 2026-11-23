@@ -449,6 +449,36 @@ enum AppNavigationSceneStorageAccess {
         )
     }
 
+    /// The chooser may be shown before a remembered CloudKit Herd imports.
+    /// On its first activation, validate the original scene payload against
+    /// that Herd instead of replacing it with empty navigation.
+    static func restoreForSelectedHerd(
+        navigation: AppNavigationState,
+        selectedHerdID: UUID?,
+        from payload: String,
+        using validator: any AppNavigationRestorationValidating,
+        dataAccessMode: AppDataAccessMode
+    ) -> AppNavigationRestoreOutcome? {
+        navigation.selectedHerdID = selectedHerdID
+        return restore(
+            navigation: navigation,
+            from: payload,
+            using: validator,
+            dataAccessMode: dataAccessMode
+        )
+    }
+
+    /// The first selection itself is not a user navigation decision. While
+    /// record validation is pending, only an actual subsequent navigation
+    /// change may replace the previously saved scene payload.
+    static func shouldPersistNavigation(
+        snapshot: AppNavigationSnapshot,
+        deferredBaseline: AppNavigationSnapshot?,
+        isRestorationDeferred: Bool
+    ) -> Bool {
+        !isRestorationDeferred || snapshot != deferredBaseline
+    }
+
     static func payload(
         for navigation: AppNavigationState,
         dataAccessMode: AppDataAccessMode
@@ -471,6 +501,7 @@ private struct RootAppView: View {
     @State private var navigation = AppNavigationState()
     @State private var hasRestoredNavigation = false
     @State private var navigationRestorationDeferred = false
+    @State private var deferredNavigationBaseline: AppNavigationSnapshot?
     @SceneStorage("navigation.restoration.v1") private var navigationRestorationPayload = ""
 
     init(
@@ -504,30 +535,25 @@ private struct RootAppView: View {
             .task {
                 guard !hasRestoredNavigation else { return }
                 guard dataAccessMode.isRecoveryMode || herdSelection.currentHerdID != nil else {
-                    // No Herd-specific scene snapshot can be restored into the chooser.
+                    // The original scene payload must survive the chooser until
+                    // a Herd is selected and its records can be validated.
                     return
                 }
-                navigation.selectedHerdID = herdSelection.currentHerdID
-                let outcome = AppNavigationSceneStorageAccess.restore(
-                    navigation: navigation,
-                    from: navigationRestorationPayload,
-                    using: navigationRestorationValidator,
-                    dataAccessMode: dataAccessMode
-                )
-                hasRestoredNavigation = true
-                guard let outcome else { return }
-                navigationRestorationDeferred = outcome == .deferredValidation
-                guard outcome == .applied,
-                      let payload = AppNavigationSceneStorageAccess.payload(
-                        for: navigation,
-                        dataAccessMode: dataAccessMode
-                      ) else { return }
-                navigationRestorationPayload = payload
+                restoreInitialNavigation(for: herdSelection.currentHerdID)
             }
             .onChange(of: herdSelection.selectionRevision) { _, _ in
+                if !hasRestoredNavigation,
+                   let selectedHerdID = herdSelection.currentHerdID,
+                   !dataAccessMode.isRecoveryMode {
+                    // The first selection after an import-pending chooser is
+                    // the delayed startup, not a switch away from an open Herd.
+                    restoreInitialNavigation(for: selectedHerdID)
+                    return
+                }
                 navigation.resetForHerdChange(to: herdSelection.currentHerdID, force: true)
                 hasRestoredNavigation = true
                 navigationRestorationDeferred = false
+                deferredNavigationBaseline = nil
                 if let payload = AppNavigationSceneStorageAccess.payload(
                     for: navigation,
                     dataAccessMode: dataAccessMode
@@ -535,11 +561,19 @@ private struct RootAppView: View {
                     navigationRestorationPayload = payload
                 }
             }
-            .onChange(of: navigation.snapshot) { _, _ in
+            .onChange(of: navigation.snapshot) { _, newSnapshot in
                 guard hasRestoredNavigation, !dataAccessMode.isRecoveryMode else { return }
 
-                // Only the durable runtime may replace a deferred snapshot after user navigation.
+                guard AppNavigationSceneStorageAccess.shouldPersistNavigation(
+                    snapshot: newSnapshot,
+                    deferredBaseline: deferredNavigationBaseline,
+                    isRestorationDeferred: navigationRestorationDeferred
+                ) else { return }
+
+                // Explicit navigation may replace a deferred snapshot; the
+                // automatic first Herd activation itself must not.
                 navigationRestorationDeferred = false
+                deferredNavigationBaseline = nil
                 guard let payload = AppNavigationSceneStorageAccess.payload(
                     for: navigation,
                     dataAccessMode: dataAccessMode
@@ -586,6 +620,28 @@ private struct RootAppView: View {
     }
 
     @MainActor
+    private func restoreInitialNavigation(for selectedHerdID: UUID?) {
+        let outcome = AppNavigationSceneStorageAccess.restoreForSelectedHerd(
+            navigation: navigation,
+            selectedHerdID: selectedHerdID,
+            from: navigationRestorationPayload,
+            using: navigationRestorationValidator,
+            dataAccessMode: dataAccessMode
+        )
+        hasRestoredNavigation = true
+        guard let outcome else { return }
+
+        navigationRestorationDeferred = outcome == .deferredValidation
+        deferredNavigationBaseline = navigationRestorationDeferred ? navigation.snapshot : nil
+        guard outcome == .applied,
+              let payload = AppNavigationSceneStorageAccess.payload(
+                for: navigation,
+                dataAccessMode: dataAccessMode
+              ) else { return }
+        navigationRestorationPayload = payload
+    }
+
+    @MainActor
     private func retryDeferredNavigationRestoration() {
         guard hasRestoredNavigation,
               navigationRestorationDeferred,
@@ -603,6 +659,7 @@ private struct RootAppView: View {
                   for: navigation,
                   dataAccessMode: dataAccessMode
               ) else { return }
+        deferredNavigationBaseline = nil
         navigationRestorationPayload = payload
     }
 }
