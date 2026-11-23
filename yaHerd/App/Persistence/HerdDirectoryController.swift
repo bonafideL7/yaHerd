@@ -106,11 +106,20 @@ final class HerdDirectoryController {
     }
 
     /// Do not publish a partially imported Herd into the active repository graph.
-    func selectHerdWhenReady(id: UUID) async throws {
+    func selectHerdWhenReady(id: UUID, expectedRoot: AccessibleHerd? = nil) async throws {
         let accessible = try readAccessibleHerds()
         let matching = accessible.filter { $0.id == id }
         guard matching.count == 1, let originalHerd = matching.first else {
             throw HerdRepositoryError.missingHerd
+        }
+        // A pending import retry must continue opening the root the user tapped,
+        // not a replacement from another store (or another root in that store)
+        // that happens to reuse its UUID.
+        if let expectedRoot,
+           (expectedRoot.id != originalHerd.id ||
+            expectedRoot.category != originalHerd.category ||
+            expectedRoot.summary.createdAt != originalHerd.summary.createdAt) {
+            throw HerdDirectoryError.pendingHerdUnavailable
         }
         let previousSelection = selection.currentHerdID
         let originatingSelectionRevision = selection.selectionRevision
