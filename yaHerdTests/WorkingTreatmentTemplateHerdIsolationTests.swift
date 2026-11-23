@@ -137,26 +137,123 @@ final class WorkingTreatmentTemplateHerdIsolationTests: XCTestCase {
         model.clear()
         XCTAssertNil(model.template)
     }
+
+    func testTemplateListReadFailureIsNotAnEmptyHerdAndCanRetry() throws {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let identity = try XCTUnwrap(WorkingQueueEditorHerdIdentity(selection: selection))
+        let reader = TemplateListReaderProbe()
+        let model = WorkingTreatmentTemplatesViewModel(repository: reader)
+
+        reader.shouldFail = true
+        model.load()
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertNotNil(model.errorMessage)
+        XCTAssertTrue(model.visibleTemplates(identity: identity, selection: selection).isEmpty)
+
+        reader.shouldFail = false
+        model.load()
+        XCTAssertTrue(model.hasLoaded, "A successful empty query is not a failed import.")
+        XCTAssertNil(model.errorMessage)
+        XCTAssertTrue(model.templates.isEmpty)
+
+        let existing = WorkingTreatmentTemplateSummary(
+            id: UUID(), name: "Working Set", treatmentCount: 1
+        )
+        reader.templates = [existing]
+        model.load()
+        XCTAssertEqual(model.visibleTemplates(identity: identity, selection: selection).map(\.id), [existing.id])
+
+        reader.shouldFail = true
+        model.load()
+        XCTAssertTrue(model.hasLoaded, "The last complete snapshot remains known.")
+        XCTAssertNotNil(model.errorMessage)
+        XCTAssertTrue(
+            model.visibleTemplates(identity: identity, selection: selection).isEmpty,
+            "Failed refresh must not expose stale template choices."
+        )
+
+        reader.shouldFail = false
+        model.load()
+        XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(model.visibleTemplates(identity: identity, selection: selection).map(\.id), [existing.id])
+        model.clear()
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testTemplateDetailSeparatesFailureFromNotFoundAndCanRetry() throws {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let identity = try XCTUnwrap(WorkingQueueEditorHerdIdentity(selection: selection))
+        let template = WorkingTreatmentTemplateDetailSnapshot(
+            id: UUID(),
+            name: "Recovery Treatment",
+            plannedTreatments: [WorkingTreatmentPlanItem(name: "Vaccine")]
+        )
+        let reader = TemplateDetailReaderProbe(detail: template)
+        let model = WorkingTreatmentTemplateDetailViewModel(
+            templateID: template.id,
+            repository: reader
+        )
+
+        reader.shouldFail = true
+        model.load()
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertNil(model.template)
+        XCTAssertNotNil(model.errorMessage)
+
+        reader.shouldFail = false
+        reader.detail = nil
+        model.load()
+        XCTAssertTrue(model.hasLoaded, "Successful nil fetch means the template is absent.")
+        XCTAssertNil(model.errorMessage)
+        XCTAssertNil(model.template)
+
+        reader.detail = template
+        model.load()
+        XCTAssertEqual(model.visibleTemplate(identity: identity, selection: selection)?.id, template.id)
+
+        reader.shouldFail = true
+        model.load()
+        XCTAssertTrue(model.hasLoaded)
+        XCTAssertNotNil(model.errorMessage)
+        XCTAssertNil(
+            model.visibleTemplate(identity: identity, selection: selection),
+            "An unavailable refresh must not expose a potentially stale editor."
+        )
+
+        reader.shouldFail = false
+        model.load()
+        XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(model.visibleTemplate(identity: identity, selection: selection)?.name, template.name)
+        model.clear()
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertNil(model.template)
+    }
+
 }
 
 @MainActor
 private final class TemplateListReaderProbe: WorkingTreatmentTemplateListReader {
     var templates: [WorkingTreatmentTemplateSummary] = []
+    var shouldFail = false
 
     func fetchTemplates() throws -> [WorkingTreatmentTemplateSummary] {
-        templates
+        if shouldFail { throw NSError(domain: "TemplateListRead", code: 1) }
+        return templates
     }
 }
 
 @MainActor
 private final class TemplateDetailReaderProbe: WorkingTreatmentTemplateDetailReader {
-    let detail: WorkingTreatmentTemplateDetailSnapshot
+    var detail: WorkingTreatmentTemplateDetailSnapshot?
+    var shouldFail = false
 
     init(detail: WorkingTreatmentTemplateDetailSnapshot) {
         self.detail = detail
     }
 
     func fetchTemplateDetail(id: UUID) throws -> WorkingTreatmentTemplateDetailSnapshot? {
-        id == detail.id ? detail : nil
+        if shouldFail { throw NSError(domain: "TemplateDetailRead", code: 1) }
+        return id == detail?.id ? detail : nil
     }
 }
