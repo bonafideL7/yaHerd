@@ -11,10 +11,14 @@ struct DashboardView: View {
 
     private let configuration = DashboardConfiguration()
 
+    private var presentedSnapshot: DashboardSnapshot? {
+        viewModel.presentationSnapshot(for: herdSelection)
+    }
+
     private var presentationData: DashboardPresentationData {
         DashboardPresentationData(
-            snapshot: viewModel.snapshot,
-            fieldCheckSessions: fieldChecksModel.sessions
+            snapshot: presentedSnapshot,
+            fieldCheckSessions: fieldChecksModel.presentationSessions(for: herdSelection)
         )
     }
 
@@ -23,7 +27,7 @@ struct DashboardView: View {
         ScrollView {
             DashboardChartsContent(
                 data: presentationData,
-                isLoaded: viewModel.snapshot != nil,
+                isLoaded: presentedSnapshot != nil,
                 selectedPastureName: $chartModel.selectedPastureName
             )
             .padding(.horizontal, 20)
