@@ -5,6 +5,38 @@ import XCTest
 final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
     private lazy var unchangedSelection = AppCurrentHerdSelection(currentHerdID: UUID())
 
+    func testTransientSetupReadFailureCanRetryWithoutReopeningOrChangingHerd() async {
+        let pastureID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let animal = makeCandidate(tag: "R01", pastureID: pastureID)
+        let reader = WorkingSetupCandidateReader(animalsByPasture: [pastureID: [animal]])
+        let templates = RecoveringWorkingSetupTemplateRepository()
+        let model = NewWorkingSessionViewModel(
+            pastureRepository: WorkingSetupPastureReader(pastureID: pastureID),
+            animalReferenceQueryReader: reader,
+            workingRepository: templates
+        )
+
+        model.load()
+        XCTAssertTrue(model.hasLoaded)
+        XCTAssertFalse(model.hasLoadedSetupSuccessfully)
+        XCTAssertTrue(model.pastures.isEmpty)
+        XCTAssertNotNil(model.setupLoadErrorMessage)
+
+        templates.isAvailable = true
+        model.load()
+        XCTAssertTrue(model.hasLoadedSetupSuccessfully)
+        XCTAssertNil(model.setupLoadErrorMessage)
+        XCTAssertEqual(model.pastures.map(\.id), [pastureID])
+        XCTAssertTrue(model.templates.isEmpty)
+
+        await model.loadEligibleAnimals(
+            pastureID: pastureID, currentHerdSelection: selection
+        )
+        XCTAssertTrue(model.hasCurrentCandidates(pastureID: pastureID, selection: selection))
+        XCTAssertEqual(model.eligibleAnimals(pastureID: pastureID).map(\.id), [animal.id])
+    }
+
     func testFailedTemplateListKeepsSetupBlockedAfterSuccessfulCandidatePages() async {
         let pastureID = UUID()
         let animal = makeCandidate(tag: "T01", pastureID: pastureID)
@@ -695,6 +727,20 @@ private struct WorkingSetupTemplateRepository: NewWorkingSessionRepository {
             throw WorkingSetupReadError.templateDetailUnavailable
         }
         return nil
+    }
+}
+
+@MainActor
+private final class RecoveringWorkingSetupTemplateRepository: NewWorkingSessionRepository {
+    var isAvailable = false
+
+    func fetchTemplates() throws -> [WorkingTreatmentTemplateSummary] {
+        guard isAvailable else { throw WorkingSetupReadError.templatesUnavailable }
+        return []
+    }
+
+    func fetchTemplateDetail(id: UUID) throws -> WorkingTreatmentTemplateDetailSnapshot? {
+        nil
     }
 }
 
