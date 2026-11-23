@@ -6,7 +6,8 @@ import Observation
 final class FieldCheckSessionSetupViewModel {
     private(set) var pastures: [PastureOption] = []
     var errorMessage: String?
-    var hasLoaded = false
+    private(set) var pastureLoadErrorMessage: String?
+    private(set) var hasLoaded = false
 
     @ObservationIgnored private var selection: AppCurrentHerdSelection?
     @ObservationIgnored private var selectedHerdID: UUID?
@@ -27,6 +28,7 @@ final class FieldCheckSessionSetupViewModel {
         if changed {
             pastures = []
             errorMessage = nil
+            pastureLoadErrorMessage = nil
             hasLoaded = false
         }
     }
@@ -34,15 +36,21 @@ final class FieldCheckSessionSetupViewModel {
     @discardableResult
     func load(using repository: any PastureReferenceDataReader) -> Bool {
         guard isCurrentSelection else { return false }
-        defer { hasLoaded = true }
 
         do {
-            pastures = try repository.fetchPastureOptions()
+            let loadedPastures = try repository.fetchPastureOptions()
                 .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            pastures = loadedPastures
+            hasLoaded = true
+            pastureLoadErrorMessage = nil
             errorMessage = nil
             return true
         } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+            // A partially imported Herd is not an empty Herd. A failed
+            // refresh must not retain stale selectable destinations.
+            pastures = []
+            hasLoaded = false
+            pastureLoadErrorMessage = UserVisibleErrorMessage.make(error)
             return false
         }
     }
