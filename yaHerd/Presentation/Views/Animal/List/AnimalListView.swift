@@ -623,15 +623,24 @@ struct AnimalListView: View {
         guard !isSeedingSampleData, canOfferSampleData,
               dataAccessMode.allowsDataMutations, let sampleDataSeeder,
               let originatingHerdID = herdSelection.currentHerdID else { return }
+        let originatingSelectionRevision = herdSelection.selectionRevision
         isSeedingSampleData = true
         Task { @MainActor in
             defer { isSeedingSampleData = false }
-            guard herdSelection.currentHerdID == originatingHerdID else { return }
+            guard herdSelection.currentHerdID == originatingHerdID,
+                  herdSelection.selectionRevision == originatingSelectionRevision else { return }
             do {
                 let inserted = try await (large
-                    ? sampleDataSeeder.seedLargeSampleDataIfNeeded(for: originatingHerdID)
-                    : sampleDataSeeder.seedSampleDataIfNeeded(for: originatingHerdID))
-                guard herdSelection.currentHerdID == originatingHerdID else { return }
+                    ? sampleDataSeeder.seedLargeSampleDataIfNeeded(
+                        for: originatingHerdID,
+                        selectionRevision: originatingSelectionRevision
+                    )
+                    : sampleDataSeeder.seedSampleDataIfNeeded(
+                        for: originatingHerdID,
+                        selectionRevision: originatingSelectionRevision
+                    ))
+                guard herdSelection.currentHerdID == originatingHerdID,
+                  herdSelection.selectionRevision == originatingSelectionRevision else { return }
                 if inserted {
                     eligibleSampleDataRevision = nil
                     reload()
@@ -639,7 +648,8 @@ struct AnimalListView: View {
                     viewModel.errorMessage = "Sample data can only be added to an empty herd."
                 }
             } catch {
-                guard herdSelection.currentHerdID == originatingHerdID else { return }
+                guard herdSelection.currentHerdID == originatingHerdID,
+                  herdSelection.selectionRevision == originatingSelectionRevision else { return }
                 viewModel.errorMessage = error.localizedDescription
             }
         }
