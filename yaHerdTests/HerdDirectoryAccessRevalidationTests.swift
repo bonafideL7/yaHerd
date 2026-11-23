@@ -622,6 +622,59 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         }
     }
 
+    func testReadinessDoesNotActivateReplacementRootInSameStoreCategory() async throws {
+        for category: AccessibleHerd.Category in [.owned, .shared] {
+            let activeID = UUID()
+            let candidateID = UUID()
+            let selection = AppCurrentHerdSelection(currentHerdID: activeID)
+            let candidate = AccessibleHerd(
+                summary: herd(candidateID).summary,
+                category: category
+            )
+            let repository = StubHerdRepository(available: [herd(activeID), candidate])
+            var pendingReadiness: CheckedContinuation<Void, Never>?
+            let directory = HerdDirectoryController(
+                repository: repository,
+                selection: selection,
+                validateReadiness: { _ in
+                    await withCheckedContinuation { pendingReadiness = $0 }
+                }
+            )
+
+            let opening = Task { try await directory.selectHerdWhenReady(id: candidateID) }
+            while pendingReadiness == nil {
+                await Task.yield()
+            }
+
+            let originalRevision = selection.selectionRevision
+            // A revoked/imported root can be replaced before the readiness
+            // probe completes, even when its UUID and store category match.
+            repository.available = [
+                herd(activeID),
+                AccessibleHerd(
+                    summary: HerdSummary(
+                        publicID: candidateID,
+                        name: "Replacement",
+                        createdAt: candidate.summary.createdAt.addingTimeInterval(60),
+                        updatedAt: candidate.summary.updatedAt.addingTimeInterval(60)
+                    ),
+                    category: category
+                )
+            ]
+            pendingReadiness?.resume()
+
+            do {
+                try await opening.value
+                XCTFail("The replacement root must receive its own readiness check.")
+            } catch is CancellationError {
+                // An obsolete readiness result cannot authorize the replacement.
+            }
+            XCTAssertEqual(directory.selectedHerdID, activeID)
+            XCTAssertEqual(selection.selectionRevision, originalRevision)
+            XCTAssertEqual(directory.herds.first { $0.id == candidateID }?.name, "Replacement")
+        }
+    }
+
     func testReadinessStillOpensSameStoreHerdAfterRemoteRename() async throws {
         let activeID = UUID()
         let candidateID = UUID()
