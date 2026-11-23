@@ -6,6 +6,7 @@ import Observation
 final class PastureGroupListViewModel {
     var groups: [PastureGroupSummary] = []
     var errorMessage: String?
+    private(set) var hasInitialLoadFailure = false
     var isPresentingAddGroup = false
     var groupPendingDeletion: PastureGroupSummary?
 
@@ -33,8 +34,12 @@ final class PastureGroupListViewModel {
             groups = try repository.fetchPastureGroups()
             loadedHerdID = selection.currentHerdID
             loadedSelectionRevision = selection.selectionRevision
+            hasInitialLoadFailure = false
             errorMessage = nil
         } catch {
+            if !isLoadedForCurrentSelection(selection) {
+                hasInitialLoadFailure = true
+            }
             errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
@@ -74,6 +79,7 @@ final class PastureGroupListViewModel {
         groups = []
         loadedHerdID = nil
         loadedSelectionRevision = nil
+        hasInitialLoadFailure = false
         errorMessage = nil
         isPresentingAddGroup = false
         clearPendingDeletion()
