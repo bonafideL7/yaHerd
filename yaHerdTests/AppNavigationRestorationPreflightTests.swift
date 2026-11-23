@@ -96,6 +96,47 @@ final class AppNavigationRestorationPreflightTests: XCTestCase {
     }
 
     @MainActor
+    func testDeferredFirstChooserRestoreDoesNotOverwriteSceneStorageWithoutUserNavigation() {
+        let herdID = UUID()
+        let savedPayload = makePayload(herdID: herdID, animalID: UUID())
+        let navigation = AppNavigationState()
+        let validator = PreflightStubNavigationValidator(
+            currentHerdResult: .success(herdID),
+            animalResult: .failure(.readFailed)
+        )
+
+        XCTAssertEqual(
+            AppNavigationSceneStorageAccess.restoreForSelectedHerd(
+                navigation: navigation,
+                selectedHerdID: herdID,
+                from: savedPayload,
+                using: validator,
+                dataAccessMode: .readWrite
+            ),
+            .deferredValidation
+        )
+
+        let deferredBaseline = navigation.snapshot
+        XCTAssertFalse(
+            AppNavigationSceneStorageAccess.shouldPersistNavigation(
+                snapshot: navigation.snapshot,
+                deferredBaseline: deferredBaseline,
+                isRestorationDeferred: true
+            )
+        )
+        // An explicit tab change supersedes the pending restoration; unlike
+        // the automatic Herd activation, it may replace the saved payload.
+        navigation.selectedTab = .search
+        XCTAssertTrue(
+            AppNavigationSceneStorageAccess.shouldPersistNavigation(
+                snapshot: navigation.snapshot,
+                deferredBaseline: deferredBaseline,
+                isRestorationDeferred: true
+            )
+        )
+    }
+
+    @MainActor
     func testCurrentHerdReadFailureDefersWithoutMutatingNavigation() {
         let herdID = UUID()
         let animalID = UUID()
