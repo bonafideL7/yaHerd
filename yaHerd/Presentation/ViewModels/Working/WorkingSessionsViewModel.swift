@@ -6,7 +6,7 @@ final class WorkingSessionsViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private var repository: any WorkingSessionsRepository
-    private var hasLoaded = false
+    @Published private(set) var hasLoaded = false
     private var lastLoadedRevision: UInt64 = 0
     private var herdSelection: AppCurrentHerdSelection?
     private var selectedHerdID: UUID?
