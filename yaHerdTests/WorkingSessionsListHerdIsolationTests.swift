@@ -122,6 +122,71 @@ final class WorkingSessionsListHerdIsolationTests: XCTestCase {
         XCTAssertEqual(repository.fetchCount, 2)
     }
 
+    func testFailedInitialReadCanRetryWithoutTreatingItAsEmptyHerd() {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let session = makeSession()
+        let repository = HerdScopedWorkingSessionsProbe(
+            selection: selection,
+            sessionsByHerd: [herdID: [session]]
+        )
+        let model = WorkingSessionsViewModel(repository: repository)
+        model.configure(selection: selection)
+
+        repository.shouldFail = true
+        XCTAssertFalse(model.load())
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertTrue(model.sessions.isEmpty)
+        XCTAssertNotNil(model.errorMessage)
+
+        repository.shouldFail = false
+        XCTAssertTrue(model.load())
+        XCTAssertTrue(model.hasLoaded)
+        XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(model.sessions.map(\.id), [session.id])
+        XCTAssertEqual(repository.fetchCount, 2)
+    }
+
+    func testFailedRefreshDoesNotPresentPreviousResultsAsAnEmptySuccessfulRead() {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let initial = makeSession()
+        let updated = makeSession()
+        let repository = HerdScopedWorkingSessionsProbe(
+            selection: selection,
+            sessionsByHerd: [herdID: [initial]]
+        )
+        let model = WorkingSessionsViewModel(repository: repository)
+        model.configure(selection: selection)
+
+        XCTAssertTrue(model.load())
+        XCTAssertTrue(model.hasLoaded)
+        repository.sessionsByHerd[herdID] = [updated]
+        repository.shouldFail = true
+
+        XCTAssertFalse(model.load())
+        XCTAssertTrue(model.hasLoaded, "The last complete read remains known, but the refresh failed.")
+        XCTAssertNotNil(model.errorMessage)
+        XCTAssertEqual(model.sessions.map(\.id), [initial.id])
+
+        repository.shouldFail = false
+        XCTAssertTrue(model.load())
+        XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(model.sessions.map(\.id), [updated.id])
+    }
+
+    func testSuccessfulEmptyReadIsDifferentFromAnUnavailableHerdRead() {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let repository = HerdScopedWorkingSessionsProbe(selection: selection)
+        let model = WorkingSessionsViewModel(repository: repository)
+        model.configure(selection: selection)
+
+        XCTAssertTrue(model.load())
+        XCTAssertTrue(model.hasLoaded)
+        XCTAssertTrue(model.sessions.isEmpty)
+        XCTAssertNil(model.errorMessage)
+    }
+
     private func makeSession() -> WorkingSessionSummary {
         WorkingSessionSummary(
             id: UUID(),
