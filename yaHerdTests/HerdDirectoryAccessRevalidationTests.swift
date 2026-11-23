@@ -831,3 +831,39 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         }
     }
 }
+
+@MainActor
+final class HerdDirectoryOpeningStateTests: XCTestCase {
+    func testCancelledImportAttemptImmediatelyAllowsAnotherHerdToOpen() throws {
+        var state = HerdDirectoryOpeningState()
+        let original = try XCTUnwrap(state.begin())
+        XCTAssertTrue(state.isOpening)
+
+        state.cancel()
+
+        XCTAssertFalse(state.isOpening)
+        let replacement = try XCTUnwrap(state.begin())
+        XCTAssertNotEqual(original, replacement)
+        XCTAssertTrue(state.isCurrent(replacement))
+
+        // The canceled validation can finish after the replacement starts.
+        XCTAssertFalse(state.finish(original))
+        XCTAssertTrue(state.isCurrent(replacement))
+        XCTAssertTrue(state.isOpening)
+
+        XCTAssertTrue(state.finish(replacement))
+        XCTAssertFalse(state.isOpening)
+    }
+
+    func testOnlyActiveAttemptCanCompleteAndReleaseChooser() throws {
+        var state = HerdDirectoryOpeningState()
+        let active = try XCTUnwrap(state.begin())
+        XCTAssertNil(state.begin())
+        XCTAssertFalse(state.finish(UUID()))
+        XCTAssertTrue(state.isOpening)
+
+        XCTAssertTrue(state.finish(active))
+        XCTAssertFalse(state.isOpening)
+        XCTAssertNotNil(state.begin())
+    }
+}
