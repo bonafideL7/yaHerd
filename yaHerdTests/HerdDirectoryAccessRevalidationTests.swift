@@ -682,6 +682,13 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
                 }
                 XCTAssertEqual(readinessChecks, 1)
                 XCTAssertEqual(directory.selectedHerdID, activeID)
+
+                // Only an intentional new choice may open the replacement root.
+                try await directory.selectHerdWhenReady(
+                    id: pendingID, expectedRoot: replacement
+                )
+                XCTAssertEqual(readinessChecks, 2)
+                XCTAssertEqual(directory.selectedHerdID, pendingID)
             }
         }
     }
