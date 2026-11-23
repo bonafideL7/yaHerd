@@ -410,4 +410,57 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
         XCTAssertEqual(selection.currentHerdID, herdID)
         XCTAssertEqual(selection.selectionRevision, revision)
     }
+
+    func testActiveInMemorySelectionRejectsSameUUIDFromDifferentStoreOnRefresh() throws {
+        let id = UUID()
+        let selection = AppCurrentHerdSelection()
+        let owned = herd(id)
+        let shared = AccessibleHerd(summary: owned.summary, category: .shared)
+        try selection.selectAccessibleHerd(id, from: [owned])
+        let originalRevision = selection.selectionRevision
+
+        selection.revalidateActiveHerd(from: [shared])
+
+        XCTAssertNil(selection.currentHerdID)
+        XCTAssertEqual(selection.selectionRevision, originalRevision + 1)
+
+        // Re-entering the replacement root requires an explicit new selection.
+        try selection.selectAccessibleHerd(id, from: [shared])
+        XCTAssertEqual(selection.currentHerdID, id)
+        let reopenedRevision = selection.selectionRevision
+        selection.revalidateActiveHerd(from: [shared])
+        XCTAssertEqual(selection.selectionRevision, reopenedRevision)
+    }
+
+    func testDirectInMemoryReopeningSameUUIDInAnotherStoreInvalidatesOldState() throws {
+        let id = UUID()
+        let selection = AppCurrentHerdSelection()
+        let owned = herd(id)
+        let shared = AccessibleHerd(summary: owned.summary, category: .shared)
+        try selection.selectAccessibleHerd(id, from: [owned])
+        let originalRevision = selection.selectionRevision
+
+        try selection.selectAccessibleHerd(id, from: [shared])
+
+        XCTAssertEqual(selection.currentHerdID, id)
+        XCTAssertGreaterThan(selection.selectionRevision, originalRevision)
+        let reopenedRevision = selection.selectionRevision
+        try selection.selectAccessibleHerd(id, from: [shared])
+        XCTAssertEqual(selection.selectionRevision, reopenedRevision)
+    }
+
+    func testRestorationDoesNotSilentlyAdoptAnotherStoreWithoutPreferences() throws {
+        let id = UUID()
+        let selection = AppCurrentHerdSelection()
+        let owned = herd(id)
+        let shared = AccessibleHerd(summary: owned.summary, category: .shared)
+        try selection.selectAccessibleHerd(id, from: [owned])
+        let originalRevision = selection.selectionRevision
+
+        selection.restoreAccessibleHerd(from: [shared])
+
+        XCTAssertNil(selection.currentHerdID)
+        XCTAssertEqual(selection.selectionRevision, originalRevision + 1)
+    }
+
 }
