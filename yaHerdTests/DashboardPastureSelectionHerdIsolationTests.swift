@@ -10,11 +10,12 @@ final class DashboardPastureSelectionHerdIsolationTests: XCTestCase {
         let model = DashboardViewModel()
         let reader = EmptyDashboardSelectionReader()
 
-        XCTAssertTrue(await model.load(
+        let initialLoad = await model.load(
             configuration: DashboardConfiguration(),
             using: reader,
             selection: selection
-        ))
+        )
+        XCTAssertTrue(initialLoad)
         XCTAssertNotNil(model.presentationSnapshot(for: selection))
 
         selection.select(UUID())
@@ -25,11 +26,12 @@ final class DashboardPastureSelectionHerdIsolationTests: XCTestCase {
         XCTAssertNil(model.presentationSnapshot(for: selection),
                      "A Herd round trip must not revive the previous selection's chart data.")
 
-        XCTAssertTrue(await model.load(
+        let subsequentLoad = await model.load(
             configuration: DashboardConfiguration(),
             using: reader,
             selection: selection
-        ))
+        )
+        XCTAssertTrue(subsequentLoad)
         XCTAssertNotNil(model.presentationSnapshot(for: selection))
     }
 
@@ -38,11 +40,12 @@ final class DashboardPastureSelectionHerdIsolationTests: XCTestCase {
         let model = DashboardViewModel()
         let reader = EmptyDashboardSelectionReader()
 
-        XCTAssertTrue(await model.load(
+        let initialLoad = await model.load(
             configuration: DashboardConfiguration(),
             using: reader,
             selection: selection
-        ))
+        )
+        XCTAssertTrue(initialLoad)
         XCTAssertNotNil(model.presentationSnapshot(for: selection))
 
         selection.select(nil)
