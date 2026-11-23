@@ -71,7 +71,8 @@ struct AnimalDetailView: View {
 
     var body: some View {
         Group {
-            if viewModel.viewingSelectionIdentity == nil && herdSelection.currentHerdID != nil {
+            if !viewModel.hasLoaded && viewModel.viewingSelectionIdentity == nil
+                && herdSelection.currentHerdID != nil {
                 ProgressView()
             } else if !isViewingCurrentHerd {
                 ContentUnavailableView(
