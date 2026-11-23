@@ -4,6 +4,27 @@ import XCTest
 
 @MainActor
 final class AnimalDetailEditorHerdIsolationTests: XCTestCase {
+    func testAnimalDetailPresentationDoesNotExposeObsoleteHerdAfterSelectionChanges() {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let animalID = UUID()
+        let repository = AnimalDetailWriteProbe(animalID: animalID)
+        let model = loadedEditor(animalID: animalID, repository: repository, selection: selection)
+
+        XCTAssertEqual(model.presentationDetail(for: selection)?.id, animalID)
+
+        selection.select(UUID())
+        XCTAssertNil(model.presentationDetail(for: selection), "Another Herd must not see the previous animal.")
+
+        selection.select(originalHerdID)
+        XCTAssertNil(model.presentationDetail(for: selection), "Switching away and back must not revive an old detail screen.")
+
+        selection.select(nil)
+        XCTAssertNil(model.presentationDetail(for: selection), "A revoked selection must hide the detail.")
+
+        XCTAssertEqual(model.detail?.id, animalID, "Hiding presentation must not mutate stored records.")
+    }
+
     func testSavingAnOldDraftDoesNotUpdateAnotherHerd() {
         for change in SelectionChange.allCases {
             let originalHerdID = UUID()
