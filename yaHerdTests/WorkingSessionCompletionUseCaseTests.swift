@@ -99,6 +99,75 @@ final class WorkingSessionCompletionUseCaseTests: XCTestCase {
         XCTAssertNil(viewModel.errorMessage)
     }
 
+    func testFinishViewModelRetriesIncompleteSessionReadWithoutTreatingItAsMissing() {
+        let sessionID = UUID()
+        let repository = WorkingSessionCompletionRepositorySpy(
+            session: makeSession(id: sessionID, queueItemIDs: [UUID()])
+        )
+        repository.shouldFailSessionRead = true
+        let model = WorkingFinishSessionViewModel(
+            sessionID: sessionID,
+            workingRepository: repository,
+            pastureRepository: EmptyPastureRepository()
+        )
+
+        model.load()
+
+        XCTAssertEqual(model.sessionLoadState, .failed)
+        XCTAssertNil(model.session)
+        XCTAssertFalse(model.hasLoadedPastureOptions)
+        XCTAssertNotNil(model.errorMessage)
+
+        repository.shouldFailSessionRead = false
+        model.retrySession()
+
+        XCTAssertEqual(model.sessionLoadState, .ready)
+        XCTAssertEqual(model.session?.id, sessionID)
+        XCTAssertTrue(model.hasLoadedPastureOptions)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testFinishViewModelDistinguishesMissingSessionFromFailedRead() {
+        let sessionID = UUID()
+        let repository = WorkingSessionCompletionRepositorySpy(session: nil)
+        let model = WorkingFinishSessionViewModel(
+            sessionID: sessionID,
+            workingRepository: repository,
+            pastureRepository: EmptyPastureRepository()
+        )
+
+        model.load()
+
+        XCTAssertEqual(model.sessionLoadState, .missing)
+        XCTAssertNil(model.session)
+        XCTAssertFalse(model.hasLoadedPastureOptions)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testFinishViewModelInvalidatesPreviouslyLoadedDestinationsOnFailedRefresh() {
+        let sessionID = UUID()
+        let repository = WorkingSessionCompletionRepositorySpy(
+            session: makeSession(id: sessionID, queueItemIDs: [UUID()])
+        )
+        let model = WorkingFinishSessionViewModel(
+            sessionID: sessionID,
+            workingRepository: repository,
+            pastureRepository: EmptyPastureRepository()
+        )
+        model.load()
+        XCTAssertEqual(model.sessionLoadState, .ready)
+        XCTAssertTrue(model.hasLoadedPastureOptions)
+
+        repository.shouldFailSessionRead = true
+        model.load()
+
+        XCTAssertEqual(model.sessionLoadState, .failed)
+        XCTAssertNil(model.session)
+        XCTAssertTrue(model.pastures.isEmpty)
+        XCTAssertFalse(model.hasLoadedPastureOptions)
+        XCTAssertNotNil(model.errorMessage)
+    }
+
     func testRejectsFinishedSessionBeforeMutation() async {
         let sessionID = UUID()
         let repository = WorkingSessionCompletionRepositorySpy(
@@ -305,6 +374,7 @@ private final class WorkingSessionCompletionRepositorySpy: WorkingFinishSessionR
     }
 
     let session: WorkingSessionDetailSnapshot?
+    var shouldFailSessionRead = false
     private(set) var completionCalls: [CompletionCall] = []
     var suspendCompletion = false
     private var pendingCompletion: CheckedContinuation<Void, Never>?
@@ -314,7 +384,8 @@ private final class WorkingSessionCompletionRepositorySpy: WorkingFinishSessionR
     }
 
     func fetchSessionDetail(id: UUID) throws -> WorkingSessionDetailSnapshot? {
-        session?.id == id ? session : nil
+        if shouldFailSessionRead { throw WorkingSessionCompletionTestError.sessionReadFailed }
+        return session?.id == id ? session : nil
     }
 
     func completeSession(
@@ -365,4 +436,5 @@ private final class FlakyPastureReferenceDataReader: PastureReferenceDataReader 
 
 private enum WorkingSessionCompletionTestError: Error {
     case pastureReadFailed
+    case sessionReadFailed
 }
