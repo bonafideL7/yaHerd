@@ -56,11 +56,19 @@ final class PastureGroupDetailViewModel {
         }
 
         do {
-            detail = try repository.fetchPastureGroupDetail(id: groupID)
-            allPastures = try repository.fetchPastures()
+            // Only publish a complete group/pasture pair. A partially imported
+            // graph must not combine a new group with older assignment rows.
+            let fetchedDetail = try repository.fetchPastureGroupDetail(id: groupID)
+            let fetchedPastures = try repository.fetchPastures()
+            detail = fetchedDetail
+            allPastures = fetchedPastures
             hasLoaded = true
             errorMessage = nil
         } catch {
+            // A failed refresh cannot authorize edits through retained rows.
+            detail = nil
+            allPastures = []
+            isPresentingEditGroup = false
             hasLoaded = true
             errorMessage = UserVisibleErrorMessage.make(error)
         }
@@ -115,8 +123,11 @@ final class PastureGroupDetailViewModel {
         // must not redirect an earlier Herd's assignment to the new Herd,
         // including a switch away and back to the same UUID.
         guard selection.currentHerdID == expectedHerdID,
-              selection.selectionRevision == expectedSelectionRevision else { return }
-        let destinationGroupID = row.isAssignedToCurrentGroup ? nil : detail?.id
+              selection.selectionRevision == expectedSelectionRevision,
+              let detail,
+              detail.id == row.groupID,
+              assignmentRows.contains(row) else { return }
+        let destinationGroupID = row.isAssignedToCurrentGroup ? nil : detail.id
         assign(
             row.pasture.id, to: destinationGroupID, using: repository,
             expectedHerdID: expectedHerdID,
