@@ -349,7 +349,7 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
             })
             let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
             request.affectedStores = [privateStore]
-            XCTAssertEqual(try read.fetch(request).map(\.id), [created.id])
+            XCTAssertEqual(try read.fetch(request).compactMap(\.id), [created.id])
             request.affectedStores = [sharedStore]
             let sharedRoots = try read.fetch(request)
             XCTAssertEqual(sharedRoots.count, 1)
