@@ -257,6 +257,72 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
         XCTAssertNil(defaults.string(forKey: "selected"))
     }
 
+    func testExplicitRestorationDoesNotOverwriteDifferentRememberedHerdCategory() throws {
+        for rememberedCategory: AccessibleHerd.Category in [.owned, .shared] {
+            let suite = "stage3-explicit-remembered-category-\(UUID())"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+
+            let rememberedID = UUID()
+            let explicitID = UUID()
+            let remembered = AccessibleHerd(
+                summary: herd(rememberedID).summary,
+                category: rememberedCategory
+            )
+            let explicitCategory: AccessibleHerd.Category =
+                rememberedCategory == .owned ? .shared : .owned
+            let explicit = AccessibleHerd(
+                summary: herd(explicitID).summary,
+                category: explicitCategory
+            )
+            let rememberedValue = rememberedCategory == .owned ? "owned" : "shared"
+            defaults.set(rememberedID.uuidString, forKey: "selected")
+            defaults.set(rememberedValue, forKey: "selected.storeCategory")
+
+            let selection = AppCurrentHerdSelection(
+                currentHerdID: explicitID, defaults: defaults, preferenceKey: "selected"
+            )
+            selection.restoreAccessibleHerd(from: [remembered, explicit])
+
+            XCTAssertEqual(selection.currentHerdID, explicitID)
+            XCTAssertEqual(defaults.string(forKey: "selected"), rememberedID.uuidString)
+            XCTAssertEqual(defaults.string(forKey: "selected.storeCategory"), rememberedValue)
+
+            let relaunched = AppCurrentHerdSelection(
+                defaults: defaults, preferenceKey: "selected"
+            )
+            relaunched.restoreAccessibleHerd(from: [remembered, explicit])
+            XCTAssertEqual(relaunched.currentHerdID, rememberedID)
+        }
+    }
+
+    func testExplicitRestorationPreservesLegacyRememberedHerdStoreIdentity() throws {
+        let suite = "stage3-explicit-legacy-category-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let rememberedID = UUID()
+        let explicitID = UUID()
+        defaults.set(rememberedID.uuidString, forKey: "selected")
+        let owned = herd(rememberedID)
+        let shared = AccessibleHerd(
+            summary: herd(explicitID).summary, category: .shared
+        )
+        let selection = AppCurrentHerdSelection(
+            currentHerdID: explicitID, defaults: defaults, preferenceKey: "selected"
+        )
+        selection.restoreAccessibleHerd(from: [owned, shared])
+
+        XCTAssertEqual(selection.currentHerdID, explicitID)
+        XCTAssertNil(defaults.string(forKey: "selected.storeCategory"))
+
+        let relaunched = AppCurrentHerdSelection(
+            defaults: defaults, preferenceKey: "selected"
+        )
+        relaunched.restoreAccessibleHerd(from: [owned, shared])
+        XCTAssertEqual(relaunched.currentHerdID, rememberedID)
+    }
+
     func testExplicitSelectionWinsOverStoredPreference() throws {
         let suite = "stage3-selection-\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
