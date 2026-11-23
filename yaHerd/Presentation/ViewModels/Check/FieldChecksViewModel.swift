@@ -15,6 +15,16 @@ final class FieldChecksViewModel {
     @ObservationIgnored private var selectedHerdID: UUID?
     @ObservationIgnored private var selectedRevision: UInt64?
 
+    /// Dashboard presentation must be safe even before the next selection-
+    /// keyed observation task has reconfigured this retained model.
+    func presentationSessions(for currentSelection: AppCurrentHerdSelection) -> [FieldCheckSessionSummary] {
+        guard selection === currentSelection,
+              isCurrentSelection(herdID: selectedHerdID, revision: selectedRevision) else {
+            return []
+        }
+        return sessions
+    }
+
     var activeSessions: [FieldCheckSessionSummary] {
         sessions.filter { !$0.isCompleted && !$0.isPastureArchived }
     }
