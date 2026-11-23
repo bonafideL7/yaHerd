@@ -121,6 +121,39 @@ final class WorkingQueueItemEditorHerdIsolationTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testHerdSwitchInvalidatesEditorSnapshotAndPreventsCrossHerdReload() {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let repository = TagReplacementRepositorySpy()
+        let model = makeModel(repository: repository, selection: selection)
+        XCTAssertNotNil(model.snapshot)
+        XCTAssertEqual(repository.fetchCount, 1)
+
+        selection.select(UUID())
+        model.invalidateForHerdChange()
+        XCTAssertNil(model.snapshot)
+        XCTAssertNil(model.errorMessage)
+
+        model.load()
+        XCTAssertNil(model.snapshot)
+        XCTAssertEqual(repository.fetchCount, 1, "Obsolete editors must not query the newly selected Herd.")
+    }
+
+    func testHerdRoundTripCannotRestoreInvalidatedEditorSnapshot() {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let repository = TagReplacementRepositorySpy()
+        let model = makeModel(repository: repository, selection: selection)
+
+        selection.select(UUID())
+        selection.select(originalHerdID)
+        model.invalidateForHerdChange()
+        model.load()
+
+        XCTAssertNil(model.snapshot)
+        XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(repository.fetchCount, 1, "Returning to the original UUID must not revive an obsolete editor.")
+    }
+
     private func makeModel(
         repository: TagReplacementRepositorySpy,
         selection: AppCurrentHerdSelection
@@ -149,10 +182,12 @@ private final class TagReplacementRepositorySpy: WorkingQueueItemEditingReposito
     let sessionID = UUID()
     let queueItemID = UUID()
     private(set) var replacementCalls = 0
+    private(set) var fetchCount = 0
     private var replacementContinuation: CheckedContinuation<WorkingQueueItemEditorSnapshot, Error>?
 
     func fetchQueueItemEditor(sessionID: UUID, queueItemID: UUID) throws -> WorkingQueueItemEditorSnapshot? {
-        snapshot(tag: "OLD")
+        fetchCount += 1
+        return snapshot(tag: "OLD")
     }
 
     func replacePrimaryTag(
