@@ -58,7 +58,9 @@ final class WorkingSessionDetailViewModel: ObservableObject {
             return true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
-            hasLoaded = true
+            // A failed read cannot establish that an absent session was deleted.
+            // Keep an earlier complete snapshot when one is already available.
+            hasLoaded = session != nil
             return false
         }
     }
