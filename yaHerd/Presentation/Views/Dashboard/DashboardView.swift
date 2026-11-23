@@ -8,7 +8,6 @@ struct DashboardView: View {
 
     @State private var viewModel = DashboardViewModel()
     @State private var fieldChecksModel = FieldChecksViewModel()
-    @State private var selectedPastureName: String?
 
     private let configuration = DashboardConfiguration()
 
@@ -20,11 +19,12 @@ struct DashboardView: View {
     }
 
     var body: some View {
+        @Bindable var chartModel = viewModel
         ScrollView {
             DashboardChartsContent(
                 data: presentationData,
                 isLoaded: viewModel.snapshot != nil,
-                selectedPastureName: $selectedPastureName
+                selectedPastureName: $chartModel.selectedPastureName
             )
             .padding(.horizontal, 20)
             .padding(.top, 20)
