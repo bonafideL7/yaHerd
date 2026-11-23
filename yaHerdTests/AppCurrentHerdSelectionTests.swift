@@ -346,7 +346,7 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
     }
 
     func testLegacyRememberedOwnedHerdDoesNotAutomaticallySelectSharedReplacement() throws {
-        let suite = "stage3-legacy-store-(UUID())"
+        let suite = "stage3-legacy-store-\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
 
@@ -378,7 +378,7 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
     }
 
     func testLegacyActiveOwnedHerdIsInvalidatedIfOnlySharedRootMatches() throws {
-        let suite = "stage3-legacy-active-store-(UUID())"
+        let suite = "stage3-legacy-active-store-\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
 
