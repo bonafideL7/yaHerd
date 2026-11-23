@@ -389,6 +389,12 @@ struct WorkingFinishSessionView: View {
             Button {
                 guard isViewingOriginatingHerd else { return }
                 viewModel.retrySession()
+                if viewModel.sessionLoadState == .ready {
+                    // Rebuild assignments from the newly read session even
+                    // when SwiftUI coalesces nil → same-ID observation changes.
+                    seedExceptions(force: true)
+                    revalidateExceptionDestinationsAgainstLivePastures()
+                }
             } label: {
                 Label("Retry Loading Session", systemImage: "arrow.clockwise")
             }
