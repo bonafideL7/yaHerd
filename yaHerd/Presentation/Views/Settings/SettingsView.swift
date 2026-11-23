@@ -443,8 +443,10 @@ struct HerdDirectoryView: View {
             while !Task.isCancelled {
                 // Do not overwrite the active validation task with a no-op
                 // retry, or Cancel could miss the in-flight Herd opening.
-                if let pendingHerdID, let attempt = beginOpeningHerd(id: pendingHerdID) {
-                    await attempt.value
+                if let pendingHerdID {
+                    // Do not await an uncooperative canceled validation here:
+                    // the retry loop must remain free to open another Herd.
+                    beginOpeningHerd(id: pendingHerdID)
                 }
                 do {
                     try await Task.sleep(for: .seconds(5))
