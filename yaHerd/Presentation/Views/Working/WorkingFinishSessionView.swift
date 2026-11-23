@@ -83,6 +83,7 @@ struct WorkingFinishSessionView: View {
         guard !isFinishing,
               isViewingOriginatingHerd,
               dataAccessMode.allowsDataMutations,
+              viewModel.sessionLoadState == .ready,
               viewModel.hasLoadedPastureOptions,
               let session,
               session.status == .active,
@@ -106,7 +107,18 @@ struct WorkingFinishSessionView: View {
         guard isViewingOriginatingHerd else {
             return "The selected Herd changed. Reopen the session to continue."
         }
-        guard let session else { return "Loading session…" }
+        guard let session else {
+            switch viewModel.sessionLoadState {
+            case .loading:
+                return "Loading session…"
+            case .missing:
+                return "This session is not available in the selected Herd. Retry to check again."
+            case .failed:
+                return "Session details could not be read. Retry before finishing."
+            case .ready:
+                return "This session is not available."
+            }
+        }
         guard session.status == .active else {
             return "This session is already completed."
         }
@@ -145,17 +157,25 @@ struct WorkingFinishSessionView: View {
         NavigationStack {
             Form {
                 if isViewingOriginatingHerd {
-                    summarySection
-                    defaultDestinationSection
+                    switch viewModel.sessionLoadState {
+                    case .loading:
+                        ProgressView("Loading session…")
+                            .frame(maxWidth: .infinity)
+                    case .missing, .failed:
+                        sessionLoadRecoverySection
+                    case .ready:
+                        summarySection
+                        defaultDestinationSection
 
-                    if viewModel.needsPastureOptionsRetry {
-                        pastureLoadRecoverySection
-                    }
+                        if viewModel.needsPastureOptionsRetry {
+                            pastureLoadRecoverySection
+                        }
 
-                    exceptionSection
+                        exceptionSection
 
-                    if !unfinishedItems.isEmpty {
-                        unfinishedSection
+                        if !unfinishedItems.isEmpty {
+                            unfinishedSection
+                        }
                     }
                 } else {
                     ContentUnavailableView(
@@ -181,7 +201,8 @@ struct WorkingFinishSessionView: View {
                     pastureRepository: pastureRepository
                 )
                 viewModel.load()
-                if viewModel.errorMessage != nil {
+                if viewModel.errorMessage != nil &&
+                   viewModel.sessionLoadState != .failed {
                     showingError = true
                 }
                 seedExceptions()
@@ -242,7 +263,8 @@ struct WorkingFinishSessionView: View {
                 Text(errorMessage ?? viewModel.errorMessage ?? "Unknown error")
             }
             .onChange(of: viewModel.errorMessage) { _, newValue in
-                if newValue != nil && isViewingOriginatingHerd {
+                if newValue != nil && isViewingOriginatingHerd &&
+                   viewModel.sessionLoadState != .failed {
                     showingError = true
                 }
             }
@@ -351,6 +373,27 @@ struct WorkingFinishSessionView: View {
             } else if !selectedExceptionItems.isEmpty {
                 Text("Only animals listed here will move somewhere other than the source pasture.")
             }
+        }
+    }
+
+    private var sessionLoadRecoverySection: some View {
+        Section {
+            if viewModel.sessionLoadState == .missing {
+                Text("This Working session is not available in the selected Herd. It may still be importing or may have been removed.")
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Working session details could not be read. Retry after the Herd finishes importing.")
+                    .foregroundStyle(.secondary)
+            }
+
+            Button {
+                guard isViewingOriginatingHerd else { return }
+                viewModel.retrySession()
+            } label: {
+                Label("Retry Loading Session", systemImage: "arrow.clockwise")
+            }
+        } header: {
+            Text("Session Unavailable")
         }
     }
 
