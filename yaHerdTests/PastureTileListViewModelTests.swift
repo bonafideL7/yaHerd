@@ -691,6 +691,84 @@ final class PastureTileListViewModelTests: XCTestCase {
         XCTAssertEqual(model.items, [second, first])
     }
 
+
+    func testObsoletePastureMutationObserverDoesNotReadNewlySelectedHerd() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let reader = PastureListReaderStub(
+            result: .success([PastureTestSupport.makeSummary(name: "Original")])
+        )
+        let mutations = ApplicationMutationCenter()
+        let model = PastureTileListViewModel()
+        model.configure(selection: selection)
+
+        let obsoleteObserver = Task {
+            await model.observe(using: reader, mutationStream: mutations)
+        }
+        for _ in 0..<100 where !model.hasLoaded {
+            await Task.yield()
+        }
+        XCTAssertTrue(model.hasLoaded)
+
+        selection.select(UUID())
+        model.configure(selection: selection)
+        let replacement = PastureTestSupport.makeSummary(name: "Replacement")
+        reader.result = .success([replacement])
+        XCTAssertTrue(model.load(using: reader))
+
+        // The only remaining observer was created for the previous Herd.
+        // It must not issue a repository read or show its failure in this Herd.
+        reader.result = .failure(PastureTestError.forced)
+        mutations.recordSuccessfulMutation(reason: .pasture)
+        for _ in 0..<100 {
+            await Task.yield()
+        }
+
+        XCTAssertEqual(model.items, [replacement])
+        XCTAssertNil(model.errorMessage)
+
+        obsoleteObserver.cancel()
+        await obsoleteObserver.value
+    }
+
+    func testObsoletePastureObserverStaysInvalidAfterReturningToOriginalHerd() async {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let reader = PastureListReaderStub(
+            result: .success([PastureTestSupport.makeSummary(name: "Old Snapshot")])
+        )
+        let mutations = ApplicationMutationCenter()
+        let model = PastureTileListViewModel()
+        model.configure(selection: selection)
+
+        let obsoleteObserver = Task {
+            await model.observe(using: reader, mutationStream: mutations)
+        }
+        for _ in 0..<100 where !model.hasLoaded {
+            await Task.yield()
+        }
+        XCTAssertTrue(model.hasLoaded)
+
+        selection.select(UUID())
+        model.configure(selection: selection)
+        selection.select(originalHerdID)
+        model.configure(selection: selection)
+        let refreshed = PastureTestSupport.makeSummary(name: "New Snapshot")
+        reader.result = .success([refreshed])
+        XCTAssertTrue(model.load(using: reader))
+
+        reader.result = .failure(PastureTestError.forced)
+        mutations.recordSuccessfulMutation(reason: .pasture)
+        for _ in 0..<100 {
+            await Task.yield()
+        }
+
+        XCTAssertEqual(model.items, [refreshed])
+        XCTAssertNil(model.errorMessage, "The selection revision must invalidate a prior observer.")
+
+        obsoleteObserver.cancel()
+        await obsoleteObserver.value
+    }
+
 }
 
 @MainActor
