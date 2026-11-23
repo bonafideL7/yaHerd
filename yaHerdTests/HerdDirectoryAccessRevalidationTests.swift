@@ -622,6 +622,99 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         XCTAssertEqual(directory.selectedHerdID, originalID)
     }
 
+    func testPendingImportRetryRejectsReplacementOfTheChosenHerdRoot() async throws {
+        for originalCategory: AccessibleHerd.Category in [.owned, .shared] {
+            for replaceStore in [false, true] {
+                let activeID = UUID()
+                let pendingID = UUID()
+                let selection = AppCurrentHerdSelection(currentHerdID: activeID)
+                let original = AccessibleHerd(
+                    summary: herd(pendingID).summary,
+                    category: originalCategory
+                )
+                let repository = StubHerdRepository(available: [herd(activeID), original])
+                var readinessChecks = 0
+                let directory = HerdDirectoryController(
+                    repository: repository,
+                    selection: selection,
+                    validateReadiness: { _ in
+                        readinessChecks += 1
+                        if readinessChecks == 1 {
+                            throw HerdRepositoryError.missingHerd
+                        }
+                    }
+                )
+
+                // The initially chosen root exists, but its imported graph is not ready.
+                do {
+                    try await directory.selectHerdWhenReady(
+                        id: pendingID, expectedRoot: original
+                    )
+                    XCTFail("The first attempt should wait for import.")
+                } catch let error as HerdRepositoryError {
+                    XCTAssertEqual(error, .missingHerd)
+                }
+
+                // A new root reuses the UUID before the chooser's pending retry.
+                // It must not inherit the user's approval to open the old root.
+                let replacement = AccessibleHerd(
+                    summary: HerdSummary(
+                        publicID: pendingID,
+                        name: "Different Herd",
+                        createdAt: original.summary.createdAt.addingTimeInterval(
+                            replaceStore ? 0 : 60
+                        ),
+                        updatedAt: original.summary.updatedAt.addingTimeInterval(60)
+                    ),
+                    category: replaceStore
+                        ? (originalCategory == .owned ? .shared : .owned)
+                        : originalCategory
+                )
+                repository.available = [herd(activeID), replacement]
+
+                do {
+                    try await directory.selectHerdWhenReady(
+                        id: pendingID, expectedRoot: original
+                    )
+                    XCTFail("A replacement root needs a new explicit choice.")
+                } catch let error as HerdDirectoryError {
+                    XCTAssertEqual(error, .pendingHerdUnavailable)
+                }
+                XCTAssertEqual(readinessChecks, 1)
+                XCTAssertEqual(directory.selectedHerdID, activeID)
+            }
+        }
+    }
+
+    func testPendingImportRetryAllowsRenameOfTheSameRoot() async throws {
+        let activeID = UUID()
+        let pendingID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: activeID)
+        let original = AccessibleHerd(
+            summary: herd(pendingID).summary,
+            category: .shared
+        )
+        let repository = StubHerdRepository(available: [herd(activeID), original])
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+        repository.available = [
+            herd(activeID),
+            AccessibleHerd(
+                summary: HerdSummary(
+                    publicID: pendingID,
+                    name: "Renamed While Importing",
+                    createdAt: original.summary.createdAt,
+                    updatedAt: original.summary.updatedAt.addingTimeInterval(60)
+                ),
+                category: .shared
+            )
+        ]
+
+        try await directory.selectHerdWhenReady(id: pendingID, expectedRoot: original)
+
+        XCTAssertEqual(directory.selectedHerdID, pendingID)
+        XCTAssertEqual(directory.herds.first { $0.id == pendingID }?.name, "Renamed While Importing")
+    }
+
     func testReadinessDoesNotActivateDifferentStoreOwnershipForSameHerdID() async throws {
         for originalCategory: AccessibleHerd.Category in [.owned, .shared] {
             let activeID = UUID()
