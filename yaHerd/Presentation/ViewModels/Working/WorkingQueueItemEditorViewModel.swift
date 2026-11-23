@@ -39,6 +39,14 @@ final class WorkingQueueItemEditorViewModel: ObservableObject {
         }
     }
 
+    /// Discard data from an editor whose opening Herd or selection revision
+    /// is no longer active. A later return to the same UUID cannot revive it.
+    func invalidateForHerdChange() {
+        guard !isOriginatingHerdActive else { return }
+        snapshot = nil
+        errorMessage = nil
+    }
+
     func load() {
         guard isOriginatingHerdActive else { return }
         do {
