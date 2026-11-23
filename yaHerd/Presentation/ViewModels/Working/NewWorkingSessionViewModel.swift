@@ -67,6 +67,18 @@ final class NewWorkingSessionViewModel: ObservableObject {
         hasLoaded = true
     }
 
+    /// A setup belongs to one Herd-selection incarnation. Discard all of its
+    /// read models and invalidate any in-flight candidate snapshot.
+    func invalidateForHerdChange() {
+        clearCandidates(for: nil)
+        pastures = []
+        templates = []
+        hasLoaded = false
+        hasLoadedSetupSuccessfully = false
+        setupLoadErrorMessage = nil
+        errorMessage = nil
+    }
+
     /// Drop the prior pasture's candidates immediately, before a new asynchronous
     /// page fetch can complete. This also invalidates an older in-flight result.
     func clearCandidates(for pastureID: UUID?) {
