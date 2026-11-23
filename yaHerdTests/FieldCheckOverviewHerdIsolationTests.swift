@@ -4,6 +4,32 @@ import XCTest
 
 @MainActor
 final class FieldCheckOverviewHerdIsolationTests: XCTestCase {
+    func testDashboardSessionsAreHiddenBeforeHerdChangeConfigurationRuns() {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let session = makeSession()
+        let repository = HerdScopedFieldCheckOverviewProbe(
+            selection: selection, sessionsByHerd: [originalHerdID: [session]]
+        )
+        let model = FieldChecksViewModel()
+        model.configure(selection: selection)
+        XCTAssertTrue(model.load(using: repository))
+        XCTAssertEqual(model.presentationSessions(for: selection).map(\.id), [session.id])
+
+        selection.select(UUID())
+        XCTAssertTrue(model.presentationSessions(for: selection).isEmpty,
+                      "Dashboard must not present old Field Checks while reconfiguration is queued.")
+
+        selection.select(originalHerdID)
+        XCTAssertTrue(model.presentationSessions(for: selection).isEmpty,
+                      "Returning to the same Herd must not restore an obsolete list.")
+
+        model.configure(selection: selection)
+        XCTAssertTrue(model.presentationSessions(for: selection).isEmpty)
+        XCTAssertTrue(model.load(using: repository))
+        XCTAssertEqual(model.presentationSessions(for: selection).map(\.id), [session.id])
+    }
+
     func testHerdSwitchClearsOldSessionsAndLoadsCurrentHerd() {
         let originalID = UUID()
         let nextID = UUID()
