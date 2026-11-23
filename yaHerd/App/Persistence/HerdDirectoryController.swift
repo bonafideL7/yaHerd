@@ -128,13 +128,14 @@ final class HerdDirectoryController {
               selectionGeneration == originatingGeneration else {
             throw CancellationError()
         }
-        // An identically identified root can replace the validated root in
-        // another store while CloudKit import or access changes are in flight.
-        // Validate the new store's graph before activating it.
+        // A replaced root is not authorized by the previous root's readiness
+        // result, even when it reuses the same UUID and store category. A
+        // normal rename does not change the original creation timestamp.
         let current = try readAccessibleHerds()
         let currentMatching = current.filter { $0.id == id }
         guard currentMatching.count == 1,
-              currentMatching[0].category == originalHerd.category else {
+              currentMatching[0].category == originalHerd.category,
+              currentMatching[0].summary.createdAt == originalHerd.summary.createdAt else {
             throw CancellationError()
         }
         try selection.selectAccessibleHerd(id, from: current)
