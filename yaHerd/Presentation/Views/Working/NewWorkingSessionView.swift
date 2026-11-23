@@ -24,6 +24,8 @@ struct NewWorkingSessionView: View {
         workingRepository: EmptyWorkingRepository()
     )
 
+    @State private var originatingHerdID: UUID?
+    @State private var originatingHerdSelectionRevision: UInt64?
     @State private var date: Date = .now
     @State private var selectedPastureID: UUID?
     @State private var selectedTemplateID: UUID?
@@ -50,6 +52,12 @@ struct NewWorkingSessionView: View {
         _selectedPastureID = State(initialValue: suggestedPastureID)
     }
 
+    private var isPresentingOriginatingHerd: Bool {
+        guard let originatingHerdID, let originatingHerdSelectionRevision else { return false }
+        return herdSelection.currentHerdID == originatingHerdID
+            && herdSelection.selectionRevision == originatingHerdSelectionRevision
+    }
+
     private var selectedPasture: PastureOption? {
         guard let selectedPastureID else { return nil }
         return viewModel.pastures.first { $0.id == selectedPastureID }
@@ -67,7 +75,8 @@ struct NewWorkingSessionView: View {
     }
 
     private var canStart: Bool {
-        !isStarting
+        isPresentingOriginatingHerd
+            && !isStarting
             && viewModel.hasLoadedSetupSuccessfully
             && viewModel.hasCurrentCandidates(
                 pastureID: selectedPastureID, selection: herdSelection
@@ -125,16 +134,31 @@ struct NewWorkingSessionView: View {
     }
 
     private var content: some View {
-        Form {
-            sessionSection
-            animalsSection
-            treatmentsSection
+        Group {
+            if originatingHerdSelectionRevision != nil && !isPresentingOriginatingHerd {
+                ContentUnavailableView(
+                    "Herd Changed",
+                    systemImage: "arrow.left.arrow.right",
+                    description: Text("Reopen Working setup in the selected Herd.")
+                )
+            } else {
+                Form {
+                    sessionSection
+                    animalsSection
+                    treatmentsSection
+                }
+            }
         }
         .navigationTitle("Start Working Session")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(isStarting)
-        .interactiveDismissDisabled(isStarting)
+        .navigationBarBackButtonHidden(isStarting && isPresentingOriginatingHerd)
+        .interactiveDismissDisabled(isStarting && isPresentingOriginatingHerd)
         .task(id: selectedPastureID) {
+            if originatingHerdSelectionRevision == nil {
+                originatingHerdID = herdSelection.currentHerdID
+                originatingHerdSelectionRevision = herdSelection.selectionRevision
+            }
+            guard isPresentingOriginatingHerd else { return }
             viewModel.configure(
                 pastureRepository: pastureRepository,
                 animalReferenceQueryReader: animalReferenceQueryReader,
@@ -157,6 +181,19 @@ struct NewWorkingSessionView: View {
                ) {
                 resetAnimalSelection()
             }
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            guard originatingHerdSelectionRevision != nil,
+                  !isPresentingOriginatingHerd else { return }
+            viewModel.invalidateForHerdChange()
+            selectedPastureID = nil
+            selectedTemplateID = nil
+            selectedTemplateName = nil
+            plannedTreatments = []
+            specifiesAnimals = false
+            selectedAnimalIDs = []
+            showingAnimalPicker = false
+            startedRoute = nil
         }
         .onChange(of: selectedPastureID) { _, newPastureID in
             viewModel.clearCandidates(for: newPastureID)
@@ -312,7 +349,8 @@ struct NewWorkingSessionView: View {
     private func startSession() {
         guard canStart,
               let pastureID = selectedPastureID,
-              let originatingHerdID = herdSelection.currentHerdID else {
+              let originatingHerdID,
+              let originatingSelectionRevision = originatingHerdSelectionRevision else {
             return
         }
 
@@ -329,7 +367,6 @@ struct NewWorkingSessionView: View {
         // Capture one coherent setup snapshot before the async command begins.
         // Changes to form controls must not alter a submitted selection.
         let sessionDate = date
-        let originatingSelectionRevision = herdSelection.selectionRevision
         let templateName = selectedTemplateName
         let submittedAnimalIDs = specifiesAnimals ? Array(selectedAnimalIDs) : nil
         isStarting = true
