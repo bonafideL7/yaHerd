@@ -28,7 +28,27 @@ struct TreatmentTemplatesView: View {
 
     var body: some View {
         List {
-            if visibleTemplates.isEmpty {
+            if herdIdentity?.isCurrent(in: herdSelection) != true {
+                ContentUnavailableView(
+                    "Select a Herd",
+                    systemImage: "square.stack.3d.up",
+                    description: Text("Choose a Herd to see its treatment sets.")
+                )
+            } else if let readError = viewModel.errorMessage {
+                ContentUnavailableView(
+                    "Treatment Sets Unavailable",
+                    systemImage: "arrow.clockwise",
+                    description: Text(readError)
+                )
+                Button {
+                    guard herdIdentity?.isCurrent(in: herdSelection) == true else { return }
+                    viewModel.load()
+                } label: {
+                    Label("Retry Loading Treatment Sets", systemImage: "arrow.clockwise")
+                }
+            } else if !viewModel.hasLoaded {
+                ProgressView("Loading treatment sets…")
+            } else if visibleTemplates.isEmpty {
                 ContentUnavailableView(
                     "No Treatments",
                     systemImage: "syringe",
@@ -70,7 +90,11 @@ struct TreatmentTemplatesView: View {
                     Image(systemName: "plus")
                 }
                 .disabledWhenDataReadOnly()
-                .disabled(herdIdentity?.isCurrent(in: herdSelection) != true)
+                .disabled(
+                    herdIdentity?.isCurrent(in: herdSelection) != true
+                    || !viewModel.hasLoaded
+                    || viewModel.errorMessage != nil
+                )
             }
         }
         .task(id: herdSelection.selectionRevision) {
@@ -98,10 +122,7 @@ struct TreatmentTemplatesView: View {
         .alert("Can’t Save", isPresented: $showingError) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(errorMessage ?? viewModel.errorMessage ?? "")
-        }
-        .onChange(of: viewModel.errorMessage) { _, newValue in
-            if newValue != nil { showingError = true }
+            Text(errorMessage ?? "")
         }
         .sheet(isPresented: $showingAdd) {
             TreatmentTemplateAddView(originatingHerdIdentity: pendingAddHerdIdentity)
@@ -109,6 +130,9 @@ struct TreatmentTemplatesView: View {
     }
 
     private func delete(at offsets: IndexSet) {
+        guard herdIdentity?.isCurrent(in: herdSelection) == true,
+              viewModel.hasLoaded,
+              viewModel.errorMessage == nil else { return }
         do {
             guard try WorkingTreatmentTemplateHerdAction.performIfCurrent(
                 identity: herdIdentity,
@@ -252,7 +276,28 @@ private struct TreatmentTemplateDetailView: View {
 
     var body: some View {
         Group {
-            if herdIdentity?.isCurrent(in: herdSelection) == true {
+            if herdIdentity?.isCurrent(in: herdSelection) != true {
+                ContentUnavailableView(
+                    "Herd Changed",
+                    systemImage: "arrow.left.arrow.right",
+                    description: Text("Reopen this treatment set from the selected Herd.")
+                )
+            } else if let readError = viewModel.errorMessage {
+                ContentUnavailableView(
+                    "Treatment Set Unavailable",
+                    systemImage: "arrow.clockwise",
+                    description: Text(readError)
+                )
+                Button("Retry Loading Treatment Set") { refreshTemplate() }
+            } else if !viewModel.hasLoaded {
+                ProgressView("Loading treatment set…")
+            } else if viewModel.visibleTemplate(identity: herdIdentity, selection: herdSelection) == nil {
+                ContentUnavailableView(
+                    "Treatment Set Not Found",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text("This treatment set is no longer available in the selected Herd.")
+                )
+            } else {
                 Form {
                     Section("Name") {
                         TextField("Treatment set name", text: $nameDraft)
@@ -279,12 +324,6 @@ private struct TreatmentTemplateDetailView: View {
                         }
                     }
                 }
-            } else {
-                ContentUnavailableView(
-                    "Herd Changed",
-                    systemImage: "arrow.left.arrow.right",
-                    description: Text("Reopen this treatment set from the selected Herd.")
-                )
             }
         }
         .navigationTitle(nameDraft.isEmpty ? "Treatment Set" : nameDraft)
@@ -302,7 +341,10 @@ private struct TreatmentTemplateDetailView: View {
             }
             ToolbarItem(placement: .confirmationAction) {
                 ToolbarSaveButton { save() }
-                    .disabled(herdIdentity?.isCurrent(in: herdSelection) != true)
+                    .disabled(
+                        herdIdentity?.isCurrent(in: herdSelection) != true
+                        || viewModel.visibleTemplate(identity: herdIdentity, selection: herdSelection) == nil
+                    )
             }
         }
         .confirmationDialog(
@@ -318,8 +360,7 @@ private struct TreatmentTemplateDetailView: View {
         .task {
             guard herdIdentity?.isCurrent(in: herdSelection) == true else { return }
             viewModel.configure(repository: repository)
-            viewModel.load()
-            seedFromSnapshot()
+            refreshTemplate()
         }
         .onChange(of: herdSelection.selectionRevision) { _, _ in
             viewModel.clear()
@@ -328,23 +369,26 @@ private struct TreatmentTemplateDetailView: View {
             showingDiscardConfirmation = false
             dismiss()
         }
-        .onChange(of: viewModel.template?.id) { _, _ in
-            seedFromSnapshot()
-        }
         .alert("Can’t Save", isPresented: $showingError) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(errorMessage ?? viewModel.errorMessage ?? "")
+            Text(errorMessage ?? "")
         }
     }
 
-    private func seedFromSnapshot() {
-        guard let template = viewModel.visibleTemplate(
+    private func refreshTemplate() {
+        guard herdIdentity?.isCurrent(in: herdSelection) == true else { return }
+        viewModel.load()
+        if let template = viewModel.visibleTemplate(
             identity: herdIdentity,
             selection: herdSelection
-        ) else { return }
-        nameDraft = template.name
-        plannedTreatments = template.plannedTreatments
+        ) {
+            nameDraft = template.name
+            plannedTreatments = template.plannedTreatments
+        } else {
+            nameDraft = ""
+            plannedTreatments = []
+        }
     }
 
     private func save() {
