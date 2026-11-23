@@ -72,7 +72,7 @@ final class FieldCheckOverviewHerdIsolationTests: XCTestCase {
         model.configure(selection: selection)
 
         XCTAssertTrue(model.load(using: repository))
-        XCTAssertEqual(model.sessions.map(\\.id), [originalSession.id])
+        XCTAssertEqual(model.sessions.map(\.id), [originalSession.id])
         XCTAssertTrue(model.hasLoaded)
 
         // A partially imported Field Check graph can make the second read
@@ -82,14 +82,14 @@ final class FieldCheckOverviewHerdIsolationTests: XCTestCase {
         repository.shouldFailFindings = true
 
         XCTAssertFalse(model.load(using: repository))
-        XCTAssertEqual(model.sessions.map(\\.id), [originalSession.id])
+        XCTAssertEqual(model.sessions.map(\.id), [originalSession.id])
         XCTAssertTrue(model.openFindings.isEmpty)
         XCTAssertTrue(model.hasLoaded)
         XCTAssertNotNil(model.errorMessage)
 
         repository.shouldFailFindings = false
         XCTAssertTrue(model.load(using: repository))
-        XCTAssertEqual(model.sessions.map(\\.id), [importedSession.id])
+        XCTAssertEqual(model.sessions.map(\.id), [importedSession.id])
         XCTAssertNil(model.errorMessage)
     }
 
