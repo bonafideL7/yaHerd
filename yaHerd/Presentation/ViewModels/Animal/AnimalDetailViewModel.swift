@@ -37,6 +37,12 @@ final class AnimalDetailViewModel {
             && selection.selectionRevision == viewingSelectionRevision
     }
 
+    /// Retained detail views may not present a record from an obsolete Herd selection.
+    func presentationDetail(for selection: AppCurrentHerdSelection) -> AnimalDetailSnapshot? {
+        guard isViewingSelectionCurrent(selection) else { return nil }
+        return detail
+    }
+
     var viewingSelectionIdentity: (herdID: UUID, revision: UInt64)? {
         guard let viewingHerdID, let viewingSelectionRevision else { return nil }
         return (viewingHerdID, viewingSelectionRevision)
