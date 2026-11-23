@@ -4,6 +4,7 @@ import Foundation
 final class WorkingTreatmentTemplatesViewModel: ObservableObject {
     @Published private(set) var templates: [WorkingTreatmentTemplateSummary] = []
     @Published var errorMessage: String?
+    @Published private(set) var hasLoaded = false
 
     private var repository: any WorkingTreatmentTemplateListReader
 
@@ -18,8 +19,11 @@ final class WorkingTreatmentTemplatesViewModel: ObservableObject {
     func load() {
         do {
             templates = try repository.fetchTemplates()
+            hasLoaded = true
             errorMessage = nil
         } catch {
+            // Retain the last complete snapshot for recovery, but never expose
+            // it to a screen while the current read remains unavailable.
             errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
@@ -28,12 +32,15 @@ final class WorkingTreatmentTemplatesViewModel: ObservableObject {
         identity: WorkingQueueEditorHerdIdentity?,
         selection: AppCurrentHerdSelection
     ) -> [WorkingTreatmentTemplateSummary] {
-        guard identity?.isCurrent(in: selection) == true else { return [] }
+        guard identity?.isCurrent(in: selection) == true,
+              hasLoaded,
+              errorMessage == nil else { return [] }
         return templates
     }
 
     func clear() {
         templates = []
+        hasLoaded = false
         errorMessage = nil
     }
 }
@@ -42,6 +49,7 @@ final class WorkingTreatmentTemplatesViewModel: ObservableObject {
 final class WorkingTreatmentTemplateDetailViewModel: ObservableObject {
     @Published private(set) var template: WorkingTreatmentTemplateDetailSnapshot?
     @Published var errorMessage: String?
+    @Published private(set) var hasLoaded = false
 
     private let templateID: UUID
     private var repository: any WorkingTreatmentTemplateDetailReader
@@ -58,8 +66,10 @@ final class WorkingTreatmentTemplateDetailViewModel: ObservableObject {
     func load() {
         do {
             template = try repository.fetchTemplateDetail(id: templateID)
+            hasLoaded = true
             errorMessage = nil
         } catch {
+            // Failed imports are not evidence that a template was deleted.
             errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
@@ -68,12 +78,15 @@ final class WorkingTreatmentTemplateDetailViewModel: ObservableObject {
         identity: WorkingQueueEditorHerdIdentity?,
         selection: AppCurrentHerdSelection
     ) -> WorkingTreatmentTemplateDetailSnapshot? {
-        guard identity?.isCurrent(in: selection) == true else { return nil }
+        guard identity?.isCurrent(in: selection) == true,
+              hasLoaded,
+              errorMessage == nil else { return nil }
         return template
     }
 
     func clear() {
         template = nil
+        hasLoaded = false
         errorMessage = nil
     }
 }
