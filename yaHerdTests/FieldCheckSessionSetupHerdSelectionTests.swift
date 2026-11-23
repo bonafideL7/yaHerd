@@ -304,12 +304,14 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
         model.configure(selection: selection)
         repository.shouldFail = true
         XCTAssertFalse(model.load(using: repository))
-        XCTAssertNotNil(model.errorMessage)
+        XCTAssertNotNil(model.pastureLoadErrorMessage)
+        XCTAssertFalse(model.hasLoaded)
 
         selection.select(nil)
         model.configure(selection: selection)
         XCTAssertTrue(model.pastures.isEmpty)
         XCTAssertNil(model.errorMessage)
+        XCTAssertNil(model.pastureLoadErrorMessage)
         XCTAssertFalse(model.hasLoaded)
         XCTAssertFalse(model.load(using: repository))
         XCTAssertEqual(repository.fetchCount, 1, "No Herd must not trigger an unscoped pasture read.")
@@ -320,6 +322,7 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
         XCTAssertTrue(model.load(using: repository))
         XCTAssertTrue(model.hasCurrentHerdData)
         XCTAssertNil(model.errorMessage)
+        XCTAssertNil(model.pastureLoadErrorMessage)
     }
 }
 
