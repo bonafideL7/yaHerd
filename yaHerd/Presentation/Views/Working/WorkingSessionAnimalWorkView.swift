@@ -119,7 +119,13 @@ struct WorkingSessionAnimalWorkView: View {
 
     var body: some View {
         Group {
-            if !isPresentingCurrentHerd {
+            if editorHerdIdentity != nil && !isPresentingCurrentHerd {
+                ContentUnavailableView(
+                    "Animal Work Unavailable",
+                    systemImage: "arrow.left.arrow.right",
+                    description: Text("The selected Herd changed. Reopen the animal work editor to continue.")
+                )
+            } else if !isPresentingCurrentHerd {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let snapshot {
@@ -135,12 +141,12 @@ struct WorkingSessionAnimalWorkView: View {
                 )
             }
         }
-        .navigationTitle(navigationTitle)
+        .navigationTitle(isPresentingCurrentHerd ? navigationTitle : "Animal Work")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(isMutatingWork)
-        .interactiveDismissDisabled(isMutatingWork)
+        .navigationBarBackButtonHidden(isMutatingWork && isPresentingCurrentHerd)
+        .interactiveDismissDisabled(isMutatingWork && isPresentingCurrentHerd)
         .toolbar {
-            if snapshot != nil && !isSessionLocked {
+            if isPresentingCurrentHerd, snapshot != nil && !isSessionLocked {
                 workToolbar
             }
         }
@@ -168,10 +174,14 @@ struct WorkingSessionAnimalWorkView: View {
             seedSessionSourcePastureReferenceIfNeeded()
         }
         .sheet(isPresented: $showingTagReplacement) {
-            tagReplacementSheet
+            if isPresentingCurrentHerd {
+                tagReplacementSheet
+            }
         }
         .sheet(isPresented: $showingSirePicker) {
-            sirePickerSheet
+            if isPresentingCurrentHerd {
+                sirePickerSheet
+            }
         }
         .alert("Save Session Vaccinations", isPresented: $showingSaveSessionVaccination) {
             TextField("Vaccination name", text: $sessionVaccinationName)
@@ -203,10 +213,40 @@ struct WorkingSessionAnimalWorkView: View {
             Text(errorMessage ?? viewModel.errorMessage ?? "Unknown error")
         }
         .onChange(of: viewModel.errorMessage) { _, newValue in
-            if newValue != nil {
+            if newValue != nil && isPresentingCurrentHerd {
                 showingError = true
             }
         }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            invalidateForHerdChange()
+        }
+    }
+
+    private func invalidateForHerdChange() {
+        guard editorHerdIdentity != nil, !isPresentingCurrentHerd else { return }
+        viewModel.invalidateForHerdChange()
+        treatmentEntries = []
+        availablePastures = []
+        pastureReferencesLoaded = false
+        selectedDestinationPastureID = nil
+        sourcePastureReference = nil
+        destinationSelectionRequiresReview = false
+        recordPregnancyCheck = false
+        pregnancyResult = .unknown
+        estimatedDaysText = ""
+        automaticallyCalculatedDueDate = nil
+        selectedSire = nil
+        castrationPerformed = false
+        observationNotes = ""
+        seededSnapshotID = nil
+        showingSirePicker = false
+        showingTagReplacement = false
+        showingDeleteConfirmation = false
+        showingSaveSessionVaccination = false
+        sessionVaccinationName = ""
+        savedVaccinationName = nil
+        errorMessage = nil
+        showingError = false
     }
 
     private var navigationTitle: String {
