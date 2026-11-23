@@ -100,8 +100,12 @@ final class FieldChecksViewModel {
         }
 
         do {
-            sessions = try repository.fetchSessions()
-            openFindings = try repository.fetchOpenFindings(limit: 0)
+            let refreshedSessions = try repository.fetchSessions()
+            let refreshedOpenFindings = try repository.fetchOpenFindings(limit: 0)
+            // Both reads must succeed before replacing the last coherent
+            // overview; partially imported related records can fail either.
+            sessions = refreshedSessions
+            openFindings = refreshedOpenFindings
             errorMessage = nil
             hasLoaded = true
             return true
