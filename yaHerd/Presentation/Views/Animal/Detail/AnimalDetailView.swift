@@ -71,7 +71,9 @@ struct AnimalDetailView: View {
 
     var body: some View {
         Group {
-            if !isViewingCurrentHerd {
+            if viewModel.viewingSelectionIdentity == nil && herdSelection.currentHerdID != nil {
+                ProgressView()
+            } else if !isViewingCurrentHerd {
                 ContentUnavailableView(
                     "Animal Unavailable",
                     systemImage: "arrow.left.arrow.right",
@@ -305,6 +307,10 @@ struct AnimalDetailView: View {
     }
 
     private func requestBack() {
+        guard isViewingCurrentHerd else {
+            closeDestination()
+            return
+        }
         if viewModel.isEditing && canSaveChanges {
             discardDestination = .back
             showingDiscardConfirmation = true
