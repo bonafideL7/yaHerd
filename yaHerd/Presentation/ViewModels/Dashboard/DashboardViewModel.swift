@@ -134,6 +134,17 @@ final class DashboardViewModel {
         }
     }
 
+    /// A retained Dashboard may be rendered before its selection-change
+    /// observer starts. Never present a snapshot from another Herd generation.
+    func presentationSnapshot(for selection: AppCurrentHerdSelection) -> DashboardSnapshot? {
+        guard let loadedHerdID,
+              loadedHerdID == selection.currentHerdID,
+              loadedSelectionRevision == selection.selectionRevision else {
+            return nil
+        }
+        return snapshot
+    }
+
     func pastures(filteredBy filter: DashboardPastureFilter) -> [DashboardPastureItem] {
         guard let snapshot else { return [] }
         return DashboardService().filterPastures(snapshot.pastures, filter: filter)
