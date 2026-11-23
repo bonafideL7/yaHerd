@@ -4,6 +4,51 @@ import XCTest
 
 @MainActor
 final class DashboardPastureSelectionHerdIsolationTests: XCTestCase {
+    func testDashboardSnapshotIsHiddenImmediatelyAfterHerdSelectionChanges() async {
+        let originalHerdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: originalHerdID)
+        let model = DashboardViewModel()
+        let reader = EmptyDashboardSelectionReader()
+
+        XCTAssertTrue(await model.load(
+            configuration: DashboardConfiguration(),
+            using: reader,
+            selection: selection
+        ))
+        XCTAssertNotNil(model.presentationSnapshot(for: selection))
+
+        selection.select(UUID())
+        XCTAssertNil(model.presentationSnapshot(for: selection),
+                     "Dashboard must not show the previous Herd while its new read has not started.")
+
+        selection.select(originalHerdID)
+        XCTAssertNil(model.presentationSnapshot(for: selection),
+                     "A Herd round trip must not revive the previous selection's chart data.")
+
+        XCTAssertTrue(await model.load(
+            configuration: DashboardConfiguration(),
+            using: reader,
+            selection: selection
+        ))
+        XCTAssertNotNil(model.presentationSnapshot(for: selection))
+    }
+
+    func testDashboardSnapshotIsHiddenWhenHerdAccessIsRemoved() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let model = DashboardViewModel()
+        let reader = EmptyDashboardSelectionReader()
+
+        XCTAssertTrue(await model.load(
+            configuration: DashboardConfiguration(),
+            using: reader,
+            selection: selection
+        ))
+        XCTAssertNotNil(model.presentationSnapshot(for: selection))
+
+        selection.select(nil)
+        XCTAssertNil(model.presentationSnapshot(for: selection))
+    }
+
     func testPastureChartSelectionDoesNotCarryIntoAnotherHerd() async {
         let selection = AppCurrentHerdSelection(currentHerdID: UUID())
         let model = DashboardViewModel()
