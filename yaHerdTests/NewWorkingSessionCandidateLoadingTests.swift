@@ -293,6 +293,83 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
         XCTAssertFalse(model.hasCurrentCandidates(pastureID: pastureID, selection: selection))
     }
 
+    func testChangingHerdClearsWorkingSetupAndCandidateData() async {
+        let pastureID = UUID()
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let animal = makeCandidate(tag: "A01", pastureID: pastureID)
+        let template = WorkingTreatmentTemplateSummary(
+            id: UUID(), name: "Herd A treatment", treatmentCount: 1
+        )
+        let model = NewWorkingSessionViewModel(
+            pastureRepository: WorkingSetupPastureReader(pastureID: pastureID),
+            animalReferenceQueryReader: WorkingSetupCandidateReader(
+                animalsByPasture: [pastureID: [animal]]
+            ),
+            workingRepository: WorkingSetupTemplateRepository(templates: [template])
+        )
+
+        model.load()
+        await model.loadEligibleAnimals(
+            pastureID: pastureID, currentHerdSelection: selection
+        )
+        XCTAssertTrue(model.hasLoadedSetupSuccessfully)
+        XCTAssertEqual(model.pastures.map(\.id), [pastureID])
+        XCTAssertEqual(model.templates.map(\.id), [template.id])
+        XCTAssertEqual(model.animals.map(\.id), [animal.id])
+
+        selection.select(UUID())
+        model.invalidateForHerdChange()
+
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertFalse(model.hasLoadedSetupSuccessfully)
+        XCTAssertTrue(model.pastures.isEmpty)
+        XCTAssertTrue(model.templates.isEmpty)
+        XCTAssertTrue(model.animals.isEmpty)
+        XCTAssertNil(model.loadedPastureID)
+        XCTAssertNil(model.setupLoadErrorMessage)
+        XCTAssertNil(model.candidateLoadErrorMessage)
+        XCTAssertNil(model.errorMessage)
+        XCTAssertFalse(model.isLoadingAnimals)
+
+        selection.select(herdID)
+        XCTAssertFalse(model.hasCurrentCandidates(pastureID: pastureID, selection: selection))
+    }
+
+    func testChangingHerdInvalidatesInFlightWorkingCandidateLoad() async {
+        let pastureID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let reader = WorkingSetupCandidateReader(
+            animalsByPasture: [pastureID: [makeCandidate(tag: "A01", pastureID: pastureID)]],
+            pausedPastureID: pastureID
+        )
+        let model = NewWorkingSessionViewModel(
+            pastureRepository: WorkingSetupPastureReader(pastureID: pastureID),
+            animalReferenceQueryReader: reader,
+            workingRepository: WorkingSetupTemplateRepository()
+        )
+        model.load()
+
+        let oldRead = Task {
+            await model.loadEligibleAnimals(
+                pastureID: pastureID, currentHerdSelection: selection
+            )
+        }
+        await reader.waitForPausedRequest()
+        selection.select(UUID())
+        model.invalidateForHerdChange()
+        await reader.resumePausedRequest()
+        await oldRead.value
+
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertTrue(model.pastures.isEmpty)
+        XCTAssertTrue(model.templates.isEmpty)
+        XCTAssertTrue(model.animals.isEmpty)
+        XCTAssertNil(model.loadedPastureID)
+        XCTAssertFalse(model.isLoadingAnimals)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testSessionStartDoesNotRunAfterSwitchingHerdsBeforeSubmission() async throws {
         let originatingHerdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: originatingHerdID)
@@ -604,12 +681,13 @@ private struct WorkingSetupPastureReader: PastureReferenceDataReader {
 private struct WorkingSetupTemplateRepository: NewWorkingSessionRepository {
     var failList = false
     var failDetail = false
+    var templates: [WorkingTreatmentTemplateSummary] = []
 
     func fetchTemplates() throws -> [WorkingTreatmentTemplateSummary] {
         if failList {
             throw WorkingSetupReadError.templatesUnavailable
         }
-        return []
+        return templates
     }
 
     func fetchTemplateDetail(id: UUID) throws -> WorkingTreatmentTemplateDetailSnapshot? {
