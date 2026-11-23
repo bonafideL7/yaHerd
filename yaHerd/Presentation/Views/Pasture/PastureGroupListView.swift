@@ -8,7 +8,24 @@ struct PastureGroupListView: View {
 
     var body: some View {
         Group {
-            if model.groups.isEmpty || !model.isLoadedForCurrentSelection(herdSelection) {
+            if model.hasInitialLoadFailure {
+                VStack(spacing: 12) {
+                    ContentUnavailableView(
+                        "Pasture Groups Unavailable",
+                        systemImage: "arrow.clockwise",
+                        description: Text(
+                            model.errorMessage ?? "Pasture groups could not be loaded."
+                        )
+                    )
+                    Button {
+                        model.load(using: repository, selection: herdSelection)
+                    } label: {
+                        Label("Retry Loading Groups", systemImage: "arrow.clockwise")
+                    }
+                }
+            } else if !model.isLoadedForCurrentSelection(herdSelection) {
+                ProgressView("Loading pasture groups…")
+            } else if model.groups.isEmpty {
                 ContentUnavailableView(
                     "No Pasture Groups",
                     systemImage: "rectangle.3.group",
@@ -49,6 +66,7 @@ struct PastureGroupListView: View {
                     Image(systemName: "plus")
                 }
                 .accessibilityLabel("Add Pasture Group")
+                .disabled(!model.isLoadedForCurrentSelection(herdSelection))
                 .disabledWhenDataReadOnly()
             }
         }
@@ -93,7 +111,7 @@ struct PastureGroupListView: View {
 
     private var errorBinding: Binding<Bool> {
         Binding(
-            get: { model.errorMessage != nil },
+            get: { model.errorMessage != nil && !model.hasInitialLoadFailure },
             set: { newValue in
                 if !newValue {
                     model.clearError()
