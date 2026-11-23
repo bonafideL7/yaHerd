@@ -344,4 +344,57 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
         XCTAssertEqual(defaults.string(forKey: "selected"), herdID.uuidString)
         XCTAssertEqual(defaults.string(forKey: "selected.storeCategory"), "owned")
     }
+
+    func testLegacyRememberedOwnedHerdDoesNotAutomaticallySelectSharedReplacement() throws {
+        let suite = "stage3-legacy-store-(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let herdID = UUID()
+        defaults.set(herdID.uuidString, forKey: "selected")
+        let shared = AccessibleHerd(summary: herd(herdID).summary, category: .shared)
+        let selection = AppCurrentHerdSelection(
+            defaults: defaults, preferenceKey: "selected"
+        )
+
+        // Older local-only selections had no store-category preference.
+        // Reusing their UUID must not silently adopt a participant Herd.
+        selection.restoreAccessibleHerd(from: [shared])
+
+        XCTAssertNil(selection.currentHerdID)
+        XCTAssertEqual(defaults.string(forKey: "selected"), herdID.uuidString)
+        XCTAssertNil(defaults.string(forKey: "selected.storeCategory"))
+
+        // The user can still deliberately open the now-shared root.
+        try selection.selectAccessibleHerd(herdID, from: [shared])
+        XCTAssertEqual(selection.currentHerdID, herdID)
+        XCTAssertEqual(defaults.string(forKey: "selected.storeCategory"), "shared")
+
+        let reopened = AppCurrentHerdSelection(
+            defaults: defaults, preferenceKey: "selected"
+        )
+        reopened.restoreAccessibleHerd(from: [shared])
+        XCTAssertEqual(reopened.currentHerdID, herdID)
+    }
+
+    func testLegacyActiveOwnedHerdIsInvalidatedIfOnlySharedRootMatches() throws {
+        let suite = "stage3-legacy-active-store-(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let herdID = UUID()
+        defaults.set(herdID.uuidString, forKey: "selected")
+        let selection = AppCurrentHerdSelection(
+            currentHerdID: herdID, defaults: defaults, preferenceKey: "selected"
+        )
+        let revision = selection.selectionRevision
+        let shared = AccessibleHerd(summary: herd(herdID).summary, category: .shared)
+
+        selection.revalidateActiveHerd(from: [shared])
+
+        XCTAssertNil(selection.currentHerdID)
+        XCTAssertEqual(selection.selectionRevision, revision + 1)
+        XCTAssertEqual(defaults.string(forKey: "selected"), herdID.uuidString)
+        XCTAssertNil(defaults.string(forKey: "selected.storeCategory"))
+    }
 }
