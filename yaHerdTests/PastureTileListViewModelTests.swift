@@ -691,6 +691,33 @@ final class PastureTileListViewModelTests: XCTestCase {
         XCTAssertEqual(model.items, [second, first])
     }
 
+    func testLateObsoletePastureObserverCannotAdoptNewHerdSelection() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let model = PastureTileListViewModel()
+        model.configure(selection: selection)
+
+        // The old task was scheduled for Herd A but starts after B becomes active.
+        selection.select(UUID())
+        let reader = PastureListReaderStub(
+            result: .success([PastureTestSupport.makeSummary(name: "New Herd")])
+        )
+        let observer = Task {
+            await model.observe(
+                using: reader,
+                mutationStream: ApplicationMutationCenter()
+            )
+        }
+        for _ in 0..<100 {
+            await Task.yield()
+        }
+
+        XCTAssertTrue(model.items.isEmpty)
+        XCTAssertFalse(model.hasLoaded, "An obsolete observer cannot initiate the new Herd's load.")
+
+        observer.cancel()
+        await observer.value
+    }
+
     func testCurrentPastureMutationObserverRefreshesActiveHerd() async {
         let initial = PastureTestSupport.makeSummary(name: "Initial")
         let updated = PastureTestSupport.makeSummary(name: "Updated")
