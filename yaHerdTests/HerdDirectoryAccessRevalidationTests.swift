@@ -671,6 +671,10 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
             }
             XCTAssertEqual(directory.selectedHerdID, activeID)
             XCTAssertEqual(selection.selectionRevision, originalRevision)
+
+            // The replacement remains discoverable for an explicit new
+            // opening; only the stale readiness result is discarded.
+            directory.refresh(reportErrors: false)
             XCTAssertEqual(directory.herds.first { $0.id == candidateID }?.name, "Replacement")
         }
     }
