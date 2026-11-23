@@ -259,6 +259,105 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         XCTAssertNil(directory.selectedHerdID)
     }
 
+    func testCreateOwnedHerdRejectsIncompletePrivateRootWithoutChangingExistingData() async throws {
+        for missingField in ["id", "name", "createdAt", "updatedAt"] {
+            let harness = try CoreDataPersistenceHarness()
+            let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+                storeURL: harness.storeURL, mirroringEnabled: false
+            )
+            let existingID = UUID()
+            let originalDate = Date(timeIntervalSince1970: 100)
+            let context = try assembly.contextFactory.makeWriteContext()
+            try context.performAndWait {
+                let privateStore = try XCTUnwrap(context.persistentStoreCoordinator?.persistentStores.first {
+                    $0.url?.lastPathComponent == CoreDataPersistentContainer.storeFileName
+                })
+                let importing = CDHerd(context: context)
+                importing.id = missingField == "id" ? nil : existingID
+                importing.name = missingField == "name" ? nil : "Importing"
+                importing.createdAt = missingField == "createdAt" ? nil : originalDate
+                importing.updatedAt = missingField == "updatedAt" ? nil : originalDate
+                context.assign(importing, to: privateStore)
+                try context.save()
+            }
+
+            let repository = CoreDataHerdRepository(
+                selection: AppCurrentHerdSelection(), assembly: assembly
+            )
+            do {
+                _ = try await repository.createOwnedHerd(named: "Accidental Duplicate")
+                XCTFail("Incomplete private root (\(missingField)) must prevent creation")
+            } catch {
+                XCTAssertEqual(
+                    error as? HerdRepositoryError, .incompleteOwnedHerdImport,
+                    "Missing field: \(missingField)"
+                )
+            }
+
+            let read = assembly.contextFactory.makeReadContext()
+            try read.performAndWait {
+                let privateStore = try XCTUnwrap(read.persistentStoreCoordinator?.persistentStores.first {
+                    $0.url?.lastPathComponent == CoreDataPersistentContainer.storeFileName
+                })
+                let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+                request.affectedStores = [privateStore]
+                let roots = try read.fetch(request)
+                XCTAssertEqual(roots.count, 1)
+                let original = try XCTUnwrap(roots.first)
+                XCTAssertEqual(original.id, missingField == "id" ? nil : existingID)
+                XCTAssertEqual(original.name, missingField == "name" ? nil : "Importing")
+                XCTAssertEqual(original.createdAt, missingField == "createdAt" ? nil : originalDate)
+                XCTAssertEqual(original.updatedAt, missingField == "updatedAt" ? nil : originalDate)
+            }
+        }
+    }
+
+    func testIncompleteSharedRootDoesNotBlockDeliberatePrivateHerdCreation() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let sharedID = UUID()
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let sharedStore = try XCTUnwrap(context.persistentStoreCoordinator?.persistentStores.first {
+                $0.url?.lastPathComponent == CoreDataPersistentContainer.sharedStoreFileName
+            })
+            let importing = CDHerd(context: context)
+            importing.id = sharedID
+            importing.name = nil
+            importing.createdAt = nil
+            importing.updatedAt = nil
+            context.assign(importing, to: sharedStore)
+            try context.save()
+        }
+
+        let repository = CoreDataHerdRepository(
+            selection: AppCurrentHerdSelection(), assembly: assembly
+        )
+        let created = try await repository.createOwnedHerd(named: "My Offline Herd")
+        XCTAssertEqual(created.name, "My Offline Herd")
+
+        let read = assembly.contextFactory.makeReadContext()
+        try read.performAndWait {
+            let stores = try XCTUnwrap(read.persistentStoreCoordinator?.persistentStores)
+            let privateStore = try XCTUnwrap(stores.first {
+                $0.url?.lastPathComponent == CoreDataPersistentContainer.storeFileName
+            })
+            let sharedStore = try XCTUnwrap(stores.first {
+                $0.url?.lastPathComponent == CoreDataPersistentContainer.sharedStoreFileName
+            })
+            let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            request.affectedStores = [privateStore]
+            XCTAssertEqual(try read.fetch(request).map(\.id), [created.id])
+            request.affectedStores = [sharedStore]
+            let sharedRoots = try read.fetch(request)
+            XCTAssertEqual(sharedRoots.count, 1)
+            XCTAssertEqual(sharedRoots.first?.id, sharedID)
+            XCTAssertNil(sharedRoots.first?.name)
+        }
+    }
+
     func testDeferredSampleSeedDoesNotWriteToNewlySelectedHerd() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let repository = CoreDataHerdRepository(
