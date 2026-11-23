@@ -289,11 +289,13 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
 
             let selectedID = UUID()
             let selection = AppCurrentHerdSelection(defaults: defaults, preferenceKey: "selected")
-            selection.select(selectedID)
             let original = AccessibleHerd(
                 summary: herd(selectedID).summary,
                 category: originalCategory
             )
+            // A shared Herd is only a valid active selection after explicit
+            // store-qualified selection; a legacy UUID alone represents owned.
+            try selection.selectAccessibleHerd(selectedID, from: [original])
             let repository = StubHerdRepository(available: [original])
             let directory = HerdDirectoryController(repository: repository, selection: selection)
 
