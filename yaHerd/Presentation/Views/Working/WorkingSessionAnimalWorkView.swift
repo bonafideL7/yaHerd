@@ -234,6 +234,7 @@ struct WorkingSessionAnimalWorkView: View {
         recordPregnancyCheck = false
         pregnancyResult = .unknown
         estimatedDaysText = ""
+        dueDate = .now
         automaticallyCalculatedDueDate = nil
         selectedSire = nil
         castrationPerformed = false
