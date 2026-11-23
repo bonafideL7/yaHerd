@@ -321,6 +321,51 @@ final class HerdDirectoryAccessRevalidationTests: XCTestCase {
         }
     }
 
+    func testRefreshInvalidatesSameStoreReplacementBeforeOpeningItsRecords() async throws {
+        for category: AccessibleHerd.Category in [.owned, .shared] {
+            let suite = "stage3-root-replacement-\(UUID())"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+
+            let selectedID = UUID()
+            let original = AccessibleHerd(
+                summary: herd(selectedID).summary,
+                category: category
+            )
+            let selection = AppCurrentHerdSelection(defaults: defaults, preferenceKey: "selected")
+            try selection.selectAccessibleHerd(selectedID, from: [original])
+            let repository = StubHerdRepository(available: [original])
+            let directory = HerdDirectoryController(repository: repository, selection: selection)
+            directory.refresh()
+            let originalRevision = selection.selectionRevision
+
+            // A revoked or replaced root can reuse an application UUID and
+            // store category, but it is not the previously opened Herd.
+            let replacement = AccessibleHerd(
+                summary: HerdSummary(
+                    publicID: selectedID,
+                    name: "Replacement Herd",
+                    createdAt: original.summary.createdAt.addingTimeInterval(60),
+                    updatedAt: original.summary.updatedAt.addingTimeInterval(60)
+                ),
+                category: category
+            )
+            repository.available = [replacement]
+
+            directory.refresh(reportErrors: false)
+
+            XCTAssertNil(directory.selectedHerdID)
+            XCTAssertEqual(selection.selectionRevision, originalRevision + 1)
+            XCTAssertEqual(defaults.string(forKey: "selected"), selectedID.uuidString)
+            XCTAssertEqual(directory.herds, [replacement])
+
+            // The replacement remains discoverable, but may only become
+            // active after a fresh explicit readiness-checked opening.
+            try await directory.selectHerdWhenReady(id: selectedID)
+            XCTAssertEqual(directory.selectedHerdID, selectedID)
+        }
+    }
+
     func testRefreshPreservesSelectedHerdAfterSameStoreRename() {
         let selectedID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: selectedID)
