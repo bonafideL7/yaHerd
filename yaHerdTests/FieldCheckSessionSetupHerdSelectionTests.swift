@@ -229,6 +229,73 @@ final class FieldCheckSessionSetupHerdSelectionTests: XCTestCase {
         XCTAssertEqual(repository.fetchCount, 2)
     }
 
+    func testFailedPastureReadIsNotMistakenForAnEmptyHerdAndCanRetry() {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let expectedPasture = PastureOption(id: UUID(), name: "North")
+        let repository = HerdScopedSetupPastureProbe(
+            selection: selection,
+            pasturesByHerd: [herdID: [expectedPasture]]
+        )
+        let model = FieldCheckSessionSetupViewModel()
+        model.configure(selection: selection)
+
+        repository.shouldFail = true
+        XCTAssertFalse(model.load(using: repository))
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertFalse(model.hasCurrentHerdData)
+        XCTAssertTrue(model.pastures.isEmpty)
+        XCTAssertNotNil(model.pastureLoadErrorMessage)
+
+        repository.shouldFail = false
+        XCTAssertTrue(model.load(using: repository))
+        XCTAssertTrue(model.hasLoaded)
+        XCTAssertTrue(model.hasCurrentHerdData)
+        XCTAssertEqual(model.pastures, [expectedPasture])
+        XCTAssertNil(model.pastureLoadErrorMessage)
+        XCTAssertEqual(repository.fetchCount, 2)
+    }
+
+    func testFailedRefreshHidesPreviouslyLoadedPasturesUntilSuccessfulRetry() {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let priorPasture = PastureOption(id: UUID(), name: "Old")
+        let replacementPasture = PastureOption(id: UUID(), name: "New")
+        let repository = HerdScopedSetupPastureProbe(
+            selection: selection,
+            pasturesByHerd: [herdID: [priorPasture]]
+        )
+        let model = FieldCheckSessionSetupViewModel()
+        model.configure(selection: selection)
+        XCTAssertTrue(model.load(using: repository))
+        XCTAssertEqual(model.pastures, [priorPasture])
+
+        repository.shouldFail = true
+        repository.pasturesByHerd[herdID] = [replacementPasture]
+        XCTAssertFalse(model.load(using: repository))
+        XCTAssertFalse(model.hasCurrentHerdData)
+        XCTAssertTrue(model.pastures.isEmpty)
+        XCTAssertNotNil(model.pastureLoadErrorMessage)
+
+        repository.shouldFail = false
+        XCTAssertTrue(model.load(using: repository))
+        XCTAssertEqual(model.pastures, [replacementPasture])
+        XCTAssertNil(model.pastureLoadErrorMessage)
+    }
+
+    func testSuccessfulEmptyPastureReadRemainsDistinctFromFailedImport() {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let repository = HerdScopedSetupPastureProbe(selection: selection)
+        let model = FieldCheckSessionSetupViewModel()
+        model.configure(selection: selection)
+
+        XCTAssertTrue(model.load(using: repository))
+        XCTAssertTrue(model.hasLoaded)
+        XCTAssertTrue(model.hasCurrentHerdData)
+        XCTAssertTrue(model.pastures.isEmpty)
+        XCTAssertNil(model.pastureLoadErrorMessage)
+    }
+
     func testPastureSetupRequiresAccessibleSelectionAndClearsOldError() {
         let herdID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: herdID)
