@@ -290,6 +290,38 @@ final class PastureGroupAssignmentHerdIsolationTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testPreviouslyLoadedRowCannotAssignAfterSuccessfulRefresh() throws {
+        let (model, oldRow, repository, selection) = makeFixture()
+        let herdID = try XCTUnwrap(selection.currentHerdID)
+        let revision = selection.selectionRevision
+        model.load(
+            groupID: oldRow.groupID, using: repository,
+            expectedHerdID: herdID,
+            expectedSelectionRevision: revision,
+            selection: selection
+        )
+
+        let currentPasture = PastureTestSupport.makeSummary(name: "South")
+        repository.pastures = [currentPasture]
+        model.load(
+            groupID: oldRow.groupID, using: repository,
+            expectedHerdID: herdID,
+            expectedSelectionRevision: revision,
+            selection: selection
+        )
+
+        XCTAssertEqual(model.assignmentRows.map(\.id), [currentPasture.id])
+        model.toggleAssignment(
+            oldRow, using: repository,
+            expectedHerdID: herdID,
+            expectedSelectionRevision: revision,
+            selection: selection
+        )
+
+        XCTAssertTrue(repository.validatedPastureIDs.isEmpty)
+        XCTAssertTrue(repository.assignments.isEmpty)
+    }
+
     func testFailedGroupRefreshClearsPreviouslyLoadedAssignmentRows() throws {
         let (model, row, repository, selection) = makeFixture()
         let herdID = try XCTUnwrap(selection.currentHerdID)
