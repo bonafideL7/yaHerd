@@ -146,16 +146,19 @@ final class WorkingSessionCompletionUseCaseTests: XCTestCase {
 
     func testFinishViewModelInvalidatesPreviouslyLoadedDestinationsOnFailedRefresh() {
         let sessionID = UUID()
+        let pasture = PastureOption(id: UUID(), name: "Return Pasture")
         let repository = WorkingSessionCompletionRepositorySpy(
             session: makeSession(id: sessionID, queueItemIDs: [UUID()])
         )
         let model = WorkingFinishSessionViewModel(
             sessionID: sessionID,
             workingRepository: repository,
-            pastureRepository: EmptyPastureRepository()
+            pastureRepository: FlakyPastureReferenceDataReader(options: [pasture])
         )
         model.load()
+        model.retryPastureOptions()
         XCTAssertEqual(model.sessionLoadState, .ready)
+        XCTAssertEqual(model.pastures, [pasture])
         XCTAssertTrue(model.hasLoadedPastureOptions)
 
         repository.shouldFailSessionRead = true
