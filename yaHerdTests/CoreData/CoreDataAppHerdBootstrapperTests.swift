@@ -1372,6 +1372,53 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     // production Core Data model. Existing permanent repository contracts own
     // the individual field mutation and rollback semantics.
     @MainActor
+    func testSampleActionsRejectSelectionRoundTripBeforeWriting() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        try await seedExplicitLocalHerd(at: harness.storeURL)
+        let app = try await CoreDataAppPersistenceAssembly.load(
+            at: harness.storeURL,
+            selectionPreferences: testSelectionPreferences
+        )
+        let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
+        let selection = app.currentHerdSelection
+        let herdID = try XCTUnwrap(selection.currentHerdID)
+        let staleRevision = selection.selectionRevision
+        let seeder = try XCTUnwrap(dependencies.animalFeatureDependencies.sampleDataSeeder)
+
+        selection.select(UUID())
+        selection.select(herdID)
+        XCTAssertNotEqual(selection.selectionRevision, staleRevision)
+
+        for isLarge in [false, true] {
+            do {
+                if isLarge {
+                    _ = try await seeder.seedLargeSampleDataIfNeeded(
+                        for: herdID, selectionRevision: staleRevision
+                    )
+                } else {
+                    _ = try await seeder.seedSampleDataIfNeeded(
+                        for: herdID, selectionRevision: staleRevision
+                    )
+                }
+                XCTFail("A seed request from a previous selection must not write after A-B-A")
+            } catch {
+                XCTAssertEqual(error as? HerdRepositoryError, .missingHerd)
+            }
+        }
+
+        XCTAssertTrue(try seeder.canSeedSampleData())
+        XCTAssertTrue(try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().isEmpty)
+        XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, 0)
+
+        let inserted = try await seeder.seedSampleDataIfNeeded(
+            for: herdID, selectionRevision: selection.selectionRevision
+        )
+        XCTAssertTrue(inserted)
+        XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, 1)
+        XCTAssertEqual(try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().count, 18)
+    }
+
+    @MainActor
     func testAnimalListSampleActionsCreateCompleteCoreDataGraphs() async throws {
         let entityNames = [
             "Herd", "TagColorDefinition", "AnimalStatusReference", "PastureGroup",
