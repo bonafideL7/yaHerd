@@ -76,45 +76,70 @@ struct WorkingSessionsView: View {
                 )
             }
 
-            if displayedActiveSessions.isEmpty && displayedFinishedSessions.isEmpty {
+            if herdSelection.currentHerdID == nil {
+                ContentUnavailableView(
+                    "Select a Herd",
+                    systemImage: "square.stack.3d.up",
+                    description: Text("Choose a Herd to see its working sessions.")
+                )
+            } else if let readError = viewModel.errorMessage,
+                      viewModel.isCurrentHerdSelection {
+                ContentUnavailableView(
+                    "Working Sessions Unavailable",
+                    systemImage: "arrow.clockwise",
+                    description: Text(readError)
+                )
+                Button {
+                    guard viewModel.isCurrentHerdSelection else { return }
+                    _ = viewModel.load()
+                } label: {
+                    Label("Retry Loading Sessions", systemImage: "arrow.clockwise")
+                }
+            } else if !viewModel.hasLoaded || !viewModel.isCurrentHerdSelection {
+                HStack {
+                    ProgressView()
+                    Text("Loading working sessions…")
+                        .foregroundStyle(.secondary)
+                }
+            } else if displayedActiveSessions.isEmpty && displayedFinishedSessions.isEmpty {
                 ContentUnavailableView(
                     "No working sessions",
                     systemImage: "wrench",
                     description: Text("Create a session to collect animals into the working pen.")
                 )
-            }
-
-            if !displayedActiveSessions.isEmpty {
-                Section("Active") {
-                    ForEach(displayedActiveSessions) { session in
-                        workingSessionNavigationRow(session)
+            } else {
+                if !displayedActiveSessions.isEmpty {
+                    Section("Active") {
+                        ForEach(displayedActiveSessions) { session in
+                            workingSessionNavigationRow(session)
+                        }
+                        .onDelete { offsets in
+                            requestDelete(
+                                from: displayedActiveSessions,
+                                offsets: offsets,
+                                originatingHerdID: originatingHerdID,
+                                originatingSelectionRevision: originatingSelectionRevision
+                            )
+                        }
+                        .deleteDisabled(dataAccessMode.isRecoveryMode || isDeletingSession)
                     }
-                    .onDelete { offsets in
-                        requestDelete(
-                            from: displayedActiveSessions,
-                            offsets: offsets,
-                            originatingHerdID: originatingHerdID,
-                            originatingSelectionRevision: originatingSelectionRevision
-                        )
-                    }
-                    .deleteDisabled(dataAccessMode.isRecoveryMode || isDeletingSession)
                 }
-            }
 
-            if !displayedFinishedSessions.isEmpty {
-                Section("History") {
-                    ForEach(displayedFinishedSessions) { session in
-                        workingSessionNavigationRow(session)
+                if !displayedFinishedSessions.isEmpty {
+                    Section("History") {
+                        ForEach(displayedFinishedSessions) { session in
+                            workingSessionNavigationRow(session)
+                        }
+                        .onDelete { offsets in
+                            requestDelete(
+                                from: displayedFinishedSessions,
+                                offsets: offsets,
+                                originatingHerdID: originatingHerdID,
+                                originatingSelectionRevision: originatingSelectionRevision
+                            )
+                        }
+                        .deleteDisabled(dataAccessMode.isRecoveryMode || isDeletingSession)
                     }
-                    .onDelete { offsets in
-                        requestDelete(
-                            from: displayedFinishedSessions,
-                            offsets: offsets,
-                            originatingHerdID: originatingHerdID,
-                            originatingSelectionRevision: originatingSelectionRevision
-                        )
-                    }
-                    .deleteDisabled(dataAccessMode.isRecoveryMode || isDeletingSession)
                 }
             }
         }
@@ -125,6 +150,8 @@ struct WorkingSessionsView: View {
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     guard viewModel.isCurrentHerdSelection,
+                          viewModel.hasLoaded,
+                          viewModel.errorMessage == nil,
                           herdSelection.currentHerdID != nil else { return }
                     onStartSessionSetup()
                 } label: {
@@ -134,6 +161,8 @@ struct WorkingSessionsView: View {
                     !dataAccessMode.allowsDataMutations
                     || isDeletingSession
                     || !viewModel.isCurrentHerdSelection
+                    || !viewModel.hasLoaded
+                    || viewModel.errorMessage != nil
                 )
             }
         }
@@ -164,10 +193,7 @@ struct WorkingSessionsView: View {
         .alert("Can’t Save", isPresented: $showingError) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(errorMessage ?? viewModel.errorMessage ?? "")
-        }
-        .onChange(of: viewModel.errorMessage) { _, newValue in
-            if newValue != nil { showingError = true }
+            Text(errorMessage ?? "")
         }
         .onChange(of: herdSelection.selectionRevision) { _, _ in
             // Discard both the old list and any pending confirmation immediately.
