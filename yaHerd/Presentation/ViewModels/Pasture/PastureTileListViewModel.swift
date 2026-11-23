@@ -49,6 +49,14 @@ final class PastureTileListViewModel {
         mutationStream: any ApplicationMutationStreaming
     ) async {
         refreshHerdSelection()
+        let originatingHerdID = selectedHerdID
+        let originatingSelectionRevision = selectedSelectionRevision
+        guard !Task.isCancelled,
+              isCurrentObserver(
+                herdID: originatingHerdID,
+                selectionRevision: originatingSelectionRevision
+              ) else { return }
+
         let startingRevision = mutationStream.pastureRevision
         if !hasLoaded || lastLoadedRevision < startingRevision {
             if load(using: repository) {
@@ -60,11 +68,27 @@ final class PastureTileListViewModel {
             for: .pastures,
             after: lastLoadedRevision
         ) {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled,
+                  isCurrentObserver(
+                    herdID: originatingHerdID,
+                    selectionRevision: originatingSelectionRevision
+                  ) else { return }
             if load(using: repository) {
                 lastLoadedRevision = revision
             }
         }
+    }
+
+    private func isCurrentObserver(
+        herdID: UUID?,
+        selectionRevision: UInt64
+    ) -> Bool {
+        !hasConfiguredHerdSelection || (
+            herdID != nil
+            && selectedHerdID == herdID
+            && selectedSelectionRevision == selectionRevision
+            && isCurrentHerdSelection
+        )
     }
 
     @discardableResult
