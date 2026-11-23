@@ -1407,7 +1407,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         }
 
         XCTAssertTrue(try seeder.canSeedSampleData())
-        XCTAssertTrue(try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().isEmpty)
+        XCTAssertTrue(
+            try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().isEmpty
+        )
         XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, 0)
 
         let inserted = try await seeder.seedSampleDataIfNeeded(
@@ -1415,7 +1417,10 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         )
         XCTAssertTrue(inserted)
         XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, 1)
-        XCTAssertEqual(try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().count, 18)
+        XCTAssertEqual(
+            try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().count,
+            18
+        )
     }
 
     @MainActor
@@ -1449,9 +1454,15 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             XCTAssertTrue(try seeder.canSeedSampleData())
             let inserted: Bool
             if isLarge {
-                inserted = try await seeder.seedLargeSampleDataIfNeeded(for: originalHerdID, selectionRevision: app.currentHerdSelection.selectionRevision)
+                inserted = try await seeder.seedLargeSampleDataIfNeeded(
+                    for: originalHerdID,
+                    selectionRevision: app.currentHerdSelection.selectionRevision
+                )
             } else {
-                inserted = try await seeder.seedSampleDataIfNeeded(for: originalHerdID, selectionRevision: app.currentHerdSelection.selectionRevision)
+                inserted = try await seeder.seedSampleDataIfNeeded(
+                    for: originalHerdID,
+                    selectionRevision: app.currentHerdSelection.selectionRevision
+                )
             }
             XCTAssertTrue(inserted)
             XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, 1)
@@ -1494,7 +1505,10 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
                 .overviewReader.fetchOpenFindings(limit: 100)
             XCTAssertFalse(openFindings.isEmpty)
 
-            let repeated = try await seeder.seedLargeSampleDataIfNeeded(for: originalHerdID, selectionRevision: app.currentHerdSelection.selectionRevision)
+            let repeated = try await seeder.seedLargeSampleDataIfNeeded(
+                    for: originalHerdID,
+                    selectionRevision: app.currentHerdSelection.selectionRevision
+                )
             XCTAssertFalse(repeated)
             XCTAssertFalse(try seeder.canSeedSampleData())
             XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, 1)
@@ -1539,7 +1553,10 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
                 return XCTFail("Read-only app graph should still supply a guarded seed action")
             }
             do {
-                _ = try await readOnlySeeder.seedSampleDataIfNeeded(for: originalHerdID, selectionRevision: reopened.currentHerdSelection.selectionRevision)
+                _ = try await readOnlySeeder.seedSampleDataIfNeeded(
+                    for: originalHerdID,
+                    selectionRevision: reopened.currentHerdSelection.selectionRevision
+                )
                 XCTFail("Read-only recovery must not permit sample writes")
             } catch {
                 XCTAssertTrue(error is LocalDataWritePolicy.WriteError)
@@ -1587,8 +1604,14 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         )
         let groupOnlySequence = dependencies.applicationMutationCenter.currentSequence
         XCTAssertFalse(try seeder.canSeedSampleData())
-        let insertedCompact = try await seeder.seedSampleDataIfNeeded(for: herdID, selectionRevision: app.currentHerdSelection.selectionRevision)
-        let insertedLarge = try await seeder.seedLargeSampleDataIfNeeded(for: herdID, selectionRevision: app.currentHerdSelection.selectionRevision)
+        let insertedCompact = try await seeder.seedSampleDataIfNeeded(
+                    for: herdID,
+                    selectionRevision: app.currentHerdSelection.selectionRevision
+                )
+        let insertedLarge = try await seeder.seedLargeSampleDataIfNeeded(
+                    for: herdID,
+                    selectionRevision: app.currentHerdSelection.selectionRevision
+                )
         XCTAssertFalse(insertedCompact)
         XCTAssertFalse(insertedLarge)
         XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, groupOnlySequence)
@@ -1623,7 +1646,10 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             dependencies.applicationMutationCenter.animalRevision, groupCreatedRevision
         )
         XCTAssertFalse(try seeder.canSeedSampleData())
-        let repeatedLarge = try await seeder.seedLargeSampleDataIfNeeded(for: herdID, selectionRevision: app.currentHerdSelection.selectionRevision)
+        let repeatedLarge = try await seeder.seedLargeSampleDataIfNeeded(
+                    for: herdID,
+                    selectionRevision: app.currentHerdSelection.selectionRevision
+                )
         XCTAssertFalse(repeatedLarge)
         XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, originalSequence)
         XCTAssertEqual(
