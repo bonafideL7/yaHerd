@@ -60,6 +60,39 @@ final class FieldCheckOverviewHerdIsolationTests: XCTestCase {
         XCTAssertEqual(model.sessions.map(\.id), [replacementSession.id])
     }
 
+    func testFailedOpenFindingsImportPreservesCompleteOverviewUntilRetry() {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let originalSession = makeSession()
+        let importedSession = makeSession()
+        let repository = HerdScopedFieldCheckOverviewProbe(
+            selection: selection, sessionsByHerd: [herdID: [originalSession]]
+        )
+        let model = FieldChecksViewModel()
+        model.configure(selection: selection)
+
+        XCTAssertTrue(model.load(using: repository))
+        XCTAssertEqual(model.sessions.map(\\.id), [originalSession.id])
+        XCTAssertTrue(model.hasLoaded)
+
+        // A partially imported Field Check graph can make the second read
+        // fail even after fresh sessions were fetched. Publishing either half
+        // would mix two generations of the overview on the active Herd.
+        repository.sessionsByHerd[herdID] = [importedSession]
+        repository.shouldFailFindings = true
+
+        XCTAssertFalse(model.load(using: repository))
+        XCTAssertEqual(model.sessions.map(\\.id), [originalSession.id])
+        XCTAssertTrue(model.openFindings.isEmpty)
+        XCTAssertTrue(model.hasLoaded)
+        XCTAssertNotNil(model.errorMessage)
+
+        repository.shouldFailFindings = false
+        XCTAssertTrue(model.load(using: repository))
+        XCTAssertEqual(model.sessions.map(\\.id), [importedSession.id])
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testSwitchClearsPreviousHerdLoadError() {
         let selection = AppCurrentHerdSelection(currentHerdID: UUID())
         let repository = HerdScopedFieldCheckOverviewProbe(selection: selection)
@@ -135,6 +168,7 @@ private final class HerdScopedFieldCheckOverviewProbe: FieldCheckOverviewReading
     let selection: AppCurrentHerdSelection
     var sessionsByHerd: [UUID: [FieldCheckSessionSummary]]
     var shouldFail = false
+    var shouldFailFindings = false
     private(set) var fetchCount = 0
 
     init(
@@ -153,7 +187,7 @@ private final class HerdScopedFieldCheckOverviewProbe: FieldCheckOverviewReading
     }
 
     func fetchOpenFindings(limit: Int) throws -> [FieldCheckFindingSnapshot] {
-        if shouldFail { throw ProbeError.failed }
+        if shouldFail || shouldFailFindings { throw ProbeError.failed }
         return []
     }
 
