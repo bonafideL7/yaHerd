@@ -206,6 +206,75 @@ final class PastureGroupListHerdIsolationTests: XCTestCase {
         XCTAssertFalse(model.isLoadedForCurrentSelection(selection))
     }
 
+    func testInitialReadFailureIsNotAnEmptyHerdAndCanRecoverOnRetry() {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let group = makeGroup()
+        let repository = GroupListDeletionProbe(groups: [group])
+        repository.failReads = true
+        let model = PastureGroupListViewModel()
+
+        model.load(using: repository, selection: selection)
+
+        XCTAssertTrue(model.hasInitialLoadFailure)
+        XCTAssertFalse(model.isLoadedForCurrentSelection(selection))
+        XCTAssertTrue(model.groups.isEmpty)
+        XCTAssertNotNil(model.errorMessage)
+
+        repository.failReads = false
+        model.load(using: repository, selection: selection)
+
+        XCTAssertFalse(model.hasInitialLoadFailure)
+        XCTAssertTrue(model.isLoadedForCurrentSelection(selection))
+        XCTAssertEqual(model.groups, [group])
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testDismissingInitialReadErrorDoesNotMisreportEmptyGroups() {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let repository = GroupListDeletionProbe(groups: [makeGroup()])
+        repository.failReads = true
+        let model = PastureGroupListViewModel()
+
+        model.load(using: repository, selection: selection)
+        model.clearError()
+
+        XCTAssertTrue(model.hasInitialLoadFailure)
+        XCTAssertFalse(model.isLoadedForCurrentSelection(selection))
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testReadFailureAfterSuccessfulLoadKeepsCurrentHerdRows() {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let group = makeGroup()
+        let repository = GroupListDeletionProbe(groups: [group])
+        let model = PastureGroupListViewModel()
+        model.load(using: repository, selection: selection)
+        repository.failReads = true
+
+        model.load(using: repository, selection: selection)
+
+        XCTAssertFalse(model.hasInitialLoadFailure)
+        XCTAssertTrue(model.isLoadedForCurrentSelection(selection))
+        XCTAssertEqual(model.groups, [group])
+        XCTAssertNotNil(model.errorMessage)
+    }
+
+    func testSelectionResetClearsReadFailureStateBeforeAnotherHerdLoads() {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let repository = GroupListDeletionProbe(groups: [makeGroup()])
+        repository.failReads = true
+        let model = PastureGroupListViewModel()
+        model.load(using: repository, selection: selection)
+
+        selection.select(UUID())
+        model.resetForHerdChange()
+
+        XCTAssertFalse(model.hasInitialLoadFailure)
+        XCTAssertFalse(model.isLoadedForCurrentSelection(selection))
+        XCTAssertNil(model.errorMessage)
+        XCTAssertTrue(model.groups.isEmpty)
+    }
+
     private func makeGroup() -> PastureGroupSummary {
         PastureGroupSummary(
             id: UUID(), name: "Spring Rotation",
@@ -219,13 +288,15 @@ private final class GroupListDeletionProbe: PastureGroupListRepository {
     var groups: [PastureGroupSummary]
     private(set) var validatedIDs: [[UUID]] = []
     private(set) var deletedIDs: [[UUID]] = []
+    var failReads = false
 
     init(groups: [PastureGroupSummary]) {
         self.groups = groups
     }
 
     func fetchPastureGroups() throws -> [PastureGroupSummary] {
-        groups
+        if failReads { throw GroupListReadError.unavailable }
+        return groups
     }
 
     func validatePastureGroupIDsExist(_ ids: [UUID]) throws {
@@ -236,4 +307,10 @@ private final class GroupListDeletionProbe: PastureGroupListRepository {
         deletedIDs.append(ids)
         groups.removeAll { ids.contains($0.id) }
     }
+}
+
+private enum GroupListReadError: LocalizedError {
+    case unavailable
+
+    var errorDescription: String? { "Pasture groups are temporarily unavailable." }
 }
