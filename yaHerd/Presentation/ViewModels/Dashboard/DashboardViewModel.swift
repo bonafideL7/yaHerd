@@ -12,6 +12,7 @@ final class DashboardViewModel {
     private var loadedHerdID: UUID?
     private var loadedSelectionRevision: UInt64?
     var errorMessage: String?
+    var selectedPastureName: String?
     var isPresentingAddAnimal = false
     var isPresentingAddPasture = false
     var isPresentingNewWorkingSession = false
@@ -185,6 +186,7 @@ final class DashboardViewModel {
               loadedSelectionRevision != selection.selectionRevision else { return }
         loadedHerdID = selection.currentHerdID
         loadedSelectionRevision = selection.selectionRevision
+        selectedPastureName = nil
         snapshot = nil
         hasLoaded = false
         lastLoadedRevision = 0
