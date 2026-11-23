@@ -170,17 +170,7 @@ struct NewWorkingSessionView: View {
             }
             // A failed Pasture/template setup is not a valid form. Do not
             // request independent candidates or allow a partial session.
-            guard viewModel.hasLoadedSetupSuccessfully else { return }
-            let pastureID = selectedPastureID
-            await viewModel.loadEligibleAnimals(
-                pastureID: pastureID, currentHerdSelection: herdSelection
-            )
-            if !Task.isCancelled,
-               viewModel.hasCurrentCandidates(
-                   pastureID: pastureID, selection: herdSelection
-               ) {
-                resetAnimalSelection()
-            }
+            await loadCandidatesForSelectedPasture()
         }
         .onChange(of: herdSelection.selectionRevision) { _, _ in
             guard originatingHerdSelectionRevision != nil,
@@ -234,6 +224,14 @@ struct NewWorkingSessionView: View {
                 HStack {
                     ProgressView()
                     Text("Loading pastures…").foregroundStyle(.secondary)
+                }
+            } else if !viewModel.hasLoadedSetupSuccessfully {
+                ContentUnavailableView {
+                    Label("Working Setup Unavailable", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(viewModel.setupLoadErrorMessage ?? "Could not load pastures and treatment templates.")
+                } actions: {
+                    Button("Retry Loading Setup", action: retrySetup)
                 }
             } else if viewModel.pastures.isEmpty {
                 ContentUnavailableView(
@@ -323,6 +321,38 @@ struct NewWorkingSessionView: View {
             Text("Vaccinations & Treatments")
         } footer: {
             Text("This setup is optional. You can add more vaccinations or treatments after the session starts, including one-off medications for a single animal.")
+        }
+    }
+
+    private func retrySetup() {
+        guard isPresentingOriginatingHerd else { return }
+
+        viewModel.load()
+        guard viewModel.hasLoadedSetupSuccessfully else { return }
+
+        let previousPastureID = selectedPastureID
+        seedSuggestedPastureIfNeeded()
+        // Changing the pasture already restarts .task(id: selectedPastureID).
+        guard previousPastureID == selectedPastureID else { return }
+        Task { @MainActor in
+            await loadCandidatesForSelectedPasture()
+        }
+    }
+
+    private func loadCandidatesForSelectedPasture() async {
+        guard isPresentingOriginatingHerd,
+              viewModel.hasLoadedSetupSuccessfully else { return }
+
+        let pastureID = selectedPastureID
+        await viewModel.loadEligibleAnimals(
+            pastureID: pastureID, currentHerdSelection: herdSelection
+        )
+        if !Task.isCancelled,
+           isPresentingOriginatingHerd,
+           viewModel.hasCurrentCandidates(
+               pastureID: pastureID, selection: herdSelection
+           ) {
+            resetAnimalSelection()
         }
     }
 
