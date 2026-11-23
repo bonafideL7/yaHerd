@@ -1,10 +1,18 @@
 import Foundation
 
+enum WorkingFinishSessionLoadState: Equatable {
+    case loading
+    case ready
+    case missing
+    case failed
+}
+
 @MainActor
 final class WorkingFinishSessionViewModel: ObservableObject {
     @Published private(set) var session: WorkingSessionDetailSnapshot?
     @Published private(set) var pastures: [PastureOption] = []
     @Published private(set) var hasLoadedPastureOptions = false
+    @Published private(set) var sessionLoadState: WorkingFinishSessionLoadState = .loading
     @Published var errorMessage: String?
 
     private let sessionID: UUID
@@ -54,14 +62,32 @@ final class WorkingFinishSessionViewModel: ObservableObject {
     }
 
     func load() {
+        // A failed or missing re-read cannot authorize completion using
+        // previously loaded session details or destination options.
+        sessionLoadState = .loading
+        session = nil
+        pastures = []
+        hasLoadedPastureOptions = false
+
         do {
-            session = try workingRepository.fetchSessionDetail(id: sessionID)
+            guard let loadedSession = try workingRepository.fetchSessionDetail(id: sessionID) else {
+                sessionLoadState = .missing
+                errorMessage = nil
+                return
+            }
+            session = loadedSession
+            sessionLoadState = .ready
         } catch {
+            sessionLoadState = .failed
             errorMessage = UserVisibleErrorMessage.make(error)
             return
         }
 
         loadPastureOptions()
+    }
+
+    func retrySession() {
+        load()
     }
 
     func retryPastureOptions() {
@@ -79,6 +105,7 @@ final class WorkingFinishSessionViewModel: ObservableObject {
             hasLoadedPastureOptions = true
             errorMessage = nil
         } catch {
+            pastures = []
             hasLoadedPastureOptions = false
             errorMessage = UserVisibleErrorMessage.make(error)
         }
