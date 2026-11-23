@@ -72,6 +72,14 @@ struct WorkingSessionDetailView: View {
                 )
             } else if let session = viewModel.session {
                 sessionContent(session)
+            } else if let loadError = viewModel.errorMessage {
+                ContentUnavailableView {
+                    Label("Unable to Load Session", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(loadError)
+                } actions: {
+                    Button("Try Again") { reload() }
+                }
             } else if viewModel.hasLoaded {
                 ContentUnavailableView(
                     "Session Not Found",
@@ -170,7 +178,9 @@ struct WorkingSessionDetailView: View {
             Text(viewModel.errorMessage ?? "Unknown error")
         }
         .onChange(of: viewModel.errorMessage) { _, newValue in
-            if newValue != nil && isViewingOriginatingHerd {
+            // Initial read failures have an inline retry. Mutation errors
+            // and refresh failures with an existing snapshot retain the alert.
+            if newValue != nil && isViewingOriginatingHerd && viewModel.session != nil {
                 showingError = true
             }
         }
