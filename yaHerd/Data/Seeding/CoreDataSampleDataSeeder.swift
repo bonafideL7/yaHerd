@@ -36,17 +36,22 @@ final class CoreDataSampleDataSeeder: SampleDataSeeding {
         }
     }
 
-    func seedSampleDataIfNeeded(for herdID: UUID) async throws -> Bool {
-        try await seed(size: .compact, for: herdID)
+    func seedSampleDataIfNeeded(for herdID: UUID, selectionRevision: UInt64) async throws -> Bool {
+        try await seed(size: .compact, for: herdID, selectionRevision: selectionRevision)
     }
 
-    func seedLargeSampleDataIfNeeded(for herdID: UUID) async throws -> Bool {
-        try await seed(size: .large, for: herdID)
+    func seedLargeSampleDataIfNeeded(for herdID: UUID, selectionRevision: UInt64) async throws -> Bool {
+        try await seed(size: .large, for: herdID, selectionRevision: selectionRevision)
     }
 
-    private func seed(size: CoreDataSampleHerdFactory.Size, for herdID: UUID) async throws -> Bool {
+    private func seed(
+        size: CoreDataSampleHerdFactory.Size,
+        for herdID: UUID,
+        selectionRevision: UInt64
+    ) async throws -> Bool {
         try writePolicy.validateCanWrite()
-        guard selection.currentHerdID == herdID else {
+        guard selection.currentHerdID == herdID,
+              selection.selectionRevision == selectionRevision else {
             throw HerdRepositoryError.missingHerd
         }
         // Working template CRUD is synchronous on the MainActor, so reserve
@@ -63,8 +68,9 @@ final class CoreDataSampleDataSeeder: SampleDataSeeding {
         await assembly.animalWriteBoundary.beginAnimalWrite()
         defer { assembly.animalWriteBoundary.endAnimalWrite() }
         // Selection may change while waiting for either write gate.
-        // Never retarget an action that originated in a different Herd.
-        guard selection.currentHerdID == herdID else {
+        // Do not revive a request after selecting another Herd and returning.
+        guard selection.currentHerdID == herdID,
+              selection.selectionRevision == selectionRevision else {
             throw HerdRepositoryError.missingHerd
         }
         // Also exclude concurrent materialization of canonical Tag Color IDs.
