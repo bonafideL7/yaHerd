@@ -340,12 +340,14 @@ struct HerdDirectoryView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var isCreating = false
-    @State private var isOpeningHerd = false
+    @State private var openingState = HerdDirectoryOpeningState()
     @State private var pendingHerdID: UUID?
     @State private var validationTask: Task<Void, Never>?
     @State private var creationTask: Task<Void, Never>?
     @State private var showsCreatePrompt = false
     @State private var newHerdName = ""
+
+    private var isOpeningHerd: Bool { openingState.isOpening }
 
     var body: some View {
         List {
@@ -400,6 +402,8 @@ struct HerdDirectoryView: View {
                         Spacer()
                         Button("Cancel") {
                             validationTask?.cancel()
+                            validationTask = nil
+                            openingState.cancel()
                             pendingHerdID = nil
                         }
                     }
@@ -454,8 +458,11 @@ struct HerdDirectoryView: View {
             if phase == .active { directory.refresh(reportErrors: false) }
         }
         .onDisappear {
-            // No in-flight chooser action may select a Herd after dismissal.
+            // Invalidate the old attempt immediately, even if its validation
+            // callback does not cooperate with Task cancellation.
             validationTask?.cancel()
+            validationTask = nil
+            openingState.cancel()
             creationTask?.cancel()
         }
         .alert("Create Herd", isPresented: $showsCreatePrompt) {
@@ -509,28 +516,30 @@ struct HerdDirectoryView: View {
     @discardableResult
     @MainActor
     private func beginOpeningHerd(id: UUID) -> Task<Void, Never>? {
-        guard !isOpeningHerd else { return nil }
-        isOpeningHerd = true
+        guard let attemptID = openingState.begin() else { return nil }
         validationTask?.cancel()
-        let attempt = Task { @MainActor in await openHerd(id: id) }
+        let attempt = Task { @MainActor in await openHerd(id: id, attemptID: attemptID) }
         validationTask = attempt
         return attempt
     }
 
     @MainActor
-    private func openHerd(id: UUID) async {
+    private func openHerd(id: UUID, attemptID: UUID) async {
         defer {
-            isOpeningHerd = false
-            validationTask = nil
+            if openingState.finish(attemptID) {
+                validationTask = nil
+            }
         }
         do {
             try await directory.selectHerdWhenReady(id: id)
+            guard !Task.isCancelled, openingState.isCurrent(attemptID) else { return }
             pendingHerdID = nil
             navigation.resetForHerdChange(to: id)
             navigation.dismissSheet()
         } catch {
-            // A cancelled validation must never restore pending import retries.
-            if Task.isCancelled || error is CancellationError { return }
+            // A canceled or superseded validation cannot publish old state.
+            if Task.isCancelled || error is CancellationError ||
+                !openingState.isCurrent(attemptID) { return }
             #if DEBUG
             if CloudKitDevelopmentLaunch.isImportPending(error) {
                 if directory.shouldContinueWaitingForHerd(id: id) {
@@ -545,5 +554,34 @@ struct HerdDirectoryView: View {
             pendingHerdID = nil
             directory.report(error)
         }
+    }
+}
+
+@MainActor
+struct HerdDirectoryOpeningState {
+    private(set) var activeAttemptID: UUID?
+
+    var isOpening: Bool { activeAttemptID != nil }
+
+    mutating func begin() -> UUID? {
+        guard activeAttemptID == nil else { return nil }
+        let id = UUID()
+        activeAttemptID = id
+        return id
+    }
+
+    func isCurrent(_ id: UUID) -> Bool {
+        activeAttemptID == id
+    }
+
+    @discardableResult
+    mutating func finish(_ id: UUID) -> Bool {
+        guard activeAttemptID == id else { return false }
+        activeAttemptID = nil
+        return true
+    }
+
+    mutating func cancel() {
+        activeAttemptID = nil
     }
 }
