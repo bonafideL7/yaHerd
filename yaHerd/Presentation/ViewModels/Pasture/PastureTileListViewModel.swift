@@ -48,9 +48,11 @@ final class PastureTileListViewModel {
         using repository: any PastureListReader,
         mutationStream: any ApplicationMutationStreaming
     ) async {
-        refreshHerdSelection()
+        // Capture before refreshing: a queued observer from the prior Herd
+        // must not adopt the newly selected Herd when it finally starts.
         let originatingHerdID = selectedHerdID
         let originatingSelectionRevision = selectedSelectionRevision
+        refreshHerdSelection()
         guard !Task.isCancelled,
               isCurrentObserver(
                 herdID: originatingHerdID,
