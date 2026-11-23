@@ -47,6 +47,10 @@ struct FieldCheckSessionSetupView: View {
             return "Select a Herd to start a check."
         }
 
+        if model.pastureLoadErrorMessage != nil {
+            return "Pastures couldn’t be loaded. Retry to continue."
+        }
+
         if !model.hasCurrentHerdData {
             return "Loading pastures…"
         }
@@ -75,17 +79,7 @@ struct FieldCheckSessionSetupView: View {
         .task(id: herdSelection.selectionRevision) {
             model.configure(selection: herdSelection)
             if !model.hasLoaded {
-                model.load(using: pastureReferenceDataReader)
-            }
-
-            if !hasAppliedSuggestedPasture {
-                hasAppliedSuggestedPasture = true
-                if let suggestedPastureID,
-                   model.pastures.contains(where: { $0.id == suggestedPastureID }) {
-                    selectedPastureID = suggestedPastureID
-                } else {
-                    selectedPastureID = nil
-                }
+                loadPastures()
             }
         }
         .onChange(of: herdSelection.selectionRevision) { _, _ in
@@ -95,6 +89,8 @@ struct FieldCheckSessionSetupView: View {
             notes = ""
             startedAt = .now
             startedRoute = nil
+            // A suggested pasture belongs to the view's originating Herd.
+            hasAppliedSuggestedPasture = true
         }
         .navigationDestination(item: $startedRoute) { route in
             FieldCheckSessionDetailView(sessionID: route.id)
@@ -121,6 +117,18 @@ struct FieldCheckSessionSetupView: View {
                     systemImage: "square.stack.3d.up",
                     description: Text("Choose a Herd to start a pasture check.")
                 )
+            } else if let loadErrorMessage = model.pastureLoadErrorMessage {
+                ContentUnavailableView(
+                    "Pastures Unavailable",
+                    systemImage: "arrow.clockwise",
+                    description: Text(loadErrorMessage)
+                )
+
+                Button {
+                    loadPastures()
+                } label: {
+                    Label("Retry Loading Pastures", systemImage: "arrow.clockwise")
+                }
             } else if !model.hasCurrentHerdData {
                 HStack {
                     ProgressView()
@@ -178,6 +186,23 @@ struct FieldCheckSessionSetupView: View {
             Text("After Start")
         } footer: {
             Text("The check opens directly into field-work mode after it is created.")
+        }
+    }
+
+    private func loadPastures() {
+        guard !isStartingSession,
+              herdSelection.currentHerdID != nil,
+              model.load(using: pastureReferenceDataReader),
+              !hasAppliedSuggestedPasture else {
+            return
+        }
+
+        hasAppliedSuggestedPasture = true
+        if let suggestedPastureID,
+           model.pastures.contains(where: { $0.id == suggestedPastureID }) {
+            selectedPastureID = suggestedPastureID
+        } else {
+            selectedPastureID = nil
         }
     }
 
