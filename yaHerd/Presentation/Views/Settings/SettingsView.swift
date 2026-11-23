@@ -341,7 +341,7 @@ struct HerdDirectoryView: View {
 
     @State private var isCreating = false
     @State private var openingState = HerdDirectoryOpeningState()
-    @State private var pendingHerdID: UUID?
+    @State private var pendingHerd: AccessibleHerd?
     @State private var validationTask: Task<Void, Never>?
     @State private var creationTask: Task<Void, Never>?
     @State private var showsCreatePrompt = false
@@ -354,7 +354,7 @@ struct HerdDirectoryView: View {
             Section("Available Herds") {
                 ForEach(directory.herds) { herd in
                     Button {
-                        beginOpeningHerd(id: herd.id)
+                        beginOpeningHerd(herd: herd)
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
@@ -394,7 +394,7 @@ struct HerdDirectoryView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                if pendingHerdID != nil {
+                if pendingHerd != nil {
                     HStack {
                         ProgressView()
                         Text("Waiting for the selected Herd's records to finish importing.")
@@ -404,7 +404,7 @@ struct HerdDirectoryView: View {
                             validationTask?.cancel()
                             validationTask = nil
                             openingState.cancel()
-                            pendingHerdID = nil
+                            pendingHerd = nil
                         }
                     }
                 }
@@ -443,10 +443,10 @@ struct HerdDirectoryView: View {
             while !Task.isCancelled {
                 // Do not overwrite the active validation task with a no-op
                 // retry, or Cancel could miss the in-flight Herd opening.
-                if let pendingHerdID {
+                if let pendingHerd {
                     // Do not await an uncooperative canceled validation here:
                     // the retry loop must remain free to open another Herd.
-                    beginOpeningHerd(id: pendingHerdID)
+                    beginOpeningHerd(herd: pendingHerd)
                 }
                 do {
                     try await Task.sleep(for: .seconds(5))
@@ -474,7 +474,7 @@ struct HerdDirectoryView: View {
                       directory.inventoryState == .available ||
                       directory.inventoryState == .incomplete else { return }
                 validationTask?.cancel()
-                pendingHerdID = nil
+                pendingHerd = nil
                 isCreating = true
                 creationTask = Task { @MainActor in
                     defer {
@@ -517,26 +517,26 @@ struct HerdDirectoryView: View {
     /// second tap cannot cancel the first and lose the newer selection.
     @discardableResult
     @MainActor
-    private func beginOpeningHerd(id: UUID) -> Task<Void, Never>? {
+    private func beginOpeningHerd(herd: AccessibleHerd) -> Task<Void, Never>? {
         guard let attemptID = openingState.begin() else { return nil }
         validationTask?.cancel()
-        let attempt = Task { @MainActor in await openHerd(id: id, attemptID: attemptID) }
+        let attempt = Task { @MainActor in await openHerd(herd: herd, attemptID: attemptID) }
         validationTask = attempt
         return attempt
     }
 
     @MainActor
-    private func openHerd(id: UUID, attemptID: UUID) async {
+    private func openHerd(herd: AccessibleHerd, attemptID: UUID) async {
         defer {
             if openingState.finish(attemptID) {
                 validationTask = nil
             }
         }
         do {
-            try await directory.selectHerdWhenReady(id: id)
+            try await directory.selectHerdWhenReady(id: herd.id, expectedRoot: herd)
             guard !Task.isCancelled, openingState.isCurrent(attemptID) else { return }
-            pendingHerdID = nil
-            navigation.resetForHerdChange(to: id)
+            pendingHerd = nil
+            navigation.resetForHerdChange(to: herd.id)
             navigation.dismissSheet()
         } catch {
             // A canceled or superseded validation cannot publish old state.
@@ -544,16 +544,16 @@ struct HerdDirectoryView: View {
                 !openingState.isCurrent(attemptID) { return }
             #if DEBUG
             if CloudKitDevelopmentLaunch.isImportPending(error) {
-                if directory.shouldContinueWaitingForHerd(id: id) {
-                    pendingHerdID = id
+                if directory.shouldContinueWaitingForHerd(id: herd.id) {
+                    pendingHerd = herd
                 } else {
-                    pendingHerdID = nil
+                    pendingHerd = nil
                     directory.report(HerdDirectoryError.pendingHerdUnavailable)
                 }
                 return
             }
             #endif
-            pendingHerdID = nil
+            pendingHerd = nil
             directory.report(error)
         }
     }
