@@ -692,6 +692,36 @@ final class PastureTileListViewModelTests: XCTestCase {
     }
 
 
+    func testCurrentPastureMutationObserverRefreshesActiveHerd() async {
+        let initial = PastureTestSupport.makeSummary(name: "Initial")
+        let updated = PastureTestSupport.makeSummary(name: "Updated")
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let reader = PastureListReaderStub(result: .success([initial]))
+        let mutations = ApplicationMutationCenter()
+        let model = PastureTileListViewModel()
+        model.configure(selection: selection)
+
+        let observer = Task {
+            await model.observe(using: reader, mutationStream: mutations)
+        }
+        for _ in 0..<100 where !model.hasLoaded {
+            await Task.yield()
+        }
+        XCTAssertEqual(model.items, [initial])
+
+        reader.result = .success([updated])
+        mutations.recordSuccessfulMutation(reason: .pasture)
+        for _ in 0..<100 where model.items != [updated] {
+            await Task.yield()
+        }
+
+        XCTAssertEqual(model.items, [updated])
+        XCTAssertNil(model.errorMessage)
+
+        observer.cancel()
+        await observer.value
+    }
+
     func testObsoletePastureMutationObserverDoesNotReadNewlySelectedHerd() async {
         let selection = AppCurrentHerdSelection(currentHerdID: UUID())
         let reader = PastureListReaderStub(
