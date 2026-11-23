@@ -29,6 +29,7 @@ protocol HerdRepository: AnyObject {
 enum HerdRepositoryError: LocalizedError, Equatable, Sendable {
     case emptyName
     case missingHerd
+    case incompleteOwnedHerdImport
 
     var errorDescription: String? {
         switch self {
@@ -36,6 +37,8 @@ enum HerdRepositoryError: LocalizedError, Equatable, Sendable {
             "Herd name cannot be empty."
         case .missingHerd:
             "No herd exists yet. Add herd data before using herd-specific actions."
+        case .incompleteOwnedHerdImport:
+            "An existing owned Herd is missing required data. To avoid creating a duplicate, wait for iCloud import to finish or resolve the incomplete record before creating another Herd."
         }
     }
 }
