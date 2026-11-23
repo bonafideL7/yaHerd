@@ -4,6 +4,98 @@ import XCTest
 
 final class AppNavigationRestorationPreflightTests: XCTestCase {
     @MainActor
+    func testFirstHerdActivationAfterChooserRestoresMatchingSceneRoutes() {
+        let herdID = UUID()
+        let animalID = UUID()
+        let savedPayload = makePayload(herdID: herdID, animalID: animalID)
+        let navigation = AppNavigationState()
+        let validator = PreflightStubNavigationValidator(
+            currentHerdResult: .success(herdID),
+            animalResult: .success(true)
+        )
+
+        // CloudKit startup displayed the chooser while the remembered root
+        // was absent. Selecting the imported Herd must restore, not overwrite,
+        // the still-durable navigation snapshot.
+        XCTAssertNil(navigation.selectedHerdID)
+        XCTAssertEqual(
+            AppNavigationSceneStorageAccess.restoreForSelectedHerd(
+                navigation: navigation,
+                selectedHerdID: herdID,
+                from: savedPayload,
+                using: validator,
+                dataAccessMode: .readWrite
+            ),
+            .applied
+        )
+        XCTAssertEqual(navigation.selectedHerdID, herdID)
+        XCTAssertEqual(navigation.selectedTab, .herd)
+        XCTAssertEqual(navigation.herdRouter.path, [.animal(animalID)])
+    }
+
+    @MainActor
+    func testFirstChooserSelectionDoesNotRestoreDifferentHerdNavigation() {
+        let previousHerdID = UUID()
+        let newlySelectedHerdID = UUID()
+        let savedPayload = makePayload(herdID: previousHerdID, animalID: UUID())
+        let navigation = AppNavigationState()
+        let validator = PreflightStubNavigationValidator(
+            currentHerdResult: .success(newlySelectedHerdID),
+            animalResult: .failure(.readFailed)
+        )
+
+        XCTAssertEqual(
+            AppNavigationSceneStorageAccess.restoreForSelectedHerd(
+                navigation: navigation,
+                selectedHerdID: newlySelectedHerdID,
+                from: savedPayload,
+                using: validator,
+                dataAccessMode: .readWrite
+            ),
+            .applied
+        )
+        XCTAssertEqual(navigation.selectedHerdID, newlySelectedHerdID)
+        XCTAssertEqual(navigation.selectedTab, .home)
+        XCTAssertTrue(navigation.herdRouter.path.isEmpty)
+        XCTAssertNil(navigation.fullScreenWorkflow)
+    }
+
+    @MainActor
+    func testFirstChooserSelectionPreservesDeferredRestorationForImportRetry() {
+        let herdID = UUID()
+        let animalID = UUID()
+        let savedPayload = makePayload(herdID: herdID, animalID: animalID)
+        let navigation = AppNavigationState()
+        let incompleteImport = PreflightStubNavigationValidator(
+            currentHerdResult: .success(herdID),
+            animalResult: .failure(.readFailed)
+        )
+
+        XCTAssertEqual(
+            AppNavigationSceneStorageAccess.restoreForSelectedHerd(
+                navigation: navigation,
+                selectedHerdID: herdID,
+                from: savedPayload,
+                using: incompleteImport,
+                dataAccessMode: .readWrite
+            ),
+            .deferredValidation
+        )
+        XCTAssertEqual(navigation.selectedHerdID, herdID)
+        XCTAssertTrue(navigation.herdRouter.path.isEmpty)
+
+        let ready = PreflightStubNavigationValidator(
+            currentHerdResult: .success(herdID),
+            animalResult: .success(true)
+        )
+        XCTAssertEqual(
+            navigation.restorePreservingStoredSnapshot(from: savedPayload, using: ready),
+            .applied
+        )
+        XCTAssertEqual(navigation.herdRouter.path, [.animal(animalID)])
+    }
+
+    @MainActor
     func testCurrentHerdReadFailureDefersWithoutMutatingNavigation() {
         let herdID = UUID()
         let animalID = UUID()
