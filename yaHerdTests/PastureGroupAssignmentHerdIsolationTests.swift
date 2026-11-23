@@ -236,6 +236,86 @@ final class PastureGroupAssignmentHerdIsolationTests: XCTestCase {
         XCTAssertEqual(model.detail?.id, row.groupID)
     }
 
+    func testIncompletePastureRefreshDoesNotMixNewGroupWithStaleAssignments() throws {
+        let (model, row, repository, selection) = makeFixture()
+        let herdID = try XCTUnwrap(selection.currentHerdID)
+        let revision = selection.selectionRevision
+        model.load(
+            groupID: row.groupID, using: repository,
+            expectedHerdID: herdID,
+            expectedSelectionRevision: revision,
+            selection: selection
+        )
+        XCTAssertEqual(model.assignmentRows.map(\.id), [row.pasture.id])
+
+        let replacementPasture = PastureTestSupport.makeSummary(name: "South")
+        repository.detail = PastureGroupDetailSnapshot(
+            id: row.groupID, name: "Updated Rotation", grazeDays: 9,
+            restDays: 24, pastures: []
+        )
+        repository.pastures = [replacementPasture]
+        repository.failPastureRead = true
+
+        model.reloadAfterSave(
+            groupID: row.groupID, using: repository,
+            expectedHerdID: herdID,
+            expectedSelectionRevision: revision,
+            selection: selection
+        )
+
+        XCTAssertNil(model.detail)
+        XCTAssertTrue(model.allPastures.isEmpty)
+        XCTAssertTrue(model.assignmentRows.isEmpty)
+        XCTAssertTrue(model.hasLoaded)
+        XCTAssertNotNil(model.errorMessage)
+
+        // A retained row callback must not turn a failed refresh into a write.
+        model.toggleAssignment(
+            row, using: repository,
+            expectedHerdID: herdID,
+            expectedSelectionRevision: revision,
+            selection: selection
+        )
+        XCTAssertTrue(repository.assignments.isEmpty)
+
+        repository.failPastureRead = false
+        model.load(
+            groupID: row.groupID, using: repository,
+            expectedHerdID: herdID,
+            expectedSelectionRevision: revision,
+            selection: selection
+        )
+        XCTAssertEqual(model.detail?.name, "Updated Rotation")
+        XCTAssertEqual(model.assignmentRows.map(\.id), [replacementPasture.id])
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testFailedGroupRefreshClearsPreviouslyLoadedAssignmentRows() throws {
+        let (model, row, repository, selection) = makeFixture()
+        let herdID = try XCTUnwrap(selection.currentHerdID)
+        let revision = selection.selectionRevision
+        model.load(
+            groupID: row.groupID, using: repository,
+            expectedHerdID: herdID,
+            expectedSelectionRevision: revision,
+            selection: selection
+        )
+        repository.failGroupRead = true
+
+        model.load(
+            groupID: row.groupID, using: repository,
+            expectedHerdID: herdID,
+            expectedSelectionRevision: revision,
+            selection: selection
+        )
+
+        XCTAssertNil(model.detail)
+        XCTAssertTrue(model.allPastures.isEmpty)
+        XCTAssertTrue(model.assignmentRows.isEmpty)
+        XCTAssertTrue(model.hasLoaded)
+        XCTAssertNotNil(model.errorMessage)
+    }
+
     private func makeFixture() -> (
         PastureGroupDetailViewModel,
         PastureGroupAssignmentRow,
@@ -260,8 +340,14 @@ final class PastureGroupAssignmentHerdIsolationTests: XCTestCase {
 
 @MainActor
 private final class AssignmentRepositoryProbe: PastureGroupDetailRepository {
-    let detail: PastureGroupDetailSnapshot
-    let pastures: [PastureSummary]
+    enum ReadError: Error {
+        case incompleteImport
+    }
+
+    var detail: PastureGroupDetailSnapshot
+    var pastures: [PastureSummary]
+    var failGroupRead = false
+    var failPastureRead = false
     private(set) var validatedPastureIDs: [[UUID]] = []
     private(set) var validatedGroupIDs: [[UUID]] = []
     private(set) var assignments: [(pastureID: UUID, groupID: UUID?)] = []
@@ -275,11 +361,13 @@ private final class AssignmentRepositoryProbe: PastureGroupDetailRepository {
 
     func fetchPastureGroupDetail(id: UUID) throws -> PastureGroupDetailSnapshot? {
         groupReads += 1
+        if failGroupRead { throw ReadError.incompleteImport }
         return detail
     }
 
     func fetchPastures() throws -> [PastureSummary] {
         pastureReads += 1
+        if failPastureRead { throw ReadError.incompleteImport }
         return pastures
     }
 
