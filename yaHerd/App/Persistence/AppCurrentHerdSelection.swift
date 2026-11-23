@@ -35,7 +35,7 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
             )
             if matches.count == 1,
                (rememberedHerdID != currentHerdID
-                || matchesRememberedStoreCategory(matches[0].category)) {
+                || matchesRememberedStoreCategory(matches[0].category, for: currentHerdID)) {
                 // An explicit in-memory choice takes precedence over another
                 // remembered UUID. For the same UUID, its store must still match.
                 return
@@ -46,7 +46,7 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
                 accessibleHerds.filter { $0.id == storedID }
             } ?? []
             if storedHerds.count == 1,
-               matchesRememberedStoreCategory(storedHerds[0].category) {
+               matchesRememberedStoreCategory(storedHerds[0].category, for: storedHerds[0].id) {
                 setCurrentHerdID(storedHerds[0].id)
                 rememberStoreCategory(storedHerds[0].category)
             } else {
@@ -73,7 +73,7 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
         let rememberedID = UUID(uuidString: defaults?.string(forKey: preferenceKey) ?? "")
         guard matching.count == 1,
               (rememberedID != activeID
-               || matchesRememberedStoreCategory(matching[0].category)) else {
+               || matchesRememberedStoreCategory(matching[0].category, for: activeID)) else {
             setCurrentHerdID(nil)
             return
         }
@@ -97,7 +97,7 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
         guard matching.count == 1, let herd = matching.first else {
             throw HerdRepositoryError.missingHerd
         }
-        if currentHerdID == id && !matchesRememberedStoreCategory(herd.category) {
+        if currentHerdID == id && !matchesRememberedStoreCategory(herd.category, for: id) {
             // Equal UUIDs are not the same active selection when ownership
             // changes. Force a new selection revision for navigation reset.
             setCurrentHerdID(nil)
@@ -131,7 +131,12 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
         }
     }
 
-    private func matchesRememberedStoreCategory(_ category: AccessibleHerd.Category) -> Bool {
+    private func matchesRememberedStoreCategory(
+        _ category: AccessibleHerd.Category,
+        for herdID: UUID
+    ) -> Bool {
+        let persistedID = UUID(uuidString: defaults?.string(forKey: preferenceKey) ?? "")
+        guard persistedID == herdID else { return true }
         guard let remembered = defaults?.string(forKey: storeCategoryPreferenceKey) else {
             // UUID-only preferences predate shared stores and identify an
             // owned Herd. Do not silently restore a different shared root
