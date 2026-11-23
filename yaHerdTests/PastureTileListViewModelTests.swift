@@ -691,7 +691,6 @@ final class PastureTileListViewModelTests: XCTestCase {
         XCTAssertEqual(model.items, [second, first])
     }
 
-
     func testCurrentPastureMutationObserverRefreshesActiveHerd() async {
         let initial = PastureTestSupport.makeSummary(name: "Initial")
         let updated = PastureTestSupport.makeSummary(name: "Updated")
