@@ -397,4 +397,17 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
         XCTAssertEqual(defaults.string(forKey: "selected"), herdID.uuidString)
         XCTAssertNil(defaults.string(forKey: "selected.storeCategory"))
     }
+
+    func testExplicitSharedSelectionWithoutRememberedUUIDRetainsIdentity() throws {
+        let herdID = UUID()
+        let shared = AccessibleHerd(summary: herd(herdID).summary, category: .shared)
+        let selection = AppCurrentHerdSelection()
+
+        try selection.selectAccessibleHerd(herdID, from: [shared])
+        let revision = selection.selectionRevision
+        try selection.selectAccessibleHerd(herdID, from: [shared])
+
+        XCTAssertEqual(selection.currentHerdID, herdID)
+        XCTAssertEqual(selection.selectionRevision, revision)
+    }
 }
