@@ -271,6 +271,7 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         )
         let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
         let seeder = try XCTUnwrap(dependencies.animalFeatureDependencies.sampleDataSeeder)
+        let originatingSelectionRevision = app.currentHerdSelection.selectionRevision
 
         // The empty-state action began in the original Herd, but its Task was
         // scheduled after navigation switched to another empty Herd.
@@ -278,9 +279,13 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         for useLargeFixture in [false, true] {
             do {
                 if useLargeFixture {
-                    _ = try await seeder.seedLargeSampleDataIfNeeded(for: origin.id)
+                    _ = try await seeder.seedLargeSampleDataIfNeeded(
+                        for: origin.id, selectionRevision: originatingSelectionRevision
+                    )
                 } else {
-                    _ = try await seeder.seedSampleDataIfNeeded(for: origin.id)
+                    _ = try await seeder.seedSampleDataIfNeeded(
+                        for: origin.id, selectionRevision: originatingSelectionRevision
+                    )
                 }
                 XCTFail("An old-Herd request must not seed the newly selected Herd.")
             } catch {
@@ -298,7 +303,9 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
 
         // A valid request still seeds its own selected Herd without touching
         // the other Herd's empty records.
-        let inserted = try await seeder.seedSampleDataIfNeeded(for: origin.id)
+        let inserted = try await seeder.seedSampleDataIfNeeded(
+            for: origin.id, selectionRevision: app.currentHerdSelection.selectionRevision
+        )
         XCTAssertTrue(inserted)
         XCTAssertEqual(
             try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().count, 18
