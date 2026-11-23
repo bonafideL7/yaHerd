@@ -166,6 +166,12 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
 
     private func rememberStoreCategory(_ category: AccessibleHerd.Category) {
         activeStoreCategory = category
+        // An explicit in-memory Herd may differ from the persisted selection.
+        // Do not overwrite that other Herd's saved store identity.
+        guard let currentHerdID,
+              UUID(uuidString: defaults?.string(forKey: preferenceKey) ?? "") == currentHerdID else {
+            return
+        }
         defaults?.set(category == .owned ? "owned" : "shared", forKey: storeCategoryPreferenceKey)
     }
 }
