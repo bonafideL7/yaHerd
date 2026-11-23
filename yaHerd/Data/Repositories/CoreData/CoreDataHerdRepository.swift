@@ -148,6 +148,23 @@ final class CoreDataHerdRepository: HerdRepository {
                         throw CoreDataPersistenceError.unscopedMultiStoreWrite
                     }
 
+                    // A root can exist in the private store before CloudKit
+                    // delivers its required metadata. Never mistake that
+                    // incomplete import for permission to create another root.
+                    // A partial shared-store root must not block a separate
+                    // user-requested owned Herd.
+                    let existingRequest = NSFetchRequest<CDHerd>(
+                        entityName: CDHerd.coreDataEntityName
+                    )
+                    existingRequest.affectedStores = [destination]
+                    for existing in try context.fetch(existingRequest) {
+                        do {
+                            _ = try existing.toSummary()
+                        } catch is CoreDataHerdMappingError {
+                            throw HerdRepositoryError.incompleteOwnedHerdImport
+                        }
+                    }
+
                     let id = UUID()
                     guard try CoreDataLookup().herd(id: id, in: context) == nil else {
                         throw CoreDataPersistenceError.duplicateApplicationID(
