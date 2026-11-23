@@ -49,23 +49,35 @@ struct AnimalDetailView: View {
         viewModel.isViewingSelectionCurrent(herdSelection)
     }
 
+    private var presentedDetail: AnimalDetailSnapshot? {
+        viewModel.presentationDetail(for: herdSelection)
+    }
+
     private var displayedTagNumber: String {
+        guard isViewingCurrentHerd else { return "" }
         if viewModel.isEditing {
             return viewModel.form.draft.normalizedTagNumber
         }
-        return viewModel.detail?.displayTagNumber ?? ""
+        return presentedDetail?.displayTagNumber ?? ""
     }
 
     private var displayedTagColorID: UUID? {
+        guard isViewingCurrentHerd else { return nil }
         if viewModel.isEditing {
             return viewModel.form.draft.tagColorID
         }
-        return viewModel.detail?.displayTagColorID
+        return presentedDetail?.displayTagColorID
     }
 
     var body: some View {
         Group {
-            if let detail = viewModel.detail {
+            if !isViewingCurrentHerd {
+                ContentUnavailableView(
+                    "Animal Unavailable",
+                    systemImage: "arrow.left.arrow.right",
+                    description: Text("The selected Herd changed. Reopen this animal to continue.")
+                )
+            } else if let detail = presentedDetail {
                 ScrollViewReader { proxy in
                     Form {
                         if viewModel.isEditing {
@@ -140,7 +152,7 @@ struct AnimalDetailView: View {
             guard isViewingCurrentHerd else { return }
             viewModel.load(animalID: animalID, using: repository, pastureRepository: pastureReferenceDataReader)
         }) {
-            if let preparedEditor = viewModel.preparedOffspringEditor {
+            if isViewingCurrentHerd, let preparedEditor = viewModel.preparedOffspringEditor {
                 AddAnimalView(
                     title: "Add Offspring",
                     initialDraft: preparedEditor.draft,
@@ -180,12 +192,12 @@ struct AnimalDetailView: View {
             .presentationDetents([.large])
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if viewModel.isEditing {
+            if isViewingCurrentHerd && viewModel.isEditing {
                 Color.clear.frame(height: 88).allowsHitTesting(false)
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            if viewModel.isEditing {
+            if isViewingCurrentHerd && viewModel.isEditing {
                 floatingActions
                     .padding(.trailing, 24)
                     .padding(.bottom, 12)
@@ -204,7 +216,7 @@ struct AnimalDetailView: View {
                 .accessibilityHint("Return to the previous screen")
             }
 
-            if !displayedTagNumber.isEmpty {
+            if isViewingCurrentHerd && !displayedTagNumber.isEmpty {
                 ToolbarItem(placement: .principal) {
                     let def = tagColorLibrary.resolvedDefinition(tagColorID: displayedTagColorID)
                     AnimalTagView(
@@ -216,7 +228,7 @@ struct AnimalDetailView: View {
                 }
             }
 
-            if viewModel.isEditing {
+            if isViewingCurrentHerd && viewModel.isEditing {
                 ToolbarItem(placement: .confirmationAction) {
                     ToolbarSaveButton {
                         saveChanges()
@@ -225,7 +237,7 @@ struct AnimalDetailView: View {
                 }
             }
 
-            if viewModel.detail != nil {
+            if presentedDetail != nil {
                 if let identity = viewModel.viewingSelectionIdentity {
                     ToolbarItem(placement: .topBarTrailing) {
                         NavigationLink {
@@ -264,12 +276,23 @@ struct AnimalDetailView: View {
             }
         }
         .onChange(of: viewModel.errorMessage) { _, newValue in
-            showingError = newValue != nil
+            showingError = newValue != nil && isViewingCurrentHerd
         }
         .onChange(of: viewModel.didDelete) { _, didDelete in
-            if didDelete {
+            if didDelete && isViewingCurrentHerd {
                 closeDestination()
             }
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            guard !isViewingCurrentHerd else { return }
+            activeParentPicker = nil
+            showingAddTag = false
+            editingTag = nil
+            showingAddOffspring = false
+            showingDiscardConfirmation = false
+            showingArchiveConfirmation = false
+            permanentDeleteReviewDetail = nil
+            showingError = false
         }
     }
 
