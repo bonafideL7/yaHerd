@@ -133,9 +133,10 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
 
     private func matchesRememberedStoreCategory(_ category: AccessibleHerd.Category) -> Bool {
         guard let remembered = defaults?.string(forKey: storeCategoryPreferenceKey) else {
-            // An existing preference without a category is adopted on the
-            // first successful inventory lookup.
-            return true
+            // UUID-only preferences predate shared stores and identify an
+            // owned Herd. Do not silently restore a different shared root
+            // that happens to have the same application UUID.
+            return category == .owned
         }
         return remembered == (category == .owned ? "owned" : "shared")
     }
