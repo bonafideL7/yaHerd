@@ -668,7 +668,7 @@ enum CloudKitDevelopmentEventLog {
         if let error = event.error, event.endDate != nil {
             let failure = error as NSError
             ReliabilityLog.persistence.error(
-                "icloud_transfer action=\(action, privacy: .public) state=failed store=\(store, privacy: .public) event=\(eventID, privacy: .public) error_domain=\(failure.domain, privacy: .public) error_code=\(failure.code) "
+                "icloud_transfer action=\(action, privacy: .public) state=failed store=\(store, privacy: .public) event=\(eventID, privacy: .public) error_domain=\(failure.domain, privacy: .public) error_code=\(failure.code)"
             )
             // Development console output is intentionally minimal so
             // testers can identify failed transfers without OSLog filters.
