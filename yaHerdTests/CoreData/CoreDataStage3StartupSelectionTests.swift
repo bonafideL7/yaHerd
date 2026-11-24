@@ -131,6 +131,75 @@ final class CoreDataStage3StartupSelectionTests: XCTestCase {
         )
     }
 
+    func testAmbiguousCloudKitInventoryKeepsStoresOpenForChooserRecovery() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let suiteName = "yaHerd.stage3.inventory-recovery.\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let selection = AppCurrentHerdSelection(defaults: defaults)
+        let repository = CoreDataHerdRepository(selection: selection, assembly: assembly)
+        let owned = try await repository.createOwnedHerd(named: "Original")
+        try selection.selectAccessibleHerd(owned.id, from: repository.fetchAccessibleHerds())
+
+        let writer = try assembly.contextFactory.makeWriteContext()
+        try writer.performAndWait {
+            let sharedStore = try XCTUnwrap(
+                writer.persistentStoreCoordinator?.persistentStores.first {
+                    $0.url?.lastPathComponent == CoreDataPersistentContainer.sharedStoreFileName
+                }
+            )
+            let duplicate = CDHerd(context: writer)
+            duplicate.id = owned.id
+            duplicate.name = "Conflicting imported root"
+            duplicate.createdAt = Date(timeIntervalSince1970: 100)
+            duplicate.updatedAt = Date(timeIntervalSince1970: 100)
+            writer.assign(duplicate, to: sharedStore)
+            try writer.save()
+        }
+
+        let app = try CoreDataAppPersistenceAssembly.resolveCloudKitHerdForChoice(
+            using: assembly, privateStoreURL: harness.storeURL,
+            selectionPreferences: defaults
+        )
+        XCTAssertNil(app.currentHerdSelection.currentHerdID)
+        XCTAssertEqual(defaults.string(forKey: "yaHerd.selectedHerdID.v1"), owned.id.uuidString)
+        let directory = HerdDirectoryController(
+            repository: app.makeDependencies(dataAccessMode: .readWrite).herdRepository,
+            selection: app.currentHerdSelection
+        )
+        directory.refresh()
+        XCTAssertEqual(directory.inventoryState, .unavailable)
+        XCTAssertNotNil(directory.errorMessage)
+
+        // Simulate resolution of the imported collision while the same stores
+        // and chooser remain open. No automatic replacement root is created.
+        let removal = try assembly.contextFactory.makeWriteContext()
+        try removal.performAndWait {
+            let sharedStore = try XCTUnwrap(
+                removal.persistentStoreCoordinator?.persistentStores.first {
+                    $0.url?.lastPathComponent == CoreDataPersistentContainer.sharedStoreFileName
+                }
+            )
+            let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            request.affectedStores = [sharedStore]
+            let duplicate = try XCTUnwrap(removal.fetch(request).first)
+            removal.delete(duplicate)
+            try removal.save()
+        }
+
+        directory.refresh()
+        XCTAssertEqual(directory.inventoryState, .available)
+        XCTAssertEqual(directory.herds.map(\.id), [owned.id])
+        XCTAssertNil(directory.selectedHerdID)
+        try await directory.selectHerdWhenReady(id: owned.id)
+        XCTAssertEqual(directory.selectedHerdID, owned.id)
+        XCTAssertNil(directory.errorMessage)
+    }
+
     func testExplicitUnavailableCloudKitHerdCannotFallBackToAnother() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
