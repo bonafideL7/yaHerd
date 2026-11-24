@@ -5,6 +5,7 @@ struct PastureTileListView: View {
     private var repository: any PastureListManagingRepository { pastureDependencies.listRepository }
     private var deletionCommand: any PastureDeletionPerforming { pastureDependencies.deletionCommand }
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
 
     private let model: PastureTileListViewModel
     @Binding private var isManaging: Bool
@@ -133,11 +134,16 @@ struct PastureTileListView: View {
         ) {
             if let pasture = model.pasturePendingDeletion {
                 Button("Delete \(pasture.name)", role: .destructive) {
+                    guard let originatingHerdID = model.pendingDeletionHerdID,
+                          let originatingSelectionRevision = model.pendingDeletionSelectionRevision else { return }
                     Task { @MainActor in
                         await model.deletePasture(
                             id: pasture.id,
                             deletionCommand: deletionCommand,
-                            orderingRepository: repository
+                            orderingRepository: repository,
+                            selection: herdSelection,
+                            originatingHerdID: originatingHerdID,
+                            originatingSelectionRevision: originatingSelectionRevision
                         )
                     }
                 }
@@ -151,7 +157,8 @@ struct PastureTileListView: View {
                 Text("Historical pasture checks will remain available under Archived Pastures.")
             }
         }
-        .task {
+        .task(id: herdSelection.selectionRevision) {
+            model.configure(selection: herdSelection)
             await model.observe(
                 using: repository,
                 mutationStream: pastureDependencies.mutationStream
@@ -166,7 +173,8 @@ struct PastureTileListView: View {
 
     @ViewBuilder
     private func pastureContent(draggedPasture: Binding<PastureSummary?>) -> some View {
-        if !model.hasLoaded {
+        let originatingSelectionRevision = herdSelection.selectionRevision
+        if !model.hasLoaded || !model.isCurrentHerdSelection {
             initialContentView
         } else if model.items.isEmpty {
             PastureEmptyStateView(onAddPasture: model.requestAddPasture)
@@ -174,15 +182,32 @@ struct PastureTileListView: View {
             PastureManageGrid(
                 items: model.items,
                 draggedPasture: draggedPasture,
-                onDelete: model.requestDelete,
-                onBeginDrag: model.beginDragging,
+                onDelete: { pasture in
+                    model.requestDelete(
+                        pasture,
+                        originatingSelectionRevision: originatingSelectionRevision
+                    )
+                },
+                onBeginDrag: { pasture in
+                    model.beginDragging(
+                        pasture,
+                        originatingSelectionRevision: originatingSelectionRevision
+                    )
+                },
                 onMove: { source, destination in
                     withAnimation(.snappy) {
-                        model.moveDraggedPasture(from: source, to: destination)
+                        model.moveDraggedPasture(
+                            from: source,
+                            to: destination,
+                            originatingSelectionRevision: originatingSelectionRevision
+                        )
                     }
                 },
                 onCommitMove: {
-                    model.commitDragOrder(using: repository)
+                    model.commitDragOrder(
+                        using: repository,
+                        originatingSelectionRevision: originatingSelectionRevision
+                    )
                 }
             )
         } else if filteredItems.isEmpty {

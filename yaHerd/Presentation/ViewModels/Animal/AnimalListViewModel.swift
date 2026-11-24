@@ -32,6 +32,32 @@ final class AnimalListViewModel {
     private var derivedStateGeneration = 0
     private var lastDerivedStateRequest: DerivedStateRequest?
     private let derivationActor = AnimalListDerivationActor()
+    @ObservationIgnored private var herdSelection: (any CurrentHerdSelectionReading)?
+    private var selectedHerdID: UUID?
+    private var selectedSelectionRevision: UInt64 = 0
+    private var hasConfiguredHerdSelection = false
+
+    /// Identity of the rows currently held by this model, not the selection
+    /// that may have changed before SwiftUI has discarded an old row.
+    var loadedSelectionIdentity: (herdID: UUID, revision: UInt64)? {
+        guard hasLoaded, hasConfiguredHerdSelection, let selectedHerdID else { return nil }
+        return (selectedHerdID, selectedSelectionRevision)
+    }
+
+    /// Bind this model to the application selection before loading. A load that
+    /// originated under another Herd cannot publish its result after a switch.
+    func configure(selection: any CurrentHerdSelectionReading) {
+        herdSelection = selection
+        let herdID = selection.currentHerdID
+        let revision = selection.selectionRevision
+        guard !hasConfiguredHerdSelection ||
+              selectedHerdID != herdID ||
+              selectedSelectionRevision != revision else { return }
+        hasConfiguredHerdSelection = true
+        selectedHerdID = herdID
+        selectedSelectionRevision = revision
+        resetForHerdChange()
+    }
 
     func observe(
         using repository: any AnimalListRepository,
@@ -70,6 +96,7 @@ final class AnimalListViewModel {
         pastureRepository: any PastureReferenceDataReader,
         snapshotReader: (any AnimalListSnapshotReading)? = nil
     ) {
+        refreshHerdSelection()
         guard !hasLoaded, !isLoading else { return }
         load(using: repository, pastureRepository: pastureRepository, snapshotReader: snapshotReader)
     }
@@ -79,9 +106,12 @@ final class AnimalListViewModel {
         pastureRepository: any PastureReferenceDataReader,
         snapshotReader: (any AnimalListSnapshotReading)? = nil
     ) {
+        refreshHerdSelection()
         loadGeneration += 1
         if !hasLoaded { hasInitialLoadFailure = false }
         let generation = loadGeneration
+        let originatingHerdID = selectedHerdID
+        let originatingSelectionRevision = selectedSelectionRevision
         loadTask?.cancel()
         loadTask = nil
 
@@ -100,7 +130,9 @@ final class AnimalListViewModel {
             await self.loadUsingReadModel(
                 queryReader,
                 snapshotReader: snapshotReader,
-                generation: generation
+                generation: generation,
+                originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: originatingSelectionRevision
             )
         }
     }
@@ -129,9 +161,15 @@ final class AnimalListViewModel {
     func performPrimarySwipeAction(
         animalID: UUID,
         hardDelete: Bool,
+        originatingHerdID: UUID,
+        originatingSelectionRevision: UInt64,
         using repository: any AnimalListRepository,
         pastureRepository _: any PastureReferenceDataReader
     ) {
+        guard isCurrentActionSelection(
+            herdID: originatingHerdID,
+            revision: originatingSelectionRevision
+        ) else { return }
         do {
             if hardDelete {
                 try repository.delete(ids: [animalID])
@@ -153,9 +191,15 @@ final class AnimalListViewModel {
 
     func restore(
         animalID: UUID,
+        originatingHerdID: UUID,
+        originatingSelectionRevision: UInt64,
         using repository: any AnimalListRepository,
         pastureRepository _: any PastureReferenceDataReader
     ) {
+        guard isCurrentActionSelection(
+            herdID: originatingHerdID,
+            revision: originatingSelectionRevision
+        ) else { return }
         do {
             try repository.restore(ids: [animalID])
             invalidateCurrentLoad()
@@ -170,9 +214,17 @@ final class AnimalListViewModel {
     func move(
         ids: [UUID],
         toPastureID pastureID: UUID?,
+        originatingHerdID: UUID,
+        originatingSelectionRevision: UInt64,
         using repository: any AnimalListRepository,
         pastureRepository _: any PastureReferenceDataReader
     ) {
+        // A retained pasture picker must not mutate the Herd that is currently
+        // selected after its originating Animal list has been superseded.
+        guard isCurrentActionSelection(
+            herdID: originatingHerdID,
+            revision: originatingSelectionRevision
+        ) else { return }
         do {
             try repository.move(ids: ids, toPastureID: pastureID)
             invalidateCurrentLoad()
@@ -182,6 +234,16 @@ final class AnimalListViewModel {
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
+    }
+
+    /// Both the rendered-row origin and the live selection must still agree.
+    /// The revision prevents stale actions after an A → B → A round trip.
+    private func isCurrentActionSelection(herdID: UUID, revision: UInt64) -> Bool {
+        guard let herdSelection, hasConfiguredHerdSelection else { return false }
+        return selectedHerdID == herdID
+            && selectedSelectionRevision == revision
+            && herdSelection.currentHerdID == herdID
+            && herdSelection.selectionRevision == revision
     }
 
     func pastureName(for id: UUID?) -> String? {
@@ -203,7 +265,9 @@ final class AnimalListViewModel {
     private func loadUsingReadModel(
         _ reader: any AnimalListQueryReading,
         snapshotReader: (any AnimalListSnapshotReading)?,
-        generation: Int
+        generation: Int,
+        originatingHerdID: UUID?,
+        originatingSelectionRevision: UInt64
     ) async {
         defer {
             if generation == loadGeneration {
@@ -228,7 +292,15 @@ final class AnimalListViewModel {
                 return (animals, try await pastureOptions)
             }
 
-            guard !Task.isCancelled, generation == loadGeneration else { return }
+            guard !Task.isCancelled else { return }
+            refreshHerdSelection()
+            guard isCurrentLoad(
+                generation: generation,
+                originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: originatingSelectionRevision
+            ) else {
+                return
+            }
             if !hasLoaded { hasInitialDerivedState = false }
             items = loaded.0
             pastureOptions = loaded.1
@@ -239,7 +311,15 @@ final class AnimalListViewModel {
         } catch is CancellationError {
             return
         } catch {
-            guard generation == loadGeneration else { return }
+            guard !Task.isCancelled else { return }
+            refreshHerdSelection()
+            guard isCurrentLoad(
+                generation: generation,
+                originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: originatingSelectionRevision
+            ) else {
+                return
+            }
             if !hasLoaded { hasInitialLoadFailure = true }
             errorMessage = UserVisibleErrorMessage.make(error)
         }
@@ -292,6 +372,51 @@ final class AnimalListViewModel {
             guard !page.animals.isEmpty else { return animals }
             offset += page.animals.count
         }
+    }
+
+    private func refreshHerdSelection() {
+        guard let herdSelection,
+              herdSelection.currentHerdID != selectedHerdID ||
+              herdSelection.selectionRevision != selectedSelectionRevision else { return }
+        configure(selection: herdSelection)
+    }
+
+    private func isCurrentLoad(
+        generation: Int,
+        originatingHerdID: UUID?,
+        originatingSelectionRevision: UInt64
+    ) -> Bool {
+        guard generation == loadGeneration else { return false }
+        guard let herdSelection else { return true }
+        return selectedHerdID == originatingHerdID
+            && selectedSelectionRevision == originatingSelectionRevision
+            && herdSelection.currentHerdID == originatingHerdID
+            && herdSelection.selectionRevision == originatingSelectionRevision
+    }
+
+    private func resetForHerdChange() {
+        invalidateCurrentLoad()
+        derivedStateTask?.cancel()
+        derivedStateTask = nil
+        derivedStateGeneration += 1
+        lastLoadedRevision = 0
+        items = []
+        pastureOptions = []
+        hasLoaded = false
+        hasInitialDerivedState = false
+        hasInitialLoadFailure = false
+        filteredAndSortedAnimals = []
+        groupedAnimals = []
+        shouldUseSections = false
+        currentSectionIDs = []
+        emptyStateConfiguration = AnimalListEmptyStateConfiguration(
+            title: "No Animals Yet",
+            description: "Add your first animal to start building the herd.",
+            systemImage: "Cow"
+        )
+        hasHiddenOffHerdAnimals = false
+        hasHiddenArchivedRecords = false
+        errorMessage = nil
     }
 
     private func invalidateCurrentLoad() {

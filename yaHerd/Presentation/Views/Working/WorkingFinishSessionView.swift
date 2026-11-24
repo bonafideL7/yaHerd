@@ -4,6 +4,7 @@ struct WorkingFinishSessionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     private var repository: any WorkingFinishSessionRepository {
@@ -14,6 +15,9 @@ struct WorkingFinishSessionView: View {
         workingDependencies.pastureReferenceReader
     }
 
+    private let originatingHerdID: UUID
+    private let originatingSelectionRevision: UInt64
+
     @StateObject private var viewModel: WorkingFinishSessionViewModel
     @State private var exceptionAnimalIDs: Set<UUID> = []
     @State private var exceptionDestinationIDs: [UUID: UUID] = [:]
@@ -23,7 +27,9 @@ struct WorkingFinishSessionView: View {
     @State private var showingError = false
     @State private var isFinishing = false
 
-    init(sessionID: UUID) {
+    init(sessionID: UUID, originatingHerdID: UUID, originatingSelectionRevision: UInt64) {
+        self.originatingHerdID = originatingHerdID
+        self.originatingSelectionRevision = originatingSelectionRevision
         _viewModel = StateObject(
             wrappedValue: WorkingFinishSessionViewModel(
                 sessionID: sessionID,
@@ -31,6 +37,11 @@ struct WorkingFinishSessionView: View {
                 pastureRepository: EmptyPastureRepository()
             )
         )
+    }
+
+    private var isViewingOriginatingHerd: Bool {
+        herdSelection.currentHerdID == originatingHerdID
+            && herdSelection.selectionRevision == originatingSelectionRevision
     }
 
     private var session: WorkingSessionDetailSnapshot? {
@@ -70,7 +81,9 @@ struct WorkingFinishSessionView: View {
 
     private var canFinish: Bool {
         guard !isFinishing,
+              isViewingOriginatingHerd,
               dataAccessMode.allowsDataMutations,
+              viewModel.sessionLoadState == .ready,
               viewModel.hasLoadedPastureOptions,
               let session,
               session.status == .active,
@@ -91,7 +104,21 @@ struct WorkingFinishSessionView: View {
     }
 
     private var finishStatusText: String? {
-        guard let session else { return "Loading session…" }
+        guard isViewingOriginatingHerd else {
+            return "The selected Herd changed. Reopen the session to continue."
+        }
+        guard let session else {
+            switch viewModel.sessionLoadState {
+            case .loading:
+                return "Loading session…"
+            case .missing:
+                return "This session is not available in the selected Herd. Retry to check again."
+            case .failed:
+                return "Session details could not be read. Retry before finishing."
+            case .ready:
+                return "This session is not available."
+            }
+        }
         guard session.status == .active else {
             return "This session is already completed."
         }
@@ -129,17 +156,33 @@ struct WorkingFinishSessionView: View {
     var body: some View {
         NavigationStack {
             Form {
-                summarySection
-                defaultDestinationSection
+                if isViewingOriginatingHerd {
+                    switch viewModel.sessionLoadState {
+                    case .loading:
+                        ProgressView("Loading session…")
+                            .frame(maxWidth: .infinity)
+                    case .missing, .failed:
+                        sessionLoadRecoverySection
+                    case .ready:
+                        summarySection
+                        defaultDestinationSection
 
-                if viewModel.needsPastureOptionsRetry {
-                    pastureLoadRecoverySection
-                }
+                        if viewModel.needsPastureOptionsRetry {
+                            pastureLoadRecoverySection
+                        }
 
-                exceptionSection
+                        exceptionSection
 
-                if !unfinishedItems.isEmpty {
-                    unfinishedSection
+                        if !unfinishedItems.isEmpty {
+                            unfinishedSection
+                        }
+                    }
+                } else {
+                    ContentUnavailableView(
+                        "Working Session Unavailable",
+                        systemImage: "arrow.left.arrow.right",
+                        description: Text("The selected Herd changed. Reopen the session to continue.")
+                    )
                 }
             }
             .navigationTitle("Finish Session")
@@ -152,32 +195,45 @@ struct WorkingFinishSessionView: View {
                 }
             }
             .task {
+                guard isViewingOriginatingHerd else { return }
                 viewModel.configure(
                     workingRepository: repository,
                     pastureRepository: pastureRepository
                 )
                 viewModel.load()
-                if viewModel.errorMessage != nil {
+                if viewModel.errorMessage != nil &&
+                   viewModel.sessionLoadState != .failed {
                     showingError = true
                 }
                 seedExceptions()
             }
             .onChange(of: viewModel.session?.id) { _, _ in
+                guard isViewingOriginatingHerd else { return }
                 seedExceptions(force: true)
             }
             .onChange(of: viewModel.hasLoadedPastureOptions) { _, loaded in
-                if loaded {
+                if loaded && isViewingOriginatingHerd {
                     revalidateExceptionDestinationsAgainstLivePastures()
                 }
             }
             .onChange(of: exceptionAnimalIDs) { _, _ in
+                guard isViewingOriginatingHerd else { return }
                 synchronizeExceptionDestinations()
             }
+            .onChange(of: herdSelection.selectionRevision) { _, _ in
+                guard !isViewingOriginatingHerd else { return }
+                showingExceptionPicker = false
+                showingUnfinishedConfirmation = false
+                showingError = false
+                dismiss()
+            }
             .sheet(isPresented: $showingExceptionPicker) {
-                WorkingFinishExceptionSelectionView(
-                    items: orderedItems,
-                    selection: $exceptionAnimalIDs
-                )
+                if isViewingOriginatingHerd {
+                    WorkingFinishExceptionSelectionView(
+                        items: orderedItems,
+                        selection: $exceptionAnimalIDs
+                    )
+                }
             }
             .confirmationDialog(
                 "Finish With Unworked Animals?",
@@ -193,11 +249,13 @@ struct WorkingFinishSessionView: View {
                 Text(unfinishedConfirmationMessage)
             }
             .safeAreaInset(edge: .bottom) {
-                WorkingFinishSessionActionBar(
-                    isEnabled: canFinish,
-                    statusText: finishStatusText,
-                    onFinish: finishTapped
-                )
+                if isViewingOriginatingHerd {
+                    WorkingFinishSessionActionBar(
+                        isEnabled: canFinish,
+                        statusText: finishStatusText,
+                        onFinish: finishTapped
+                    )
+                }
             }
             .alert("Can’t Finish Session", isPresented: $showingError) {
                 Button("OK", role: .cancel) {}
@@ -205,7 +263,8 @@ struct WorkingFinishSessionView: View {
                 Text(errorMessage ?? viewModel.errorMessage ?? "Unknown error")
             }
             .onChange(of: viewModel.errorMessage) { _, newValue in
-                if newValue != nil {
+                if newValue != nil && isViewingOriginatingHerd &&
+                   viewModel.sessionLoadState != .failed {
                     showingError = true
                 }
             }
@@ -314,6 +373,33 @@ struct WorkingFinishSessionView: View {
             } else if !selectedExceptionItems.isEmpty {
                 Text("Only animals listed here will move somewhere other than the source pasture.")
             }
+        }
+    }
+
+    private var sessionLoadRecoverySection: some View {
+        Section {
+            if viewModel.sessionLoadState == .missing {
+                Text("This Working session is not available in the selected Herd. It may still be importing or may have been removed.")
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Working session details could not be read. Retry after the Herd finishes importing.")
+                    .foregroundStyle(.secondary)
+            }
+
+            Button {
+                guard isViewingOriginatingHerd else { return }
+                viewModel.retrySession()
+                if viewModel.sessionLoadState == .ready {
+                    // Rebuild assignments from the newly read session even
+                    // when SwiftUI coalesces nil → same-ID observation changes.
+                    seedExceptions(force: true)
+                    revalidateExceptionDestinationsAgainstLivePastures()
+                }
+            } label: {
+                Label("Retry Loading Session", systemImage: "arrow.clockwise")
+            }
+        } header: {
+            Text("Session Unavailable")
         }
     }
 
@@ -429,7 +515,7 @@ struct WorkingFinishSessionView: View {
     }
 
     private func completeSession() {
-        guard !isFinishing, let session, canFinish else { return }
+        guard !isFinishing, canFinish, isViewingOriginatingHerd else { return }
 
         let assignments = orderedItems.map { item in
             let destinationPastureID = exceptionAnimalIDs.contains(item.id)
@@ -447,12 +533,18 @@ struct WorkingFinishSessionView: View {
             defer { isFinishing = false }
 
             do {
-                try await CompleteWorkingSessionUseCase(repository: repository).execute(
-                    sessionID: session.id,
-                    assignments: assignments
-                )
+                guard try await viewModel.finishSession(
+                    assignments: assignments,
+                    originatingHerdID: originatingHerdID,
+                    originatingSelectionRevision: originatingSelectionRevision,
+                    currentHerdSelection: herdSelection,
+                    repository: repository
+                ) else { return }
                 dismiss()
             } catch {
+                guard !Task.isCancelled,
+                      herdSelection.currentHerdID == originatingHerdID,
+                      herdSelection.selectionRevision == originatingSelectionRevision else { return }
                 errorMessage = UserVisibleErrorMessage.make(error)
                 showingError = true
             }

@@ -6,6 +6,8 @@ import Observation
 final class AnimalInlineEntryViewModel {
     @ObservationIgnored private let dateProvider: any DateProviding
     @ObservationIgnored private let calendar: Calendar
+    @ObservationIgnored private var draftHerdID: UUID?
+    @ObservationIgnored private var draftSelectionRevision: UInt64?
 
     var isActive = false
     var identity = UUID()
@@ -39,7 +41,13 @@ final class AnimalInlineEntryViewModel {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    func beginNew() {
+    func beginNew(selection: AppCurrentHerdSelection) {
+        guard let herdID = selection.currentHerdID else {
+            cancel()
+            return
+        }
+        draftHerdID = herdID
+        draftSelectionRevision = selection.selectionRevision
         editingAnimalID = nil
         isActive = true
         identity = UUID()
@@ -54,7 +62,18 @@ final class AnimalInlineEntryViewModel {
         ignoresNextFocusLoss = false
     }
 
-    func beginEditing(_ animal: AnimalSummary, detail: AnimalDetailSnapshot, tagColorLibrary: TagColorLibraryStore) {
+    func beginEditing(
+        _ animal: AnimalSummary,
+        detail: AnimalDetailSnapshot,
+        tagColorLibrary: TagColorLibraryStore,
+        selection: AppCurrentHerdSelection
+    ) {
+        guard let herdID = selection.currentHerdID else {
+            cancel()
+            return
+        }
+        draftHerdID = herdID
+        draftSelectionRevision = selection.selectionRevision
         editingAnimalID = animal.id
         isActive = true
         identity = animal.id
@@ -90,6 +109,8 @@ final class AnimalInlineEntryViewModel {
     }
 
     func cancel() {
+        draftHerdID = nil
+        draftSelectionRevision = nil
         isActive = false
         editingAnimalID = nil
         text = ""
@@ -109,9 +130,16 @@ final class AnimalInlineEntryViewModel {
         startNewEntryAfterCreate: Bool,
         colors: [TagColorSnapshot],
         defaultTagColorID: UUID?,
-        using repository: any AnimalListRepository
+        using repository: any AnimalListRepository,
+        selection: AppCurrentHerdSelection
     ) throws -> Bool {
         guard isActive, !isCommitting else { return false }
+        guard let draftHerdID,
+              let draftSelectionRevision,
+              selection.currentHerdID == draftHerdID,
+              selection.selectionRevision == draftSelectionRevision else {
+            throw CancellationError()
+        }
 
         let trimmedText = trimmedText
         guard !trimmedText.isEmpty else {
@@ -130,7 +158,7 @@ final class AnimalInlineEntryViewModel {
         } else {
             try createInlineAnimal(text: trimmedText, colors: colors, defaultTagColorID: defaultTagColorID, using: repository)
             if startNewEntryAfterCreate {
-                beginNew()
+                beginNew(selection: selection)
             } else {
                 clearCommittedEntry()
             }
@@ -187,6 +215,8 @@ final class AnimalInlineEntryViewModel {
     }
 
     private func clearCommittedEntry() {
+        draftHerdID = nil
+        draftSelectionRevision = nil
         isActive = false
         editingAnimalID = nil
         text = ""

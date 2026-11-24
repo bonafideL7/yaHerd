@@ -1,10 +1,18 @@
 import Foundation
 
+enum WorkingFinishSessionLoadState: Equatable {
+    case loading
+    case ready
+    case missing
+    case failed
+}
+
 @MainActor
 final class WorkingFinishSessionViewModel: ObservableObject {
     @Published private(set) var session: WorkingSessionDetailSnapshot?
     @Published private(set) var pastures: [PastureOption] = []
     @Published private(set) var hasLoadedPastureOptions = false
+    @Published private(set) var sessionLoadState: WorkingFinishSessionLoadState = .loading
     @Published var errorMessage: String?
 
     private let sessionID: UUID
@@ -17,6 +25,33 @@ final class WorkingFinishSessionViewModel: ObservableObject {
         self.pastureRepository = pastureRepository
     }
 
+    /// A queued finish must not write against a different selected Herd.
+    /// The repository owns the in-flight transaction; only the originating
+    /// Herd may acknowledge its result to presentation.
+    @discardableResult
+    func finishSession(
+        assignments: [WorkingQueueDestinationAssignment],
+        originatingHerdID: UUID,
+        originatingSelectionRevision: UInt64,
+        currentHerdSelection: AppCurrentHerdSelection,
+        repository: any WorkingFinishSessionRepository
+    ) async throws -> Bool {
+        guard !Task.isCancelled,
+              currentHerdSelection.currentHerdID == originatingHerdID,
+              currentHerdSelection.selectionRevision == originatingSelectionRevision else {
+            return false
+        }
+
+        try await CompleteWorkingSessionUseCase(repository: repository).execute(
+            sessionID: sessionID,
+            assignments: assignments
+        )
+
+        return !Task.isCancelled
+            && currentHerdSelection.currentHerdID == originatingHerdID
+            && currentHerdSelection.selectionRevision == originatingSelectionRevision
+    }
+
     var needsPastureOptionsRetry: Bool {
         session != nil && !hasLoadedPastureOptions
     }
@@ -27,14 +62,32 @@ final class WorkingFinishSessionViewModel: ObservableObject {
     }
 
     func load() {
+        // A failed or missing re-read cannot authorize completion using
+        // previously loaded session details or destination options.
+        sessionLoadState = .loading
+        session = nil
+        pastures = []
+        hasLoadedPastureOptions = false
+
         do {
-            session = try workingRepository.fetchSessionDetail(id: sessionID)
+            guard let loadedSession = try workingRepository.fetchSessionDetail(id: sessionID) else {
+                sessionLoadState = .missing
+                errorMessage = nil
+                return
+            }
+            session = loadedSession
+            sessionLoadState = .ready
         } catch {
+            sessionLoadState = .failed
             errorMessage = UserVisibleErrorMessage.make(error)
             return
         }
 
         loadPastureOptions()
+    }
+
+    func retrySession() {
+        load()
     }
 
     func retryPastureOptions() {
@@ -52,6 +105,7 @@ final class WorkingFinishSessionViewModel: ObservableObject {
             hasLoadedPastureOptions = true
             errorMessage = nil
         } catch {
+            pastures = []
             hasLoadedPastureOptions = false
             errorMessage = UserVisibleErrorMessage.make(error)
         }

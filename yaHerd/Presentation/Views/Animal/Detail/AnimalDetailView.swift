@@ -13,6 +13,7 @@ struct AnimalDetailView: View {
     private var repository: any AnimalDetailRepository { animalDependencies.detailRepository }
     private var pastureReferenceDataReader: any PastureReferenceDataReader { animalDependencies.pastureReferenceReader }
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @State private var viewModel = AnimalDetailViewModel()
@@ -44,23 +45,42 @@ struct AnimalDetailView: View {
         _returnsToListAfterSave = State(initialValue: initiallyEditing)
     }
 
+    private var isViewingCurrentHerd: Bool {
+        viewModel.isViewingSelectionCurrent(herdSelection)
+    }
+
+    private var presentedDetail: AnimalDetailSnapshot? {
+        viewModel.presentationDetail(for: herdSelection)
+    }
+
     private var displayedTagNumber: String {
+        guard isViewingCurrentHerd else { return "" }
         if viewModel.isEditing {
             return viewModel.form.draft.normalizedTagNumber
         }
-        return viewModel.detail?.displayTagNumber ?? ""
+        return presentedDetail?.displayTagNumber ?? ""
     }
 
     private var displayedTagColorID: UUID? {
+        guard isViewingCurrentHerd else { return nil }
         if viewModel.isEditing {
             return viewModel.form.draft.tagColorID
         }
-        return viewModel.detail?.displayTagColorID
+        return presentedDetail?.displayTagColorID
     }
 
     var body: some View {
         Group {
-            if let detail = viewModel.detail {
+            if !viewModel.hasLoaded && viewModel.viewingSelectionIdentity == nil
+                && herdSelection.currentHerdID != nil {
+                ProgressView()
+            } else if !isViewingCurrentHerd {
+                ContentUnavailableView(
+                    "Animal Unavailable",
+                    systemImage: "arrow.left.arrow.right",
+                    description: Text("The selected Herd changed. Reopen this animal to continue.")
+                )
+            } else if let detail = presentedDetail {
                 ScrollViewReader { proxy in
                     Form {
                         if viewModel.isEditing {
@@ -132,9 +152,10 @@ struct AnimalDetailView: View {
             .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showingAddOffspring, onDismiss: {
+            guard isViewingCurrentHerd else { return }
             viewModel.load(animalID: animalID, using: repository, pastureRepository: pastureReferenceDataReader)
         }) {
-            if let preparedEditor = viewModel.preparedOffspringEditor {
+            if isViewingCurrentHerd, let preparedEditor = viewModel.preparedOffspringEditor {
                 AddAnimalView(
                     title: "Add Offspring",
                     initialDraft: preparedEditor.draft,
@@ -169,17 +190,17 @@ struct AnimalDetailView: View {
         }
         .sheet(item: $permanentDeleteReviewDetail) { reviewDetail in
             AnimalPermanentDeleteReviewView(detail: reviewDetail) {
-                viewModel.delete(animalID: animalID, using: repository)
+                viewModel.delete(animalID: animalID, using: repository, selection: herdSelection)
             }
             .presentationDetents([.large])
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if viewModel.isEditing {
+            if isViewingCurrentHerd && viewModel.isEditing {
                 Color.clear.frame(height: 88).allowsHitTesting(false)
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            if viewModel.isEditing {
+            if isViewingCurrentHerd && viewModel.isEditing {
                 floatingActions
                     .padding(.trailing, 24)
                     .padding(.bottom, 12)
@@ -198,7 +219,7 @@ struct AnimalDetailView: View {
                 .accessibilityHint("Return to the previous screen")
             }
 
-            if !displayedTagNumber.isEmpty {
+            if isViewingCurrentHerd && !displayedTagNumber.isEmpty {
                 ToolbarItem(placement: .principal) {
                     let def = tagColorLibrary.resolvedDefinition(tagColorID: displayedTagColorID)
                     AnimalTagView(
@@ -210,50 +231,71 @@ struct AnimalDetailView: View {
                 }
             }
 
-            if viewModel.isEditing {
+            if isViewingCurrentHerd && viewModel.isEditing {
                 ToolbarItem(placement: .confirmationAction) {
                     ToolbarSaveButton {
                         saveChanges()
                     }
-                    .disabled(!canSaveChanges)
+                    .disabled(!canSaveChanges || !isViewingCurrentHerd)
                 }
             }
 
-            if viewModel.detail != nil {
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        AnimalTimelineContainerView(animalID: animalID)
-                    } label: {
-                        Image(systemName: "clock.arrow.circlepath")
+            if presentedDetail != nil {
+                if let identity = viewModel.viewingSelectionIdentity {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        NavigationLink {
+                            AnimalTimelineContainerView(
+                                animalID: animalID,
+                                originatingHerdID: identity.herdID,
+                                originatingSelectionRevision: identity.revision
+                            )
+                        } label: {
+                            Image(systemName: "clock.arrow.circlepath")
+                        }
+                        .accessibilityLabel("Animal Timeline")
+                        .disabled(!isViewingCurrentHerd)
                     }
-                    .accessibilityLabel("Animal Timeline")
                 }
 
                 if !viewModel.isEditing {
                     ToolbarItem(placement: .topBarTrailing) {
                         ToolbarEditButton {
                             returnsToListAfterSave = false
-                            viewModel.beginEditing()
+                            viewModel.beginEditing(selection: herdSelection)
                         }
+                        .disabled(!isViewingCurrentHerd)
                     }
                 }
             }
         }
         .task {
+            viewModel.captureViewingSelection(herdSelection)
+            guard isViewingCurrentHerd else { return }
             if !viewModel.hasLoaded {
                 viewModel.load(animalID: animalID, using: repository, pastureRepository: pastureReferenceDataReader)
                 if initiallyEditing && dataAccessMode.allowsDataMutations && viewModel.detail != nil {
-                    viewModel.beginEditing()
+                    viewModel.beginEditing(selection: herdSelection)
                 }
             }
         }
         .onChange(of: viewModel.errorMessage) { _, newValue in
-            showingError = newValue != nil
+            showingError = newValue != nil && isViewingCurrentHerd
         }
         .onChange(of: viewModel.didDelete) { _, didDelete in
-            if didDelete {
+            if didDelete && isViewingCurrentHerd {
                 closeDestination()
             }
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            guard !isViewingCurrentHerd else { return }
+            activeParentPicker = nil
+            showingAddTag = false
+            editingTag = nil
+            showingAddOffspring = false
+            showingDiscardConfirmation = false
+            showingArchiveConfirmation = false
+            permanentDeleteReviewDetail = nil
+            showingError = false
         }
     }
 
@@ -266,6 +308,10 @@ struct AnimalDetailView: View {
     }
 
     private func requestBack() {
+        guard isViewingCurrentHerd else {
+            closeDestination()
+            return
+        }
         if viewModel.isEditing && canSaveChanges {
             discardDestination = .back
             showingDiscardConfirmation = true
@@ -298,7 +344,8 @@ struct AnimalDetailView: View {
         viewModel.save(
             animalID: animalID,
             defaultTagColorID: tagColorLibrary.defaultColorID,
-            using: repository
+            using: repository,
+            selection: herdSelection
         )
         if !viewModel.isEditing && returnsToListAfterSave {
             closeDestination()
@@ -309,7 +356,8 @@ struct AnimalDetailView: View {
         viewModel.archive(
             animalID: animalID,
             using: repository,
-            pastureRepository: pastureReferenceDataReader
+            pastureRepository: pastureReferenceDataReader,
+            selection: herdSelection
         )
         if viewModel.errorMessage == nil {
             viewModel.cancelEditing()
@@ -323,7 +371,8 @@ struct AnimalDetailView: View {
         viewModel.restore(
             animalID: animalID,
             using: repository,
-            pastureRepository: pastureReferenceDataReader
+            pastureRepository: pastureReferenceDataReader,
+            selection: herdSelection
         )
         if viewModel.errorMessage == nil {
             viewModel.cancelEditing()
@@ -347,7 +396,7 @@ struct AnimalDetailView: View {
                 } label: {
                     Label("Add Offspring", systemImage: "plus.circle")
                 }
-                .disabled(canSaveChanges)
+                .disabled(canSaveChanges || !isViewingCurrentHerd)
             }
 
             if let detail = viewModel.detail, dataAccessMode.allowsDataMutations {
@@ -359,24 +408,25 @@ struct AnimalDetailView: View {
                     } label: {
                         Label("Restore Archived Record", systemImage: "arrow.uturn.backward.circle")
                     }
-                    .disabled(canSaveChanges)
+                    .disabled(canSaveChanges || !isViewingCurrentHerd)
 
                     Button(role: .destructive) {
                         permanentDeleteReviewDetail = viewModel.preparePermanentDeleteReview(
                             animalID: animalID,
-                            using: repository
+                            using: repository,
+                            selection: herdSelection
                         )
                     } label: {
                         Label("Permanently Delete", systemImage: "trash")
                     }
-                    .disabled(canSaveChanges)
+                    .disabled(canSaveChanges || !isViewingCurrentHerd)
                 } else {
                     Button(role: .destructive) {
                         showingArchiveConfirmation = true
                     } label: {
                         Label("Archive Record", systemImage: "archivebox")
                     }
-                    .disabled(canSaveChanges)
+                    .disabled(canSaveChanges || !isViewingCurrentHerd)
                 }
             }
         } label: {
@@ -456,14 +506,14 @@ struct AnimalDetailView: View {
         AnimalDetailStatusSection(detail: detail) { status in
             guard dataAccessMode.allowsDataMutations else { return }
             returnsToListAfterSave = false
-            viewModel.beginEditingStatus(status)
+            viewModel.beginEditingStatus(status, selection: herdSelection)
         }
         AnimalDetailRecordManagementSection(
             detail: detail,
-            onRestore: { viewModel.restore(animalID: animalID, using: repository, pastureRepository: pastureReferenceDataReader) },
-            onArchive: { viewModel.archive(animalID: animalID, using: repository, pastureRepository: pastureReferenceDataReader) },
-            onPreparePermanentDelete: { viewModel.preparePermanentDeleteReview(animalID: animalID, using: repository) },
-            onDelete: { viewModel.delete(animalID: animalID, using: repository) }
+            onRestore: { viewModel.restore(animalID: animalID, using: repository, pastureRepository: pastureReferenceDataReader, selection: herdSelection) },
+            onArchive: { viewModel.archive(animalID: animalID, using: repository, pastureRepository: pastureReferenceDataReader, selection: herdSelection) },
+            onPreparePermanentDelete: { viewModel.preparePermanentDeleteReview(animalID: animalID, using: repository, selection: herdSelection) },
+            onDelete: { viewModel.delete(animalID: animalID, using: repository, selection: herdSelection) }
         )
     }
 }

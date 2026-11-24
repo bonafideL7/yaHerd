@@ -18,6 +18,44 @@ final class AnimalDetailViewModel {
     var pendingScrollTarget: AnimalEditorScrollTarget?
     var preparedOffspringEditor: PreparedAnimalEditor?
 
+    @ObservationIgnored private var editingHerdID: UUID?
+    @ObservationIgnored private var editingSelectionRevision: UInt64?
+    @ObservationIgnored private var viewingHerdID: UUID?
+    @ObservationIgnored private var viewingSelectionRevision: UInt64?
+    @ObservationIgnored private var hasCapturedViewingSelection = false
+
+    func captureViewingSelection(_ selection: AppCurrentHerdSelection) {
+        guard !hasCapturedViewingSelection else { return }
+        hasCapturedViewingSelection = true
+        viewingHerdID = selection.currentHerdID
+        viewingSelectionRevision = selection.selectionRevision
+    }
+
+    func isViewingSelectionCurrent(_ selection: AppCurrentHerdSelection) -> Bool {
+        guard let viewingHerdID, let viewingSelectionRevision else { return false }
+        return selection.currentHerdID == viewingHerdID
+            && selection.selectionRevision == viewingSelectionRevision
+    }
+
+    /// Retained detail views may not present a record from an obsolete Herd selection.
+    func presentationDetail(for selection: AppCurrentHerdSelection) -> AnimalDetailSnapshot? {
+        guard isViewingSelectionCurrent(selection) else { return nil }
+        return detail
+    }
+
+    var viewingSelectionIdentity: (herdID: UUID, revision: UInt64)? {
+        guard let viewingHerdID, let viewingSelectionRevision else { return nil }
+        return (viewingHerdID, viewingSelectionRevision)
+    }
+
+    private func validateViewingSelection(_ selection: AppCurrentHerdSelection) -> Bool {
+        guard isViewingSelectionCurrent(selection) else {
+            errorMessage = "The selected Herd changed. Reopen this animal before making changes."
+            return false
+        }
+        return true
+    }
+
     func load(
         animalID: UUID,
         using repository: any AnimalDetailRepository,
@@ -40,8 +78,11 @@ final class AnimalDetailViewModel {
         }
     }
 
-    func beginEditing() {
-        guard let detail else { return }
+    func beginEditing(selection: AppCurrentHerdSelection) {
+        guard validateViewingSelection(selection),
+              let detail, let herdID = selection.currentHerdID else { return }
+        editingHerdID = herdID
+        editingSelectionRevision = selection.selectionRevision
         form.populate(from: detail)
         draftTags = detail.activeTags + detail.inactiveTags
         pendingScrollTarget = nil
@@ -49,6 +90,8 @@ final class AnimalDetailViewModel {
     }
 
     func cancelEditing() {
+        editingHerdID = nil
+        editingSelectionRevision = nil
         guard let detail else {
             draftTags = []
             pendingScrollTarget = nil
@@ -61,8 +104,21 @@ final class AnimalDetailViewModel {
         isEditing = false
     }
 
-    func save(animalID: UUID, defaultTagColorID: UUID?, using repository: any AnimalDetailRepository) {
-        guard detail != nil else { return }
+    func save(
+        animalID: UUID,
+        defaultTagColorID: UUID?,
+        using repository: any AnimalDetailRepository,
+        selection: AppCurrentHerdSelection
+    ) {
+        guard isEditing,
+              detail?.id == animalID,
+              let editingHerdID,
+              let editingSelectionRevision,
+              selection.currentHerdID == editingHerdID,
+              selection.selectionRevision == editingSelectionRevision else {
+            errorMessage = "The selected Herd or animal changed. Reopen the editor before saving."
+            return
+        }
 
         do {
             let input = try form.makeInput(defaultTagColorID: defaultTagColorID)
@@ -78,6 +134,9 @@ final class AnimalDetailViewModel {
             draftTags = updated.activeTags + updated.inactiveTags
             pendingScrollTarget = nil
             isEditing = false
+            self.editingHerdID = nil
+            self.editingSelectionRevision = nil
+            errorMessage = nil
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
@@ -177,9 +236,14 @@ final class AnimalDetailViewModel {
         return detail.sex == .female && !detail.isArchived && detail.status == .active
     }
 
-    func beginEditingStatus(_ status: AnimalStatus? = nil) {
-        guard let detail else { return }
-
+    func beginEditingStatus(
+        _ status: AnimalStatus? = nil,
+        selection: AppCurrentHerdSelection
+    ) {
+        guard validateViewingSelection(selection),
+              let detail, let herdID = selection.currentHerdID else { return }
+        editingHerdID = herdID
+        editingSelectionRevision = selection.selectionRevision
         form.populate(from: detail)
         draftTags = detail.activeTags + detail.inactiveTags
 
@@ -211,8 +275,10 @@ final class AnimalDetailViewModel {
     func archive(
         animalID: UUID,
         using repository: any AnimalDetailRepository,
-        pastureRepository: any PastureReferenceDataReader
+        pastureRepository: any PastureReferenceDataReader,
+        selection: AppCurrentHerdSelection
     ) {
+        guard validateViewingSelection(selection) else { return }
         do {
             try repository.archive(ids: [animalID])
             load(animalID: animalID, using: repository, pastureRepository: pastureRepository)
@@ -224,8 +290,10 @@ final class AnimalDetailViewModel {
     func restore(
         animalID: UUID,
         using repository: any AnimalDetailRepository,
-        pastureRepository: any PastureReferenceDataReader
+        pastureRepository: any PastureReferenceDataReader,
+        selection: AppCurrentHerdSelection
     ) {
+        guard validateViewingSelection(selection) else { return }
         do {
             try repository.restore(ids: [animalID])
             load(animalID: animalID, using: repository, pastureRepository: pastureRepository)
@@ -236,8 +304,10 @@ final class AnimalDetailViewModel {
 
     func preparePermanentDeleteReview(
         animalID: UUID,
-        using repository: any AnimalDetailRepository
+        using repository: any AnimalDetailRepository,
+        selection: AppCurrentHerdSelection
     ) -> AnimalDetailSnapshot? {
+        guard validateViewingSelection(selection) else { return nil }
         do {
             let currentDetail = try fetchArchivedDetail(animalID: animalID, using: repository)
             detail = currentDetail
@@ -249,7 +319,12 @@ final class AnimalDetailViewModel {
         }
     }
 
-    func delete(animalID: UUID, using repository: any AnimalDetailRepository) {
+    func delete(
+        animalID: UUID,
+        using repository: any AnimalDetailRepository,
+        selection: AppCurrentHerdSelection
+    ) {
+        guard validateViewingSelection(selection) else { return }
         do {
             _ = try fetchArchivedDetail(animalID: animalID, using: repository)
             try repository.delete(ids: [animalID])

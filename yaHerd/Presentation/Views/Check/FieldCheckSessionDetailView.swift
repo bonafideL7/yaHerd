@@ -4,7 +4,10 @@ struct FieldCheckSessionDetailView: View {
     @Environment(\.fieldCheckFeatureDependencies) private var fieldCheckDependencies
     private var repository: any FieldCheckSessionDetailRepository { fieldCheckDependencies.sessionDetailRepository }
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @State private var model = FieldCheckSessionDetailViewModel()
+    @State private var originatingHerdID: UUID?
+    @State private var originatingHerdSelectionRevision: UInt64?
     @State private var rosterFilter: FieldCheckRosterFilter = .remaining
     @State private var rosterSearchText = ""
     @State private var showingAddFinding = false
@@ -158,16 +161,44 @@ struct FieldCheckSessionDetailView: View {
         selectedPane == .roster && !trimmedRosterSearchText.isEmpty
     }
 
+    private var isPresentingOriginatingHerd: Bool {
+        guard let originatingHerdID, let originatingHerdSelectionRevision else {
+            return false
+        }
+        return herdSelection.currentHerdID == originatingHerdID
+            && herdSelection.selectionRevision == originatingHerdSelectionRevision
+    }
+
     private var canEditActiveCheck: Bool {
         dataAccessMode.allowsDataMutations
+            && isPresentingOriginatingHerd
             && model.detail?.isCompleted == false
             && model.detail?.isPastureArchived == false
             && !model.isCompletingSession
     }
 
+    /// Capture only selection identity, not this View or its @State model,
+    /// since the mutation observer can retain the guard for its lifetime.
+    private var originatingHerdReadAllowed: @MainActor () -> Bool {
+        let expectedHerdID = originatingHerdID
+        let expectedRevision = originatingHerdSelectionRevision
+        let selection = herdSelection
+        return {
+            guard let expectedHerdID, let expectedRevision else { return false }
+            return selection.currentHerdID == expectedHerdID
+                && selection.selectionRevision == expectedRevision
+        }
+    }
+
     var body: some View {
         Group {
-            if let detail = model.detail {
+            if !isPresentingOriginatingHerd && originatingHerdSelectionRevision != nil {
+                ContentUnavailableView(
+                    "Check unavailable",
+                    systemImage: "checklist",
+                    description: Text("This check belongs to the previously selected Herd.")
+                )
+            } else if let detail = model.detail {
                 detailContent(detail)
             } else if model.hasLoaded {
                 ContentUnavailableView(
@@ -180,7 +211,7 @@ struct FieldCheckSessionDetailView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .navigationTitle(model.detail?.displayTitle ?? "Check")
+        .navigationTitle(isPresentingOriginatingHerd ? (model.detail?.displayTitle ?? "Check") : "Check")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(model.isCompletingSession)
         .interactiveDismissDisabled(model.isCompletingSession)
@@ -195,12 +226,13 @@ struct FieldCheckSessionDetailView: View {
                         Menu {
                             Button {
                                 Task { @MainActor in
-                                    await model.reopenSession(sessionID: sessionID, using: repository)
+                                    await model.reopenSession(sessionID: sessionID, using: repository, mayContinue: { isPresentingOriginatingHerd })
                                 }
                             } label: {
                                 Label("Reopen Check", systemImage: "lock.open")
                             }
                             .disabledWhenDataReadOnly()
+                            .disabled(!isPresentingOriginatingHerd)
                         } label: {
                             Image(systemName: "ellipsis")
                                 .font(.system(size: 17, weight: .semibold))
@@ -236,7 +268,7 @@ struct FieldCheckSessionDetailView: View {
                         ToolbarSaveButton(accessibilityLabel: "Review") {
                             showingFinishReview = true
                         }
-                        .disabled(model.isCompletingSession)
+                        .disabled(!canEditActiveCheck)
                     }
                 }
             }
@@ -269,17 +301,37 @@ struct FieldCheckSessionDetailView: View {
             }
         }
         .task(id: sessionID) {
-            model.load(sessionID: sessionID, using: repository)
+            if originatingHerdSelectionRevision == nil {
+                originatingHerdID = herdSelection.currentHerdID
+                originatingHerdSelectionRevision = herdSelection.selectionRevision
+            }
+            guard isPresentingOriginatingHerd else { return }
+            model.load(
+                sessionID: sessionID,
+                using: repository,
+                mayContinue: originatingHerdReadAllowed
+            )
             syncSelectedPane()
             applyInitialFindingRouteIfNeeded()
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            guard !isPresentingOriginatingHerd else { return }
+            model.invalidateForHerdChange()
+            selectedAnimalID = nil
+            editingFinding = nil
+            showingFinishReview = false
+            showingAddFinding = false
+            showingAddTrackedAnimal = false
+            showingQuickCount = false
+            showingFindings = false
+            showingNotes = false
+            pendingFindingAnimalID = nil
         }
         .onDisappear {
             if dataAccessMode.allowsDataMutations
                 && model.detail?.isCompleted == false
                 && model.detail?.isPastureArchived == false {
-                Task { @MainActor in
-                    await model.persistNotes(sessionID: sessionID, using: repository)
-                }
+                persistNotesForOriginatingHerd()
             }
         }
         .sheet(isPresented: $showingFinishReview) {
@@ -313,20 +365,27 @@ struct FieldCheckSessionDetailView: View {
                 ) { input in
                     guard canEditActiveCheck else { return }
                     Task { @MainActor in
-                        await model.addFinding(sessionID: sessionID, input: input, using: repository)
+                        await model.addFinding(sessionID: sessionID, input: input, using: repository, mayContinue: { isPresentingOriginatingHerd })
                     }
                 }
             }
         }
         .sheet(isPresented: $showingAddTrackedAnimal) {
-            if let detail = model.detail {
+            if let detail = model.detail,
+               let originatingHerdID,
+               let originatingHerdSelectionRevision {
                 NavigationStack {
-                    FieldCheckTrackedAnimalPickerView(session: detail) { animalID in
+                    FieldCheckTrackedAnimalPickerView(
+                        session: detail,
+                        originatingHerdID: originatingHerdID,
+                        originatingSelectionRevision: originatingHerdSelectionRevision
+                    ) { animalID in
                         guard canEditActiveCheck else { return false }
                         return await model.addTrackedAnimalToSession(
                             sessionID: sessionID,
                             animalID: animalID,
-                            using: repository
+                            using: repository,
+                            mayContinue: { isPresentingOriginatingHerd }
                         )
                     }
                 }
@@ -347,9 +406,7 @@ struct FieldCheckSessionDetailView: View {
             }
         }
         .sheet(isPresented: $showingNotes, onDismiss: {
-            Task { @MainActor in
-                await model.persistNotes(sessionID: sessionID, using: repository)
-            }
+            persistNotesForOriginatingHerd()
         }) {
             if let detail = model.detail {
                 NavigationStack {
@@ -370,7 +427,8 @@ struct FieldCheckSessionDetailView: View {
                             sessionID: sessionID,
                             findingID: finding.id,
                             input: input,
-                            using: repository
+                            using: repository,
+                            mayContinue: { isPresentingOriginatingHerd }
                         )
                     }
                 }
@@ -426,7 +484,11 @@ struct FieldCheckSessionDetailView: View {
         .listSectionSpacing(8)
         .contentMargins(.top, 8, for: .scrollContent)
         .refreshable {
-            model.refresh(sessionID: sessionID, using: repository)
+            model.refresh(
+                sessionID: sessionID,
+                using: repository,
+                mayContinue: originatingHerdReadAllowed
+            )
         }
         .disabled(model.isCompletingSession)
         .modifier(FieldCheckRosterSearchModifier(isActive: selectedPane == .roster, text: $rosterSearchText))
@@ -442,7 +504,11 @@ struct FieldCheckSessionDetailView: View {
             completedCountBreakdownSection(detail)
         }
         .refreshable {
-            model.refresh(sessionID: sessionID, using: repository)
+            model.refresh(
+                sessionID: sessionID,
+                using: repository,
+                mayContinue: originatingHerdReadAllowed
+            )
         }
     }
 
@@ -537,7 +603,8 @@ struct FieldCheckSessionDetailView: View {
                                     sessionID: sessionID,
                                     animalCheckID: check.id,
                                     isCounted: !check.wasCounted,
-                                    using: repository
+                                    using: repository,
+                                    mayContinue: { isPresentingOriginatingHerd }
                                 )
                             }
                         },
@@ -547,7 +614,8 @@ struct FieldCheckSessionDetailView: View {
                                     sessionID: sessionID,
                                     animalCheckID: check.id,
                                     isMissing: !check.isMissing,
-                                    using: repository
+                                    using: repository,
+                                    mayContinue: { isPresentingOriginatingHerd }
                                 )
                             }
                         },
@@ -823,7 +891,8 @@ struct FieldCheckSessionDetailView: View {
                                     sessionID: sessionID,
                                     findingID: finding.id,
                                     status: status,
-                                    using: repository
+                                    using: repository,
+                                    mayContinue: { isPresentingOriginatingHerd }
                                 )
                             }
                         } : nil
@@ -956,7 +1025,8 @@ struct FieldCheckSessionDetailView: View {
                         sessionID: sessionID,
                         findingID: finding.id,
                         status: status,
-                        using: repository
+                        using: repository,
+                        mayContinue: { isPresentingOriginatingHerd }
                     )
                 }
             } : nil
@@ -970,7 +1040,8 @@ struct FieldCheckSessionDetailView: View {
                             await model.deleteFinding(
                                 sessionID: sessionID,
                                 findingID: finding.id,
-                                using: repository
+                                using: repository,
+                                mayContinue: { isPresentingOriginatingHerd }
                             )
                         }
                     }
@@ -990,15 +1061,31 @@ struct FieldCheckSessionDetailView: View {
         }
     }
 
+    private func persistNotesForOriginatingHerd() {
+        guard let originatingHerdID,
+              let originatingHerdSelectionRevision,
+              isPresentingOriginatingHerd else {
+            return
+        }
+
+        Task { @MainActor in
+            await model.persistNotes(
+                sessionID: sessionID,
+                originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: originatingHerdSelectionRevision,
+                currentHerdSelection: herdSelection,
+                using: repository
+            )
+        }
+    }
+
     private func selectPane(_ pane: FieldCheckSessionPane) {
         if dataAccessMode.allowsDataMutations,
             model.detail?.isPastureArchived == false,
             selectedPane == .notes,
             pane != .notes
         {
-            Task { @MainActor in
-                await model.persistNotes(sessionID: sessionID, using: repository)
-            }
+            persistNotesForOriginatingHerd()
         }
 
         if pane != .roster {
@@ -1040,11 +1127,19 @@ struct FieldCheckSessionDetailView: View {
         Binding(
             get: { model.quickAnimalTypeCountsDraft },
             set: { newValue in
-                guard canEditActiveCheck else { return }
+                guard canEditActiveCheck,
+                      let originatingHerdID,
+                      let originatingHerdSelectionRevision else {
+                    return
+                }
                 model.updateQuickAnimalTypeCounts(
                     sessionID: sessionID,
                     counts: newValue,
-                    using: repository
+                    using: repository,
+                    mayContinue: {
+                        herdSelection.currentHerdID == originatingHerdID
+                            && herdSelection.selectionRevision == originatingHerdSelectionRevision
+                    }
                 )
             }
         )
@@ -1105,7 +1200,8 @@ struct FieldCheckSessionDetailView: View {
             await model.completeSession(
                 sessionID: sessionID,
                 using: repository,
-                completionAlreadyAccepted: true
+                completionAlreadyAccepted: true,
+                mayContinue: { isPresentingOriginatingHerd }
             )
             if model.detail?.isCompleted == true {
                 showingFinishReview = false

@@ -4,6 +4,7 @@ struct WorkingSessionAnimalWorkView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.workingSessionFeatureDependencies) var workingDependencies
     @Environment(\.appDataAccessMode) var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @EnvironmentObject var tagColorLibrary: TagColorLibraryStore
 
     var repository: any WorkingQueueItemEditingRepository {
@@ -47,6 +48,7 @@ struct WorkingSessionAnimalWorkView: View {
     @State var errorMessage: String?
     @State var showingError = false
     @State var isMutatingWork = false
+    @State var editorHerdIdentity: WorkingQueueEditorHerdIdentity?
 
     init(sessionID: UUID, queueItemID: UUID) {
         _viewModel = StateObject(
@@ -77,8 +79,15 @@ struct WorkingSessionAnimalWorkView: View {
         snapshot?.sessionStatus != .active
     }
 
+    var isPresentingCurrentHerd: Bool {
+        editorHerdIdentity?.isCurrent(in: herdSelection) == true
+    }
+
     var allowsEditing: Bool {
-        dataAccessMode.allowsDataMutations && !isSessionLocked && !isMutatingWork
+        isPresentingCurrentHerd
+            && dataAccessMode.allowsDataMutations
+            && !isSessionLocked
+            && !isMutatingWork
     }
 
     var isFemale: Bool {
@@ -110,7 +119,16 @@ struct WorkingSessionAnimalWorkView: View {
 
     var body: some View {
         Group {
-            if let snapshot {
+            if editorHerdIdentity != nil && !isPresentingCurrentHerd {
+                ContentUnavailableView(
+                    "Animal Work Unavailable",
+                    systemImage: "arrow.left.arrow.right",
+                    description: Text("The selected Herd changed. Reopen the animal work editor to continue.")
+                )
+            } else if !isPresentingCurrentHerd {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let snapshot {
                 workForm(snapshot)
             } else if viewModel.errorMessage == nil {
                 ProgressView()
@@ -123,20 +141,24 @@ struct WorkingSessionAnimalWorkView: View {
                 )
             }
         }
-        .navigationTitle(navigationTitle)
+        .navigationTitle(isPresentingCurrentHerd ? navigationTitle : "Animal Work")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(isMutatingWork)
-        .interactiveDismissDisabled(isMutatingWork)
+        .navigationBarBackButtonHidden(isMutatingWork && isPresentingCurrentHerd)
+        .interactiveDismissDisabled(isMutatingWork && isPresentingCurrentHerd)
         .toolbar {
-            if snapshot != nil && !isSessionLocked {
+            if isPresentingCurrentHerd, snapshot != nil && !isSessionLocked {
                 workToolbar
             }
         }
         .task {
+            if editorHerdIdentity == nil {
+                editorHerdIdentity = WorkingQueueEditorHerdIdentity(selection: herdSelection)
+            }
+            guard isPresentingCurrentHerd else { return }
             let mutationStream = workingDependencies.mutationStream
             let startingSequence = mutationStream.currentSequence
 
-            viewModel.configure(repository: repository)
+            viewModel.configure(repository: repository, herdSelection: herdSelection)
             viewModel.load()
             loadPastures()
             seedStateIfNeeded()
@@ -152,10 +174,14 @@ struct WorkingSessionAnimalWorkView: View {
             seedSessionSourcePastureReferenceIfNeeded()
         }
         .sheet(isPresented: $showingTagReplacement) {
-            tagReplacementSheet
+            if isPresentingCurrentHerd {
+                tagReplacementSheet
+            }
         }
         .sheet(isPresented: $showingSirePicker) {
-            sirePickerSheet
+            if isPresentingCurrentHerd {
+                sirePickerSheet
+            }
         }
         .alert("Save Session Vaccinations", isPresented: $showingSaveSessionVaccination) {
             TextField("Vaccination name", text: $sessionVaccinationName)
@@ -187,10 +213,41 @@ struct WorkingSessionAnimalWorkView: View {
             Text(errorMessage ?? viewModel.errorMessage ?? "Unknown error")
         }
         .onChange(of: viewModel.errorMessage) { _, newValue in
-            if newValue != nil {
+            if newValue != nil && isPresentingCurrentHerd {
                 showingError = true
             }
         }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            invalidateForHerdChange()
+        }
+    }
+
+    private func invalidateForHerdChange() {
+        guard editorHerdIdentity != nil, !isPresentingCurrentHerd else { return }
+        viewModel.invalidateForHerdChange()
+        treatmentEntries = []
+        availablePastures = []
+        pastureReferencesLoaded = false
+        selectedDestinationPastureID = nil
+        sourcePastureReference = nil
+        destinationSelectionRequiresReview = false
+        recordPregnancyCheck = false
+        pregnancyResult = .unknown
+        estimatedDaysText = ""
+        dueDate = .now
+        automaticallyCalculatedDueDate = nil
+        selectedSire = nil
+        castrationPerformed = false
+        observationNotes = ""
+        seededSnapshotID = nil
+        showingSirePicker = false
+        showingTagReplacement = false
+        showingDeleteConfirmation = false
+        showingSaveSessionVaccination = false
+        sessionVaccinationName = ""
+        savedVaccinationName = nil
+        errorMessage = nil
+        showingError = false
     }
 
     private var navigationTitle: String {
@@ -213,7 +270,7 @@ struct WorkingSessionAnimalWorkView: View {
         after startingSequence: UInt64
     ) async {
         for await event in mutationStream.events(after: startingSequence) {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, isPresentingCurrentHerd else { return }
 
             switch event.source {
             case .local(.pasture):
@@ -337,6 +394,7 @@ struct WorkingSessionAnimalWorkView: View {
                 id: checkedSireID
             )
             guard !Task.isCancelled,
+                  isPresentingCurrentHerd,
                   WorkingQueueEditorIdentity.shouldClearSelectedSire(
                     checkedSireID: checkedSireID,
                     currentSireID: selectedSire?.id,

@@ -41,39 +41,121 @@ final class PastureGroupDetailViewModel {
             }
     }
 
-    func load(groupID: UUID, using repository: any PastureGroupDetailReader & PastureListReader) {
+    func load(
+        groupID: UUID,
+        using repository: any PastureGroupDetailReader & PastureListReader,
+        expectedHerdID: UUID?,
+        expectedSelectionRevision: UInt64,
+        selection: AppCurrentHerdSelection
+    ) {
+        guard let expectedHerdID,
+              selection.currentHerdID == expectedHerdID,
+              selection.selectionRevision == expectedSelectionRevision else {
+            resetForHerdChange()
+            return
+        }
+
         do {
-            detail = try repository.fetchPastureGroupDetail(id: groupID)
-            allPastures = try repository.fetchPastures()
+            // Only publish a complete group/pasture pair. A partially imported
+            // graph must not combine a new group with older assignment rows.
+            let fetchedDetail = try repository.fetchPastureGroupDetail(id: groupID)
+            let fetchedPastures = try repository.fetchPastures()
+            detail = fetchedDetail
+            allPastures = fetchedPastures
             hasLoaded = true
             errorMessage = nil
         } catch {
+            // A failed refresh cannot authorize edits through retained rows.
+            detail = nil
+            allPastures = []
+            isPresentingEditGroup = false
             hasLoaded = true
             errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
-    func beginEditing() {
+    func beginEditing(
+        expectedHerdID: UUID?,
+        expectedSelectionRevision: UInt64,
+        selection: AppCurrentHerdSelection
+    ) {
+        guard let expectedHerdID,
+              selection.currentHerdID == expectedHerdID,
+              selection.selectionRevision == expectedSelectionRevision else {
+            resetForHerdChange()
+            return
+        }
+        guard detail != nil else { return }
         isPresentingEditGroup = true
     }
 
-    func reloadAfterSave(groupID: UUID, using repository: any PastureGroupDetailReader & PastureListReader) {
-        load(groupID: groupID, using: repository)
+    func reloadAfterSave(
+        groupID: UUID,
+        using repository: any PastureGroupDetailReader & PastureListReader,
+        expectedHerdID: UUID?,
+        expectedSelectionRevision: UInt64,
+        selection: AppCurrentHerdSelection
+    ) {
+        load(
+            groupID: groupID, using: repository,
+            expectedHerdID: expectedHerdID,
+            expectedSelectionRevision: expectedSelectionRevision,
+            selection: selection
+        )
     }
 
-    func toggleAssignment(_ row: PastureGroupAssignmentRow, using repository: any PastureGroupAssignRepository & PastureGroupDetailReader & PastureListReader) {
-        let destinationGroupID = row.isAssignedToCurrentGroup ? nil : detail?.id
-        assign(row.pasture.id, to: destinationGroupID, using: repository)
+    func resetForHerdChange() {
+        detail = nil
+        allPastures = []
+        errorMessage = nil
+        hasLoaded = false
+        isPresentingEditGroup = false
     }
 
-    func assign(_ pastureID: UUID, to groupID: UUID?, using repository: any PastureGroupAssignRepository & PastureGroupDetailReader & PastureListReader) {
+    func toggleAssignment(
+        _ row: PastureGroupAssignmentRow,
+        using repository: any PastureGroupAssignRepository & PastureGroupDetailReader & PastureListReader,
+        expectedHerdID: UUID,
+        expectedSelectionRevision: UInt64,
+        selection: AppCurrentHerdSelection
+    ) {
+        // The repository uses the live selection. A retained detail action
+        // must not redirect an earlier Herd's assignment to the new Herd,
+        // including a switch away and back to the same UUID.
+        guard selection.currentHerdID == expectedHerdID,
+              selection.selectionRevision == expectedSelectionRevision,
+              let detail,
+              detail.id == row.groupID,
+              assignmentRows.contains(row) else { return }
+        let destinationGroupID = row.isAssignedToCurrentGroup ? nil : detail.id
+        assign(
+            row.pasture.id, to: destinationGroupID, using: repository,
+            expectedHerdID: expectedHerdID,
+            expectedSelectionRevision: expectedSelectionRevision,
+            selection: selection
+        )
+    }
+
+    private func assign(
+        _ pastureID: UUID,
+        to groupID: UUID?,
+        using repository: any PastureGroupAssignRepository & PastureGroupDetailReader & PastureListReader,
+        expectedHerdID: UUID,
+        expectedSelectionRevision: UInt64,
+        selection: AppCurrentHerdSelection
+    ) {
         do {
             try AssignPastureToGroupUseCase(repository: repository).execute(
                 pastureID: pastureID,
                 groupID: groupID
             )
             if let detail {
-                load(groupID: detail.id, using: repository)
+                load(
+                    groupID: detail.id, using: repository,
+                    expectedHerdID: expectedHerdID,
+                    expectedSelectionRevision: expectedSelectionRevision,
+                    selection: selection
+                )
             }
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)

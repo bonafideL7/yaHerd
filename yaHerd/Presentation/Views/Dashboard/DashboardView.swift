@@ -1,29 +1,34 @@
 import SwiftUI
 
 struct DashboardView: View {
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @Environment(\.homeFeatureDependencies) private var homeDependencies
     private var dashboardQueryReader: any DashboardQueryReading { homeDependencies.dashboardQueryReader }
     private var fieldCheckOverviewReader: any FieldCheckOverviewReading { homeDependencies.fieldCheckOverviewReader }
 
     @State private var viewModel = DashboardViewModel()
     @State private var fieldChecksModel = FieldChecksViewModel()
-    @State private var selectedPastureName: String?
 
     private let configuration = DashboardConfiguration()
 
+    private var presentedSnapshot: DashboardSnapshot? {
+        viewModel.presentationSnapshot(for: herdSelection)
+    }
+
     private var presentationData: DashboardPresentationData {
         DashboardPresentationData(
-            snapshot: viewModel.snapshot,
-            fieldCheckSessions: fieldChecksModel.sessions
+            snapshot: presentedSnapshot,
+            fieldCheckSessions: fieldChecksModel.presentationSessions(for: herdSelection)
         )
     }
 
     var body: some View {
+        @Bindable var chartModel = viewModel
         ScrollView {
             DashboardChartsContent(
                 data: presentationData,
-                isLoaded: viewModel.snapshot != nil,
-                selectedPastureName: $selectedPastureName
+                isLoaded: presentedSnapshot != nil,
+                selectedPastureName: $chartModel.selectedPastureName
             )
             .padding(.horizontal, 20)
             .padding(.top, 20)
@@ -33,18 +38,23 @@ struct DashboardView: View {
         .refreshable {
             await loadDashboardData()
         }
-        .task {
+        .task(id: herdSelection.selectionRevision) {
             await viewModel.observe(
                 configuration: configuration,
                 using: dashboardQueryReader,
-                mutationStream: homeDependencies.mutationStream
+                mutationStream: homeDependencies.mutationStream,
+                selection: herdSelection
             )
         }
-        .task {
+        .task(id: herdSelection.selectionRevision) {
+            fieldChecksModel.configure(selection: herdSelection)
             await fieldChecksModel.observe(
                 using: fieldCheckOverviewReader,
                 mutationStream: homeDependencies.mutationStream
             )
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            fieldChecksModel.configure(selection: herdSelection)
         }
         .alert("Dashboard Error", isPresented: errorBinding) {
             Button("OK", role: .cancel) {
@@ -76,8 +86,10 @@ struct DashboardView: View {
     private func loadDashboardData() async {
         async let dashboardLoad: Bool = viewModel.load(
             configuration: configuration,
-            using: dashboardQueryReader
+            using: dashboardQueryReader,
+            selection: herdSelection
         )
+        fieldChecksModel.configure(selection: herdSelection)
         fieldChecksModel.load(using: fieldCheckOverviewReader)
         _ = await dashboardLoad
     }

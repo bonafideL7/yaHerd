@@ -9,7 +9,10 @@ final class DashboardViewModel {
     private var isLoading = false
     private var loadCompletionWaiters: [CheckedContinuation<Void, Never>] = []
     private var lastLoadedRevision: UInt64 = 0
+    private var loadedHerdID: UUID?
+    private var loadedSelectionRevision: UInt64?
     var errorMessage: String?
+    var selectedPastureName: String?
     var isPresentingAddAnimal = false
     var isPresentingAddPasture = false
     var isPresentingNewWorkingSession = false
@@ -17,11 +20,22 @@ final class DashboardViewModel {
     func observe(
         configuration: DashboardConfiguration,
         using repository: any DashboardQueryReading,
-        mutationStream: any ApplicationMutationStreaming
+        mutationStream: any ApplicationMutationStreaming,
+        selection: AppCurrentHerdSelection
     ) async {
+        resetIfSelectionChanged(selection)
+        guard let originatingHerdID = selection.currentHerdID else { return }
+        let originatingSelectionRevision = selection.selectionRevision
+
         let startingRevision = mutationStream.homeRevision
         if !hasLoaded || lastLoadedRevision < startingRevision {
-            if await loadForRevision(configuration: configuration, using: repository) {
+            if await loadForRevision(
+                configuration: configuration,
+                using: repository,
+                selection: selection,
+                originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: originatingSelectionRevision
+            ) {
                 lastLoadedRevision = startingRevision
             }
         }
@@ -30,8 +44,19 @@ final class DashboardViewModel {
             for: .home,
             after: lastLoadedRevision
         ) {
-            guard !Task.isCancelled else { return }
-            if await loadForRevision(configuration: configuration, using: repository) {
+            guard !Task.isCancelled,
+                  isCurrentSelection(
+                    selection,
+                    herdID: originatingHerdID,
+                    revision: originatingSelectionRevision
+                  ) else { return }
+            if await loadForRevision(
+                configuration: configuration,
+                using: repository,
+                selection: selection,
+                originatingHerdID: originatingHerdID,
+                originatingSelectionRevision: originatingSelectionRevision
+            ) {
                 lastLoadedRevision = revision
             }
         }
@@ -39,18 +64,25 @@ final class DashboardViewModel {
 
     func loadIfNeeded(
         configuration: DashboardConfiguration,
-        using repository: any DashboardQueryReading
+        using repository: any DashboardQueryReading,
+        selection: AppCurrentHerdSelection
     ) async {
+        resetIfSelectionChanged(selection)
         guard !hasLoaded else { return }
-        _ = await load(configuration: configuration, using: repository)
+        _ = await load(configuration: configuration, using: repository, selection: selection)
     }
 
     @discardableResult
     func load(
         configuration: DashboardConfiguration,
-        using repository: any DashboardQueryReading
+        using repository: any DashboardQueryReading,
+        selection: AppCurrentHerdSelection
     ) async -> Bool {
-        guard !isLoading else { return false }
+        resetIfSelectionChanged(selection)
+        guard let originatingHerdID = selection.currentHerdID,
+              !isLoading, !Task.isCancelled else { return false }
+        let originatingSelectionRevision = selection.selectionRevision
+
         isLoading = true
         defer {
             isLoading = false
@@ -60,12 +92,27 @@ final class DashboardViewModel {
         }
 
         do {
-            snapshot = try await LoadDashboardUseCase(repository: repository)
+            let loadedSnapshot = try await LoadDashboardUseCase(repository: repository)
                 .execute(configuration: configuration)
+            try Task.checkCancellation()
+            guard isCurrentSelection(
+                selection,
+                herdID: originatingHerdID,
+                revision: originatingSelectionRevision
+            ) else { return false }
+            snapshot = loadedSnapshot
             errorMessage = nil
             hasLoaded = true
             return true
+        } catch is CancellationError {
+            return false
         } catch {
+            guard !Task.isCancelled,
+                  isCurrentSelection(
+                    selection,
+                    herdID: originatingHerdID,
+                    revision: originatingSelectionRevision
+                  ) else { return false }
             errorMessage = UserVisibleErrorMessage.make(error)
             return false
         }
@@ -85,6 +132,17 @@ final class DashboardViewModel {
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
+    }
+
+    /// A retained Dashboard may be rendered before its selection-change
+    /// observer starts. Never present a snapshot from another Herd generation.
+    func presentationSnapshot(for selection: AppCurrentHerdSelection) -> DashboardSnapshot? {
+        guard let loadedHerdID,
+              loadedHerdID == selection.currentHerdID,
+              loadedSelectionRevision == selection.selectionRevision else {
+            return nil
+        }
+        return snapshot
     }
 
     func pastures(filteredBy filter: DashboardPastureFilter) -> [DashboardPastureItem] {
@@ -111,14 +169,48 @@ final class DashboardViewModel {
 
     private func loadForRevision(
         configuration: DashboardConfiguration,
-        using repository: any DashboardQueryReading
+        using repository: any DashboardQueryReading,
+        selection: AppCurrentHerdSelection,
+        originatingHerdID: UUID,
+        originatingSelectionRevision: UInt64
     ) async -> Bool {
         while isLoading {
             await waitForCurrentLoad()
-            guard !Task.isCancelled else { return false }
+            guard !Task.isCancelled,
+                  isCurrentSelection(
+                    selection,
+                    herdID: originatingHerdID,
+                    revision: originatingSelectionRevision
+                  ) else { return false }
         }
 
-        return await load(configuration: configuration, using: repository)
+        guard isCurrentSelection(
+            selection,
+            herdID: originatingHerdID,
+            revision: originatingSelectionRevision
+        ) else { return false }
+        return await load(configuration: configuration, using: repository, selection: selection)
+    }
+
+    private func resetIfSelectionChanged(_ selection: AppCurrentHerdSelection) {
+        guard loadedHerdID != selection.currentHerdID ||
+              loadedSelectionRevision != selection.selectionRevision else { return }
+        loadedHerdID = selection.currentHerdID
+        loadedSelectionRevision = selection.selectionRevision
+        selectedPastureName = nil
+        snapshot = nil
+        hasLoaded = false
+        lastLoadedRevision = 0
+        errorMessage = nil
+    }
+
+    private func isCurrentSelection(
+        _ selection: AppCurrentHerdSelection,
+        herdID: UUID,
+        revision: UInt64
+    ) -> Bool {
+        selection.currentHerdID == herdID &&
+            selection.selectionRevision == revision
     }
 
     private func waitForCurrentLoad() async {

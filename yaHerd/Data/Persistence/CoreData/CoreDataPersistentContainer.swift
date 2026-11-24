@@ -12,6 +12,7 @@ final class CoreDataPersistentContainer {
     static let modelName = "yaHerdModel"
     static let storeFileName = "yaHerd.sqlite"
     static let sharedStoreFileName = "yaHerd-shared.sqlite"
+    static let remoteStoreChangeNotification = Notification.Name.NSPersistentStoreRemoteChange
     // Must match the app's CloudKit capability when that capability is enabled.
     static let cloudKitContainerIdentifier = "iCloud.ltd.yaherd"
 

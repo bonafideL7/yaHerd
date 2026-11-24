@@ -6,28 +6,78 @@ import Observation
 final class FieldCheckSessionSetupViewModel {
     private(set) var pastures: [PastureOption] = []
     var errorMessage: String?
-    var hasLoaded = false
+    private(set) var pastureLoadErrorMessage: String?
+    private(set) var hasLoaded = false
 
-    func load(using repository: any PastureReferenceDataReader) {
-        defer { hasLoaded = true }
+    @ObservationIgnored private var selection: AppCurrentHerdSelection?
+    @ObservationIgnored private var selectedHerdID: UUID?
+    @ObservationIgnored private var selectedRevision: UInt64?
+
+    var hasCurrentHerdData: Bool {
+        hasLoaded && isCurrentSelection
+    }
+
+    func configure(selection: AppCurrentHerdSelection) {
+        let changed = self.selection !== selection
+            || selectedHerdID != selection.currentHerdID
+            || selectedRevision != selection.selectionRevision
+        self.selection = selection
+        selectedHerdID = selection.currentHerdID
+        selectedRevision = selection.selectionRevision
+
+        if changed {
+            pastures = []
+            errorMessage = nil
+            pastureLoadErrorMessage = nil
+            hasLoaded = false
+        }
+    }
+
+    @discardableResult
+    func load(using repository: any PastureReferenceDataReader) -> Bool {
+        guard isCurrentSelection else { return false }
 
         do {
-            pastures = try repository.fetchPastureOptions()
+            let loadedPastures = try repository.fetchPastureOptions()
                 .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            pastures = loadedPastures
+            hasLoaded = true
+            pastureLoadErrorMessage = nil
             errorMessage = nil
+            return true
         } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+            // A partially imported Herd is not an empty Herd. A failed
+            // refresh must not retain stale selectable destinations.
+            pastures = []
+            hasLoaded = false
+            pastureLoadErrorMessage = UserVisibleErrorMessage.make(error)
+            return false
         }
+    }
+
+    private var isCurrentSelection: Bool {
+        guard let selection, let selectedHerdID else { return false }
+        return selectedHerdID == selection.currentHerdID
+            && selectedRevision == selection.selectionRevision
     }
 
     func createSession(
         pastureID: UUID?,
         startedAt: Date,
         notes: String,
+        originatingHerdID: UUID,
+        currentHerdSelection: any CurrentHerdSelectionReading,
+        selectionIsUnchanged: @escaping @MainActor () -> Bool,
         using repository: any FieldCheckSessionCreating
-    ) async throws -> UUID {
+    ) async throws -> UUID? {
         guard let pastureID else {
             throw FieldCheckRepositoryError.pastureNotFound
+        }
+        // An obsolete setup must not start a write in a newly selected Herd.
+        guard !Task.isCancelled,
+              currentHerdSelection.currentHerdID == originatingHerdID,
+              selectionIsUnchanged() else {
+            return nil
         }
 
         let input = FieldCheckSessionStartInput(
@@ -35,6 +85,16 @@ final class FieldCheckSessionSetupViewModel {
             startedAt: startedAt,
             notes: notes
         )
-        return try await repository.createSession(input: input)
+        // The Core Data repository pins its Herd before awaiting the write gate.
+        let sessionID = try await repository.createSession(input: input)
+
+        // The original save may have committed even after the view was removed.
+        // Never navigate to that record from another Herd's application state.
+        guard !Task.isCancelled,
+              currentHerdSelection.currentHerdID == originatingHerdID,
+              selectionIsUnchanged() else {
+            return nil
+        }
+        return sessionID
     }
 }

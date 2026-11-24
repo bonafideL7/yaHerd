@@ -5,13 +5,28 @@
 
 import SwiftUI
 
+/// The delete gesture owns its original Herd selection, not whatever Herd
+/// happens to be active when SwiftUI eventually dispatches the confirmation.
+@MainActor
+struct PendingWorkingSessionDeletion {
+    let session: WorkingSessionSummary
+    let herdID: UUID
+    let selectionRevision: UInt64
+
+    func isCurrent(in selection: AppCurrentHerdSelection) -> Bool {
+        selection.currentHerdID == herdID
+            && selection.selectionRevision == selectionRevision
+    }
+}
+
 struct WorkingSessionsView: View {
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
     private var repository: any WorkingSessionsRepository { workingDependencies.sessionsRepository }
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @StateObject private var viewModel: WorkingSessionsViewModel
 
-    @State private var sessionPendingDeleteID: UUID?
+    @State private var pendingDeletion: PendingWorkingSessionDeletion?
     @State private var showingDeleteAlert = false
     @State private var errorMessage: String?
     @State private var showingError = false
@@ -32,53 +47,99 @@ struct WorkingSessionsView: View {
     }
 
     private var activeSessions: [WorkingSessionSummary] {
-        viewModel.sessions.filter { $0.status == .active }
+        guard viewModel.isCurrentHerdSelection else { return [] }
+        return viewModel.sessions.filter { $0.status == .active }
     }
 
     private var finishedSessions: [WorkingSessionSummary] {
-        viewModel.sessions.filter { $0.status != .active }
+        guard viewModel.isCurrentHerdSelection else { return [] }
+        return viewModel.sessions.filter { $0.status != .active }
     }
 
     var body: some View {
-        List {
+        let displayedActiveSessions = activeSessions
+        let displayedFinishedSessions = finishedSessions
+        let originatingHerdID = herdSelection.currentHerdID
+        let originatingSelectionRevision = herdSelection.selectionRevision
+
+        return List {
             Section {
                 NavigationLink {
                     TreatmentTemplatesView()
                 } label: {
                     Label("Treatment Sets", systemImage: "syringe")
                 }
-                .disabled(isDeletingSession)
+                .disabled(
+                    isDeletingSession
+                    || !viewModel.isCurrentHerdSelection
+                    || herdSelection.currentHerdID == nil
+                )
             }
 
-            if activeSessions.isEmpty && finishedSessions.isEmpty {
+            if herdSelection.currentHerdID == nil {
+                ContentUnavailableView(
+                    "Select a Herd",
+                    systemImage: "square.stack.3d.up",
+                    description: Text("Choose a Herd to see its working sessions.")
+                )
+            } else if let readError = viewModel.errorMessage,
+                      viewModel.isCurrentHerdSelection {
+                ContentUnavailableView(
+                    "Working Sessions Unavailable",
+                    systemImage: "arrow.clockwise",
+                    description: Text(readError)
+                )
+                Button {
+                    guard viewModel.isCurrentHerdSelection else { return }
+                    _ = viewModel.load()
+                } label: {
+                    Label("Retry Loading Sessions", systemImage: "arrow.clockwise")
+                }
+            } else if !viewModel.hasLoaded || !viewModel.isCurrentHerdSelection {
+                HStack {
+                    ProgressView()
+                    Text("Loading working sessions…")
+                        .foregroundStyle(.secondary)
+                }
+            } else if displayedActiveSessions.isEmpty && displayedFinishedSessions.isEmpty {
                 ContentUnavailableView(
                     "No working sessions",
                     systemImage: "wrench",
                     description: Text("Create a session to collect animals into the working pen.")
                 )
-            }
-
-            if !activeSessions.isEmpty {
-                Section("Active") {
-                    ForEach(activeSessions) { session in
-                        workingSessionNavigationRow(session)
+            } else {
+                if !displayedActiveSessions.isEmpty {
+                    Section("Active") {
+                        ForEach(displayedActiveSessions) { session in
+                            workingSessionNavigationRow(session)
+                        }
+                        .onDelete { offsets in
+                            requestDelete(
+                                from: displayedActiveSessions,
+                                offsets: offsets,
+                                originatingHerdID: originatingHerdID,
+                                originatingSelectionRevision: originatingSelectionRevision
+                            )
+                        }
+                        .deleteDisabled(dataAccessMode.isRecoveryMode || isDeletingSession)
                     }
-                    .onDelete { offsets in
-                        requestDelete(from: activeSessions, offsets: offsets)
-                    }
-                    .deleteDisabled(dataAccessMode.isRecoveryMode || isDeletingSession)
                 }
-            }
 
-            if !finishedSessions.isEmpty {
-                Section("History") {
-                    ForEach(finishedSessions) { session in
-                        workingSessionNavigationRow(session)
+                if !displayedFinishedSessions.isEmpty {
+                    Section("History") {
+                        ForEach(displayedFinishedSessions) { session in
+                            workingSessionNavigationRow(session)
+                        }
+                        .onDelete { offsets in
+                            requestDelete(
+                                from: displayedFinishedSessions,
+                                offsets: offsets,
+                                originatingHerdID: originatingHerdID,
+                                originatingSelectionRevision: originatingSelectionRevision
+                            )
+                        }
+                        .deleteDisabled(dataAccessMode.isRecoveryMode || isDeletingSession)
                     }
-                    .onDelete { offsets in
-                        requestDelete(from: finishedSessions, offsets: offsets)
-                    }
-                    .deleteDisabled(dataAccessMode.isRecoveryMode || isDeletingSession)
                 }
             }
         }
@@ -87,26 +148,43 @@ struct WorkingSessionsView: View {
         .interactiveDismissDisabled(isDeletingSession)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button(action: onStartSessionSetup) {
+                Button {
+                    guard viewModel.isCurrentHerdSelection,
+                          viewModel.hasLoaded,
+                          viewModel.errorMessage == nil,
+                          herdSelection.currentHerdID != nil else { return }
+                    onStartSessionSetup()
+                } label: {
                     Image(systemName: "plus")
                 }
-                .disabled(!dataAccessMode.allowsDataMutations || isDeletingSession)
+                .disabled(
+                    !dataAccessMode.allowsDataMutations
+                    || isDeletingSession
+                    || !viewModel.isCurrentHerdSelection
+                    || !viewModel.hasLoaded
+                    || viewModel.errorMessage != nil
+                )
             }
         }
-        .task {
+        .task(id: herdSelection.selectionRevision) {
             viewModel.configure(repository: repository)
+            viewModel.configure(selection: herdSelection)
             await viewModel.observe(mutationStream: workingDependencies.mutationStream)
         }
         .alert(
             "Delete working session?",
             isPresented: $showingDeleteAlert,
-            presenting: pendingSession
-        ) { session in
-            Button("Delete", role: .destructive) { deleteSession(session) }
-                .disabled(!dataAccessMode.allowsDataMutations || isDeletingSession)
+            presenting: pendingDeletion
+        ) { pending in
+            Button("Delete", role: .destructive) { deleteSession(pending) }
+                .disabled(
+                    !dataAccessMode.allowsDataMutations
+                    || isDeletingSession
+                    || !pending.isCurrent(in: herdSelection)
+                )
             Button("Cancel", role: .cancel) {}
-        } message: { session in
-            if session.status == .active {
+        } message: { pending in
+            if pending.session.status == .active {
                 Text("Deleting an active session removes its records and releases animals still owned by it from the working pen. They return to their collected/source pasture when it still exists; otherwise they remain without a pasture assignment.")
             } else {
                 Text("This will delete the session and its recorded work data.")
@@ -115,49 +193,79 @@ struct WorkingSessionsView: View {
         .alert("Can’t Save", isPresented: $showingError) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(errorMessage ?? viewModel.errorMessage ?? "")
+            Text(errorMessage ?? "")
         }
-        .onChange(of: viewModel.errorMessage) { _, newValue in
-            if newValue != nil { showingError = true }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            // Discard both the old list and any pending confirmation immediately.
+            viewModel.configure(selection: herdSelection)
+            pendingDeletion = nil
+            showingDeleteAlert = false
+            errorMessage = nil
+            showingError = false
         }
     }
 
     private func workingSessionNavigationRow(_ session: WorkingSessionSummary) -> some View {
-        Button {
+        let originatingHerdID = herdSelection.currentHerdID
+        let originatingRevision = herdSelection.selectionRevision
+        return Button {
+            guard let originatingHerdID,
+                  viewModel.isCurrentHerdSelection,
+                  herdSelection.currentHerdID == originatingHerdID,
+                  herdSelection.selectionRevision == originatingRevision else { return }
             onSessionStarted(session.id)
         } label: {
             WorkingSessionRow(session: session)
         }
-        .disabled(isDeletingSession)
+        .disabled(isDeletingSession || !viewModel.isCurrentHerdSelection)
     }
 
-    private var pendingSession: WorkingSessionSummary? {
-        guard let sessionPendingDeleteID else { return nil }
-        return viewModel.sessions.first(where: { $0.id == sessionPendingDeleteID })
-    }
-
-    private func requestDelete(from list: [WorkingSessionSummary], offsets: IndexSet) {
+    private func requestDelete(
+        from list: [WorkingSessionSummary],
+        offsets: IndexSet,
+        originatingHerdID: UUID?,
+        originatingSelectionRevision: UInt64
+    ) {
         guard !isDeletingSession,
+              let originatingHerdID,
               let index = offsets.first,
               index < list.count else {
             return
         }
-        sessionPendingDeleteID = list[index].id
+        let request = PendingWorkingSessionDeletion(
+            session: list[index],
+            herdID: originatingHerdID,
+            selectionRevision: originatingSelectionRevision
+        )
+        guard request.isCurrent(in: herdSelection) else { return }
+        pendingDeletion = request
         showingDeleteAlert = true
     }
 
-    private func deleteSession(_ session: WorkingSessionSummary) {
-        guard !isDeletingSession else { return }
+    private func deleteSession(_ pending: PendingWorkingSessionDeletion) {
+        guard !isDeletingSession,
+              dataAccessMode.allowsDataMutations,
+              pending.isCurrent(in: herdSelection) else {
+            pendingDeletion = nil
+            return
+        }
         isDeletingSession = true
 
         Task { @MainActor in
             defer { isDeletingSession = false }
 
             do {
-                try await repository.deleteSession(id: session.id)
-                sessionPendingDeleteID = nil
-                viewModel.load()
+                guard try await viewModel.deleteSession(
+                    id: pending.session.id,
+                    originatingHerdID: pending.herdID,
+                    originatingSelectionRevision: pending.selectionRevision,
+                    currentHerdSelection: herdSelection
+                ) else { return }
+                pendingDeletion = nil
+                errorMessage = nil
             } catch {
+                guard !Task.isCancelled,
+                      pending.isCurrent(in: herdSelection) else { return }
                 errorMessage = UserVisibleErrorMessage.make(error)
                 showingError = true
             }

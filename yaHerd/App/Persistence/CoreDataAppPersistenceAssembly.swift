@@ -21,35 +21,25 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         )
     }
 
-    /// Production launch keeps one durable store and one selected Herd for all features.
+    /// Discover existing Herds without writing an implicit root on first launch.
+    /// The chooser provides explicit creation when the local store is empty.
     static func load(
         at storeURL: URL,
         selectionPreferences: UserDefaults = .standard
     ) async throws -> CoreDataAppPersistenceAssembly {
         let assembly = try await CoreDataPersistenceAssembly.load(storeURL: storeURL)
+        // A local-only store cannot be mid-CloudKit import. Preserve errors for
+        // incomplete existing roots instead of presenting them as a new install.
+        _ = try CoreDataAppHerdBootstrapper.fetchHerdIDs(
+            using: assembly.contextFactory
+        )
         let remembered = AppCurrentHerdSelection(defaults: selectionPreferences)
         let repository = CoreDataHerdRepository(selection: remembered, assembly: assembly)
-        let available = try repository.fetchAccessibleHerds()
-        remembered.restoreAccessibleHerd(from: available)
-
-        let herdID: UUID?
-        if let selected = remembered.currentHerdID {
-            herdID = selected
-        } else if available.isEmpty {
-            // Only the strictly local first install creates the initial Herd.
-            // A mirrored import always follows the separate choice path.
-            herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
-                assembly: assembly
-            )
-        } else {
-            // A missing or invalid remembered ID is not permission to select
-            // an arbitrary Herd, nor a storage failure.
-            herdID = nil
-        }
+        remembered.restoreAccessibleHerd(from: try repository.fetchAccessibleHerds())
 
         return CoreDataAppPersistenceAssembly(
             assembly: assembly,
-            currentHerdID: herdID,
+            currentHerdID: remembered.currentHerdID,
             selectionPreferences: selectionPreferences
         )
     }
@@ -63,14 +53,17 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
     static func loadCloudKit(
         at storeURL: URL,
         selectedHerdID: UUID? = nil,
-        mirroringEnabled: Bool
+        mirroringEnabled: Bool,
+        selectionPreferences: UserDefaults = .standard
     ) async throws -> CoreDataAppPersistenceAssembly {
         let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
             storeURL: storeURL,
             mirroringEnabled: mirroringEnabled
         )
         return try resolveCloudKitHerd(
-            using: assembly, privateStoreURL: storeURL, selectedHerdID: selectedHerdID
+            using: assembly, privateStoreURL: storeURL,
+            selectedHerdID: selectedHerdID,
+            selectionPreferences: selectionPreferences
         )
     }
 
@@ -149,16 +142,23 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         }
         let remembered = AppCurrentHerdSelection(defaults: selectionPreferences)
         let repository = CoreDataHerdRepository(selection: remembered, assembly: assembly)
-        remembered.restoreAccessibleHerd(from: try repository.fetchAccessibleHerds())
-        guard let selectedID = remembered.currentHerdID else {
-            return CoreDataAppPersistenceAssembly(
-                assembly: assembly, currentHerdID: nil,
-                selectionPreferences: selectionPreferences
-            )
+        do {
+            remembered.restoreAccessibleHerd(from: try repository.fetchAccessibleHerds())
+            if let selectedID = remembered.currentHerdID {
+                return try resolveCloudKitHerd(
+                    using: assembly, privateStoreURL: privateStoreURL,
+                    selectedHerdID: selectedID, selectionPreferences: selectionPreferences
+                )
+            }
+        } catch {
+            // Both stores are already open. An inventory or root-validation
+            // failure is not proof of storage loss or an empty installation.
+            // Keep the original assembly alive and let the chooser re-read
+            // the inventory, report the error and permit explicit recovery.
         }
-        return try resolveCloudKitHerd(
-            using: assembly, privateStoreURL: privateStoreURL,
-            selectedHerdID: selectedID, selectionPreferences: selectionPreferences
+        return CoreDataAppPersistenceAssembly(
+            assembly: assembly, currentHerdID: nil,
+            selectionPreferences: selectionPreferences
         )
     }
 
@@ -174,6 +174,12 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
             assembly: assembly,
             currentHerdID: herdID
         )
+    }
+
+    /// Probe the chosen Herd through the same loaded stores without changing
+    /// the active Herd or writing a selected-Herd preference.
+    func makeReadinessCandidate(for herdID: UUID) -> CoreDataAppPersistenceAssembly {
+        CoreDataAppPersistenceAssembly(assembly: assembly, currentHerdID: herdID)
     }
 
     func makeDependencies(dataAccessMode: AppDataAccessMode) -> AppDependencies {

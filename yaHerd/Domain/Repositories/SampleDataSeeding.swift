@@ -7,6 +7,8 @@ protocol SampleDataSeeding {
     func canSeedSampleData() throws -> Bool
 
     /// Returns false without writing if the selected Herd already has records.
-    func seedSampleDataIfNeeded() async throws -> Bool
-    func seedLargeSampleDataIfNeeded() async throws -> Bool
+    /// Capture the originating Herd and selection revision so an old request
+    /// cannot resume after switching away and back to the same Herd.
+    func seedSampleDataIfNeeded(for herdID: UUID, selectionRevision: UInt64) async throws -> Bool
+    func seedLargeSampleDataIfNeeded(for herdID: UUID, selectionRevision: UInt64) async throws -> Bool
 }

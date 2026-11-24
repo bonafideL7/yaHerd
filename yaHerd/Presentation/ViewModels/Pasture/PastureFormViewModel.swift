@@ -48,6 +48,26 @@ final class PastureFormViewModel {
         errorMessage = nil
     }
     
+    func create(
+        using repository: any PastureCreateRepository,
+        defaultTargetAcresPerHead: Double,
+        usableAcreagePercentDefault: Int,
+        expectedHerdID: UUID,
+        expectedSelectionRevision: UInt64,
+        selection: AppCurrentHerdSelection
+    ) throws {
+        guard selection.currentHerdID == expectedHerdID,
+              selection.selectionRevision == expectedSelectionRevision else {
+            throw CancellationError()
+        }
+
+        let input = try makeCreateInput(
+            defaultTargetAcresPerHead: defaultTargetAcresPerHead,
+            usableAcreagePercentDefault: usableAcreagePercentDefault
+        )
+        _ = try CreatePastureUseCase(repository: repository).execute(input: input)
+    }
+
     func makeCreateInput(
         defaultTargetAcresPerHead: Double,
         usableAcreagePercentDefault: Int

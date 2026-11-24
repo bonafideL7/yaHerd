@@ -98,7 +98,8 @@ extension WorkingSessionAnimalWorkView {
     }
 
     func seedStateIfNeeded() {
-        guard let snapshot, seededSnapshotID != snapshot.id else { return }
+        guard isPresentingCurrentHerd,
+              let snapshot, seededSnapshotID != snapshot.id else { return }
         seededSnapshotID = snapshot.id
 
         let recordsByTreatmentID = Dictionary(
@@ -183,18 +184,21 @@ extension WorkingSessionAnimalWorkView {
         isMutatingWork = true
         Task { @MainActor in
             defer { isMutatingWork = false }
+            guard isPresentingCurrentHerd else { return }
 
             do {
                 try await repository.updateSessionTreatments(
                     id: snapshot.sessionID,
                     plannedTreatments: updatedItems
                 )
+                guard isPresentingCurrentHerd else { return }
                 if treatmentEntries.indices.contains(index) {
                     treatmentEntries[index].name = trimmedName
                     treatmentEntries[index].isPlanned = true
                 }
                 viewModel.load()
             } catch {
+                guard isPresentingCurrentHerd else { return }
                 errorMessage = UserVisibleErrorMessage.make(error)
                 showingError = true
             }
@@ -202,7 +206,7 @@ extension WorkingSessionAnimalWorkView {
     }
 
     func saveSessionVaccinations() {
-        guard let snapshot else { return }
+        guard isPresentingCurrentHerd, let snapshot else { return }
         let name = sessionVaccinationName.trimmingCharacters(in: .whitespacesAndNewlines)
         let items = snapshot.plannedTreatments
         guard !name.isEmpty, !items.isEmpty else { return }
@@ -347,6 +351,7 @@ extension WorkingSessionAnimalWorkView {
         isMutatingWork = true
         Task { @MainActor in
             defer { isMutatingWork = false }
+            guard isPresentingCurrentHerd else { return }
 
             do {
                 try await repository.saveEdits(
@@ -354,8 +359,10 @@ extension WorkingSessionAnimalWorkView {
                     inSessionID: snapshot.sessionID,
                     input: input
                 )
+                guard isPresentingCurrentHerd else { return }
                 dismiss()
             } catch {
+                guard isPresentingCurrentHerd else { return }
                 errorMessage = UserVisibleErrorMessage.make(error)
                 showingError = true
             }
@@ -411,14 +418,17 @@ extension WorkingSessionAnimalWorkView {
         isMutatingWork = true
         Task { @MainActor in
             defer { isMutatingWork = false }
+            guard isPresentingCurrentHerd else { return }
 
             do {
                 try await repository.deleteWorkData(
                     forQueueItemID: snapshot.id,
                     inSessionID: snapshot.sessionID
                 )
+                guard isPresentingCurrentHerd else { return }
                 dismiss()
             } catch {
+                guard isPresentingCurrentHerd else { return }
                 errorMessage = UserVisibleErrorMessage.make(error)
                 showingError = true
             }

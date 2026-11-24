@@ -5,7 +5,10 @@ struct PastureDetailView: View {
     private var repository: any PastureDetailEditingRepository { pastureDependencies.detailRepository }
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(AppNavigationState.self) private var navigation
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @State private var isStockingExpanded = false
+    @State private var originatingHerdID: UUID?
+    @State private var originatingSelectionRevision: UInt64?
     @State private var model = PastureDetailViewModel()
 
     private let pastureID: UUID
@@ -14,10 +17,21 @@ struct PastureDetailView: View {
         self.pastureID = pastureID
     }
 
+    private var isSelectionCurrent: Bool {
+        guard let originatingHerdID, let originatingSelectionRevision else { return false }
+        return herdSelection.currentHerdID == originatingHerdID
+            && herdSelection.selectionRevision == originatingSelectionRevision
+    }
 
     var body: some View {
         Group {
-            if let detail = model.detail {
+            if originatingSelectionRevision != nil && !isSelectionCurrent {
+                ContentUnavailableView(
+                    "Pasture unavailable",
+                    systemImage: "leaf",
+                    description: Text("The selected Herd changed. Reopen this pasture to view its records.")
+                )
+            } else if isSelectionCurrent, let detail = model.detail {
                 Form {
                     pastureInfoSection(detail)
                     if model.shouldShowStockingSection {
@@ -37,13 +51,27 @@ struct PastureDetailView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .navigationTitle(model.navigationTitle)
+        .navigationTitle(isSelectionCurrent ? model.navigationTitle : "Pasture")
         .toolbar {
-            if model.isEditing {
+            if isSelectionCurrent && model.isEditing {
                 ToolbarItem(placement: .confirmationAction) {
                     ToolbarSaveButton {
-                        model.save(pastureID: pastureID, using: repository)
+                        guard let originatingHerdID, let originatingSelectionRevision else {
+                            return
+                        }
+                        model.save(
+                            pastureID: pastureID,
+                            using: repository,
+                            expectedHerdID: originatingHerdID,
+                            expectedSelectionRevision: originatingSelectionRevision,
+                            selection: herdSelection
+                        )
                     }
+                    .disabled(
+                        originatingHerdID == nil ||
+                        originatingHerdID != herdSelection.currentHerdID ||
+                        originatingSelectionRevision != herdSelection.selectionRevision
+                    )
                 }
 
                 ToolbarItem(placement: .cancellationAction) {
@@ -51,25 +79,49 @@ struct PastureDetailView: View {
                         model.cancelEditing()
                     }
                 }
-            } else {
+            } else if isSelectionCurrent {
                 ToolbarItem(placement: .primaryAction) {
                     ToolbarEditButton {
-                        model.beginEditing()
+                        guard let originatingSelectionRevision else { return }
+                        model.beginEditing(
+                            expectedHerdID: originatingHerdID,
+                            expectedSelectionRevision: originatingSelectionRevision,
+                            selection: herdSelection
+                        )
                     }
                     .disabled(model.detail == nil)
                 }
             }
         }
         .task(id: pastureID) {
+            if originatingSelectionRevision == nil {
+                originatingHerdID = herdSelection.currentHerdID
+                originatingSelectionRevision = herdSelection.selectionRevision
+            }
+            guard let originatingSelectionRevision, isSelectionCurrent else { return }
             await model.observe(
                 pastureID: pastureID,
                 using: repository,
-                mutationStream: pastureDependencies.mutationStream
+                mutationStream: pastureDependencies.mutationStream,
+                expectedHerdID: originatingHerdID,
+                expectedSelectionRevision: originatingSelectionRevision,
+                selection: herdSelection
             )
         }
         .onChange(of: navigation.fullScreenWorkflow) { oldValue, newValue in
+            guard isSelectionCurrent, let originatingSelectionRevision else { return }
             if oldValue == .fieldCheck && newValue == nil {
-                model.load(pastureID: pastureID, using: repository)
+                model.load(
+                    pastureID: pastureID, using: repository,
+                    expectedHerdID: originatingHerdID,
+                    expectedSelectionRevision: originatingSelectionRevision,
+                    selection: herdSelection
+                )
+            }
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            if !isSelectionCurrent {
+                model.resetForHerdChange()
             }
         }
         .alert("Can’t Save", isPresented: errorBinding) {
