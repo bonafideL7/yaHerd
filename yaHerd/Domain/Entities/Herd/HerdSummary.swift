@@ -14,6 +14,29 @@ struct HerdSummary: Identifiable, Equatable, Sendable {
     var id: UUID { publicID }
 }
 
+/// Last locally available share information, not a live server authorization.
+/// No participant identities, invitation URLs or transport objects leave persistence.
+enum HerdSharingMetadata: Equatable, Sendable {
+    enum Access: Equatable, Sendable {
+        case owner
+        case readOnly
+        case readWrite
+        case pending
+        case removed
+        case unknown
+    }
+
+    case notConfigured
+    case noCachedShare
+    case unavailable
+    case shared(access: Access, acceptedParticipants: Int?, pendingInvitations: Int?)
+
+    var access: Access? {
+        guard case let .shared(access, _, _) = self else { return nil }
+        return access
+    }
+}
+
 /// A complete local Herd root available in an owned or joined persistent store.
 /// Shared access permissions are resolved separately; store location alone
 /// must never be interpreted as permission to edit.
@@ -27,6 +50,19 @@ struct AccessibleHerd: Identifiable, Equatable, Sendable {
     let category: Category
     /// Local store-qualified identity of the actual root, not its application UUID.
     let rootIdentity: URL
+    let sharingMetadata: HerdSharingMetadata
+
+    init(
+        summary: HerdSummary,
+        category: Category,
+        rootIdentity: URL,
+        sharingMetadata: HerdSharingMetadata = .notConfigured
+    ) {
+        self.summary = summary
+        self.category = category
+        self.rootIdentity = rootIdentity
+        self.sharingMetadata = sharingMetadata
+    }
 
     var id: UUID { summary.id }
     var name: String { summary.name }

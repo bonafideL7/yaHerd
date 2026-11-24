@@ -626,6 +626,67 @@ final class CoreDataPersistentContainer {
         container.newBackgroundContext()
     }
 
+    /// Read only the shares already imported by this container. This does not
+    /// contact the server or establish current authorization while offline.
+    func sharingMetadata(for objectIDs: [NSManagedObjectID]) -> [NSManagedObjectID: HerdSharingMetadata] {
+        guard !objectIDs.isEmpty else { return [:] }
+        guard importResults != nil,
+              let mirrored = container as? NSPersistentCloudKitContainer else {
+            return Dictionary(uniqueKeysWithValues: objectIDs.map { ($0, .notConfigured) })
+        }
+        guard !herdImportState.blocksHerdAccess else {
+            return Dictionary(uniqueKeysWithValues: objectIDs.map { ($0, .unavailable) })
+        }
+
+        do {
+            let shares = try mirrored.fetchShares(matching: objectIDs)
+            return Dictionary(uniqueKeysWithValues: objectIDs.map { id in
+                let metadata = shares[id].map(Self.sharingMetadata(for:)) ?? .noCachedShare
+                return (id, metadata)
+            })
+        } catch {
+            let failure = error as NSError
+            ReliabilityLog.persistence.error(
+                "operation=share-metadata-read domain=\(failure.domain, privacy: .public) code=\(failure.code, privacy: .public)"
+            )
+            return Dictionary(uniqueKeysWithValues: objectIDs.map { ($0, .unavailable) })
+        }
+    }
+
+    private static func sharingMetadata(for share: CKShare) -> HerdSharingMetadata {
+        let access: HerdSharingMetadata.Access
+        if let participant = share.currentUserParticipant {
+            switch participant.acceptanceStatus {
+            case .removed: access = .removed
+            case .pending: access = .pending
+            case .accepted:
+                if participant.role == .owner {
+                    access = .owner
+                } else {
+                    switch participant.permission {
+                    case .readOnly: access = .readOnly
+                    case .readWrite: access = .readWrite
+                    default: access = .unknown
+                    }
+                }
+            default: access = .unknown
+            }
+        } else {
+            access = .unknown
+        }
+
+        // A participant is not guaranteed to see the owner's entire roster.
+        // Counts are therefore only meaningful for the current share owner.
+        let guests = share.participants.filter { $0.role != .owner }
+        return .shared(
+            access: access,
+            acceptedParticipants: access == .owner
+                ? guests.filter { $0.acceptanceStatus == .accepted }.count : nil,
+            pendingInvitations: access == .owner
+                ? guests.filter { $0.acceptanceStatus == .pending }.count : nil
+        )
+    }
+
     private static func loadModel() throws -> NSManagedObjectModel {
         let bundle = Bundle(for: CDHerd.self)
         let url = bundle.url(forResource: modelName, withExtension: "momd")
