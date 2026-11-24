@@ -93,7 +93,7 @@ final class AnimalTimelineContainerViewModel {
         originatingHerdID: UUID,
         originatingSelectionRevision: UInt64
     ) {
-        guard !hasLoaded,
+        guard !Task.isCancelled,
               selection.currentHerdID == originatingHerdID,
               selection.selectionRevision == originatingSelectionRevision else { return }
 
@@ -101,12 +101,14 @@ final class AnimalTimelineContainerViewModel {
             let loaded = try PerformanceLog.measure("AnimalTimeline.load") {
                 try reader.fetchTimeline(id: animalID)
             }
-            guard selection.currentHerdID == originatingHerdID,
+            guard !Task.isCancelled,
+                  selection.currentHerdID == originatingHerdID,
                   selection.selectionRevision == originatingSelectionRevision else { return }
             events = loaded
             errorMessage = nil
         } catch {
-            guard selection.currentHerdID == originatingHerdID,
+            guard !Task.isCancelled,
+                  selection.currentHerdID == originatingHerdID,
                   selection.selectionRevision == originatingSelectionRevision else { return }
             events = []
             errorMessage = UserVisibleErrorMessage.make(error)

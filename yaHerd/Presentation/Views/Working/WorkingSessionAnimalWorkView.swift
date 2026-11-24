@@ -150,6 +150,15 @@ struct WorkingSessionAnimalWorkView: View {
         .navigationBarBackButtonHidden(isMutatingWork && isPresentingCurrentHerd)
         .interactiveDismissDisabled(isMutatingWork && isPresentingCurrentHerd)
         .toolbar {
+            if isPresentingCurrentHerd, remoteReadFailed, !remoteDraftChanged, !isMutatingWork {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        retryWorkValidation()
+                    } label: {
+                        Label("Retry Work Validation", systemImage: "arrow.clockwise")
+                    }
+                }
+            }
             if isPresentingCurrentHerd, snapshot != nil && !isSessionLocked {
                 workToolbar
             }
@@ -163,7 +172,7 @@ struct WorkingSessionAnimalWorkView: View {
             let startingSequence = mutationStream.currentSequence
 
             viewModel.configure(repository: repository, herdSelection: herdSelection)
-            viewModel.load()
+            _ = revalidateWorkSnapshot()
             loadPastures()
             seedStateIfNeeded()
             seedSessionSourcePastureReferenceIfNeeded()
@@ -212,6 +221,11 @@ struct WorkingSessionAnimalWorkView: View {
             Text("Treatments, pregnancy checks, procedures, and observations recorded for this animal in this session will be deleted. The animal remains in the session.")
         }
         .alert("Can’t Save", isPresented: $showingError) {
+            if remoteReadFailed && !remoteDraftChanged {
+                Button("Retry Validation") {
+                    retryWorkValidation()
+                }
+            }
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage ?? viewModel.errorMessage ?? "Unknown error")
@@ -244,6 +258,8 @@ struct WorkingSessionAnimalWorkView: View {
         castrationPerformed = false
         observationNotes = ""
         seededSnapshotID = nil
+        remoteReadFailed = false
+        remoteDraftChanged = false
         showingSirePicker = false
         showingTagReplacement = false
         showingDeleteConfirmation = false
@@ -309,19 +325,38 @@ struct WorkingSessionAnimalWorkView: View {
     func revalidateWorkSnapshot() -> Bool {
         guard isPresentingCurrentHerd, !remoteDraftChanged else { return false }
         let previous = snapshot
+        let previousReadError = viewModel.errorMessage
+        let wasReadFailed = remoteReadFailed
         viewModel.load()
-        if viewModel.errorMessage != nil {
-            remoteReadFailed = true
-            return false
-        }
-        remoteReadFailed = false
+        // A thrown read retains the prior snapshot; a successful read returning
+        // nil means the record was removed and cannot authorize an old draft.
         if let previous, previous != snapshot {
+            remoteReadFailed = false
             remoteDraftChanged = true
             errorMessage = "This animal or working session changed. Your draft is retained; reopen the editor before saving."
             showingError = true
             return false
         }
+        if let readError = viewModel.errorMessage {
+            remoteReadFailed = true
+            errorMessage = readError
+            showingError = true
+            return false
+        }
+        remoteReadFailed = false
+        if wasReadFailed, errorMessage == previousReadError {
+            errorMessage = nil
+        }
         return snapshot != nil
+    }
+
+    private func retryWorkValidation() {
+        guard isPresentingCurrentHerd, !isMutatingWork,
+              remoteReadFailed, !remoteDraftChanged else { return }
+        guard revalidateWorkSnapshot() else { return }
+        // Only seed if initial loading failed. Existing drafts remain untouched.
+        seedStateIfNeeded()
+        seedSessionSourcePastureReferenceIfNeeded()
     }
 
     @MainActor
