@@ -19,6 +19,7 @@ struct WorkingFinishSessionView: View {
     private let originatingSelectionRevision: UInt64
 
     @StateObject private var viewModel: WorkingFinishSessionViewModel
+    @State private var savedExceptions: [UUID: DestinationException] = [:]
     @State private var exceptionAnimalIDs: Set<UUID> = []
     @State private var exceptionDestinationIDs: [UUID: UUID] = [:]
     @State private var showingExceptionPicker = false
@@ -61,8 +62,11 @@ struct WorkingFinishSessionView: View {
     }
 
     private var liveSourcePastureID: UUID? {
-        guard let session, session.isSourcePastureAvailable else { return nil }
-        return session.sourcePastureID
+        guard let session, session.isSourcePastureAvailable,
+              let sourceID = session.sourcePastureID,
+              !viewModel.hasLoadedPastureOptions ||
+                viewModel.pastures.contains(where: { $0.id == sourceID }) else { return nil }
+        return sourceID
     }
 
     private var liveSourcePastureName: String? {
@@ -91,15 +95,15 @@ struct WorkingFinishSessionView: View {
             return false
         }
 
-        if requiresExplicitDestinationForEveryItem {
-            return orderedItems.allSatisfy { item in
-                exceptionAnimalIDs.contains(item.id)
-                    && exceptionDestinationIDs[item.id] != nil
-            }
+        let queueIDs = Set(orderedItems.map(\.id))
+        let destinationIDs = Set(otherPastures.map(\.id))
+        guard exceptionAnimalIDs.isSubset(of: queueIDs),
+              !requiresExplicitDestinationForEveryItem || exceptionAnimalIDs == queueIDs else {
+            return false
         }
-
-        return exceptionAnimalIDs.allSatisfy {
-            exceptionDestinationIDs[$0] != nil
+        return exceptionAnimalIDs.allSatisfy { itemID in
+            guard let destinationID = exceptionDestinationIDs[itemID] else { return false }
+            return destinationIDs.contains(destinationID)
         }
     }
 
@@ -200,36 +204,10 @@ struct WorkingFinishSessionView: View {
                     workingRepository: repository,
                     pastureRepository: pastureRepository
                 )
-                viewModel.load()
-                if viewModel.errorMessage != nil &&
-                   viewModel.sessionLoadState != .failed {
-                    showingError = true
-                }
-                seedExceptions()
+                reloadSession()
             }
             .onChange(of: workingDependencies.mutationStream.workingSessionRevision) { _, _ in
-                guard isViewingOriginatingHerd, !isFinishing else { return }
-                viewModel.load()
-                guard let session else { return }
-                let liveIDs = Set(session.queueItems.map(\.id))
-                exceptionAnimalIDs.formIntersection(liveIDs)
-                if requiresExplicitDestinationForEveryItem {
-                    exceptionAnimalIDs.formUnion(liveIDs)
-                }
-                revalidateExceptionDestinationsAgainstLivePastures()
-            }
-            .onChange(of: viewModel.session?.id) { _, _ in
-                guard isViewingOriginatingHerd else { return }
-                seedExceptions(force: true)
-            }
-            .onChange(of: viewModel.hasLoadedPastureOptions) { _, loaded in
-                if loaded && isViewingOriginatingHerd {
-                    revalidateExceptionDestinationsAgainstLivePastures()
-                }
-            }
-            .onChange(of: exceptionAnimalIDs) { _, _ in
-                guard isViewingOriginatingHerd else { return }
-                synchronizeExceptionDestinations()
+                reloadSession()
             }
             .onChange(of: herdSelection.selectionRevision) { _, _ in
                 guard !isViewingOriginatingHerd else { return }
@@ -242,7 +220,7 @@ struct WorkingFinishSessionView: View {
                 if isViewingOriginatingHerd {
                     WorkingFinishExceptionSelectionView(
                         items: orderedItems,
-                        selection: $exceptionAnimalIDs
+                        selection: exceptionSelectionBinding
                     )
                 }
             }
@@ -398,14 +376,7 @@ struct WorkingFinishSessionView: View {
             }
 
             Button {
-                guard isViewingOriginatingHerd else { return }
-                viewModel.retrySession()
-                if viewModel.sessionLoadState == .ready {
-                    // Rebuild assignments from the newly read session even
-                    // when SwiftUI coalesces nil → same-ID observation changes.
-                    seedExceptions(force: true)
-                    revalidateExceptionDestinationsAgainstLivePastures()
-                }
+                reloadSession()
             } label: {
                 Label("Retry Loading Session", systemImage: "arrow.clockwise")
             }
@@ -417,7 +388,9 @@ struct WorkingFinishSessionView: View {
     private var pastureLoadRecoverySection: some View {
         Section {
             Button {
+                guard isViewingOriginatingHerd, !isFinishing else { return }
                 viewModel.retryPastureOptions()
+                reconcileExceptions()
             } label: {
                 Label("Retry Loading Pastures", systemImage: "arrow.clockwise")
             }
@@ -453,75 +426,112 @@ struct WorkingFinishSessionView: View {
         }
     }
 
-    private func seedExceptions(force: Bool = false) {
-        guard let session else { return }
-        if !force && !exceptionAnimalIDs.isEmpty { return }
+    private struct DestinationException: Equatable {
+        let isSelected: Bool
+        let destinationID: UUID?
+    }
 
-        let livePastureIDs = Set(viewModel.pastures.map(\.id))
-        let pastureOptionsAreAuthoritative = viewModel.hasLoadedPastureOptions
-
-        if requiresExplicitDestinationForEveryItem {
-            exceptionAnimalIDs = Set(session.queueItems.map(\.id))
-            exceptionDestinationIDs = Dictionary(
-                uniqueKeysWithValues: session.queueItems.compactMap { item in
-                    guard let destinationID = item.destinationPastureID,
-                          !pastureOptionsAreAuthoritative || livePastureIDs.contains(destinationID) else {
-                        return nil
-                    }
-                    return (item.id, destinationID)
-                }
-            )
+    private func reloadSession() {
+        guard isViewingOriginatingHerd, !isFinishing else { return }
+        viewModel.load()
+        guard viewModel.sessionLoadState == .ready else {
+            // An unavailable read is not a new session. Keep the draft and its
+            // last successful baseline; prevent changes through an empty picker.
+            showingExceptionPicker = false
+            showingUnfinishedConfirmation = false
             return
         }
+        reconcileExceptions()
+        if viewModel.errorMessage != nil {
+            showingError = true
+        }
+    }
 
-        let existingExceptions = session.queueItems.filter { item in
-            guard let destinationID = item.destinationPastureID else { return false }
-            return destinationID != liveSourcePastureID
+    private func savedException(
+        for item: WorkingQueueItemSnapshot,
+        validDestinations: Set<UUID>
+    ) -> DestinationException {
+        let selected = requiresExplicitDestinationForEveryItem ||
+            (item.destinationPastureID != nil && item.destinationPastureID != liveSourcePastureID)
+        let destinationID = item.destinationPastureID.flatMap { id in
+            !viewModel.hasLoadedPastureOptions || validDestinations.contains(id) ? id : nil
+        }
+        return DestinationException(isSelected: selected, destinationID: selected ? destinationID : nil)
+    }
+
+    /// Merge successful reads into the existing draft. A user can intentionally
+    /// remove every exception or clear a destination, so emptiness is not an
+    /// initialization signal. Missing/failed reads never replace this baseline.
+    private func reconcileExceptions() {
+        guard isViewingOriginatingHerd,
+              viewModel.sessionLoadState == .ready, let session else { return }
+
+        let validDestinations = Set(otherPastures.map(\.id))
+        var nextSaved: [UUID: DestinationException] = [:]
+        var nextSelection: Set<UUID> = []
+        var nextDestinations: [UUID: UUID] = [:]
+
+        for item in session.queueItems {
+            let saved = savedException(for: item, validDestinations: validDestinations)
+            let draft = DestinationException(
+                isSelected: exceptionAnimalIDs.contains(item.id),
+                destinationID: exceptionDestinationIDs[item.id]
+            )
+            let resolved: DestinationException
+            if let previous = savedExceptions[item.id], draft != previous {
+                resolved = draft
+            } else {
+                resolved = saved
+            }
+
+            nextSaved[item.id] = saved
+            guard resolved.isSelected || requiresExplicitDestinationForEveryItem else { continue }
+            nextSelection.insert(item.id)
+            if let destinationID = resolved.destinationID,
+               !viewModel.hasLoadedPastureOptions || validDestinations.contains(destinationID) {
+                nextDestinations[item.id] = destinationID
+            }
         }
 
-        exceptionAnimalIDs = Set(existingExceptions.map(\.id))
-        exceptionDestinationIDs = Dictionary(
-            uniqueKeysWithValues: existingExceptions.compactMap { item in
-                guard let destinationID = item.destinationPastureID,
-                      !pastureOptionsAreAuthoritative || livePastureIDs.contains(destinationID) else {
-                    return nil
+        savedExceptions = nextSaved
+        exceptionAnimalIDs = nextSelection
+        exceptionDestinationIDs = nextDestinations
+    }
+
+    private var exceptionSelectionBinding: Binding<Set<UUID>> {
+        Binding(
+            get: { exceptionAnimalIDs },
+            set: { selection in
+                guard isViewingOriginatingHerd, viewModel.sessionLoadState == .ready,
+                      viewModel.hasLoadedPastureOptions, !isFinishing else { return }
+                let liveIDs = Set(orderedItems.map(\.id))
+                let nextSelection = requiresExplicitDestinationForEveryItem
+                    ? liveIDs : selection.intersection(liveIDs)
+                let added = nextSelection.subtracting(exceptionAnimalIDs)
+                exceptionDestinationIDs = exceptionDestinationIDs.filter {
+                    nextSelection.contains($0.key)
                 }
-                return (item.id, destinationID)
+                let validDestinations = Set(otherPastures.map(\.id))
+                for item in orderedItems where added.contains(item.id) {
+                    if let destinationID = item.destinationPastureID,
+                       validDestinations.contains(destinationID) {
+                        exceptionDestinationIDs[item.id] = destinationID
+                    }
+                }
+                exceptionAnimalIDs = nextSelection
             }
         )
-    }
-
-    private func synchronizeExceptionDestinations() {
-        exceptionDestinationIDs = exceptionDestinationIDs.filter {
-            exceptionAnimalIDs.contains($0.key)
-        }
-
-        let livePastureIDs = Set(viewModel.pastures.map(\.id))
-        for item in selectedExceptionItems
-            where exceptionDestinationIDs[item.id] == nil
-        {
-            if let existingDestination = item.destinationPastureID,
-               existingDestination != liveSourcePastureID,
-               (!viewModel.hasLoadedPastureOptions || livePastureIDs.contains(existingDestination)) {
-                exceptionDestinationIDs[item.id] = existingDestination
-            }
-        }
-    }
-
-    private func revalidateExceptionDestinationsAgainstLivePastures() {
-        guard viewModel.hasLoadedPastureOptions else { return }
-
-        let livePastureIDs = Set(viewModel.pastures.map(\.id))
-        exceptionDestinationIDs = exceptionDestinationIDs.filter {
-            exceptionAnimalIDs.contains($0.key) && livePastureIDs.contains($0.value)
-        }
-        synchronizeExceptionDestinations()
     }
 
     private func destinationBinding(for itemID: UUID) -> Binding<UUID?> {
         Binding(
             get: { exceptionDestinationIDs[itemID] },
-            set: { exceptionDestinationIDs[itemID] = $0 }
+            set: { destinationID in
+                guard isViewingOriginatingHerd, viewModel.sessionLoadState == .ready,
+                      viewModel.hasLoadedPastureOptions, !isFinishing,
+                      exceptionAnimalIDs.contains(itemID) else { return }
+                exceptionDestinationIDs[itemID] = destinationID
+            }
         )
     }
 
