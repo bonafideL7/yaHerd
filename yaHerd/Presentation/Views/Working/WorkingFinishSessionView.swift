@@ -312,27 +312,24 @@ struct WorkingFinishSessionView: View {
 
     private var exceptionSection: some View {
         Section {
-            Button {
-                showingExceptionPicker = true
-            } label: {
-                HStack {
-                    Label(
-                        requiresExplicitDestinationForEveryItem
-                            ? "Choose Destinations for Animals"
-                            : "Choose Animals Moving Elsewhere",
-                        systemImage: "arrow.triangle.branch"
-                    )
-                    Spacer()
-                    Text("\(exceptionAnimalIDs.count)")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
+            if !requiresExplicitDestinationForEveryItem {
+                Button {
+                    showingExceptionPicker = true
+                } label: {
+                    HStack {
+                        Label("Choose Animals Moving Elsewhere", systemImage: "arrow.triangle.branch")
+                        Spacer()
+                        Text("\(exceptionAnimalIDs.count)")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
                 }
+                .disabled(
+                    orderedItems.isEmpty
+                        || otherPastures.isEmpty
+                        || isFinishing
+                )
             }
-            .disabled(
-                orderedItems.isEmpty
-                    || otherPastures.isEmpty
-                    || isFinishing
-            )
 
             if selectedExceptionItems.isEmpty {
                 Text(
@@ -496,6 +493,9 @@ struct WorkingFinishSessionView: View {
         savedExceptions = nextSaved
         exceptionAnimalIDs = nextSelection
         exceptionDestinationIDs = nextDestinations
+        if requiresExplicitDestinationForEveryItem || !viewModel.hasLoadedPastureOptions {
+            showingExceptionPicker = false
+        }
     }
 
     private var exceptionSelectionBinding: Binding<Set<UUID>> {
