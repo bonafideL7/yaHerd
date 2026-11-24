@@ -9,6 +9,7 @@ enum AppLaunchStorageMode: String {
     case local
     case cloudKitDevelopment
     case cloudKitDevelopmentBlocked
+    case cloudKitSchemaValidation
     case recovery
     case unavailable
 
@@ -20,6 +21,8 @@ enum AppLaunchStorageMode: String {
             "iCloud Development"
         case .cloudKitDevelopmentBlocked:
             "iCloud Development Unavailable"
+        case .cloudKitSchemaValidation:
+            "iCloud Schema Validation"
         case .recovery:
             "Recovery Mode"
         case .unavailable:

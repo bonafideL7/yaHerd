@@ -142,36 +142,50 @@ struct CoreDataLookup: Sendable {
             }
         }
 
+        // Core Data may propagate additional deletions or nullifications during
+        // save. Check the committed graph, including to-one inverse links.
+        // Follow cascade edges recursively, but do not traverse nullify targets.
+        var visitedDeletions = Set<NSManagedObject>()
+        func validateDeletionEffects(_ object: NSManagedObject) throws {
+            guard visitedDeletions.insert(object).inserted else { return }
+            try validateOwnership(object)
+
+            for relationship in object.entity.relationshipsByName.values
+            where relationship.deleteRule == .cascadeDeleteRule
+                || relationship.deleteRule == .nullifyDeleteRule {
+                let committed = object.committedValues(
+                    forKeys: [relationship.name]
+                )[relationship.name]
+                let related: [NSManagedObject]
+                if relationship.isToMany {
+                    related = (committed as? NSSet)?.allObjects.compactMap {
+                        $0 as? NSManagedObject
+                    } ?? []
+                } else {
+                    related = (committed as? NSManagedObject).map { [$0] } ?? []
+                }
+
+                for target in related {
+                    try validateOwnership(target)
+                    if relationship.deleteRule == .cascadeDeleteRule {
+                        try validateDeletionEffects(target)
+                    }
+                }
+            }
+        }
+
         for object in changedObjects {
             try validateOwnership(object)
-            // A child can have the correct Herd relationship but still refer to
-            // an animal, pasture, group, or session owned by another Herd.
-            // Inspect to-one links on ordinary saves. Only explicit deletion
-            // needs the cascade graph; loading every to-many inverse during
-            // routine updates would fault entire Herd graphs.
+            // Ordinary writes inspect to-one links without faulting every
+            // to-many inverse in the Herd.
             for relationship in object.entity.relationshipsByName.values
             where !relationship.isToMany {
                 if let relatedObject = object.value(forKey: relationship.name) as? NSManagedObject {
                     try validateOwnership(relatedObject)
                 }
             }
-
-            // Deleting a parent can cascade-delete or nullify relationships
-            // to children that were not explicitly changed by the caller.
-            // Inspect only deleted objects' committed to-many relationships
-            // to prevent either action from mutating another Herd's records.
             if object.isDeleted {
-                for relationship in object.entity.relationshipsByName.values
-                where relationship.isToMany
-                    && (relationship.deleteRule == .cascadeDeleteRule
-                        || relationship.deleteRule == .nullifyDeleteRule) {
-                    let related = object.committedValues(
-                        forKeys: [relationship.name]
-                    )[relationship.name] as? NSSet
-                    for case let child as NSManagedObject in related ?? NSSet() {
-                        try validateOwnership(child)
-                    }
-                }
+                try validateDeletionEffects(object)
             }
         }
 

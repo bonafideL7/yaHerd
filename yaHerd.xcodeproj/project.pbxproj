@@ -553,7 +553,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				"CODE_SIGNING_ALLOWED[sdk=iphoneos*]" = YES;
 				"CODE_SIGNING_REQUIRED[sdk=iphoneos*]" = YES;
-				CODE_SIGN_ENTITLEMENTS = yaHerd/yaHerd.entitlements;
+				CODE_SIGN_ENTITLEMENTS = yaHerd/yaHerd-iCloudDevelopment.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;

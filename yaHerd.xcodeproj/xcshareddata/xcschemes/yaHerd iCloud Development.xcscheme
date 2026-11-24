@@ -99,6 +99,23 @@
             ReferencedContainer = "container:yaHerd.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <EnvironmentVariables>
+         <EnvironmentVariable
+            key = "YAHERD_VALIDATE_ICLOUD_SCHEMA"
+            value = "1"
+            isEnabled = "NO">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "YAHERD_CREATE_ICLOUD_DEV_SCHEMA"
+            value = "1"
+            isEnabled = "NO">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "YAHERD_ICLOUD_SCHEMA_VALIDATED"
+            value = "1"
+            isEnabled = "NO">
+         </EnvironmentVariable>
+      </EnvironmentVariables>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"

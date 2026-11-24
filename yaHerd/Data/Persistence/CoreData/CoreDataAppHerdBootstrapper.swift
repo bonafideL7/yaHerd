@@ -83,6 +83,9 @@ enum CoreDataAppHerdBootstrapper {
     ) throws -> [UUID] {
         let context = contextFactory.makeReadContext()
         return try context.performAndWait {
+            guard context.persistentStoreCoordinator?.persistentStores.count == 1 else {
+                throw CoreDataPersistenceError.unscopedMultiStoreWrite
+            }
             let request = NSFetchRequest<CDHerd>(
                 entityName: CDHerd.coreDataEntityName
             )
@@ -96,7 +99,7 @@ enum CoreDataAppHerdBootstrapper {
                     ascending: true
                 )
             ]
-            return try context.fetch(request).map { try $0.requiredID() }
+            return try context.fetch(request).map { try $0.toSummary().id }
         }
     }
 
@@ -111,7 +114,7 @@ enum CoreDataAppHerdBootstrapper {
             let existing = try context.fetch(request)
 
             if existing.count == 1 {
-                return try existing[0].requiredID()
+                return try existing[0].toSummary().id
             }
             if existing.count > 1 {
                 throw CoreDataAppHerdBootstrapError.multipleLocalHerds(

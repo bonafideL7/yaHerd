@@ -45,6 +45,13 @@ struct yaHerdApp: App {
                     }
 
                 #if DEBUG
+                case .developmentSchemaResult(let message):
+                    ContentUnavailableView {
+                        Label("iCloud Schema Validation", systemImage: "icloud")
+                    } description: {
+                        Text(message)
+                    }
+
                 case .developmentImportPending:
                     ContentUnavailableView {
                         Label("Waiting for iCloud Herd", systemImage: "icloud.and.arrow.down")
@@ -111,6 +118,27 @@ struct yaHerdApp: App {
                     at: storeURL
                 )
                 storageMode = .local
+            case .schemaValidation(let initialize):
+                do {
+                    try await CoreDataPersistentContainer.runDevelopmentSchemaValidation(
+                        initialize: initialize
+                    )
+                    let message = initialize
+                        ? "Development schema validation and initialization succeeded. No application Herd store was opened."
+                        : "Development schema dry run succeeded. No schema records were uploaded."
+                    AppLaunchDiagnostics.record(
+                        actualStorageMode: .cloudKitSchemaValidation
+                    )
+                    NSLog("yaHerd: %@", message)
+                    return .developmentSchemaResult(message)
+                } catch {
+                    let message = "Development schema validation failed: " + error.localizedDescription
+                    AppLaunchDiagnostics.record(
+                        actualStorageMode: .cloudKitDevelopmentBlocked,
+                        startupError: message
+                    )
+                    return .developmentMirroringBlocked(message)
+                }
             case .mirrored(let selectedHerdID):
                 let cloudKitAssembly = try await CoreDataPersistenceAssembly.loadCloudKit(
                     storeURL: storeURL,
@@ -280,6 +308,7 @@ private enum AppBootstrapState {
     case storageUnavailable(String)
     case developmentMirroringBlocked(String)
     #if DEBUG
+    case developmentSchemaResult(String)
     case developmentImportPending(CloudKitDevelopmentPendingImport)
     #endif
 }
@@ -523,10 +552,18 @@ private struct StartupStorageFailureView: View {
 /// No UI preferences or Xcode Run arguments can silently switch modes.
 enum CloudKitDevelopmentLaunch: Equatable {
     case disabled
+    case schemaValidation(initialize: Bool)
     case mirrored(selectedHerdID: UUID?)
 
     static func resolve(enabled: Bool, environment: [String: String]) throws -> Self {
         guard enabled else { return .disabled }
+        let initialize = environment["YAHERD_CREATE_ICLOUD_DEV_SCHEMA"] == "1"
+        if initialize || environment["YAHERD_VALIDATE_ICLOUD_SCHEMA"] == "1" {
+            return .schemaValidation(initialize: initialize)
+        }
+        guard environment["YAHERD_ICLOUD_SCHEMA_VALIDATED"] == "1" else {
+            throw CloudKitDevelopmentLaunchError.schemaValidationRequired
+        }
         if let rawHerdID = environment["YAHERD_SELECTED_ICLOUD_HERD_ID"] {
             guard let selectedHerdID = UUID(uuidString: rawHerdID) else {
                 throw CloudKitDevelopmentLaunchError.invalidSelectedHerdID
@@ -561,12 +598,64 @@ enum CloudKitDevelopmentLaunch: Equatable {
            case .invalidHerdOwnership(_, _, _, let actualHerdID) = readError {
             return actualHerdID == nil
         }
-        if let fieldCheckError = error as? CoreDataFieldCheckMappingError {
-            switch fieldCheckError {
-            case .missingFindingSession, .missingAnimalCheckSession:
+        if let persistenceError = error as? CoreDataPersistenceError,
+           case .missingApplicationID = persistenceError {
+            return true
+        }
+        if let animalError = error as? CoreDataAnimalRepositoryError {
+            switch animalError {
+            case .missingHealthDate, .missingHealthAnimalRelationship,
+                 .missingPregnancyAnimalRelationship, .missingTagAssignmentDate,
+                 .missingAnimalTagNumber, .missingAnimalEditorRevision,
+                 .missingAnimalHerdRelationship, .missingAnimalBirthDate,
+                 .missingPregnancyDate, .missingMovementDate,
+                 .missingMovementAnimalRelationship, .missingStatusHistoryDate,
+                 .missingStatusHistoryAnimalRelationship:
                 return true
+            case .invalidAnimalStatusRawValue(_, let value),
+                 .invalidStatusHistoryRawValue(_, let value):
+                return value == nil
             default:
                 return false
+            }
+        }
+        if let fieldCheckError = error as? CoreDataFieldCheckMappingError {
+            switch fieldCheckError {
+            case .missingFindingSession, .missingAnimalCheckSession,
+                 .missingFindingDate, .missingSessionStartDate, .missingAnimalIDSnapshot:
+                return true
+            case .invalidFindingType(_, let value), .invalidFindingStatus(_, let value),
+                 .invalidAnimalType(_, let value):
+                return value == nil
+            default:
+                return false
+            }
+        }
+        if let workingError = error as? CoreDataWorkingMappingError {
+            switch workingError {
+            case .missingQueueAnimalID, .missingTreatmentDate, .missingSessionDate:
+                return true
+            case .invalidSessionStatus(_, let value), .invalidQueueStatus(_, let value):
+                return value == nil
+            default:
+                return false
+            }
+        }
+        if let workingError = error as? CoreDataWorkingRepositoryError {
+            switch workingError {
+            case .missingTreatmentSession, .missingQueueSession:
+                return true
+            case .invalidHerdOwnership(_, _, let actual),
+                 .invalidSessionRelationship(_, _, let actual):
+                return actual == nil
+            default:
+                return false
+            }
+        }
+        if let tagError = error as? CoreDataTagColorRepositoryError {
+            switch tagError {
+            case .missingTagAnimal, .missingName, .missingCreatedAt, .missingUpdatedAt:
+                return true
             }
         }
         return false
@@ -619,9 +708,15 @@ enum CloudKitDevelopmentLaunch: Equatable {
 
 enum CloudKitDevelopmentLaunchError: LocalizedError, Equatable {
     case invalidSelectedHerdID
+    case schemaValidationRequired
 
     var errorDescription: String? {
         switch self {
+        case .schemaValidationRequired:
+            return "Run signed development schema validation using YAHERD_VALIDATE_ICLOUD_SCHEMA=1 " +
+                "and initialize the development schema if needed. After successful validation, " +
+                "enable YAHERD_ICLOUD_SCHEMA_VALIDATED=1 in the iCloud Development Run scheme. " +
+                "No Herd stores were opened."
         case .invalidSelectedHerdID:
             return "YAHERD_SELECTED_ICLOUD_HERD_ID must be an existing Herd UUID. " +
                 "Use it only with the signed development mirroring scheme to select a " +
