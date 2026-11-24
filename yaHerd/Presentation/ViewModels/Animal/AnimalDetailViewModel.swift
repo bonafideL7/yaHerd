@@ -326,6 +326,9 @@ final class AnimalDetailViewModel {
         guard validateViewingSelection(selection) else { return }
         do {
             try repository.archive(ids: [animalID])
+            // This local command intentionally changes the archive state.
+            // End the edit only after the write succeeds, before reloading.
+            if isEditing { cancelEditing() }
             load(animalID: animalID, using: repository, pastureRepository: pastureRepository)
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
@@ -341,6 +344,9 @@ final class AnimalDetailViewModel {
         guard validateViewingSelection(selection) else { return }
         do {
             try repository.restore(ids: [animalID])
+            // This local command intentionally changes the archive state.
+            // End the edit only after the write succeeds, before reloading.
+            if isEditing { cancelEditing() }
             load(animalID: animalID, using: repository, pastureRepository: pastureRepository)
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
