@@ -6,17 +6,6 @@
 import Foundation
 import SwiftUI
 
-private struct StorageActivityKey: EnvironmentKey {
-    static let defaultValue = StorageActivitySnapshot(lastLocalSave: nil, cloud: nil)
-}
-
-extension EnvironmentValues {
-    var storageActivity: StorageActivitySnapshot {
-        get { self[StorageActivityKey.self] }
-        set { self[StorageActivityKey.self] = newValue }
-    }
-}
-
 struct SettingsView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(\.recoveryModeController) private var recoveryModeController
@@ -120,62 +109,71 @@ private struct StorageActivityLink: View {
 
 private struct StorageActivityView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
-    @Environment(\.storageActivity) private var activity
+    @Environment(StorageActivityController.self) private var storageActivity: StorageActivityController?
 
     var body: some View {
         List {
-            Section {
-                if dataAccessMode.isRecoveryMode {
-                    Label("Read-only recovery — changes are not saved", systemImage: "exclamationmark.triangle")
-                } else if activity.cloud?.accessState.blocksHerdAccess == true {
-                    Text("Local save information is unavailable until account access is restored.")
-                } else {
-                    LabeledContent("Local storage", value: "Available")
-                    if let saved = activity.lastLocalSave {
-                        LabeledContent("Last local save") {
-                            Text(saved, format: .dateTime.month().day().hour().minute().second())
-                        }
-                    } else {
-                        LabeledContent("Last local save", value: "None observed this session")
-                    }
-                }
-            } header: {
-                Text("On This Device")
-            } footer: {
-                Text("Local saves are recorded for this app session across all Herds. Saving on this device does not confirm an upload.")
-            }
-
-            if dataAccessMode.isRecoveryMode {
-                Section("iCloud") {
-                    Text("Synchronization is disabled in recovery mode.")
-                }
-            } else if let cloud = activity.cloud {
-                Section {
-                    switch cloud.accessState {
-                    case .accountChanged:
-                        Label("Account changed. Reopen yaHerd to check access.", systemImage: "exclamationmark.icloud")
-                    case .accountUnavailable:
-                        Label("Account authorization unavailable. Check iCloud sign-in.", systemImage: "exclamationmark.icloud")
-                    default:
-                        Text("iCloud manages transfers automatically when available.")
-                    }
-                } header: {
-                    Text("iCloud")
-                } footer: {
-                    Text("These are the latest observed operations this session, not confirmation that every change has reached iCloud or another device.")
-                }
-
-                if !cloud.accessState.blocksHerdAccess {
-                    storeSection(title: "Owned Herds", activity: cloud.owned)
-                    storeSection(title: "Shared Herds", activity: cloud.shared)
-                }
+            if let activity = storageActivity?.snapshot {
+                statusSections(activity)
             } else {
-                Section("iCloud") {
-                    Text("Synchronization is not enabled for this launch.")
-                }
+                Text("Storage information unavailable")
             }
         }
         .navigationTitle("Storage & iCloud")
+    }
+
+    @ViewBuilder
+    private func statusSections(_ activity: StorageActivitySnapshot) -> some View {
+        Section {
+            if dataAccessMode.isRecoveryMode {
+                Label("Read-only recovery — changes are not saved", systemImage: "exclamationmark.triangle")
+            } else if activity.cloud?.accessState.blocksHerdAccess == true {
+                Text("Local save information is unavailable until account access is restored.")
+            } else {
+                LabeledContent("Local storage", value: "Available")
+                if let saved = activity.lastLocalSave {
+                    LabeledContent("Last local save") {
+                        Text(saved, format: .dateTime.month().day().hour().minute().second())
+                    }
+                } else {
+                    LabeledContent("Last local save", value: "None observed this session")
+                }
+            }
+        } header: {
+            Text("On This Device")
+        } footer: {
+            Text("Local saves are recorded for this app session across all Herds. Saving on this device does not confirm an upload.")
+        }
+
+        if dataAccessMode.isRecoveryMode {
+            Section("iCloud") {
+                Text("Synchronization is disabled in recovery mode.")
+            }
+        } else if let cloud = activity.cloud {
+            Section {
+                switch cloud.accessState {
+                case .accountChanged:
+                    Label("Account changed. Reopen yaHerd to check access.", systemImage: "exclamationmark.icloud")
+                case .accountUnavailable:
+                    Label("Account authorization unavailable. Check iCloud sign-in.", systemImage: "exclamationmark.icloud")
+                default:
+                    Text("iCloud manages transfers automatically when available.")
+                }
+            } header: {
+                Text("iCloud")
+            } footer: {
+                Text("These are the latest observed operations this session, not confirmation that every change has reached iCloud or another device.")
+            }
+
+            if !cloud.accessState.blocksHerdAccess {
+                storeSection(title: "Owned Herds", activity: cloud.owned)
+                storeSection(title: "Shared Herds", activity: cloud.shared)
+            }
+        } else {
+            Section("iCloud") {
+                Text("Synchronization is not enabled for this launch.")
+            }
+        }
     }
 
     private func storeSection(title: String, activity: CloudStoreActivity?) -> some View {
