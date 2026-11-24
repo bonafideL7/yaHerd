@@ -4,6 +4,7 @@ import XCTest
 @MainActor
 final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
     func testFailedTemplateListKeepsSetupBlockedAfterSuccessfulCandidatePages() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
         let pastureID = UUID()
         let animal = makeCandidate(tag: "T01", pastureID: pastureID)
         let reader = WorkingSetupCandidateReader(animalsByPasture: [pastureID: [animal]])
@@ -24,7 +25,7 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
 
         // Even if a candidate request completes, it has no authority to clear
         // setup failures or make an incomplete Working setup usable.
-        await model.loadEligibleAnimals(pastureID: pastureID)
+        await model.loadEligibleAnimals(pastureID: pastureID, currentHerdSelection: selection)
         XCTAssertEqual(model.eligibleAnimals(pastureID: pastureID).map(\.id), [animal.id])
         XCTAssertFalse(model.hasLoadedSetupSuccessfully)
         XCTAssertEqual(model.setupLoadErrorMessage, setupError)
@@ -48,6 +49,7 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
     }
 
     func testFailedPastureReadCannotExposeTemplatesOrEnableSetup() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
         let pastureID = UUID()
         let model = NewWorkingSessionViewModel(
             pastureRepository: WorkingSetupPastureReader(pastureID: pastureID, shouldFail: true),
@@ -64,13 +66,14 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
         let error = model.setupLoadErrorMessage
         XCTAssertNotNil(error)
 
-        await model.loadEligibleAnimals(pastureID: pastureID)
+        await model.loadEligibleAnimals(pastureID: pastureID, currentHerdSelection: selection)
         XCTAssertEqual(model.setupLoadErrorMessage, error)
         XCTAssertEqual(model.errorMessage, error)
         XCTAssertFalse(model.hasLoadedSetupSuccessfully)
     }
 
     func testCandidateRefreshDoesNotEraseTemplateDetailFailure() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
         let pastureID = UUID()
         let model = NewWorkingSessionViewModel(
             pastureRepository: WorkingSetupPastureReader(pastureID: pastureID),
@@ -85,12 +88,13 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
         let templateError = model.errorMessage
         XCTAssertNotNil(templateError)
 
-        await model.loadEligibleAnimals(pastureID: pastureID)
+        await model.loadEligibleAnimals(pastureID: pastureID, currentHerdSelection: selection)
         XCTAssertEqual(model.loadedPastureID, pastureID)
         XCTAssertEqual(model.errorMessage, templateError)
     }
 
     func testSelectedPastureLoadsEveryPageWithoutShowingAnotherPasture() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
         let firstPastureID = UUID()
         let secondPastureID = UUID()
         let first = (0..<503).map {
@@ -109,7 +113,7 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
             workingRepository: EmptyWorkingRepository()
         )
 
-        await model.loadEligibleAnimals(pastureID: firstPastureID)
+        await model.loadEligibleAnimals(pastureID: firstPastureID, currentHerdSelection: selection)
         XCTAssertFalse(model.isLoadingAnimals)
         XCTAssertEqual(model.loadedPastureID, firstPastureID)
         XCTAssertEqual(model.eligibleAnimals(pastureID: firstPastureID).map(\.id), first.map(\.id))
@@ -121,17 +125,18 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
         XCTAssertTrue(model.isLoadingAnimals)
         XCTAssertNil(model.loadedPastureID)
         XCTAssertTrue(model.eligibleAnimals(pastureID: firstPastureID).isEmpty)
-        await model.loadEligibleAnimals(pastureID: secondPastureID)
+        await model.loadEligibleAnimals(pastureID: secondPastureID, currentHerdSelection: selection)
         XCTAssertEqual(model.eligibleAnimals(pastureID: secondPastureID).map(\.id), [other.id])
 
         model.clearCandidates(for: nil)
-        await model.loadEligibleAnimals(pastureID: nil)
+        await model.loadEligibleAnimals(pastureID: nil, currentHerdSelection: selection)
         XCTAssertTrue(model.animals.isEmpty)
         XCTAssertNil(model.loadedPastureID)
         XCTAssertFalse(model.isLoadingAnimals)
     }
 
     func testFailedSnapshotHydrationNeverPublishesPartialCandidatesAndAllowsRetry() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
         let pastureID = UUID()
         let animals = (0..<505).map {
             makeCandidate(tag: String(format: "%03d", $0), pastureID: pastureID)
@@ -144,20 +149,21 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
             animalReferenceQueryReader: reader,
             workingRepository: EmptyWorkingRepository()
         )
-        await model.loadEligibleAnimals(pastureID: pastureID)
+        await model.loadEligibleAnimals(pastureID: pastureID, currentHerdSelection: selection)
         XCTAssertNil(model.loadedPastureID)
         XCTAssertTrue(model.eligibleAnimals(pastureID: pastureID).isEmpty)
         XCTAssertFalse(model.isLoadingAnimals)
         XCTAssertNotNil(model.errorMessage)
 
         await reader.setFailureOffset(nil)
-        await model.loadEligibleAnimals(pastureID: pastureID)
+        await model.loadEligibleAnimals(pastureID: pastureID, currentHerdSelection: selection)
         XCTAssertEqual(model.eligibleAnimals(pastureID: pastureID).count, animals.count)
         XCTAssertEqual(model.loadedPastureID, pastureID)
         XCTAssertNil(model.errorMessage)
     }
 
     func testOlderPastureRequestCannotOverwriteNewerCandidates() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
         let firstPastureID = UUID()
         let secondPastureID = UUID()
         let first = makeCandidate(tag: "1", pastureID: firstPastureID)
@@ -176,11 +182,11 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
         )
 
         let olderRequest = Task {
-            await model.loadEligibleAnimals(pastureID: firstPastureID)
+            await model.loadEligibleAnimals(pastureID: firstPastureID, currentHerdSelection: selection)
         }
         await reader.waitForPausedRequest()
         model.clearCandidates(for: secondPastureID)
-        await model.loadEligibleAnimals(pastureID: secondPastureID)
+        await model.loadEligibleAnimals(pastureID: secondPastureID, currentHerdSelection: selection)
 
         await reader.resumePausedRequest()
         await olderRequest.value
