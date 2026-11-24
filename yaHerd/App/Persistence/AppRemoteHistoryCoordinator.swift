@@ -15,8 +15,10 @@ final class AppRemoteHistoryCoordinator {
     ) {
         self.wakeups = wakeups
         let consumer = CoreDataPersistentHistoryConsumer(contextFactory: contextFactory)
-        task = Task {
-            await consumer.run(wakeups: wakeups) { changes in
+        task = Task { @MainActor in
+            await consumer.run(wakeups: wakeups, refreshInventory: {
+                herdDirectory.refresh(reportErrors: false)
+            }) { changes in
                 guard !contextFactory.herdImportState.blocksHerdAccess else { return false }
                 // Resolve access first; feature reloads must see the new selection.
                 herdDirectory.refresh(reportErrors: false)

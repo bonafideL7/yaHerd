@@ -74,10 +74,14 @@ actor CoreDataPersistentHistoryConsumer {
 
     func run(
         wakeups: CoreDataHistoryWakeups,
+        refreshInventory: @escaping @MainActor @Sendable () -> Void,
         publish: @escaping @MainActor @Sendable (PersistentHistoryChanges) -> Bool
     ) async {
         for await _ in wakeups.stream {
             guard !Task.isCancelled else { return }
+            // Keep Stage 3 directory revalidation even for notifications that
+            // contain no record history (for example a share metadata change).
+            await refreshInventory()
             guard !contextFactory.herdImportState.blocksHerdAccess else { continue }
 
             // One bounded retry handles a transient fetch/checkpoint failure;
