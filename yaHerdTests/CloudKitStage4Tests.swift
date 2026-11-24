@@ -102,6 +102,43 @@ final class CloudKitStage4Tests: XCTestCase {
         XCTAssertNotEqual(owned, CoreDataHistoryStore(identifier: "replacement", url: owned.url))
     }
 
+    func testLocalSaveActivityTracksDurableCurrentFactoryWritesOnly() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let factory = assembly.contextFactory
+        let owned = try XCTUnwrap(factory.historyStores().first { $0.url == harness.storeURL })
+        XCTAssertNil(factory.storageActivity.lastLocalSave)
+        XCTAssertNil(factory.storageActivity.cloud)
+
+        try insertHerd(in: owned, using: factory, author: "external-import")
+        XCTAssertNil(factory.storageActivity.lastLocalSave)
+
+        try insertHerd(in: owned, using: factory, author: nil)
+        let saved = try XCTUnwrap(factory.storageActivity.lastLocalSave)
+
+        try insertHerd(in: owned, using: factory, author: "external-import")
+        XCTAssertEqual(factory.storageActivity.lastLocalSave, saved)
+
+        let context = try factory.makeWriteContext()
+        try context.performAndWait { try context.save() }
+        XCTAssertEqual(factory.storageActivity.lastLocalSave, saved)
+
+        let memory = try await CoreDataPersistenceAssembly.inMemory()
+        let memoryContext = try memory.contextFactory.makeWriteContext()
+        try memoryContext.performAndWait {
+            let herd = CDHerd(context: memoryContext)
+            herd.id = UUID()
+            herd.name = "Recovery fixture"
+            herd.createdAt = .distantPast
+            herd.updatedAt = .distantPast
+            try memoryContext.save()
+        }
+        XCTAssertNil(memory.contextFactory.storageActivity.lastLocalSave)
+        XCTAssertEqual(factory.storageActivity.lastLocalSave, saved)
+    }
+
     func testStoreActivityRejectsLateStartAndDuplicateCompletion() {
         let start = Date(timeIntervalSince1970: 100)
         let pending = CloudStoreActivity.Outcome(startDate: start, endDate: nil, state: .waiting)
