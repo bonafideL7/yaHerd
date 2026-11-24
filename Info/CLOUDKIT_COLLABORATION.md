@@ -207,7 +207,7 @@ The stages below form an implementation order, not a status matrix. Maintain a s
 
 ## 5. Executable manual test-case plan
 
-This is a behavior and release verification plan for ChatGPT to follow during implementation. Focused automated test creation and maintenance follow AGENTS.md; do not create separate tracking files, unnecessary testing infrastructure or unrelated CI changes. Codex reviews code and evidence, not implementation. Never mark a case passed without actually executing it.
+This is a behavior and release verification plan for ChatGPT to follow during implementation. Production verification follows AGENTS.md; do not create separate tracking files, unnecessary testing infrastructure or unrelated CI changes. Codex reviews code and evidence, not implementation. Never mark a case passed without actually executing it.
 
 ### 5.1 Test environment, fixtures, and evidence
 
@@ -329,7 +329,7 @@ Before submitting each PR:
 4. Use Xcode build/direct source inspection; run the applicable Section 5 manual test cases when equipment and accounts permit, and report cases not executed.
 5. Inspect the final diff for scope, dead/duplicate logic, unintended changes and restored removed infrastructure.
 6. Request Codex code review against AGENTS.md and the applicable feature stage. ChatGPT fixes actual production defects.
-7. Report modified paths, evidence of verification, known gaps and unresolved risks. Add or maintain focused tests under AGENTS.md; do not change unrelated tests or CI infrastructure.
+7. Report modified paths, evidence of verification, known gaps and unresolved risks. Follow the production verification policy in AGENTS.md; do not change unrelated CI infrastructure.
 
 Required changes to Scripts/verify-architecture.sh must be narrowly justified by approved CloudKit implementation. Keep its other architectural restrictions intact; do not rewrite automation or CI to create a false passing signal.
 
