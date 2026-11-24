@@ -1242,6 +1242,153 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testQueuedWritesCannotCommitAfterSelectionRoundTrip() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let context = try assembly.contextFactory.makeWriteContext()
+        let coordinator = try XCTUnwrap(context.persistentStoreCoordinator)
+        let privateStore = try XCTUnwrap(coordinator.persistentStores.first {
+            $0.url?.lastPathComponent == CoreDataPersistentContainer.storeFileName
+        })
+        let sharedStore = try XCTUnwrap(coordinator.persistentStores.first {
+            $0.url?.lastPathComponent == CoreDataPersistentContainer.sharedStoreFileName
+        })
+        let ownedID = UUID()
+        let sharedID = UUID()
+        let pastureID = UUID()
+
+        try context.performAndWait {
+            let owned = Self.makeHerd(id: ownedID, name: "Owned", in: context, store: privateStore)
+            let shared = Self.makeHerd(id: sharedID, name: "Shared", in: context, store: sharedStore)
+            Self.makePasture(id: pastureID, name: "Owned Pasture", herd: owned,
+                             in: context, store: privateStore)
+            Self.makePasture(id: pastureID, name: "Shared Pasture", herd: shared,
+                             in: context, store: sharedStore)
+            try context.save()
+        }
+
+        let selection = AppCurrentHerdSelection(currentHerdID: ownedID)
+        let animals = CoreDataAnimalRepository(selection: selection, assembly: assembly)
+        let fieldChecks = CoreDataFieldCheckRepository(selection: selection, assembly: assembly)
+        let deletion = CoreDataPastureDeletionTransactionWriter(selection: selection, assembly: assembly)
+        let boundary = assembly.animalWriteBoundary
+
+        let animal = CreateAnimalAggregateTransaction(
+            animalID: UUID(),
+            attributes: AnimalAggregateAttributes(
+                name: "Queued animal", sex: .female, birthDate: Date(timeIntervalSince1970: 100),
+                status: .active, pastureID: nil, sireID: nil, damID: nil,
+                distinguishingFeatures: [], saleDate: nil, salePrice: nil,
+                reasonSold: nil, deathDate: nil, causeOfDeath: nil, statusReferenceID: nil
+            ),
+            tags: []
+        )
+        // Hold the shared animal boundary so the aggregate write cannot start.
+        await boundary.acquireFieldCheck()
+        let queuedAnimal = Task { @MainActor in
+            try await animals.createAnimal(animal)
+        }
+        for _ in 0..<10_000 {
+            if boundary.queuedWriterCount > 0 { break }
+            await Task.yield()
+        }
+        XCTAssertGreaterThan(boundary.queuedWriterCount, 0)
+        selection.select(sharedID)
+        selection.select(ownedID)
+        boundary.releaseFieldCheck()
+        do {
+            _ = try await queuedAnimal.value
+            XCTFail("An obsolete queued animal write committed.")
+        } catch is CancellationError {
+            // Expected: no transaction began after the selection changed.
+        }
+        XCTAssertNil(try animals.fetchAnimalDetail(id: animal.animalID))
+
+        // The Field Check boundary is acquired asynchronously behind animal writes.
+        let fieldCheck = FieldCheckSessionStartInput(
+            pastureID: pastureID, startedAt: Date(), notes: "Queued check"
+        )
+        await boundary.beginAnimalWrite()
+        let queuedCheck = Task { @MainActor in
+            try await fieldChecks.createSession(input: fieldCheck)
+        }
+        for _ in 0..<10_000 {
+            if boundary.hasPendingFieldCheck { break }
+            await Task.yield()
+        }
+        XCTAssertTrue(boundary.hasPendingFieldCheck)
+        selection.select(sharedID)
+        selection.select(ownedID)
+        boundary.endAnimalWrite()
+        do {
+            _ = try await queuedCheck.value
+            XCTFail("An obsolete queued Field Check committed.")
+        } catch is CancellationError {
+            // Expected.
+        }
+        XCTAssertTrue(try fieldChecks.fetchSessions().isEmpty)
+
+        // The deletion gate waits for active conflicting writers to drain.
+        let plan = DeletePasturesTransactionPlan(
+            expectedStates: [
+                PastureDeletionExpectedState(pastureID: pastureID, residentAnimalIDs: [])
+            ],
+            operations: [
+                .archiveFieldChecks(pastureIDs: [pastureID], archivedAt: Date()),
+                .deletePastures(ids: [pastureID])
+            ]
+        )
+        let residentGate = assembly.pastureResidentWriteCoordinator
+        try residentGate.beginAnimalWrite()
+        let queuedDeletion = Task { @MainActor in
+            try await deletion.deletePastures(plan)
+        }
+        var deletionIsWaiting = false
+        for _ in 0..<10_000 {
+            do {
+                try residentGate.beginPastureWrite()
+                residentGate.endPastureWrite()
+            } catch CoreDataResidentWriteCoordinationError.pastureDeletionInProgress {
+                deletionIsWaiting = true
+                break
+            }
+            await Task.yield()
+        }
+        XCTAssertTrue(deletionIsWaiting)
+        selection.select(sharedID)
+        selection.select(ownedID)
+        residentGate.endAnimalWrite()
+        do {
+            try await queuedDeletion.value
+            XCTFail("An obsolete queued pasture deletion committed.")
+        } catch is CancellationError {
+            // Expected.
+        }
+
+        // A fresh read must see both stores unchanged, even with equal pasture UUIDs.
+        let pastures = CoreDataPastureRepository(selection: selection, assembly: assembly)
+        XCTAssertEqual(try pastures.fetchPastureDetail(id: pastureID)?.name, "Owned Pasture")
+        selection.select(sharedID)
+        XCTAssertNil(try animals.fetchAnimalDetail(id: animal.animalID))
+        XCTAssertTrue(try fieldChecks.fetchSessions().isEmpty)
+        XCTAssertEqual(try pastures.fetchPastureDetail(id: pastureID)?.name, "Shared Pasture")
+
+        // Each cancellation must release its locks so new operations can succeed.
+        selection.select(ownedID)
+        _ = try await animals.createAnimal(animal)
+        _ = try await fieldChecks.createSession(input: fieldCheck)
+        try await deletion.deletePastures(plan)
+        XCTAssertNotNil(try animals.fetchAnimalDetail(id: animal.animalID))
+        XCTAssertNil(try pastures.fetchPastureDetail(id: pastureID))
+        selection.select(sharedID)
+        XCTAssertEqual(try pastures.fetchPastureDetail(id: pastureID)?.name, "Shared Pasture")
+        XCTAssertTrue(try fieldChecks.fetchSessions().isEmpty)
+        XCTAssertNil(try animals.fetchAnimalDetail(id: animal.animalID))
+    }
+
     @discardableResult
     private static func makeHerd(
         id: UUID,

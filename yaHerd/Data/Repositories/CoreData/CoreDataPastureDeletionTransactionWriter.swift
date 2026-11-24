@@ -46,6 +46,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
             throw HerdRepositoryError.missingHerd
         }
 
+        let selectionRevision = selection.selectionRevision
         let normalized = try Self.validate(plan)
         let lookup = self.lookup
 
@@ -53,6 +54,12 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
         await residentWriteCoordinator.acquirePastureDeletion()
         let mutationDate = Date()
         do {
+            // A deletion plan is valid only for its original selection.
+            try Task.checkCancellation()
+            guard selection.currentHerdID == herdID,
+                  selection.selectionRevision == selectionRevision else {
+                throw CancellationError()
+            }
             let executed = try await transactionExecutor.performWrite(herdID: herdID, beforeSave: beforeSave) { context in
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd

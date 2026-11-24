@@ -1320,6 +1320,7 @@ final class CoreDataAnimalRepository:
         guard let herdID = selection.currentHerdID else {
             throw HerdRepositoryError.missingHerd
         }
+        let selectionRevision = selection.selectionRevision
         let lookup = self.lookup
         let gate = aggregateWriteGate
 
@@ -1327,6 +1328,13 @@ final class CoreDataAnimalRepository:
         await animalWriteBoundary.beginAnimalWrite()
 
         do {
+            // The write may have waited behind another Herd's operation.
+            // A return to the same UUID does not revive the old request.
+            try Task.checkCancellation()
+            guard selection.currentHerdID == herdID,
+                  selection.selectionRevision == selectionRevision else {
+                throw CancellationError()
+            }
             try pastureResidentWriteCoordinator.beginAnimalWrite()
         } catch {
             animalWriteBoundary.endAnimalWrite()
