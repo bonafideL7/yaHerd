@@ -159,10 +159,14 @@ final class AnimalListViewModelReloadTests: XCTestCase {
     }
 
     func testHardDeleteRemovesAnimalFromCurrentList() async {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
         let animal = makeAnimal(name: "Animal", tagNumber: "103")
         let repository = RecordingAnimalListRepository(animals: [animal])
         let pastureRepository = EmptyPastureReferenceDataReader()
         let viewModel = AnimalListViewModel()
+        viewModel.configure(selection: selection)
 
         viewModel.load(using: repository, pastureRepository: pastureRepository)
         XCTAssertEqual(viewModel.items.map(\.id), [animal.id])
@@ -170,6 +174,8 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         viewModel.performPrimarySwipeAction(
             animalID: animal.id,
             hardDelete: true,
+            originatingHerdID: herdID,
+            originatingSelectionRevision: revision,
             using: repository,
             pastureRepository: pastureRepository
         )
@@ -180,6 +186,9 @@ final class AnimalListViewModelReloadTests: XCTestCase {
     }
 
     func testArchiveSupersedesCancellationInsensitiveInFlightReload() async {
+        let herdID = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let revision = selection.selectionRevision
         let animal = makeAnimal(name: "Animal", tagNumber: "102")
         let queryReader = MutationRaceAnimalListQueryReader(animal: animal)
         let repository = BackgroundQueryingAnimalListRepository(
@@ -188,6 +197,7 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         )
         let pastureRepository = EmptyPastureReferenceDataReader()
         let viewModel = AnimalListViewModel()
+        viewModel.configure(selection: selection)
 
         viewModel.load(using: repository, pastureRepository: pastureRepository)
         let initialResultApplied = await waitForAnimal(animal.id, in: viewModel)
@@ -200,6 +210,8 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         viewModel.performPrimarySwipeAction(
             animalID: animal.id,
             hardDelete: false,
+            originatingHerdID: herdID,
+            originatingSelectionRevision: revision,
             using: repository,
             pastureRepository: pastureRepository
         )
