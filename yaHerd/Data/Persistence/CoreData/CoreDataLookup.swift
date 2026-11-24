@@ -20,7 +20,9 @@ extension CoreDataApplicationIdentifiedManagedObject {
 
 // Herd ownership is declared in the Core Data model. Its stored relationship may be
 // temporarily nil while CloudKit imports related records.
-protocol CoreDataHerdOwnedManagedObject: CoreDataApplicationIdentifiedManagedObject {}
+protocol CoreDataHerdOwnedManagedObject: CoreDataApplicationIdentifiedManagedObject {
+    var herd: CDHerd? { get }
+}
 
 struct CoreDataLookup: Sendable {
     func herd(

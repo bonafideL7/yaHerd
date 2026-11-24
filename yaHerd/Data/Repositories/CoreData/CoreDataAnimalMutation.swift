@@ -115,7 +115,16 @@ enum CoreDataAnimalMutation {
     where Object: NSManagedObject & CoreDataHerdOwnedManagedObject {
         var grouped: [UUID: [Object]] = [:]
         for object in objects {
-            grouped[try object.requiredID(), default: []].append(object)
+            let id = try object.requiredID()
+            guard object.herd?.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: Object.coreDataEntityName,
+                    id: id,
+                    expectedHerdID: herdID,
+                    actualHerdID: object.herd?.id
+                )
+            }
+            grouped[id, default: []].append(object)
         }
         if let duplicate = grouped.first(where: { $0.value.count > 1 }) {
             throw CoreDataPersistenceError.duplicateApplicationID(
@@ -477,14 +486,6 @@ enum CoreDataAnimalMutation {
         let tags = CoreDataAnimalProjection.managedTags(animal)
         try validateUniqueApplicationIDs(tags, herdID: herdID)
         for tag in tags {
-            guard tag.herd?.id == herdID else {
-                throw CoreDataReadModelError.invalidHerdOwnership(
-                    entity: CDAnimalTag.coreDataEntityName,
-                    id: (try tag.requiredID()),
-                    expectedHerdID: herdID,
-                    actualHerdID: tag.herd?.id
-                )
-            }
             _ = try CoreDataAnimalProjection.tagNumber(tag)
             _ = try CoreDataAnimalProjection.tagAssignmentDate(tag)
         }
