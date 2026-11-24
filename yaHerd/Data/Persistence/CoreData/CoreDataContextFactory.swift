@@ -7,6 +7,8 @@ import Foundation
 /// Core Data's write coordinators. No managed object or context is stored here.
 final class CoreDataContextFactory: Sendable {
     private let persistence: Mutex<CoreDataPersistentContainer>
+    private let lastLocalSave = Mutex<Date?>(nil)
+    private let localSaveObserver = Mutex<(any NSObjectProtocol)?>(nil)
     // Only this running process can claim its own published local saves.
     // Older or unknown authors are processed conservatively.
     let localTransactionAuthor = "yaHerd.local." + UUID().uuidString
@@ -39,8 +41,46 @@ final class CoreDataContextFactory: Sendable {
         persistence.withLock { $0.cloudStoreActivity }
     }
 
+    var storageActivity: StorageActivitySnapshot {
+        StorageActivitySnapshot(
+            lastLocalSave: lastLocalSave.withLock { $0 },
+            cloud: persistence.withLock { $0.cloudStorageActivity }
+        )
+    }
+
     init(persistence: sending CoreDataPersistentContainer) {
         self.persistence = Mutex(persistence)
+
+        // One observer covers the transaction executor and direct repository
+        // saves. The author identifies only this factory's local write contexts.
+        // Notifications arrive on the saving context's queue.
+        let observer = NotificationCenter.default.addObserver(
+            forName: NSManagedObjectContext.didSaveObjectIDsNotification,
+            object: nil, queue: nil
+        ) { [weak self] notification in
+            guard let self, let context = notification.object as? NSManagedObjectContext,
+                  context.transactionAuthor == self.localTransactionAuthor,
+                  context.parent == nil else { return }
+
+            let changed = [NSInsertedObjectIDsKey, NSUpdatedObjectIDsKey, NSDeletedObjectIDsKey]
+                .contains { key in
+                    guard let ids = notification.userInfo?[key] as? Set<NSManagedObjectID> else {
+                        return false
+                    }
+                    return ids.contains { $0.persistentStore?.type == NSSQLiteStoreType }
+                }
+            guard changed else { return }
+
+            self.lastLocalSave.withLock { $0 = Date() }
+            NotificationCenter.default.post(name: CoreDataPersistentContainer.storageActivityChanged, object: nil)
+        }
+        localSaveObserver.withLock { $0 = observer }
+    }
+
+    deinit {
+        localSaveObserver.withLock { observer in
+            if let observer { NotificationCenter.default.removeObserver(observer) }
+        }
     }
 
     var herdImportState: HerdImportState {

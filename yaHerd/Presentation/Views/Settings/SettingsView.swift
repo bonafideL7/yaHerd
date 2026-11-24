@@ -6,6 +6,17 @@
 import Foundation
 import SwiftUI
 
+private struct StorageActivityKey: EnvironmentKey {
+    static let defaultValue = StorageActivitySnapshot(lastLocalSave: nil, cloud: nil)
+}
+
+extension EnvironmentValues {
+    var storageActivity: StorageActivitySnapshot {
+        get { self[StorageActivityKey.self] }
+        set { self[StorageActivityKey.self] = newValue }
+    }
+}
+
 struct SettingsView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(\.recoveryModeController) private var recoveryModeController
@@ -72,6 +83,10 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Storage") {
+                StorageActivityLink()
+            }
+
             Section("About") {
                 NavigationLink {
                     AboutYaHerdView()
@@ -86,6 +101,123 @@ struct SettingsView: View {
         }
         .navigationTitle("Settings")
         .settingsSaveAndCloseToolbar()
+    }
+}
+
+private struct StorageActivityLink: View {
+    var body: some View {
+        NavigationLink {
+            StorageActivityView()
+        } label: {
+            SettingsRow(
+                title: "Storage & iCloud",
+                subtitle: "Local saves and cloud activity.",
+                systemImage: "icloud"
+            )
+        }
+    }
+}
+
+private struct StorageActivityView: View {
+    @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(\.storageActivity) private var activity
+
+    var body: some View {
+        List {
+            Section("On This Device") {
+                if dataAccessMode.isRecoveryMode {
+                    Label("Read-only recovery — changes are not saved", systemImage: "exclamationmark.triangle")
+                } else if activity.cloud?.accessState.blocksHerdAccess == true {
+                    Text("Local save information is unavailable until account access is restored.")
+                } else {
+                    LabeledContent("Local storage", value: "Available")
+                    if let saved = activity.lastLocalSave {
+                        LabeledContent("Last local save") {
+                            Text(saved, format: .dateTime.month().day().hour().minute().second())
+                        }
+                    } else {
+                        LabeledContent("Last local save", value: "None observed this session")
+                    }
+                }
+            } footer: {
+                Text("Local saves are recorded for this app session across all Herds. Saving on this device does not confirm an upload.")
+            }
+
+            if dataAccessMode.isRecoveryMode {
+                Section("iCloud") {
+                    Text("Synchronization is disabled in recovery mode.")
+                }
+            } else if let cloud = activity.cloud {
+                Section("iCloud") {
+                    switch cloud.accessState {
+                    case .accountChanged:
+                        Label("Account changed. Reopen yaHerd to check access.", systemImage: "exclamationmark.icloud")
+                    case .accountUnavailable:
+                        Label("Account authorization unavailable. Check iCloud sign-in.", systemImage: "exclamationmark.icloud")
+                    default:
+                        Text("iCloud manages transfers automatically when available.")
+                    }
+                } footer: {
+                    Text("These are the latest observed operations this session, not confirmation that every change has reached iCloud or another device.")
+                }
+
+                if !cloud.accessState.blocksHerdAccess {
+                    storeSection(title: "Owned Herds", activity: cloud.owned)
+                    storeSection(title: "Shared Herds", activity: cloud.shared)
+                }
+            } else {
+                Section("iCloud") {
+                    Text("Synchronization is not enabled for this launch.")
+                }
+            }
+        }
+        .navigationTitle("Storage & iCloud")
+    }
+
+    private func storeSection(title: String, activity: CloudStoreActivity?) -> some View {
+        Section(title) {
+            if let activity {
+                operationRow("Setup", outcome: activity.setup)
+                operationRow("Import", outcome: activity.importing)
+                operationRow("Export", outcome: activity.exporting)
+            } else {
+                Text("Store activity unavailable")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func operationRow(_ name: String, outcome: CloudStoreActivity.Outcome?) -> some View {
+        LabeledContent(name) {
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(outcomeDescription(outcome))
+                    .multilineTextAlignment(.trailing)
+                if let date = outcome?.endDate ?? outcome?.startDate {
+                    Text(date, format: .dateTime.month().day().hour().minute().second())
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func outcomeDescription(_ outcome: CloudStoreActivity.Outcome?) -> String {
+        guard let outcome else { return "No activity observed" }
+        switch outcome.state {
+        case .waiting: return "In progress"
+        case .complete: return "Last operation completed"
+        case .accountUnavailable: return "Account authorization unavailable"
+        case .accountChanged: return "Account changed"
+        case .localOnly: return "Not enabled"
+        case .failed:
+            switch outcome.issue {
+            case .network: return "Network unavailable or unreachable"
+            case .permission: return "Permission denied"
+            case .storageQuota: return "Storage quota exceeded"
+            case .service: return "Service temporarily unavailable"
+            case nil: return "Last operation unsuccessful"
+            }
+        }
     }
 }
 
@@ -444,6 +576,11 @@ struct HerdDirectoryView: View {
                     .disabled(isCreating || isOpeningHerd || !directory.canCreateHerd)
                 } footer: {
                     Text("Creating a Herd adds a separate owned Herd. It does not join an invitation or replace incomplete imported records.")
+                }
+            }
+            if directory.selectedHerdID == nil {
+                Section("Storage") {
+                    StorageActivityLink()
                 }
             }
         }

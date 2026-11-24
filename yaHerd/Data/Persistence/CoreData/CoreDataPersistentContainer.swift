@@ -25,10 +25,18 @@ enum HerdImportState: Equatable, Sendable {
 /// A value-only snapshot of each operation for one loaded persistent store.
 /// An export outcome must never be substituted for an import outcome.
 struct CloudStoreActivity: Equatable, Sendable {
+    enum Issue: Equatable, Sendable {
+        case network
+        case permission
+        case storageQuota
+        case service
+    }
+
     struct Outcome: Equatable, Sendable {
         let startDate: Date
         let endDate: Date?
         let state: HerdImportState
+        var issue: Issue? = nil
 
         func follows(_ previous: Self?) -> Bool {
             guard let previous else { return true }
@@ -40,6 +48,18 @@ struct CloudStoreActivity: Equatable, Sendable {
     var setup: Outcome?
     var importing: Outcome?
     var exporting: Outcome?
+}
+
+/// Application-facing values only; never expose store UUIDs or server errors.
+struct CloudStorageActivity: Equatable, Sendable {
+    let accessState: HerdImportState
+    let owned: CloudStoreActivity?
+    let shared: CloudStoreActivity?
+}
+
+struct StorageActivitySnapshot: Equatable, Sendable {
+    let lastLocalSave: Date?
+    let cloud: CloudStorageActivity?
 }
 
 /// Tracks store-qualified setup/import/export outcomes for this container lifetime.
@@ -68,16 +88,36 @@ private final class HerdImportResults: Sendable {
                 error?.code == CKError.Code.notAuthenticated.rawValue
                 ? .accountUnavailable : .failed
         }
-        let value = Outcome(startDate: event.startDate, endDate: event.endDate, state: outcome)
+        let issue: CloudStoreActivity.Issue?
+        if outcome == .failed, let error = event.error as NSError?,
+           error.domain == CKError.errorDomain {
+            switch error.code {
+            case CKError.Code.networkUnavailable.rawValue, CKError.Code.networkFailure.rawValue:
+                issue = .network
+            case CKError.Code.permissionFailure.rawValue:
+                issue = .permission
+            case CKError.Code.quotaExceeded.rawValue:
+                issue = .storageQuota
+            case CKError.Code.serviceUnavailable.rawValue, CKError.Code.requestRateLimited.rawValue,
+                 CKError.Code.zoneBusy.rawValue:
+                issue = .service
+            default:
+                issue = nil
+            }
+        } else {
+            issue = nil
+        }
+        let value = Outcome(
+            startDate: event.startDate, endDate: event.endDate, state: outcome, issue: issue
+        )
         let storeID = event.storeIdentifier
         return state.withLock { state in
             // Export activity is tracked independently and does not change
             // the startup/selection import gate.
             if event.type == .export {
-                if value.follows(state.exports[storeID]) {
-                    state.exports[storeID] = value
-                }
-                return false
+                guard value.follows(state.exports[storeID]) else { return false }
+                state.exports[storeID] = value
+                return true
             }
             if event.type == .setup {
                 guard value.follows(state.setup[storeID]) else {
@@ -144,6 +184,7 @@ final class CoreDataPersistentContainer {
     static let sharedStoreFileName = "yaHerd-shared.sqlite"
     static let remoteStoreChangeNotification = Notification.Name.NSPersistentStoreRemoteChange
     static let herdImportStateChanged = Notification.Name("yaHerd.herdImportStateChanged")
+    static let storageActivityChanged = Notification.Name("yaHerd.storageActivityChanged")
     // Must match the app's CloudKit capability when that capability is enabled.
     static let cloudKitContainerIdentifier = "iCloud.ltd.yaherd"
 
@@ -167,6 +208,22 @@ final class CoreDataPersistentContainer {
             store.identifier
         }
         return importResults?.activity(for: identifiers) ?? [:]
+    }
+
+    var cloudStorageActivity: CloudStorageActivity? {
+        guard importResults != nil else { return nil }
+        let stores = container.persistentStoreCoordinator.persistentStores
+        let activity = cloudStoreActivity
+        func activity(for fileName: String) -> CloudStoreActivity? {
+            guard let store = stores.first(where: { $0.url?.lastPathComponent == fileName }),
+                  let identifier: String = store.identifier else { return nil }
+            return activity[identifier]
+        }
+        return CloudStorageActivity(
+            accessState: herdImportState,
+            owned: activity(for: Self.storeFileName),
+            shared: activity(for: Self.sharedStoreFileName)
+        )
     }
 
     var herdImportState: HerdImportState {
@@ -404,6 +461,10 @@ final class CoreDataPersistentContainer {
                 CloudKitDevelopmentEventLog.record(event)
                 #endif
                 if results.record(event) {
+                    NotificationCenter.default.post(name: CoreDataPersistentContainer.storageActivityChanged, object: nil)
+                    // Export progress is informational; it must not trigger
+                    // an import gate change or an artificial data mutation.
+                    guard event.type != .export else { return }
                     NotificationCenter.default.post(name: CoreDataPersistentContainer.herdImportStateChanged, object: nil)
                     // Even a failed import may have committed some transactions.
                     // A setup/import completion is a second chance to catch up.
@@ -422,6 +483,7 @@ final class CoreDataPersistentContainer {
             ) { _ in
                 results.invalidateAccount()
                 NotificationCenter.default.post(name: CoreDataPersistentContainer.herdImportStateChanged, object: nil)
+                NotificationCenter.default.post(name: CoreDataPersistentContainer.storageActivityChanged, object: nil)
             }
         }
         var storesLoaded = false
