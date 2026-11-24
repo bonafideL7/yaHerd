@@ -19,7 +19,7 @@ struct WorkingFinishSessionView: View {
     private let originatingSelectionRevision: UInt64
 
     @StateObject private var viewModel: WorkingFinishSessionViewModel
-    @State private var savedExceptions: [UUID: DestinationException] = [:]
+    @State private var savedExceptions: [UUID: WorkingFinishDestinationDraft.Exception] = [:]
     @State private var exceptionAnimalIDs: Set<UUID> = []
     @State private var exceptionDestinationIDs: [UUID: UUID] = [:]
     @State private var showingExceptionPicker = false
@@ -423,11 +423,6 @@ struct WorkingFinishSessionView: View {
         }
     }
 
-    private struct DestinationException: Equatable {
-        let isSelected: Bool
-        let destinationID: UUID?
-    }
-
     private func reloadSession() {
         guard isViewingOriginatingHerd, !isFinishing else { return }
         viewModel.load()
@@ -444,55 +439,22 @@ struct WorkingFinishSessionView: View {
         }
     }
 
-    private func savedException(
-        for item: WorkingQueueItemSnapshot,
-        validDestinations: Set<UUID>
-    ) -> DestinationException {
-        let selected = requiresExplicitDestinationForEveryItem ||
-            (item.destinationPastureID != nil && item.destinationPastureID != liveSourcePastureID)
-        let destinationID = item.destinationPastureID.flatMap { id in
-            !viewModel.hasLoadedPastureOptions || validDestinations.contains(id) ? id : nil
-        }
-        return DestinationException(isSelected: selected, destinationID: selected ? destinationID : nil)
-    }
-
-    /// Merge successful reads into the existing draft. A user can intentionally
-    /// remove every exception or clear a destination, so emptiness is not an
-    /// initialization signal. Missing/failed reads never replace this baseline.
     private func reconcileExceptions() {
         guard isViewingOriginatingHerd,
               viewModel.sessionLoadState == .ready, let session else { return }
 
-        let validDestinations = Set(otherPastures.map(\.id))
-        var nextSaved: [UUID: DestinationException] = [:]
-        var nextSelection: Set<UUID> = []
-        var nextDestinations: [UUID: UUID] = [:]
-
-        for item in session.queueItems {
-            let saved = savedException(for: item, validDestinations: validDestinations)
-            let draft = DestinationException(
-                isSelected: exceptionAnimalIDs.contains(item.id),
-                destinationID: exceptionDestinationIDs[item.id]
-            )
-            let resolved: DestinationException
-            if let previous = savedExceptions[item.id], draft != previous {
-                resolved = draft
-            } else {
-                resolved = saved
-            }
-
-            nextSaved[item.id] = saved
-            guard resolved.isSelected || requiresExplicitDestinationForEveryItem else { continue }
-            nextSelection.insert(item.id)
-            if let destinationID = resolved.destinationID,
-               !viewModel.hasLoadedPastureOptions || validDestinations.contains(destinationID) {
-                nextDestinations[item.id] = destinationID
-            }
-        }
-
-        savedExceptions = nextSaved
-        exceptionAnimalIDs = nextSelection
-        exceptionDestinationIDs = nextDestinations
+        let reconciled = WorkingFinishDestinationDraft.reconcile(
+            queueItems: session.queueItems,
+            sourcePastureID: liveSourcePastureID,
+            validDestinations: viewModel.hasLoadedPastureOptions
+                ? Set(otherPastures.map(\.id)) : nil,
+            savedExceptions: savedExceptions,
+            selectedIDs: exceptionAnimalIDs,
+            destinations: exceptionDestinationIDs
+        )
+        savedExceptions = reconciled.savedExceptions
+        exceptionAnimalIDs = reconciled.selectedIDs
+        exceptionDestinationIDs = reconciled.destinations
         if requiresExplicitDestinationForEveryItem || !viewModel.hasLoadedPastureOptions {
             showingExceptionPicker = false
         }

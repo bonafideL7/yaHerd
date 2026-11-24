@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FA4100000000000000000002 /* CloudKitStage4Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA4100000000000000000001 /* CloudKitStage4Tests.swift */; };
 		8D20BB2230B536A1006010E3 /* IdentityContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAEC30B536A1006010E3 /* IdentityContract.swift */; };
 		8D20BB2330B536A1006010E3 /* FieldCheckQuickCountRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0D30B536A1006010E3 /* FieldCheckQuickCountRulesTests.swift */; };
 		8D20BB2430B536A1006010E3 /* FieldCheckSessionDetailViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0E30B536A1006010E3 /* FieldCheckSessionDetailViewModelTests.swift */; };
@@ -106,6 +107,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		FA4100000000000000000001 /* CloudKitStage4Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitStage4Tests.swift; sourceTree = "<group>"; };
 		8D20BACA30B536A1006010E3 /* CoreDataAnimalRepositoryContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataAnimalRepositoryContractTests.swift; sourceTree = "<group>"; };
 		8D20BACB30B536A1006010E3 /* CoreDataAppHerdBootstrapperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataAppHerdBootstrapperTests.swift; sourceTree = "<group>"; };
 		8D20BACC30B536A1006010E3 /* CoreDataFieldCheckRepositoryContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataFieldCheckRepositoryContractTests.swift; sourceTree = "<group>"; };
@@ -313,6 +315,7 @@
 				8D20BB0430B536A1006010E3 /* AppNavigationIdentityRevalidationTests.swift */,
 				8D20BB0530B536A1006010E3 /* AppNavigationRestorationPreflightTests.swift */,
 				8D20BB0630B536A1006010E3 /* AppNavigationStateTests.swift */,
+				FA4100000000000000000001 /* CloudKitStage4Tests.swift */,
 				8D20BB0730B536A1006010E3 /* CoreDataCloudKitStoreConfigurationTests.swift */,
 				8D20BB0830B536A1006010E3 /* CoreDataModelStructureTests.swift */,
 				8D20BB0930B536A1006010E3 /* DashboardPresentationDataTests.swift */,
@@ -506,6 +509,7 @@
 				8D20BB3430B536A1006010E3 /* ValidationServiceTests.swift in Sources */,
 				8D20BB3530B536A1006010E3 /* WorkingRepositoryContract+PlansTagsAndTemplates.swift in Sources */,
 				8D20BB3630B536A1006010E3 /* CoreDataStage3StartupSelectionTests.swift in Sources */,
+				FA4100000000000000000002 /* CloudKitStage4Tests.swift in Sources */,
 				8D20BB3730B536A1006010E3 /* CoreDataCloudKitStoreConfigurationTests.swift in Sources */,
 				8D20BB3830B536A1006010E3 /* AppCurrentHerdSelectionTests.swift in Sources */,
 				8D20BB3930B536A1006010E3 /* CoreDataTagColorReferenceProbe.swift in Sources */,
@@ -908,7 +912,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				"CODE_SIGNING_ALLOWED[sdk=iphoneos*]" = YES;
 				"CODE_SIGNING_REQUIRED[sdk=iphoneos*]" = YES;
-				CODE_SIGN_ENTITLEMENTS = "yaHerd/yaHerd-iCloudDevelopment.entitlements";
+				CODE_SIGN_ENTITLEMENTS = yaHerd/yaHerd-iCloudDevelopment.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
