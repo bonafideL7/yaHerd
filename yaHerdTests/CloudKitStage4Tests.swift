@@ -339,7 +339,7 @@ final class CloudKitStage4Tests: XCTestCase {
         wakeups.requestProcessing()
         wakeups.finish()
         await CoreDataPersistentHistoryConsumer(contextFactory: factory).run(
-            wakeups: wakeups, refreshInventory: {},
+            wakeups: wakeups, refreshInventory: { true },
             publish: { changes in
                 recorder.changes.append(changes)
                 return changes.storeID != rejected.identifier
@@ -383,9 +383,113 @@ final class CloudKitStage4Tests: XCTestCase {
         XCTAssertTrue(replay.changes.isEmpty)
     }
 
+    func testSQLiteHistoryRetriesInventoryFailureEvenWithoutNewTransactions() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let factory = assembly.contextFactory
+        _ = await processHistory(factory)
+        let recorder = HistoryRecorder()
+        let wakeups = CoreDataHistoryWakeups()
+        wakeups.requestProcessing()
+        wakeups.finish()
+        await CoreDataPersistentHistoryConsumer(contextFactory: factory).run(
+            wakeups: wakeups,
+            refreshInventory: {
+                recorder.inventoryAttempts += 1
+                return recorder.inventoryAttempts > 1
+            },
+            publish: { changes in
+                recorder.changes.append(changes)
+                return true
+            }
+        )
+        XCTAssertEqual(recorder.inventoryAttempts, 2)
+        XCTAssertTrue(recorder.changes.isEmpty)
+    }
+
+    func testSQLiteHistoryRetriesAcknowledgedCheckpointWriteWithoutRepublishing() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let factory = assembly.contextFactory
+        let stores = try factory.historyStores()
+        let first = try XCTUnwrap(stores.first)
+        let second = try XCTUnwrap(stores.last)
+        XCTAssertNotEqual(first, second)
+        _ = await processHistory(factory)
+        let original = try Data(contentsOf: first.checkpointURL)
+        try insertHerd(in: first, using: factory, author: "external-import")
+        try insertHerd(in: second, using: factory, author: "external-import")
+
+        let recorder = HistoryRecorder()
+        let wakeups = CoreDataHistoryWakeups()
+        wakeups.requestProcessing()
+        wakeups.finish()
+        await CoreDataPersistentHistoryConsumer(contextFactory: factory).run(
+            wakeups: wakeups, refreshInventory: { true },
+            publish: { changes in
+                recorder.changes.append(changes)
+                do {
+                    // Fail the first store's checkpoint write after acknowledgement,
+                    // then restore disk access during the independent store's page.
+                    if changes.storeID == first.identifier {
+                        try FileManager.default.removeItem(at: first.checkpointURL)
+                        try FileManager.default.createDirectory(
+                            at: first.checkpointURL, withIntermediateDirectories: false
+                        )
+                    } else if changes.storeID == second.identifier {
+                        try FileManager.default.removeItem(at: first.checkpointURL)
+                        try original.write(to: first.checkpointURL, options: .atomic)
+                    }
+                    return true
+                } catch {
+                    XCTFail("Could not prepare checkpoint failure: \(error)")
+                    return false
+                }
+            }
+        )
+
+        XCTAssertEqual(recorder.changes.map(\.storeID), [first.identifier, second.identifier])
+        XCTAssertNotEqual(try Data(contentsOf: first.checkpointURL), original)
+        let resumed = await processHistory(factory)
+        XCTAssertTrue(resumed.changes.isEmpty)
+    }
+
+    func testSQLiteHistoryRejectsCheckpointBelongingToOtherStore() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let factory = assembly.contextFactory
+        let stores = try factory.historyStores()
+        let owned = try XCTUnwrap(stores.first { $0.url == harness.storeURL })
+        let shared = try XCTUnwrap(stores.first { $0.identifier != owned.identifier })
+        try insertHerd(in: owned, using: factory, author: "external-import")
+        _ = await processHistory(factory)
+        let ownedCheckpoint = try Data(contentsOf: owned.checkpointURL)
+
+        // A copied cursor at a reused path must not be used for the new store.
+        try ownedCheckpoint.write(to: shared.checkpointURL, options: .atomic)
+        try insertHerd(in: shared, using: factory, author: "external-import")
+        let recovered = await processHistory(factory)
+        XCTAssertEqual(recovered.changes.map(\.storeID), [shared.identifier])
+        XCTAssertEqual(recovered.changes.first?.requiresFullRefresh, true)
+        XCTAssertEqual(try Data(contentsOf: owned.checkpointURL), ownedCheckpoint)
+        let checkpoint = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: shared.checkpointURL)) as? [String: Any]
+        )
+        XCTAssertEqual(checkpoint["storeID"] as? String, shared.identifier)
+        let replay = await processHistory(factory)
+        XCTAssertTrue(replay.changes.isEmpty)
+    }
+
     @MainActor
     private final class HistoryRecorder {
         var changes: [PersistentHistoryChanges] = []
+        var inventoryAttempts = 0
     }
 
     private func processHistory(
@@ -396,7 +500,7 @@ final class CloudKitStage4Tests: XCTestCase {
         wakeups.requestProcessing()
         wakeups.finish()
         await CoreDataPersistentHistoryConsumer(contextFactory: factory).run(
-            wakeups: wakeups, refreshInventory: {},
+            wakeups: wakeups, refreshInventory: { true },
             publish: { changes in
                 recorder.changes.append(changes)
                 return acknowledge
