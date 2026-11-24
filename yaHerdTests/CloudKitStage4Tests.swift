@@ -486,6 +486,101 @@ final class CloudKitStage4Tests: XCTestCase {
         XCTAssertTrue(replay.changes.isEmpty)
     }
 
+    func testShareMetadataRefreshWithoutHistoryPreservesSelectedRoot() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let factory = assembly.contextFactory
+        _ = await processHistory(factory)
+
+        let id = UUID()
+        let root = URL(fileURLWithPath: "/share-metadata-fixture")
+        let summary = HerdSummary(
+            publicID: id, name: "Shared Herd",
+            createdAt: .distantPast, updatedAt: .distantPast
+        )
+        let original = AccessibleHerd(
+            summary: summary, category: .shared, rootIdentity: root,
+            sharingMetadata: .shared(access: .readWrite, acceptedParticipants: nil, pendingInvitations: nil)
+        )
+        let repository = MetadataInventoryRepository(herds: [original])
+        let selection = AppCurrentHerdSelection()
+        let directory = HerdDirectoryController(repository: repository, selection: selection)
+        try directory.selectHerd(id: id)
+        let openingRevision = selection.selectionRevision
+
+        // Share-only changes do not insert a history transaction.
+        repository.herds = [AccessibleHerd(
+            summary: summary, category: .shared, rootIdentity: root,
+            sharingMetadata: .shared(access: .readOnly, acceptedParticipants: nil, pendingInvitations: nil)
+        )]
+        let wakeups = CoreDataHistoryWakeups()
+        let recorder = HistoryRecorder()
+        wakeups.requestProcessing()
+        wakeups.finish()
+        await CoreDataPersistentHistoryConsumer(contextFactory: factory).run(
+            wakeups: wakeups,
+            refreshInventory: { directory.refresh(reportErrors: false) },
+            publish: { changes in
+                recorder.changes.append(changes)
+                return true
+            }
+        )
+
+        XCTAssertTrue(recorder.changes.isEmpty)
+        XCTAssertEqual(directory.herds.first?.sharingMetadata.access, .readOnly)
+        XCTAssertEqual(selection.currentHerdID, id)
+        XCTAssertEqual(selection.selectedRootIdentity, root)
+        XCTAssertEqual(selection.selectionRevision, openingRevision)
+
+        repository.herds = []
+        XCTAssertTrue(directory.refresh())
+        XCTAssertNil(selection.currentHerdID)
+        XCTAssertGreaterThan(selection.selectionRevision, openingRevision)
+    }
+
+    func testUnmirroredStoresDoNotInventSharePermissions() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let factory = assembly.contextFactory
+        for store in try factory.historyStores() {
+            try insertHerd(in: store, using: factory, author: nil)
+        }
+        let repository = CoreDataHerdRepository(
+            selection: AppCurrentHerdSelection(), assembly: assembly
+        )
+        let herds = try repository.fetchAccessibleHerds()
+        XCTAssertEqual(herds.count, 2)
+        XCTAssertTrue(herds.contains { $0.category == .owned })
+        XCTAssertTrue(herds.contains { $0.category == .shared })
+        XCTAssertTrue(herds.allSatisfy { $0.sharingMetadata == .notConfigured })
+        XCTAssertTrue(herds.allSatisfy { $0.sharingMetadata.access == nil })
+    }
+
+    @MainActor
+    private final class MetadataInventoryRepository: HerdRepository {
+        var herds: [AccessibleHerd]
+
+        init(herds: [AccessibleHerd]) { self.herds = herds }
+
+        func fetchAccessibleHerds() throws -> [AccessibleHerd] { herds }
+
+        func fetchCurrentHerd() throws -> HerdSummary {
+            throw HerdRepositoryError.missingHerd
+        }
+
+        func createOwnedHerd(named name: String) async throws -> HerdSummary {
+            throw HerdRepositoryError.missingHerd
+        }
+
+        func renameCurrentHerd(to name: String) async throws -> HerdSummary {
+            throw HerdRepositoryError.missingHerd
+        }
+    }
+
     @MainActor
     private final class HistoryRecorder {
         var changes: [PersistentHistoryChanges] = []

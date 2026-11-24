@@ -638,19 +638,29 @@ final class CoreDataPersistentContainer {
             return Dictionary(uniqueKeysWithValues: objectIDs.map { ($0, .unavailable) })
         }
 
-        do {
-            let shares = try mirrored.fetchShares(matching: objectIDs)
-            return Dictionary(uniqueKeysWithValues: objectIDs.map { id in
-                let metadata = shares[id].map(Self.sharingMetadata(for:)) ?? .noCachedShare
-                return (id, metadata)
-            })
-        } catch {
-            let failure = error as NSError
-            ReliabilityLog.persistence.error(
-                "operation=share-metadata-read domain=\(failure.domain, privacy: .public) code=\(failure.code, privacy: .public)"
-            )
-            return Dictionary(uniqueKeysWithValues: objectIDs.map { ($0, .unavailable) })
+        // Read each store independently so a failed shared-store metadata
+        // lookup cannot hide successfully loaded owned-share information.
+        let groups = Dictionary(grouping: objectIDs, by: { $0.persistentStore })
+        var metadata: [NSManagedObjectID: HerdSharingMetadata] = [:]
+        for (store, ids) in groups {
+            guard store != nil else {
+                for id in ids { metadata[id] = .unavailable }
+                continue
+            }
+            do {
+                let shares = try mirrored.fetchShares(matching: ids)
+                for id in ids {
+                    metadata[id] = shares[id].map(Self.sharingMetadata(for:)) ?? .noCachedShare
+                }
+            } catch {
+                let failure = error as NSError
+                ReliabilityLog.persistence.error(
+                    "operation=share-metadata-read domain=\(failure.domain, privacy: .public) code=\(failure.code, privacy: .public)"
+                )
+                for id in ids { metadata[id] = .unavailable }
+            }
         }
+        return metadata
     }
 
     private static func sharingMetadata(for share: CKShare) -> HerdSharingMetadata {

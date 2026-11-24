@@ -44,6 +44,7 @@ final class CoreDataHerdRepository: HerdRepository {
         guard !contextFactory.herdImportState.blocksHerdAccess else {
             throw HerdRepositoryError.accountUnavailable
         }
+        let contextFactory = self.contextFactory
         let context = contextFactory.makeReadContext()
         let inventory = try context.performAndWait {
             let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
@@ -56,7 +57,7 @@ final class CoreDataHerdRepository: HerdRepository {
             // Match metadata by permanent store-qualified object identity, not
             // application UUID. A share-only notification can change this
             // snapshot without changing a Herd row or its history token.
-            let sharing = self.contextFactory.sharingMetadata(for: roots.map(\.objectID))
+            let sharing = contextFactory.sharingMetadata(for: roots.map(\.objectID))
             let ids = roots.compactMap(\.id)
             let ambiguousIDs = Set(Dictionary(grouping: ids, by: { $0 })
                 .filter { $0.value.count > 1 }.keys)

@@ -17,7 +17,10 @@ final class AppRemoteHistoryCoordinator {
         let consumer = CoreDataPersistentHistoryConsumer(contextFactory: contextFactory)
         task = Task { @MainActor in
             await consumer.run(wakeups: wakeups, refreshInventory: {
-                herdDirectory.refresh(reportErrors: false)
+                // A metadata-only change has no history transaction. Retry
+                // unknown cache reads independently of data acknowledgement.
+                herdDirectory.refresh(reportErrors: false) &&
+                    !herdDirectory.herds.contains { $0.sharingMetadata == .unavailable }
             }) { changes in
                 guard !contextFactory.herdImportState.blocksHerdAccess else { return false }
                 // Resolve access first; feature reloads must see the new selection.
