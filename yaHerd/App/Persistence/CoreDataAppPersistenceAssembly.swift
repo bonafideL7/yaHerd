@@ -142,16 +142,23 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         }
         let remembered = AppCurrentHerdSelection(defaults: selectionPreferences)
         let repository = CoreDataHerdRepository(selection: remembered, assembly: assembly)
-        remembered.restoreAccessibleHerd(from: try repository.fetchAccessibleHerds())
-        guard let selectedID = remembered.currentHerdID else {
-            return CoreDataAppPersistenceAssembly(
-                assembly: assembly, currentHerdID: nil,
-                selectionPreferences: selectionPreferences
-            )
+        do {
+            remembered.restoreAccessibleHerd(from: try repository.fetchAccessibleHerds())
+            if let selectedID = remembered.currentHerdID {
+                return try resolveCloudKitHerd(
+                    using: assembly, privateStoreURL: privateStoreURL,
+                    selectedHerdID: selectedID, selectionPreferences: selectionPreferences
+                )
+            }
+        } catch {
+            // Both stores are already open. An inventory or root-validation
+            // failure is not proof of storage loss or an empty installation.
+            // Keep the original assembly alive and let the chooser re-read
+            // the inventory, report the error and permit explicit recovery.
         }
-        return try resolveCloudKitHerd(
-            using: assembly, privateStoreURL: privateStoreURL,
-            selectedHerdID: selectedID, selectionPreferences: selectionPreferences
+        return CoreDataAppPersistenceAssembly(
+            assembly: assembly, currentHerdID: nil,
+            selectionPreferences: selectionPreferences
         )
     }
 
