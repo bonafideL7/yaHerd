@@ -30,8 +30,10 @@ enum CoreDataReadModelError: LocalizedError, Equatable, Sendable {
 
     var errorDescription: String? {
         switch self {
-        case .invalidHerdOwnership:
-            return "The read-model relationship belongs to another herd."
+        case .invalidHerdOwnership(_, _, _, let actualHerdID):
+            return actualHerdID == nil
+                ? "A record's Herd relationship is missing. Its import may be incomplete."
+                : "The read-model relationship belongs to another herd."
         case .invalidSessionRelationship:
             return "The read-model relationship points to another session."
         case .invalidAnimalRelationship:

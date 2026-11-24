@@ -232,32 +232,43 @@ final class CoreDataPersistentContainer {
         eventObserver = nil
         #endif
 
-        try await withCheckedThrowingContinuation {
-            (continuation: CheckedContinuation<Void, Error>) in
-            let progress = Mutex(StoreLoadProgress(
-                continuation: continuation,
-                remaining: storeDescriptions.count
-            ))
-
-            // Core Data calls this once for each store description. Do not
-            // report success after only the private store has finished loading.
-            container.loadPersistentStores { description, error in
-                progress.withLock { state in
-                    if let error, state.firstFailure == nil {
-                        state.firstFailure = .storeLoadFailed(
-                            url: description.url,
-                            description: error.localizedDescription
-                        )
-                    }
-                    state.remaining -= 1
-                    guard state.remaining == 0 else { return }
-                    if let failure = state.firstFailure {
-                        state.continuation.resume(throwing: failure)
-                    } else {
-                        state.continuation.resume()
+        do {
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Void, Error>) in
+                let progress = Mutex(StoreLoadProgress(
+                    continuation: continuation,
+                    remaining: storeDescriptions.count
+                ))
+    
+                // Core Data calls this once for each store description. Do not
+                // report success after only the private store has finished loading.
+                container.loadPersistentStores { description, error in
+                    progress.withLock { state in
+                        if let error, state.firstFailure == nil {
+                            state.firstFailure = .storeLoadFailed(
+                                url: description.url,
+                                description: error.localizedDescription
+                            )
+                        }
+                        state.remaining -= 1
+                        guard state.remaining == 0 else { return }
+                        if let failure = state.firstFailure {
+                            state.continuation.resume(throwing: failure)
+                        } else {
+                            state.continuation.resume()
+                        }
                     }
                 }
             }
+        } catch {
+            // All load callbacks have finished. A partially opened topology
+            // must not remain attached while read-only recovery inspects disk.
+            do {
+                try detachStores(from: container)
+            } catch {
+                ReliabilityLog.persistenceSaveFailure("partial-store-detach", error: error)
+            }
+            throw error
         }
 
         #if DEBUG
@@ -277,16 +288,54 @@ final class CoreDataPersistentContainer {
         )
     }
 
+    private static func detachStores(from container: NSPersistentContainer) throws {
+        let coordinator = container.persistentStoreCoordinator
+        for store in coordinator.persistentStores {
+            try coordinator.remove(store)
+        }
+    }
+
     #if DEBUG
-    /// Explicit, opt-in development validation. Apple's dry-run checks the
-    /// compiled model for both mirrored stores without uploading schema records.
-    /// This is never called by app startup or included in Release builds.
+    /// An explicitly requested development-only operation against disposable
+    /// stores. The user's private and shared SQLite files are never opened.
+    static func runDevelopmentSchemaValidation(initialize: Bool) async throws {
+        #if YAHERD_ICLOUD_DEVELOPMENT
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory
+            .appendingPathComponent("yaHerd-schema-" + UUID().uuidString, isDirectory: true)
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        let probe = try await loadCloudKit(
+            storeURL: directory.appendingPathComponent(storeFileName),
+            mirroringEnabled: true
+        )
+        defer {
+            // Never remove SQLite files while a coordinator still owns them.
+            do {
+                try detachStores(from: probe.container)
+                try fileManager.removeItem(at: directory)
+            } catch {
+                ReliabilityLog.persistenceSaveFailure("schema-probe-cleanup", error: error)
+            }
+        }
+        try probe.validateCloudKitSchemaDryRun()
+        if initialize {
+            try probe.initializeDevelopmentCloudKitSchema()
+        }
+        #else
+        throw CoreDataPersistenceError.storeLoadFailed(
+            url: nil,
+            description: "Schema validation requires the iCloud Development build configuration."
+        )
+        #endif
+    }
+
+    /// Apple's dry-run checks the compiled model without uploading schema records.
     func validateCloudKitSchemaDryRun() throws {
         try mirroredCloudKitContainer().initializeCloudKitSchema(options: [.dryRun])
     }
 
     /// Uploads representative records to initialize the CloudKit DEVELOPMENT
-    /// schema. Only call from an explicitly opted-in development-signed test.
+    /// schema. Only call from the explicitly opted-in development scheme.
     /// Never call during normal app launch or when provisioned for production.
     func initializeDevelopmentCloudKitSchema() throws {
         try mirroredCloudKitContainer().initializeCloudKitSchema(options: [])
