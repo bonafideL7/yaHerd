@@ -18,6 +18,8 @@ final class NewWorkingSessionViewModel: ObservableObject {
     private var workingRepository: any NewWorkingSessionRepository
     private var requestedPastureID: UUID?
     private var candidateLoadToken = UUID()
+    private var loadedCandidateHerdID: UUID?
+    private var loadedCandidateSelectionRevision: UInt64?
 
     init(
         pastureRepository: any PastureReferenceDataReader,
@@ -65,6 +67,18 @@ final class NewWorkingSessionViewModel: ObservableObject {
         hasLoaded = true
     }
 
+    /// A setup belongs to one Herd-selection incarnation. Discard all of its
+    /// read models and invalidate any in-flight candidate snapshot.
+    func invalidateForHerdChange() {
+        clearCandidates(for: nil)
+        pastures = []
+        templates = []
+        hasLoaded = false
+        hasLoadedSetupSuccessfully = false
+        setupLoadErrorMessage = nil
+        errorMessage = nil
+    }
+
     /// Drop the prior pasture's candidates immediately, before a new asynchronous
     /// page fetch can complete. This also invalidates an older in-flight result.
     func clearCandidates(for pastureID: UUID?) {
@@ -76,6 +90,8 @@ final class NewWorkingSessionViewModel: ObservableObject {
         candidateLoadErrorMessage = nil
         requestedPastureID = pastureID
         candidateLoadToken = UUID()
+        loadedCandidateHerdID = nil
+        loadedCandidateSelectionRevision = nil
         loadedPastureID = nil
         animals = []
         isLoadingAnimals = pastureID != nil
@@ -84,10 +100,18 @@ final class NewWorkingSessionViewModel: ObservableObject {
     /// Fetch only active, non-archived Animals physically in the selected Pasture.
     /// M9's Core Data reference reader owns filtering, sorting and Herd scoping.
     /// Publish only a complete snapshot; partial results must not enable Start.
-    func loadEligibleAnimals(pastureID: UUID?) async {
+    func loadEligibleAnimals(
+        pastureID: UUID?,
+        currentHerdSelection: any CurrentHerdSelectionReading
+    ) async {
         clearCandidates(for: pastureID)
         let loadToken = candidateLoadToken
         guard let pastureID else { return }
+        guard let originatingHerdID = currentHerdSelection.currentHerdID else {
+            isLoadingAnimals = false
+            return
+        }
+        let originatingSelectionRevision = currentHerdSelection.selectionRevision
         guard let animalReferenceQueryReader else {
             isLoadingAnimals = false
             candidateLoadErrorMessage = "Working animal reference query is not configured."
@@ -113,18 +137,32 @@ final class NewWorkingSessionViewModel: ObservableObject {
 
             guard candidateLoadToken == loadToken,
                   requestedPastureID == pastureID else { return }
+            guard currentHerdSelection.currentHerdID == originatingHerdID,
+                  currentHerdSelection.selectionRevision == originatingSelectionRevision else {
+                isLoadingAnimals = false
+                return
+            }
             animals = candidates
+            loadedCandidateHerdID = originatingHerdID
+            loadedCandidateSelectionRevision = originatingSelectionRevision
             loadedPastureID = pastureID
             isLoadingAnimals = false
             // A successful candidate request does not own setup, template,
             // or session errors and must never clear those alerts.
         } catch is CancellationError {
-            if candidateLoadToken == loadToken {
+            if candidateLoadToken == loadToken,
+               requestedPastureID == pastureID {
                 isLoadingAnimals = false
             }
         } catch {
-            guard candidateLoadToken == loadToken,
+            guard !Task.isCancelled,
+                  candidateLoadToken == loadToken,
                   requestedPastureID == pastureID else { return }
+            guard currentHerdSelection.currentHerdID == originatingHerdID,
+                  currentHerdSelection.selectionRevision == originatingSelectionRevision else {
+                isLoadingAnimals = false
+                return
+            }
             isLoadingAnimals = false
             candidateLoadErrorMessage = UserVisibleErrorMessage.make(error)
             if errorMessage == nil {
@@ -147,15 +185,37 @@ final class NewWorkingSessionViewModel: ObservableObject {
         return animals
     }
 
+    /// A cached cohort is usable only in the same Herd selection incarnation.
+    func hasCurrentCandidates(
+        pastureID: UUID?,
+        selection: any CurrentHerdSelectionReading
+    ) -> Bool {
+        guard let pastureID else { return false }
+        return loadedPastureID == pastureID
+            && loadedCandidateHerdID == selection.currentHerdID
+            && loadedCandidateSelectionRevision == selection.selectionRevision
+    }
+
+    /// The repository pins the originating Herd when it begins the write.
+    /// A finished save must not activate a route in another Herd's navigation.
     @discardableResult
     func startSession(
         date: Date,
         pastureID: UUID,
         treatmentTemplateName: String?,
         plannedTreatments: [WorkingTreatmentPlanItem],
-        animalIDs: [UUID]?
-    ) async throws -> UUID {
-        try await workingRepository.startSession(
+        animalIDs: [UUID]?,
+        originatingHerdID: UUID,
+        currentHerdSelection: any CurrentHerdSelectionReading,
+        selectionIsUnchanged: @escaping @MainActor () -> Bool
+    ) async throws -> UUID? {
+        guard !Task.isCancelled,
+              currentHerdSelection.currentHerdID == originatingHerdID,
+              selectionIsUnchanged() else {
+            return nil
+        }
+
+        let sessionID = try await workingRepository.startSession(
             input: WorkingSessionStartInput(
                 date: date,
                 sourcePastureID: pastureID,
@@ -164,6 +224,13 @@ final class NewWorkingSessionViewModel: ObservableObject {
                 animalIDs: animalIDs
             )
         )
+
+        guard !Task.isCancelled,
+              currentHerdSelection.currentHerdID == originatingHerdID,
+              selectionIsUnchanged() else {
+            return nil
+        }
+        return sessionID
     }
 }
 

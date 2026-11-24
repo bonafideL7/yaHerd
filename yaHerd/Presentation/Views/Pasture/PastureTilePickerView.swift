@@ -12,34 +12,46 @@ struct PastureTilePickerView: View {
     @Environment(\.pastureFeatureDependencies) private var pastureDependencies
     private var pastureListRepository: any PastureListReader { pastureDependencies.listRepository }
     @Environment(ApplicationSettings.self) private var applicationSettings
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
 
     /// Called when user selects a pasture
     let onSelect: (PastureSummary) -> Void
 
     @State private var model = PastureTilePickerViewModel()
+    @State private var loadedHerdID: UUID?
+    @State private var loadedSelectionRevision: UInt64?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    if !model.recentPastures.isEmpty {
-                        pastureSection(
-                            title: "Recent",
-                            pastures: model.recentPastures,
-                            layout: .horizontal
-                        )
-                    }
+                    if isShowingCurrentHerdPastures {
+                        if !model.recentPastures.isEmpty {
+                            pastureSection(
+                                title: "Recent",
+                                pastures: model.recentPastures,
+                                layout: .horizontal
+                            )
+                        }
 
-                    pastureSection(
-                        title: "All Pastures",
-                        pastures: model.pastures,
-                        layout: .grid
-                    )
+                        pastureSection(
+                            title: "All Pastures",
+                            pastures: model.pastures,
+                            layout: .grid
+                        )
+                    } else if herdSelection.currentHerdID == nil {
+                        ContentUnavailableView(
+                            "Select a Herd",
+                            systemImage: "square.stack.3d.up"
+                        )
+                    } else {
+                        ProgressView("Loading Pastures")
+                    }
                 }
                 .padding(.top)
             }
             .navigationTitle("Choose Pasture")
-            .task {
+            .task(id: herdSelection.selectionRevision) {
                 loadPastures()
             }
             .toolbar {
@@ -92,19 +104,33 @@ struct PastureTilePickerView: View {
         }
     }
 
+    private var isShowingCurrentHerdPastures: Bool {
+        guard let herdID = herdSelection.currentHerdID else { return false }
+        return loadedHerdID == herdID &&
+            loadedSelectionRevision == herdSelection.selectionRevision
+    }
+
     private func loadPastures() {
-        if let migratedIDs = model.load(
+        loadedHerdID = nil
+        loadedSelectionRevision = nil
+        model.reset()
+        guard let herdID = herdSelection.currentHerdID else { return }
+        // A device-wide legacy recent name has no trustworthy Herd owner.
+        // Never map its name onto a different Herd's pasture.
+        _ = model.load(
             using: pastureListRepository,
-            recentPastureIDs: applicationSettings.recentPastureIDs,
-            legacyRecentPastureNames: applicationSettings.legacyRecentPastureNames
-        ) {
-            applicationSettings.recentPastureIDs = migratedIDs
-            applicationSettings.clearLegacyRecentPastureNames()
-        }
+            recentPastureIDs: applicationSettings.recentPastureIDs(for: herdID),
+            legacyRecentPastureNames: []
+        )
+        loadedHerdID = herdID
+        loadedSelectionRevision = herdSelection.selectionRevision
     }
 
     private func selectPasture(_ pasture: PastureSummary) {
-        applicationSettings.recentPastureIDs = model.select(pasture)
+        guard let herdID = loadedHerdID,
+              herdSelection.currentHerdID == herdID,
+              loadedSelectionRevision == herdSelection.selectionRevision else { return }
+        applicationSettings.setRecentPastureIDs(model.select(pasture), for: herdID)
         onSelect(pasture)
         dismiss()
     }

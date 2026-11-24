@@ -46,6 +46,7 @@ struct FieldChecksView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var fieldCheckOverviewReader: any FieldCheckOverviewReading { fieldCheckDependencies.overviewReader }
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @State private var model = FieldChecksViewModel()
     @State private var showingStartPastureCheck = false
     @State private var hasPresentedInitialStart = false
@@ -168,7 +169,8 @@ struct FieldChecksView: View {
                 .disabled(!dataAccessMode.allowsDataMutations)
             }
         }
-        .task {
+        .task(id: herdSelection.selectionRevision) {
+            model.configure(selection: herdSelection)
             if startsWithPastureSelection && !hasPresentedInitialStart {
                 hasPresentedInitialStart = true
                 if dataAccessMode.allowsDataMutations {
@@ -179,6 +181,10 @@ struct FieldChecksView: View {
                 using: fieldCheckOverviewReader,
                 mutationStream: fieldCheckDependencies.mutationStream
             )
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            showingStartPastureCheck = false
+            model.configure(selection: herdSelection)
         }
         .alert("Can't Load Checks", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}

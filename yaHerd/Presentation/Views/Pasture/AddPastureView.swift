@@ -3,6 +3,7 @@ import SwiftUI
 struct AddPastureView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.pastureFeatureDependencies) private var pastureDependencies
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     private var repository: any PastureCreateRepository { pastureDependencies.createRepository }
 
     @Environment(ApplicationSettings.self) private var applicationSettings
@@ -11,6 +12,8 @@ struct AddPastureView: View {
     private var usableAcreagePercentDefault: Int { applicationSettings.usableAcreagePercentDefault }
 
     @State private var model = PastureFormViewModel()
+    @State private var originatingHerdID: UUID?
+    @State private var originatingSelectionRevision: UInt64?
 
     let onSave: (() -> Void)?
 
@@ -72,6 +75,10 @@ struct AddPastureView: View {
                 }
             }
             .task {
+                if originatingSelectionRevision == nil {
+                    originatingHerdID = herdSelection.currentHerdID
+                    originatingSelectionRevision = herdSelection.selectionRevision
+                }
                 model.prepareForCreate(
                     defaultTargetAcresPerHead: targetAcresPerHeadDefault,
                     usableAcreagePercentDefault: usableAcreagePercentDefault
@@ -87,11 +94,17 @@ struct AddPastureView: View {
 
     private func save() {
         do {
-            let input = try model.makeCreateInput(
+            guard let originatingHerdID, let originatingSelectionRevision else {
+                throw CancellationError()
+            }
+            try model.create(
+                using: repository,
                 defaultTargetAcresPerHead: targetAcresPerHeadDefault,
-                usableAcreagePercentDefault: usableAcreagePercentDefault
+                usableAcreagePercentDefault: usableAcreagePercentDefault,
+                expectedHerdID: originatingHerdID,
+                expectedSelectionRevision: originatingSelectionRevision,
+                selection: herdSelection
             )
-            _ = try CreatePastureUseCase(repository: repository).execute(input: input)
             onSave?()
             dismiss()
         } catch {

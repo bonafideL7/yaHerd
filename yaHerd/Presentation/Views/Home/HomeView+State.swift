@@ -182,7 +182,8 @@ extension HomeView {
     }
 
     var dismissedSetupSuggestionIDs: Set<String> {
-        applicationSettings.homeDismissedSetupSuggestionIDs
+        guard let herdID = herdSelection.currentHerdID else { return [] }
+        return applicationSettings.dismissedHomeSetupSuggestionIDs(for: herdID)
     }
 
     var customTagColorCount: Int {

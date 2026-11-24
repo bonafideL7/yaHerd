@@ -135,6 +135,16 @@ final class TagColorLibraryStore: ObservableObject {
         load()
     }
 
+    /// Unlike a same-Herd refresh, a selection change must never retain
+    /// colors or historical definitions belonging to the previously open Herd.
+    /// Even if the new store is temporarily unreadable, show no old-Herd data.
+    func resetForHerdChange() {
+        colors.removeAll()
+        historicalDefinitionsByID.removeAll()
+        lastErrorMessage = nil
+        load()
+    }
+
     private func load() {
         do {
             historicalDefinitionsByID.removeAll()

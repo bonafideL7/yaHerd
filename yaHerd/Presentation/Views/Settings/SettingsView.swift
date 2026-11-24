@@ -340,21 +340,21 @@ struct HerdDirectoryView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var isCreating = false
+    @State private var openingState = HerdDirectoryOpeningState()
+    @State private var pendingHerd: AccessibleHerd?
+    @State private var validationTask: Task<Void, Never>?
+    @State private var creationTask: Task<Void, Never>?
     @State private var showsCreatePrompt = false
     @State private var newHerdName = ""
+
+    private var isOpeningHerd: Bool { openingState.isOpening }
 
     var body: some View {
         List {
             Section("Available Herds") {
                 ForEach(directory.herds) { herd in
                     Button {
-                        do {
-                            try directory.selectHerd(id: herd.id)
-                            navigation.resetForHerdChange(to: herd.id)
-                            navigation.dismissSheet()
-                        } catch {
-                            directory.report(error)
-                        }
+                        beginOpeningHerd(herd: herd)
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
@@ -372,12 +372,41 @@ struct HerdDirectoryView: View {
                         }
                         .contentShape(Rectangle())
                     }
-                    .disabled(dataAccessMode.isRecoveryMode || isCreating)
+                    .disabled(dataAccessMode.isRecoveryMode || isCreating || isOpeningHerd)
                 }
 
-                if directory.herds.isEmpty {
-                    Text("No complete Herds are available. iCloud records may still be importing; refresh before creating a new Herd.")
+                if directory.inventoryState == .loading {
+                    ProgressView("Loading available Herds")
+                } else if directory.inventoryState == .unavailable {
+                    Label(
+                        "The Herd list could not be read. Existing Herds may still be present. Refresh before creating a Herd.",
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .foregroundStyle(.secondary)
+                } else if directory.inventoryState == .incomplete {
+                    Label(
+                        "Some Herd records are incomplete and may still be importing. Refresh to check for newly available Herds.",
+                        systemImage: "icloud.and.arrow.down"
+                    )
+                    .foregroundStyle(.secondary)
+                } else if directory.herds.isEmpty {
+                    Text("No Herds are available. If iCloud synchronization is still starting, refresh before creating a separate Herd.")
                         .foregroundStyle(.secondary)
+                }
+
+                if pendingHerd != nil {
+                    HStack {
+                        ProgressView()
+                        Text("Waiting for the selected Herd's records to finish importing.")
+                            .font(.callout)
+                        Spacer()
+                        Button("Cancel") {
+                            validationTask?.cancel()
+                            validationTask = nil
+                            openingState.cancel()
+                            pendingHerd = nil
+                        }
+                    }
                 }
             }
 
@@ -387,11 +416,16 @@ struct HerdDirectoryView: View {
                         newHerdName = ""
                         showsCreatePrompt = true
                     } label: {
-                        Label("Create Herd", systemImage: "plus")
+                        Label(
+                            directory.inventoryState == .incomplete ? "Create Separate Herd" : "Create Herd",
+                            systemImage: "plus"
+                        )
                     }
-                    .disabled(isCreating)
+                    .disabled(isCreating || isOpeningHerd ||
+                              (directory.inventoryState != .available &&
+                               directory.inventoryState != .incomplete))
                 } footer: {
-                    Text("Creating a Herd adds a new owned Herd. It does not join an invitation.")
+                    Text("Creating a Herd adds a separate owned Herd. It does not join an invitation or replace incomplete imported records.")
                 }
             }
         }
@@ -404,11 +438,16 @@ struct HerdDirectoryView: View {
             }
         }
         .task {
-            directory.refresh()
-            // CloudKit can import a shared or owned Herd after the chooser
-            // appears. Refresh while this view remains visible, without
-            // reopening stores or creating replacement records.
+            directory.refresh(reportErrors: false)
+            // Keep the original stores active while imported relationships arrive.
             while !Task.isCancelled {
+                // Do not overwrite the active validation task with a no-op
+                // retry, or Cancel could miss the in-flight Herd opening.
+                if let pendingHerd {
+                    // Do not await an uncooperative canceled validation here:
+                    // the retry loop must remain free to open another Herd.
+                    beginOpeningHerd(herd: pendingHerd)
+                }
                 do {
                     try await Task.sleep(for: .seconds(5))
                 } catch {
@@ -418,21 +457,45 @@ struct HerdDirectoryView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { directory.refresh() }
+            if phase == .active { directory.refresh(reportErrors: false) }
+        }
+        .onDisappear {
+            // Invalidate the old attempt immediately, even if its validation
+            // callback does not cooperate with Task cancellation.
+            validationTask?.cancel()
+            validationTask = nil
+            openingState.cancel()
+            creationTask?.cancel()
         }
         .alert("Create Herd", isPresented: $showsCreatePrompt) {
             TextField("Herd name", text: $newHerdName)
             Button("Create") {
-                guard !isCreating else { return }
+                guard !isCreating, !isOpeningHerd,
+                      directory.inventoryState == .available ||
+                      directory.inventoryState == .incomplete else { return }
+                validationTask?.cancel()
+                pendingHerd = nil
                 isCreating = true
-                Task { @MainActor in
-                    defer { isCreating = false }
+                creationTask = Task { @MainActor in
+                    defer {
+                        isCreating = false
+                        creationTask = nil
+                    }
                     do {
+                        try Task.checkCancellation()
                         let created = try await directory.createOwnedHerd(named: newHerdName)
+                        guard !Task.isCancelled, directory.selectedHerdID == created.id else {
+                            return
+                        }
                         navigation.resetForHerdChange(to: created.id)
                         navigation.dismissSheet()
+                    } catch is CancellationError {
+                        // A committed root is still available, but a dismissed
+                        // chooser must not reactivate it.
                     } catch {
-                        directory.report(error)
+                        if !Task.isCancelled {
+                            directory.report(error)
+                        }
                     }
                 }
             }
@@ -448,5 +511,79 @@ struct HerdDirectoryView: View {
         } message: {
             Text(directory.errorMessage ?? "The Herd cannot be opened.")
         }
+    }
+
+    /// Claim the opening attempt before scheduling its task, so a rapid
+    /// second tap cannot cancel the first and lose the newer selection.
+    @discardableResult
+    @MainActor
+    private func beginOpeningHerd(herd: AccessibleHerd) -> Task<Void, Never>? {
+        guard let attemptID = openingState.begin() else { return nil }
+        validationTask?.cancel()
+        let attempt = Task { @MainActor in await openHerd(herd: herd, attemptID: attemptID) }
+        validationTask = attempt
+        return attempt
+    }
+
+    @MainActor
+    private func openHerd(herd: AccessibleHerd, attemptID: UUID) async {
+        defer {
+            if openingState.finish(attemptID) {
+                validationTask = nil
+            }
+        }
+        do {
+            try await directory.selectHerdWhenReady(id: herd.id, expectedRoot: herd)
+            guard !Task.isCancelled, openingState.isCurrent(attemptID) else { return }
+            pendingHerd = nil
+            navigation.resetForHerdChange(to: herd.id)
+            navigation.dismissSheet()
+        } catch {
+            // A canceled or superseded validation cannot publish old state.
+            if Task.isCancelled || error is CancellationError ||
+                !openingState.isCurrent(attemptID) { return }
+            #if DEBUG
+            if CloudKitDevelopmentLaunch.isImportPending(error) {
+                if directory.shouldContinueWaitingForHerd(id: herd.id) {
+                    pendingHerd = herd
+                } else {
+                    pendingHerd = nil
+                    directory.report(HerdDirectoryError.pendingHerdUnavailable)
+                }
+                return
+            }
+            #endif
+            pendingHerd = nil
+            directory.report(error)
+        }
+    }
+}
+
+@MainActor
+struct HerdDirectoryOpeningState {
+    private(set) var activeAttemptID: UUID?
+
+    var isOpening: Bool { activeAttemptID != nil }
+
+    mutating func begin() -> UUID? {
+        guard activeAttemptID == nil else { return nil }
+        let id = UUID()
+        activeAttemptID = id
+        return id
+    }
+
+    func isCurrent(_ id: UUID) -> Bool {
+        activeAttemptID == id
+    }
+
+    @discardableResult
+    mutating func finish(_ id: UUID) -> Bool {
+        guard activeAttemptID == id else { return false }
+        activeAttemptID = nil
+        return true
+    }
+
+    mutating func cancel() {
+        activeAttemptID = nil
     }
 }

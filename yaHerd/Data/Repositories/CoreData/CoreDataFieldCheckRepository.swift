@@ -884,11 +884,18 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
             throw HerdRepositoryError.missingHerd
         }
 
+        let selectionRevision = selection.selectionRevision
         let gate = fieldCheckWriteGate
         await gate.acquire()
         await animalWriteBoundary.acquireFieldCheck()
 
         do {
+            // Do not admit a request whose Herd changed while it was queued.
+            try Task.checkCancellation()
+            guard selection.currentHerdID == herdID,
+                  selection.selectionRevision == selectionRevision else {
+                throw CancellationError()
+            }
             try pastureResidentWriteCoordinator.beginFieldCheckWrite()
         } catch {
             animalWriteBoundary.releaseFieldCheck()

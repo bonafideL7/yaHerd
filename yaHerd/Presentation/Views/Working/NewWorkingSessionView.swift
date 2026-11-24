@@ -7,6 +7,7 @@ import SwiftUI
 
 struct NewWorkingSessionView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
@@ -23,6 +24,8 @@ struct NewWorkingSessionView: View {
         workingRepository: EmptyWorkingRepository()
     )
 
+    @State private var originatingHerdID: UUID?
+    @State private var originatingHerdSelectionRevision: UInt64?
     @State private var date: Date = .now
     @State private var selectedPastureID: UUID?
     @State private var selectedTemplateID: UUID?
@@ -49,13 +52,22 @@ struct NewWorkingSessionView: View {
         _selectedPastureID = State(initialValue: suggestedPastureID)
     }
 
+    private var isPresentingOriginatingHerd: Bool {
+        guard let originatingHerdID, let originatingHerdSelectionRevision else { return false }
+        return herdSelection.currentHerdID == originatingHerdID
+            && herdSelection.selectionRevision == originatingHerdSelectionRevision
+    }
+
     private var selectedPasture: PastureOption? {
         guard let selectedPastureID else { return nil }
         return viewModel.pastures.first { $0.id == selectedPastureID }
     }
 
     private var eligibleAnimals: [AnimalSummary] {
-        viewModel.eligibleAnimals(pastureID: selectedPastureID)
+        guard viewModel.hasCurrentCandidates(
+            pastureID: selectedPastureID, selection: herdSelection
+        ) else { return [] }
+        return viewModel.eligibleAnimals(pastureID: selectedPastureID)
     }
 
     private var includedAnimalCount: Int {
@@ -63,9 +75,12 @@ struct NewWorkingSessionView: View {
     }
 
     private var canStart: Bool {
-        !isStarting
+        isPresentingOriginatingHerd
+            && !isStarting
             && viewModel.hasLoadedSetupSuccessfully
-            && viewModel.loadedPastureID == selectedPastureID
+            && viewModel.hasCurrentCandidates(
+                pastureID: selectedPastureID, selection: herdSelection
+            )
             && !viewModel.isLoadingAnimals
             && dataAccessMode.allowsDataMutations
             && selectedPasture != nil
@@ -95,9 +110,11 @@ struct NewWorkingSessionView: View {
         if viewModel.isLoadingAnimals {
             return "Loading eligible animals…"
         }
-        if viewModel.loadedPastureID != selectedPastureID {
+        if !viewModel.hasCurrentCandidates(
+            pastureID: selectedPastureID, selection: herdSelection
+        ) {
             return viewModel.candidateLoadErrorMessage
-                ?? "Eligible animals could not be loaded. Reopen Working setup to retry."
+                ?? "Eligible animals could not be loaded for the selected Herd. Reopen Working setup to retry."
         }
         if eligibleAnimals.isEmpty {
             return "The selected pasture has no active animals available to work."
@@ -117,16 +134,31 @@ struct NewWorkingSessionView: View {
     }
 
     private var content: some View {
-        Form {
-            sessionSection
-            animalsSection
-            treatmentsSection
+        Group {
+            if originatingHerdSelectionRevision != nil && !isPresentingOriginatingHerd {
+                ContentUnavailableView(
+                    "Herd Changed",
+                    systemImage: "arrow.left.arrow.right",
+                    description: Text("Reopen Working setup in the selected Herd.")
+                )
+            } else {
+                Form {
+                    sessionSection
+                    animalsSection
+                    treatmentsSection
+                }
+            }
         }
         .navigationTitle("Start Working Session")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(isStarting)
-        .interactiveDismissDisabled(isStarting)
+        .navigationBarBackButtonHidden(isStarting && isPresentingOriginatingHerd)
+        .interactiveDismissDisabled(isStarting && isPresentingOriginatingHerd)
         .task(id: selectedPastureID) {
+            if originatingHerdSelectionRevision == nil {
+                originatingHerdID = herdSelection.currentHerdID
+                originatingHerdSelectionRevision = herdSelection.selectionRevision
+            }
+            guard isPresentingOriginatingHerd else { return }
             viewModel.configure(
                 pastureRepository: pastureRepository,
                 animalReferenceQueryReader: animalReferenceQueryReader,
@@ -138,12 +170,20 @@ struct NewWorkingSessionView: View {
             }
             // A failed Pasture/template setup is not a valid form. Do not
             // request independent candidates or allow a partial session.
-            guard viewModel.hasLoadedSetupSuccessfully else { return }
-            let pastureID = selectedPastureID
-            await viewModel.loadEligibleAnimals(pastureID: pastureID)
-            if !Task.isCancelled && viewModel.loadedPastureID == pastureID {
-                resetAnimalSelection()
-            }
+            await loadCandidatesForSelectedPasture()
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            guard originatingHerdSelectionRevision != nil,
+                  !isPresentingOriginatingHerd else { return }
+            viewModel.invalidateForHerdChange()
+            selectedPastureID = nil
+            selectedTemplateID = nil
+            selectedTemplateName = nil
+            plannedTreatments = []
+            specifiesAnimals = false
+            selectedAnimalIDs = []
+            showingAnimalPicker = false
+            startedRoute = nil
         }
         .onChange(of: selectedPastureID) { _, newPastureID in
             viewModel.clearCandidates(for: newPastureID)
@@ -184,6 +224,14 @@ struct NewWorkingSessionView: View {
                 HStack {
                     ProgressView()
                     Text("Loading pastures…").foregroundStyle(.secondary)
+                }
+            } else if !viewModel.hasLoadedSetupSuccessfully {
+                ContentUnavailableView {
+                    Label("Working Setup Unavailable", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(viewModel.setupLoadErrorMessage ?? "Could not load pastures and treatment templates.")
+                } actions: {
+                    Button("Retry Loading Setup", action: retrySetup)
                 }
             } else if viewModel.pastures.isEmpty {
                 ContentUnavailableView(
@@ -276,6 +324,38 @@ struct NewWorkingSessionView: View {
         }
     }
 
+    private func retrySetup() {
+        guard isPresentingOriginatingHerd else { return }
+
+        viewModel.load()
+        guard viewModel.hasLoadedSetupSuccessfully else { return }
+
+        let previousPastureID = selectedPastureID
+        seedSuggestedPastureIfNeeded()
+        // Changing the pasture already restarts .task(id: selectedPastureID).
+        guard previousPastureID == selectedPastureID else { return }
+        Task { @MainActor in
+            await loadCandidatesForSelectedPasture()
+        }
+    }
+
+    private func loadCandidatesForSelectedPasture() async {
+        guard isPresentingOriginatingHerd,
+              viewModel.hasLoadedSetupSuccessfully else { return }
+
+        let pastureID = selectedPastureID
+        await viewModel.loadEligibleAnimals(
+            pastureID: pastureID, currentHerdSelection: herdSelection
+        )
+        if !Task.isCancelled,
+           isPresentingOriginatingHerd,
+           viewModel.hasCurrentCandidates(
+               pastureID: pastureID, selection: herdSelection
+           ) {
+            resetAnimalSelection()
+        }
+    }
+
     private func seedSuggestedPastureIfNeeded() {
         guard let suggestedPastureID else { return }
         selectedPastureID = viewModel.pastures.contains(where: { $0.id == suggestedPastureID })
@@ -298,7 +378,9 @@ struct NewWorkingSessionView: View {
 
     private func startSession() {
         guard canStart,
-              let pastureID = selectedPastureID else {
+              let pastureID = selectedPastureID,
+              let originatingHerdID,
+              let originatingSelectionRevision = originatingHerdSelectionRevision else {
             return
         }
 
@@ -327,14 +409,23 @@ struct NewWorkingSessionView: View {
                     pastureID: pastureID,
                     treatmentTemplateName: templateName,
                     plannedTreatments: cleanedTreatments,
-                    animalIDs: submittedAnimalIDs
+                    animalIDs: submittedAnimalIDs,
+                    originatingHerdID: originatingHerdID,
+                    currentHerdSelection: herdSelection,
+                    selectionIsUnchanged: {
+                        herdSelection.selectionRevision == originatingSelectionRevision
+                    }
                 )
+                guard let sessionID else { return }
                 if let onSessionCreated {
                     onSessionCreated(sessionID)
                 } else {
                     startedRoute = StartedWorkingSessionSetupRoute(id: sessionID)
                 }
             } catch {
+                guard !Task.isCancelled,
+                      herdSelection.currentHerdID == originatingHerdID,
+                      herdSelection.selectionRevision == originatingSelectionRevision else { return }
                 viewModel.errorMessage = UserVisibleErrorMessage.make(error)
             }
         }

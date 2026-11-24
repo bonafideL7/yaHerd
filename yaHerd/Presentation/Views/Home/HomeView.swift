@@ -8,6 +8,7 @@ struct HomeView: View {
     @EnvironmentObject var tagColorLibrary: TagColorLibraryStore
     @Environment(ApplicationSettings.self) var applicationSettings
     @Environment(AppNavigationState.self) private var navigation
+    @Environment(AppCurrentHerdSelection.self) var herdSelection
 
     @State var viewModel = HomeViewModel()
 
@@ -55,7 +56,8 @@ struct HomeView: View {
             await viewModel.observe(
                 configuration: configuration,
                 useCase: makeLoadHomeUseCase(),
-                mutationStream: homeDependencies.mutationStream
+                mutationStream: homeDependencies.mutationStream,
+                selection: herdSelection
             )
         }
         .alert("Home Error", isPresented: errorBinding) {
@@ -148,9 +150,10 @@ struct HomeView: View {
     }
 
     func dismissSetupSuggestion(_ id: HomeSetupSuggestionID) {
-        var ids = applicationSettings.homeDismissedSetupSuggestionIDs
+        guard let herdID = herdSelection.currentHerdID else { return }
+        var ids = applicationSettings.dismissedHomeSetupSuggestionIDs(for: herdID)
         ids.insert(id.rawValue)
-        applicationSettings.homeDismissedSetupSuggestionIDs = ids
+        applicationSettings.setDismissedHomeSetupSuggestionIDs(ids, for: herdID)
     }
 
 }

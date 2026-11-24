@@ -1,5 +1,6 @@
 @preconcurrency import CoreData
 import Foundation
+import Synchronization
 
 @MainActor
 final class CoreDataHerdRepository: HerdRepository {
@@ -36,6 +37,10 @@ final class CoreDataHerdRepository: HerdRepository {
     /// root cannot safely be selected until its original required fields arrive.
     /// Even incomplete roots participate in UUID collision checks.
     func fetchAccessibleHerds() throws -> [AccessibleHerd] {
+        try fetchHerdInventory().herds
+    }
+
+    func fetchHerdInventory() throws -> HerdInventory {
         let context = contextFactory.makeReadContext()
         return try context.performAndWait {
             let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
@@ -47,9 +52,15 @@ final class CoreDataHerdRepository: HerdRepository {
             let stores = context.persistentStoreCoordinator?.persistentStores ?? []
             var seenIDs = Set<UUID>()
             var available: [AccessibleHerd] = []
+            var hasIncompleteRoots = false
 
             for root in roots {
-                let id = try root.requiredID()
+                // A partially imported root without its UUID must not block
+                // valid accessible Herds. Leave it untouched while importing.
+                guard let id = root.id else {
+                    hasIncompleteRoots = true
+                    continue
+                }
                 guard seenIDs.insert(id).inserted else {
                     throw CoreDataPersistenceError.duplicateApplicationID(
                         entity: CDHerd.coreDataEntityName, id: id, herdID: nil
@@ -81,75 +92,101 @@ final class CoreDataHerdRepository: HerdRepository {
                     case .missingName, .missingCreatedAt, .missingUpdatedAt:
                         // Import can deliver the root before its metadata.
                         // Keep the original record untouched and undisplayed.
+                        hasIncompleteRoots = true
                         continue
                     case .missingID:
                         throw error
                     }
                 }
             }
-            return available
+            return HerdInventory(herds: available, hasIncompleteRoots: hasIncompleteRoots)
         }
     }
 
     /// Explicit user action. A new owned root belongs only in the private
     /// store; no second default Herd is created by an empty CloudKit import.
     func createOwnedHerd(named name: String) async throws -> HerdSummary {
+        try await createOwnedHerd(named: name, beforeSave: nil)
+    }
+
+    func createOwnedHerd(
+        named name: String,
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)?
+    ) async throws -> HerdSummary {
+        try Task.checkCancellation()
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
             throw HerdRepositoryError.emptyName
         }
 
         let context = try contextFactory.makeWriteContext()
-        return try await context.perform {
-            do {
-                let stores = context.persistentStoreCoordinator?.persistentStores ?? []
-                let destination: NSPersistentStore
-                if stores.count == 1, let store = stores.first {
-                    destination = store
-                } else if stores.count == 2,
-                          let privateStore = stores.first(where: {
-                              $0.url?.lastPathComponent ==
-                                  CoreDataPersistentContainer.storeFileName
-                          }),
-                          stores.contains(where: {
-                              $0.url?.lastPathComponent ==
-                                  CoreDataPersistentContainer.sharedStoreFileName
-                          }) {
-                    destination = privateStore
-                } else {
-                    throw CoreDataPersistenceError.unscopedMultiStoreWrite
-                }
-
-                let id = UUID()
-                guard try CoreDataLookup().herd(id: id, in: context) == nil else {
-                    throw CoreDataPersistenceError.duplicateApplicationID(
-                        entity: CDHerd.coreDataEntityName, id: id, herdID: nil
-                    )
-                }
-
-                let now = Date()
-                let herd = CDHerd(context: context)
-                herd.id = id
-                herd.name = trimmedName
-                herd.createdAt = now
-                herd.updatedAt = now
-                context.assign(herd, to: destination)
-                let summary = try herd.toSummary()
+        // Swift task cancellation is not automatically visible inside Core
+        // Data's private queue. A dismissed chooser must not save its Create.
+        let cancellation = Mutex(false)
+        return try await withTaskCancellationHandler {
+            try await context.perform {
                 do {
-                    try context.save()
+                    try cancellation.withLock {
+                        if $0 { throw CancellationError() }
+                    }
+
+                    let stores = context.persistentStoreCoordinator?.persistentStores ?? []
+                    let destination: NSPersistentStore
+                    if stores.count == 1, let store = stores.first {
+                        destination = store
+                    } else if stores.count == 2,
+                              let privateStore = stores.first(where: {
+                                  $0.url?.lastPathComponent ==
+                                      CoreDataPersistentContainer.storeFileName
+                              }),
+                              stores.contains(where: {
+                                  $0.url?.lastPathComponent ==
+                                      CoreDataPersistentContainer.sharedStoreFileName
+                              }) {
+                        destination = privateStore
+                    } else {
+                        throw CoreDataPersistenceError.unscopedMultiStoreWrite
+                    }
+
+                    let id = UUID()
+                    guard try CoreDataLookup().herd(id: id, in: context) == nil else {
+                        throw CoreDataPersistenceError.duplicateApplicationID(
+                            entity: CDHerd.coreDataEntityName, id: id, herdID: nil
+                        )
+                    }
+
+                    let now = Date()
+                    let herd = CDHerd(context: context)
+                    herd.id = id
+                    herd.name = trimmedName
+                    herd.createdAt = now
+                    herd.updatedAt = now
+                    context.assign(herd, to: destination)
+                    let summary = try herd.toSummary()
+                    try beforeSave?(context)
+                    // Respect cancellation after staging but before the commit.
+                    // An already-completed save cannot be undone.
+                    try cancellation.withLock {
+                        if $0 { throw CancellationError() }
+                    }
+                    do {
+                        try context.save()
+                    } catch {
+                        ReliabilityLog.persistenceSaveFailure("herd-create", error: error)
+                        throw CoreDataPersistenceError.saveFailed(
+                            description: error.localizedDescription
+                        )
+                    }
+                    return summary
                 } catch {
-                    ReliabilityLog.persistenceSaveFailure("herd-create", error: error)
-                    throw CoreDataPersistenceError.saveFailed(
-                        description: error.localizedDescription
-                    )
+                    if context.hasChanges {
+                        context.rollback()
+                    }
+                    throw error
                 }
-                return summary
-            } catch {
-                if context.hasChanges {
-                    context.rollback()
-                }
-                throw error
             }
+        } onCancel: {
+            cancellation.withLock { $0 = true }
         }
     }
 

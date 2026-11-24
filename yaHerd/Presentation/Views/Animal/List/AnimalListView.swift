@@ -7,6 +7,7 @@ import SwiftUI
 #Preview {
     AnimalListView()
         .environment(AppNavigationState())
+        .environment(AppCurrentHerdSelection())
         .preferredColorScheme(.dark)
 }
 
@@ -30,6 +31,7 @@ struct AnimalListView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(ApplicationSettings.self) private var applicationSettings
     @Environment(AppNavigationState.self) private var navigation
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
 
     private let viewModel: AnimalListViewModel
     @State private var isSeedingSampleData = false
@@ -46,6 +48,8 @@ struct AnimalListView: View {
     @State private var selectedAnimalIDs: Set<UUID> = []
     @State private var collapsedSectionIDs: Set<String> = []
     @State private var showingPasturePicker = false
+    @State private var batchMoveOriginHerdID: UUID?
+    @State private var batchMoveOriginRevision: UInt64?
     @State private var inlineEntry = AnimalInlineEntryViewModel()
     @State private var isShowingInlineBirthDatePicker = false
     @State private var activeInlineParentPicker: ParentPickerType?
@@ -343,7 +347,8 @@ struct AnimalListView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
-        .task {
+        .task(id: herdSelection.selectionRevision) {
+            viewModel.configure(selection: herdSelection)
             refreshDerivedState()
             await viewModel.observe(
                 using: repository,
@@ -351,6 +356,16 @@ struct AnimalListView: View {
                 mutationStream: animalDependencies.mutationStream,
                 snapshotReader: animalDependencies.listSnapshotReader
             )
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            inlineEntry.cancel()
+            selectedAnimalIDs.removeAll()
+            batchMode = false
+            showingPasturePicker = false
+            batchMoveOriginHerdID = nil
+            batchMoveOriginRevision = nil
+            viewModel.configure(selection: herdSelection)
+            refreshDerivedState()
         }
         // Query precisely the same whole-Herd emptiness predicate as the writer,
         // only after Animal/pasture loading completes. A filtered empty list
@@ -426,7 +441,10 @@ struct AnimalListView: View {
     }
 
     private var herdList: some View {
-        AnimalListContentList(
+        // Capture the identity of the loaded rows when their swipe closures
+        // are created; the live selection may change before invocation.
+        let rowSelection = viewModel.loadedSelectionIdentity
+        return AnimalListContentList(
             groupedAnimals: groupedAnimals,
             shouldUseSections: shouldUseSections,
             batchMode: batchMode,
@@ -460,8 +478,22 @@ struct AnimalListView: View {
             onCancelInlineEntry: cancelInlineEntry,
             onOpenInlineDetails: openInlineDetails,
             usesHardDelete: applicationSettings.hardDeleteAnimals,
-            onPrimarySwipeAction: performPrimarySwipeAction,
-            onRestoreArchivedRecord: restoreArchivedRecord
+            onPrimarySwipeAction: { animal in
+                guard let rowSelection else { return }
+                performPrimarySwipeAction(
+                    for: animal,
+                    originatingHerdID: rowSelection.herdID,
+                    originatingSelectionRevision: rowSelection.revision
+                )
+            },
+            onRestoreArchivedRecord: { animal in
+                guard let rowSelection else { return }
+                restoreArchivedRecord(
+                    animal,
+                    originatingHerdID: rowSelection.herdID,
+                    originatingSelectionRevision: rowSelection.revision
+                )
+            }
         )
     }
 
@@ -526,7 +558,7 @@ struct AnimalListView: View {
             selectedCount: selectedAnimalIDs.count,
             allVisibleAnimalsSelected: allVisibleAnimalsSelected,
             onToggleSelectAllVisible: toggleSelectAllVisible,
-            onMove: { showingPasturePicker = true }
+            onMove: presentBatchMove
         )
     }
 
@@ -555,13 +587,33 @@ struct AnimalListView: View {
         || showArchivedRecordsValue
     }
 
+    private func presentBatchMove() {
+        guard let herdID = herdSelection.currentHerdID,
+              !selectedAnimalIDs.isEmpty else { return }
+        batchMoveOriginHerdID = herdID
+        batchMoveOriginRevision = herdSelection.selectionRevision
+        showingPasturePicker = true
+    }
+
     private func moveSelectedAnimals(toPastureID pastureID: UUID?) {
+        guard let originHerdID = batchMoveOriginHerdID,
+              let originRevision = batchMoveOriginRevision,
+              herdSelection.currentHerdID == originHerdID,
+              herdSelection.selectionRevision == originRevision else {
+            showingPasturePicker = false
+            return
+        }
+
         viewModel.move(
             ids: Array(selectedAnimalIDs),
             toPastureID: pastureID,
+            originatingHerdID: originHerdID,
+            originatingSelectionRevision: originRevision,
             using: repository,
             pastureRepository: pastureReferenceDataReader
         )
+        batchMoveOriginHerdID = nil
+        batchMoveOriginRevision = nil
         refreshDerivedState()
         selectedAnimalIDs.removeAll()
         batchMode = false
@@ -569,14 +621,26 @@ struct AnimalListView: View {
 
     private func seedSampleData(large: Bool) {
         guard !isSeedingSampleData, canOfferSampleData,
-              dataAccessMode.allowsDataMutations, let sampleDataSeeder else { return }
+              dataAccessMode.allowsDataMutations, let sampleDataSeeder,
+              let originatingHerdID = herdSelection.currentHerdID else { return }
+        let originatingSelectionRevision = herdSelection.selectionRevision
         isSeedingSampleData = true
         Task { @MainActor in
             defer { isSeedingSampleData = false }
+            guard herdSelection.currentHerdID == originatingHerdID,
+                  herdSelection.selectionRevision == originatingSelectionRevision else { return }
             do {
                 let inserted = try await (large
-                    ? sampleDataSeeder.seedLargeSampleDataIfNeeded()
-                    : sampleDataSeeder.seedSampleDataIfNeeded())
+                    ? sampleDataSeeder.seedLargeSampleDataIfNeeded(
+                        for: originatingHerdID,
+                        selectionRevision: originatingSelectionRevision
+                    )
+                    : sampleDataSeeder.seedSampleDataIfNeeded(
+                        for: originatingHerdID,
+                        selectionRevision: originatingSelectionRevision
+                    ))
+                guard herdSelection.currentHerdID == originatingHerdID,
+                  herdSelection.selectionRevision == originatingSelectionRevision else { return }
                 if inserted {
                     eligibleSampleDataRevision = nil
                     reload()
@@ -584,6 +648,8 @@ struct AnimalListView: View {
                     viewModel.errorMessage = "Sample data can only be added to an empty herd."
                 }
             } catch {
+                guard herdSelection.currentHerdID == originatingHerdID,
+                  herdSelection.selectionRevision == originatingSelectionRevision else { return }
                 viewModel.errorMessage = error.localizedDescription
             }
         }
@@ -677,7 +743,7 @@ struct AnimalListView: View {
         guard dataAccessMode.allowsDataMutations, applicationSettings.inlineAnimalEditingEnabled, !batchMode else { return }
 
         withAnimation(.snappy) {
-            inlineEntry.beginNew()
+            inlineEntry.beginNew(selection: herdSelection)
         }
     }
 
@@ -697,7 +763,12 @@ struct AnimalListView: View {
                 throw AnimalValidationError.animalNotFound
             }
             withAnimation(.snappy) {
-                inlineEntry.beginEditing(animal, detail: detail, tagColorLibrary: tagColorLibrary)
+                inlineEntry.beginEditing(
+                    animal,
+                    detail: detail,
+                    tagColorLibrary: tagColorLibrary,
+                    selection: herdSelection
+                )
             }
         } catch {
             viewModel.errorMessage = UserVisibleErrorMessage.make(error)
@@ -731,7 +802,8 @@ struct AnimalListView: View {
                 startNewEntryAfterCreate: startNewEntryAfterCreate,
                 colors: tagColorLibrary.colors,
                 defaultTagColorID: tagColorLibrary.defaultColorID,
-                using: repository
+                using: repository,
+                selection: herdSelection
             )
 
             if didCommit {
@@ -774,18 +846,34 @@ struct AnimalListView: View {
         }
     }
 
-    private func performPrimarySwipeAction(for animal: AnimalSummary) {
+    private func performPrimarySwipeAction(
+        for animal: AnimalSummary,
+        originatingHerdID: UUID,
+        originatingSelectionRevision: UInt64
+    ) {
         viewModel.performPrimarySwipeAction(
             animalID: animal.id,
             hardDelete: applicationSettings.hardDeleteAnimals,
+            originatingHerdID: originatingHerdID,
+            originatingSelectionRevision: originatingSelectionRevision,
             using: repository,
             pastureRepository: pastureReferenceDataReader
         )
         refreshDerivedState()
     }
 
-    private func restoreArchivedRecord(_ animal: AnimalSummary) {
-        viewModel.restore(animalID: animal.id, using: repository, pastureRepository: pastureReferenceDataReader)
+    private func restoreArchivedRecord(
+        _ animal: AnimalSummary,
+        originatingHerdID: UUID,
+        originatingSelectionRevision: UInt64
+    ) {
+        viewModel.restore(
+            animalID: animal.id,
+            originatingHerdID: originatingHerdID,
+            originatingSelectionRevision: originatingSelectionRevision,
+            using: repository,
+            pastureRepository: pastureReferenceDataReader
+        )
         refreshDerivedState()
     }
 }

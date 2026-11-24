@@ -150,10 +150,19 @@ struct yaHerdApp: App {
                         privateStoreURL: storeURL,
                         requestedHerdID: selectedHerdID
                     )
-                    // A missing choice is not a corrupt import. Validate Home
-                    // only after an accessible Herd has been selected.
+                    // An imported Herd root may precede its child records.
+                    // For a remembered selection, leave other accessible Herds
+                    // usable through the chooser while this graph catches up.
                     if candidate.currentHerdSelection.currentHerdID != nil {
-                        try await CloudKitDevelopmentLaunch.validateHomeReadiness(candidate)
+                        do {
+                            try await CloudKitDevelopmentLaunch.validateHomeReadiness(candidate)
+                        } catch {
+                            guard selectedHerdID == nil,
+                                  CloudKitDevelopmentLaunch.isImportPending(error) else {
+                                throw error
+                            }
+                            candidate.currentHerdSelection.deferCurrentHerdUntilImportReady()
+                        }
                     }
                     persistence = candidate
                 } catch {
@@ -228,7 +237,8 @@ struct yaHerdApp: App {
                             startupError: startupMessage
                         ),
                         storageError: startupMessage,
-                        herdSelection: persistence.currentHerdSelection
+                        herdSelection: persistence.currentHerdSelection,
+                        validateHerdReadiness: nil
                     )
                 )
             } catch {
@@ -258,13 +268,29 @@ struct yaHerdApp: App {
         #if DEBUG
         NSLog("yaHerd active storage mode: %@", storageMode.displayName)
         #endif
+        let validateReadiness: (@MainActor (UUID) async throws -> Void)?
+        #if DEBUG
+        if storageMode == .cloudKitDevelopment {
+            validateReadiness = { herdID in
+                // The probe uses existing stores without changing the live selection.
+                try await CloudKitDevelopmentLaunch.validateHomeReadiness(
+                    persistence.makeReadinessCandidate(for: herdID)
+                )
+            }
+        } else {
+            validateReadiness = nil
+        }
+        #else
+        validateReadiness = nil
+        #endif
         return AppRuntime(
             persistenceLifetime: persistence,
             dependencies: dependencies,
             dataAccessMode: .readWrite,
             recoveryContext: nil,
             storageError: nil,
-            herdSelection: persistence.currentHerdSelection
+            herdSelection: persistence.currentHerdSelection,
+            validateHerdReadiness: validateReadiness
         )
     }
 
@@ -336,6 +362,7 @@ private struct AppRuntime {
     let recoveryContext: RecoveryModeContext?
     let storageError: String?
     let herdSelection: AppCurrentHerdSelection
+    let validateHerdReadiness: (@MainActor (UUID) async throws -> Void)?
 }
 
 private struct RunningAppView: View {
@@ -355,7 +382,8 @@ private struct RunningAppView: View {
         self.applicationSettings = applicationSettings
         self._herdDirectory = State(initialValue: HerdDirectoryController(
             repository: runtime.dependencies.herdRepository,
-            selection: runtime.herdSelection
+            selection: runtime.herdSelection,
+            validateReadiness: runtime.validateHerdReadiness
         ))
         self._tagColorLibrary = StateObject(
             wrappedValue: TagColorLibraryStore(
@@ -406,9 +434,27 @@ private struct RunningAppView: View {
                 \.workingSessionFeatureDependencies,
                 runtime.dependencies.workingSessionFeatureDependencies
             )
+            .onChange(of: runtime.herdSelection.selectionRevision) { _, _ in
+                tagColorLibrary.resetForHerdChange()
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: CoreDataPersistentContainer.remoteStoreChangeNotification
+                ).receive(on: DispatchQueue.main)
+            ) { _ in
+                // Remote imports and revoked shares may change membership
+                // without a scene transition or an open Herd chooser.
+                guard !runtime.dataAccessMode.isRecoveryMode else { return }
+                herdDirectory.refresh(reportErrors: false)
+            }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
-                    tagColorLibrary.refresh()
+                    if !runtime.dataAccessMode.isRecoveryMode {
+                        herdDirectory.refresh(reportErrors: false)
+                    }
+                    if runtime.herdSelection.currentHerdID != nil {
+                        tagColorLibrary.refresh()
+                    }
                 }
             }
     }
@@ -432,6 +478,36 @@ enum AppNavigationSceneStorageAccess {
         )
     }
 
+    /// The chooser may be shown before a remembered CloudKit Herd imports.
+    /// On its first activation, validate the original scene payload against
+    /// that Herd instead of replacing it with empty navigation.
+    static func restoreForSelectedHerd(
+        navigation: AppNavigationState,
+        selectedHerdID: UUID?,
+        from payload: String,
+        using validator: any AppNavigationRestorationValidating,
+        dataAccessMode: AppDataAccessMode
+    ) -> AppNavigationRestoreOutcome? {
+        navigation.selectedHerdID = selectedHerdID
+        return restore(
+            navigation: navigation,
+            from: payload,
+            using: validator,
+            dataAccessMode: dataAccessMode
+        )
+    }
+
+    /// The first selection itself is not a user navigation decision. While
+    /// record validation is pending, only an actual subsequent navigation
+    /// change may replace the previously saved scene payload.
+    static func shouldPersistNavigation(
+        snapshot: AppNavigationSnapshot,
+        deferredBaseline: AppNavigationSnapshot?,
+        isRestorationDeferred: Bool
+    ) -> Bool {
+        !isRestorationDeferred || snapshot != deferredBaseline
+    }
+
     static func payload(
         for navigation: AppNavigationState,
         dataAccessMode: AppDataAccessMode
@@ -442,6 +518,7 @@ enum AppNavigationSceneStorageAccess {
 }
 
 private struct RootAppView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(AppCurrentHerdSelection.self) private var herdSelection
 
     let storageError: String?
@@ -453,6 +530,7 @@ private struct RootAppView: View {
     @State private var navigation = AppNavigationState()
     @State private var hasRestoredNavigation = false
     @State private var navigationRestorationDeferred = false
+    @State private var deferredNavigationBaseline: AppNavigationSnapshot?
     @SceneStorage("navigation.restoration.v1") private var navigationRestorationPayload = ""
 
     init(
@@ -478,34 +556,33 @@ private struct RootAppView: View {
                 }
             } else {
                 MainTabView()
-                    // Discard old Herd drafts and view-owned async state.
-                    .id(herdSelection.currentHerdID)
+                    // Discard old Herd drafts and async state even after A → B → A.
+                    .id(herdSelection.selectionRevision)
             }
         }
             .environment(navigation)
             .task {
                 guard !hasRestoredNavigation else { return }
-                navigation.selectedHerdID = herdSelection.currentHerdID
-                let outcome = AppNavigationSceneStorageAccess.restore(
-                    navigation: navigation,
-                    from: navigationRestorationPayload,
-                    using: navigationRestorationValidator,
-                    dataAccessMode: dataAccessMode
-                )
-                hasRestoredNavigation = true
-                guard let outcome else { return }
-                navigationRestorationDeferred = outcome == .deferredValidation
-                guard outcome == .applied,
-                      let payload = AppNavigationSceneStorageAccess.payload(
-                        for: navigation,
-                        dataAccessMode: dataAccessMode
-                      ) else { return }
-                navigationRestorationPayload = payload
+                guard dataAccessMode.isRecoveryMode || herdSelection.currentHerdID != nil else {
+                    // The original scene payload must survive the chooser until
+                    // a Herd is selected and its records can be validated.
+                    return
+                }
+                restoreInitialNavigation(for: herdSelection.currentHerdID)
             }
-            .onChange(of: herdSelection.currentHerdID) { _, newHerdID in
-                navigation.resetForHerdChange(to: newHerdID)
+            .onChange(of: herdSelection.selectionRevision) { _, _ in
+                if !hasRestoredNavigation,
+                   let selectedHerdID = herdSelection.currentHerdID,
+                   !dataAccessMode.isRecoveryMode {
+                    // The first selection after an import-pending chooser is
+                    // the delayed startup, not a switch away from an open Herd.
+                    restoreInitialNavigation(for: selectedHerdID)
+                    return
+                }
+                navigation.resetForHerdChange(to: herdSelection.currentHerdID, force: true)
                 hasRestoredNavigation = true
                 navigationRestorationDeferred = false
+                deferredNavigationBaseline = nil
                 if let payload = AppNavigationSceneStorageAccess.payload(
                     for: navigation,
                     dataAccessMode: dataAccessMode
@@ -513,11 +590,19 @@ private struct RootAppView: View {
                     navigationRestorationPayload = payload
                 }
             }
-            .onChange(of: navigation.snapshot) { _, _ in
+            .onChange(of: navigation.snapshot) { _, newSnapshot in
                 guard hasRestoredNavigation, !dataAccessMode.isRecoveryMode else { return }
 
-                // Only the durable runtime may replace a deferred snapshot after user navigation.
+                guard AppNavigationSceneStorageAccess.shouldPersistNavigation(
+                    snapshot: newSnapshot,
+                    deferredBaseline: deferredNavigationBaseline,
+                    isRestorationDeferred: navigationRestorationDeferred
+                ) else { return }
+
+                // Explicit navigation may replace a deferred snapshot; the
+                // automatic first Herd activation itself must not.
                 navigationRestorationDeferred = false
+                deferredNavigationBaseline = nil
                 guard let payload = AppNavigationSceneStorageAccess.payload(
                     for: navigation,
                     dataAccessMode: dataAccessMode
@@ -528,17 +613,10 @@ private struct RootAppView: View {
                 guard hasRestoredNavigation, !dataAccessMode.isRecoveryMode else { return }
 
                 if navigationRestorationDeferred {
-                    let outcome = navigation.restorePreservingStoredSnapshot(
-                        from: navigationRestorationPayload,
-                        using: navigationRestorationValidator
-                    )
-                    navigationRestorationDeferred = outcome == .deferredValidation
-                    guard outcome == .applied else { return }
-                } else {
-                    navigation.revalidateIdentityBoundState(
-                        using: navigationRestorationValidator
-                    )
+                    retryDeferredNavigationRestoration()
+                    return
                 }
+                navigation.revalidateIdentityBoundState(using: navigationRestorationValidator)
                 if let payload = AppNavigationSceneStorageAccess.payload(
                     for: navigation,
                     dataAccessMode: dataAccessMode
@@ -546,14 +624,72 @@ private struct RootAppView: View {
                     navigationRestorationPayload = payload
                 }
             }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: CoreDataPersistentContainer.remoteStoreChangeNotification
+                ).receive(on: DispatchQueue.main)
+            ) { _ in
+                // Stage 3 retries only a pending scene restoration; broad remote
+                // feature invalidation belongs to the later history work.
+                retryDeferredNavigationRestoration()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    retryDeferredNavigationRestoration()
+                }
+            }
             .onOpenURL { url in
-                navigation.handle(url: url)
+                navigation.handle(url: url, using: navigationRestorationValidator)
             }
             .alert("Storage Error", isPresented: $showsStorageError) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(storageError ?? "Persistent storage could not be opened.")
             }
+    }
+
+    @MainActor
+    private func restoreInitialNavigation(for selectedHerdID: UUID?) {
+        let outcome = AppNavigationSceneStorageAccess.restoreForSelectedHerd(
+            navigation: navigation,
+            selectedHerdID: selectedHerdID,
+            from: navigationRestorationPayload,
+            using: navigationRestorationValidator,
+            dataAccessMode: dataAccessMode
+        )
+        hasRestoredNavigation = true
+        guard let outcome else { return }
+
+        navigationRestorationDeferred = outcome == .deferredValidation
+        deferredNavigationBaseline = navigationRestorationDeferred ? navigation.snapshot : nil
+        guard outcome == .applied,
+              let payload = AppNavigationSceneStorageAccess.payload(
+                for: navigation,
+                dataAccessMode: dataAccessMode
+              ) else { return }
+        navigationRestorationPayload = payload
+    }
+
+    @MainActor
+    private func retryDeferredNavigationRestoration() {
+        guard hasRestoredNavigation,
+              navigationRestorationDeferred,
+              !dataAccessMode.isRecoveryMode,
+              let activeHerdID = herdSelection.currentHerdID,
+              navigation.selectedHerdID == activeHerdID else { return }
+
+        let outcome = navigation.restorePreservingStoredSnapshot(
+            from: navigationRestorationPayload,
+            using: navigationRestorationValidator
+        )
+        navigationRestorationDeferred = outcome == .deferredValidation
+        guard outcome == .applied,
+              let payload = AppNavigationSceneStorageAccess.payload(
+                  for: navigation,
+                  dataAccessMode: dataAccessMode
+              ) else { return }
+        deferredNavigationBaseline = nil
+        navigationRestorationPayload = payload
     }
 }
 

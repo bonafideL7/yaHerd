@@ -2,33 +2,61 @@ import SwiftUI
 
 struct PastureGroupListView: View {
     @Environment(\.pastureFeatureDependencies) private var pastureDependencies
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
     private var repository: any PastureGroupListRepository { pastureDependencies.groupListRepository }
     @State private var model = PastureGroupListViewModel()
 
     var body: some View {
         Group {
-            if model.groups.isEmpty {
+            if model.hasInitialLoadFailure {
+                VStack(spacing: 12) {
+                    ContentUnavailableView(
+                        "Pasture Groups Unavailable",
+                        systemImage: "arrow.clockwise",
+                        description: Text(
+                            model.errorMessage ?? "Pasture groups could not be loaded."
+                        )
+                    )
+                    Button {
+                        model.load(using: repository, selection: herdSelection)
+                    } label: {
+                        Label("Retry Loading Groups", systemImage: "arrow.clockwise")
+                    }
+                }
+            } else if !model.isLoadedForCurrentSelection(herdSelection) {
+                ProgressView("Loading pasture groups…")
+            } else if model.groups.isEmpty {
                 ContentUnavailableView(
                     "No Pasture Groups",
                     systemImage: "rectangle.3.group",
                     description: Text("Create groups to organize pastures by grazing and rest schedules.")
                 )
-            } else {
+            } else if let rowOrigin = model.loadedSelectionIdentity {
                 List {
                     ForEach(model.groups) { group in
                         NavigationLink {
-                            PastureGroupDetailView(groupID: group.id)
+                            PastureGroupDetailView(
+                                groupID: group.id,
+                                originatingHerdID: rowOrigin.herdID,
+                                originatingSelectionRevision: rowOrigin.revision
+                            )
                         } label: {
                             PastureGroupRow(group: group)
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button("Delete", role: .destructive) {
-                                model.requestDelete(group)
+                                model.requestDelete(
+                                    group,
+                                    originatingHerdID: rowOrigin.herdID,
+                                    originatingSelectionRevision: rowOrigin.revision,
+                                    selection: herdSelection
+                                )
                             }
                             .disabledWhenDataReadOnly()
                         }
                     }
                 }
+                .id(herdSelection.selectionRevision)
             }
         }
         .navigationTitle("Pasture Groups")
@@ -38,12 +66,13 @@ struct PastureGroupListView: View {
                     Image(systemName: "plus")
                 }
                 .accessibilityLabel("Add Pasture Group")
+                .disabled(!model.isLoadedForCurrentSelection(herdSelection))
                 .disabledWhenDataReadOnly()
             }
         }
         .sheet(isPresented: $model.isPresentingAddGroup) {
             AddPastureGroupView {
-                model.load(using: repository)
+                model.load(using: repository, selection: herdSelection)
             }
         }
         .confirmationDialog(
@@ -53,7 +82,9 @@ struct PastureGroupListView: View {
         ) {
             if let group = model.groupPendingDeletion {
                 Button("Delete \(group.name)", role: .destructive) {
-                    model.deleteGroup(id: group.id, using: repository)
+                    model.deleteGroup(
+                        id: group.id, using: repository, selection: herdSelection
+                    )
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -65,7 +96,11 @@ struct PastureGroupListView: View {
             }
         }
         .task {
-            model.load(using: repository)
+            model.load(using: repository, selection: herdSelection)
+        }
+        .onChange(of: herdSelection.selectionRevision) { _, _ in
+            model.resetForHerdChange()
+            model.load(using: repository, selection: herdSelection)
         }
         .alert("Can’t Complete Request", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
@@ -76,7 +111,7 @@ struct PastureGroupListView: View {
 
     private var errorBinding: Binding<Bool> {
         Binding(
-            get: { model.errorMessage != nil },
+            get: { model.errorMessage != nil && !model.hasInitialLoadFailure },
             set: { newValue in
                 if !newValue {
                     model.clearError()
