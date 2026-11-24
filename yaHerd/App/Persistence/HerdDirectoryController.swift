@@ -20,6 +20,9 @@ enum HerdInventoryState: Equatable {
     case available
     case incomplete
     case unavailable
+    case waitingForImport
+    case importUnavailable
+    case accountUnavailable
 }
 
 /// Coordinates the Herd list with the authoritative, persisted app selection.
@@ -30,6 +33,7 @@ final class HerdDirectoryController {
     @ObservationIgnored private let repository: any HerdRepository
     @ObservationIgnored private let selection: AppCurrentHerdSelection
     @ObservationIgnored private let validateReadiness: (@MainActor (UUID) async throws -> Void)?
+    @ObservationIgnored private let readImportState: @MainActor () -> HerdImportState
     @ObservationIgnored private var selectionGeneration: UInt64 = 0
     @ObservationIgnored private var isCreatingHerd = false
 
@@ -39,14 +43,20 @@ final class HerdDirectoryController {
 
     var selectedHerdID: UUID? { selection.currentHerdID }
 
+    var canCreateHerd: Bool {
+        inventoryState != .loading && inventoryState != .unavailable
+    }
+
     init(
         repository: any HerdRepository,
         selection: AppCurrentHerdSelection,
-        validateReadiness: (@MainActor (UUID) async throws -> Void)? = nil
+        validateReadiness: (@MainActor (UUID) async throws -> Void)? = nil,
+        readImportState: @escaping @MainActor () -> HerdImportState = { .localOnly }
     ) {
         self.repository = repository
         self.selection = selection
         self.validateReadiness = validateReadiness
+        self.readImportState = readImportState
     }
 
     func refresh(reportErrors: Bool = true) {
@@ -88,7 +98,7 @@ final class HerdDirectoryController {
     func shouldContinueWaitingForHerd(id: UUID) -> Bool {
         refresh(reportErrors: false)
         switch inventoryState {
-        case .loading, .unavailable, .incomplete:
+        case .loading, .unavailable, .incomplete, .waitingForImport, .importUnavailable, .accountUnavailable:
             // An incomplete root may already have this UUID but cannot yet
             // appear in the selectable list. Absence is not proof of removal.
             return true
@@ -195,7 +205,20 @@ final class HerdDirectoryController {
     private func readAccessibleHerds() throws -> [AccessibleHerd] {
         do {
             let inventory = try repository.fetchHerdInventory()
-            inventoryState = inventory.hasIncompleteRoots ? .incomplete : .available
+            if inventory.hasIncompleteRoots {
+                inventoryState = .incomplete
+                return inventory.herds
+            }
+            switch readImportState() {
+            case .localOnly, .complete:
+                inventoryState = .available
+            case .waiting:
+                inventoryState = .waitingForImport
+            case .failed:
+                inventoryState = .importUnavailable
+            case .accountUnavailable:
+                inventoryState = .accountUnavailable
+            }
             return inventory.herds
         } catch {
             inventoryState = .unavailable

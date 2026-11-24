@@ -9,6 +9,7 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
     private let selection: AppCurrentHerdSelection
 
     var currentHerdSelection: AppCurrentHerdSelection { selection }
+    var herdImportState: HerdImportState { assembly.contextFactory.herdImportState }
 
     init(
         assembly: CoreDataPersistenceAssembly,

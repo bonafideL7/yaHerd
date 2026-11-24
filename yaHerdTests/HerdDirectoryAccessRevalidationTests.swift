@@ -4,6 +4,45 @@ import XCTest
 
 @MainActor
 final class HerdDirectoryAccessRevalidationTests: XCTestCase {
+    func testEmptyMirroredInventoryDistinguishesPendingImportFromCompletedImport() {
+        var importState = HerdImportState.waiting
+        let directory = HerdDirectoryController(
+            repository: StubHerdRepository(),
+            selection: AppCurrentHerdSelection(),
+            readImportState: { importState }
+        )
+        directory.refresh()
+        XCTAssertEqual(directory.inventoryState, .waitingForImport)
+        XCTAssertTrue(directory.canCreateHerd)
+
+        importState = .failed
+        directory.refresh()
+        XCTAssertEqual(directory.inventoryState, .importUnavailable)
+        XCTAssertTrue(directory.canCreateHerd)
+
+        importState = .accountUnavailable
+        directory.refresh()
+        XCTAssertEqual(directory.inventoryState, .accountUnavailable)
+
+        importState = .complete
+        directory.refresh()
+        XCTAssertEqual(directory.inventoryState, .available)
+    }
+
+    func testImportProgressDoesNotHideExistingOwnedHerds() {
+        let id = UUID()
+        let selection = AppCurrentHerdSelection(currentHerdID: id)
+        let directory = HerdDirectoryController(
+            repository: StubHerdRepository(available: [herd(id)]),
+            selection: selection,
+            readImportState: { .waiting }
+        )
+        directory.refresh()
+        XCTAssertEqual(directory.inventoryState, .waitingForImport)
+        XCTAssertEqual(directory.herds.map(\.id), [id])
+        XCTAssertEqual(directory.selectedHerdID, id)
+    }
+
     func testMissingSelectedHerdLeavesChooserActiveWithoutChangingSavedPreference() throws {
         let suite = "stage3-access-\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

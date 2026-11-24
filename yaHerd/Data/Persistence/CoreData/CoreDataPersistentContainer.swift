@@ -8,6 +8,19 @@ enum CoreDataStoreAccessMode: Equatable, Sendable {
     case readOnly
 }
 
+/// A local inventory is not evidence of a completed CloudKit import.
+enum HerdImportState: Equatable, Sendable {
+    case localOnly
+    case waiting
+    case complete
+    case failed
+    case accountUnavailable
+}
+
+private final class HerdImportResults: Sendable {
+    let states = Mutex<[String: HerdImportState]>([:])
+}
+
 final class CoreDataPersistentContainer {
     static let modelName = "yaHerdModel"
     /// Persistence-owned notification identifier for imported store transactions.
@@ -26,21 +39,41 @@ final class CoreDataPersistentContainer {
     private let container: NSPersistentContainer
     let accessMode: CoreDataStoreAccessMode
     let storeURL: URL?
+    static let herdImportStateChanged = Notification.Name("yaHerd.herdImportStateChanged")
     private let cloudKitEventObserver: (any NSObjectProtocol)?
+    private let importObserver: (any NSObjectProtocol)?
+    private let importResults: HerdImportResults?
+
+    var herdImportState: HerdImportState {
+        guard let importResults else { return .localOnly }
+        let identifiers = container.persistentStoreCoordinator.persistentStores.map(\.identifier)
+        return importResults.states.withLock { results in
+            let states = identifiers.map { results[$0] ?? .waiting }
+            if states.contains(.accountUnavailable) { return .accountUnavailable }
+            if states.contains(.failed) { return .failed }
+            return !states.isEmpty && states.allSatisfy { $0 == .complete }
+                ? .complete : .waiting
+        }
+    }
 
     private init(
         container: NSPersistentContainer,
         accessMode: CoreDataStoreAccessMode,
         storeURL: URL?,
-        cloudKitEventObserver: (any NSObjectProtocol)? = nil
+        cloudKitEventObserver: (any NSObjectProtocol)? = nil,
+        importObserver: (any NSObjectProtocol)? = nil,
+        importResults: HerdImportResults? = nil
     ) {
         self.container = container
         self.accessMode = accessMode
         self.storeURL = storeURL
         self.cloudKitEventObserver = cloudKitEventObserver
+        self.importObserver = importObserver
+        self.importResults = importResults
     }
 
     deinit {
+        if let importObserver { NotificationCenter.default.removeObserver(importObserver) }
         if let cloudKitEventObserver {
             NotificationCenter.default.removeObserver(cloudKitEventObserver)
         }
@@ -216,6 +249,38 @@ final class CoreDataPersistentContainer {
         )
         container.persistentStoreDescriptions = storeDescriptions
 
+        let importResults = cloudKitConfigured ? HerdImportResults() : nil
+        let importObserver = importResults.map { results in
+            NotificationCenter.default.addObserver(
+                forName: NSPersistentCloudKitContainer.eventChangedNotification,
+                object: container, queue: nil
+            ) { notification in
+                guard let event = notification.userInfo?[
+                    NSPersistentCloudKitContainer.eventNotificationUserInfoKey
+                ] as? NSPersistentCloudKitContainer.Event,
+                      event.endDate != nil else { return }
+                let state: HerdImportState
+                if !event.succeeded {
+                    let error = event.error as NSError?
+                    state = error?.domain == CKError.errorDomain &&
+                        error?.code == CKError.Code.notAuthenticated.rawValue
+                        ? .accountUnavailable : .failed
+                } else if event.type == .import {
+                    state = .complete
+                } else {
+                    return
+                }
+                results.states.withLock { $0[event.storeIdentifier] = state }
+                NotificationCenter.default.post(name: CoreDataPersistentContainer.herdImportStateChanged, object: nil)
+            }
+        }
+        var keepImportObserver = false
+        defer {
+            if !keepImportObserver, let importObserver {
+                NotificationCenter.default.removeObserver(importObserver)
+            }
+        }
+
         // Observe real Core Data / iCloud setup, upload and download events
         // only in development. The unsigned simulator tests and Release builds
         // never start the event monitor.
@@ -271,11 +336,14 @@ final class CoreDataPersistentContainer {
             )
         }
         #endif
+        keepImportObserver = true
         return CoreDataPersistentContainer(
             container: container,
             accessMode: .readWrite,
             storeURL: storeDescriptions[0].url,
-            cloudKitEventObserver: eventObserver
+            cloudKitEventObserver: eventObserver,
+            importObserver: importObserver,
+            importResults: importResults
         )
     }
 

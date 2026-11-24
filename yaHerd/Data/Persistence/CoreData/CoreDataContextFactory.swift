@@ -11,6 +11,10 @@ final class CoreDataContextFactory: Sendable {
         self.persistence = Mutex(persistence)
     }
 
+    var herdImportState: HerdImportState {
+        persistence.withLock { $0.herdImportState }
+    }
+
     func makeReadContext() -> NSManagedObjectContext {
         persistence.withLock { container in
             Self.makePrivateContext(
