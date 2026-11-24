@@ -64,25 +64,21 @@ actor CoreDataReadModelActor:
 {
     private let contextFactory: CoreDataContextFactory
     private let lookup: CoreDataLookup
-    private let currentHerdID: @MainActor @Sendable () -> UUID?
+    private let currentSelection: @MainActor @Sendable () -> HerdSelectionSnapshot
 
     init(
         contextFactory: CoreDataContextFactory,
         lookup: CoreDataLookup,
-        currentHerdID: @escaping @MainActor @Sendable () -> UUID?
+        currentSelection: @escaping @MainActor @Sendable () -> HerdSelectionSnapshot
     ) {
         self.contextFactory = contextFactory
         self.lookup = lookup
-        self.currentHerdID = currentHerdID
+        self.currentSelection = currentSelection
     }
 
     func fetchDashboardRecords() async throws -> DashboardRecords {
-        try Task.checkCancellation()
-        let herdID = try await selectedHerdID()
-        let context = contextFactory.makeReadContext()
-        let lookup = self.lookup
 
-        return try await context.perform {
+        return try await performRead { context, herdID, lookup in
             try Task.checkCancellation()
             try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
@@ -188,12 +184,8 @@ actor CoreDataReadModelActor:
     func fetchDashboardAnimalRecords(
         kind: DashboardAnimalListKind
     ) async throws -> [DashboardAnimalRecord] {
-        try Task.checkCancellation()
-        let herdID = try await selectedHerdID()
-        let context = contextFactory.makeReadContext()
-        let lookup = self.lookup
 
-        return try await context.perform {
+        return try await performRead { context, herdID, lookup in
             try Task.checkCancellation()
             try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
@@ -236,12 +228,8 @@ actor CoreDataReadModelActor:
     }
 
     func fetchDashboardPastureRecords() async throws -> [DashboardPastureRecord] {
-        try Task.checkCancellation()
-        let herdID = try await selectedHerdID()
-        let context = contextFactory.makeReadContext()
-        let lookup = self.lookup
 
-        return try await context.perform {
+        return try await performRead { context, herdID, lookup in
             try Task.checkCancellation()
             // Group identity validation and all resident count queries must
             // observe the same committed store generation.
@@ -265,14 +253,10 @@ actor CoreDataReadModelActor:
     /// Resolve the unfiltered Animal list in one generation rather than
     /// concatenating independently pinned pages across concurrent writes.
     func fetchAnimalSummarySnapshot() async throws -> [AnimalSummary] {
-        try Task.checkCancellation()
-        let herdID = try await selectedHerdID()
-        let context = contextFactory.makeReadContext()
-        let lookup = self.lookup
         let referenceDate = Date()
         let calendar = Calendar.current
 
-        return try await context.perform {
+        return try await performRead { context, herdID, lookup in
             try Task.checkCancellation()
             try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
@@ -343,15 +327,11 @@ actor CoreDataReadModelActor:
         matching query: AnimalListFilterQuery?,
         page: ReadPageRequest
     ) async throws -> AnimalSummaryPage {
-        try Task.checkCancellation()
-        let herdID = try await selectedHerdID()
-        let context = contextFactory.makeReadContext()
-        let lookup = self.lookup
         let requestedCount = page.limit + 1
         let referenceDate = Date()
         let calendar = Calendar.current
 
-        return try await context.perform {
+        return try await performRead { context, herdID, lookup in
             try Task.checkCancellation()
             try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
@@ -430,12 +410,8 @@ actor CoreDataReadModelActor:
     /// non-archived inactive/deceased Animals remain available, as before.
     /// Resolve one coherent selected-Herd cohort off the UI actor.
     func fetchParentOptions(excluding excludedAnimalID: UUID?) async throws -> [AnimalParentOption] {
-        try Task.checkCancellation()
-        let herdID = try await selectedHerdID()
-        let context = contextFactory.makeReadContext()
-        let lookup = self.lookup
 
-        return try await context.perform {
+        return try await performRead { context, herdID, lookup in
             try Task.checkCancellation()
             try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
@@ -475,14 +451,10 @@ actor CoreDataReadModelActor:
     func fetchAnimalReferenceSnapshot(
         matching query: AnimalReferenceQuery
     ) async throws -> [AnimalSummary] {
-        try Task.checkCancellation()
-        let herdID = try await selectedHerdID()
-        let context = contextFactory.makeReadContext()
-        let lookup = self.lookup
         let referenceDate = Date()
         let calendar = Calendar.current
 
-        return try await context.perform {
+        return try await performRead { context, herdID, lookup in
             try Task.checkCancellation()
             try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
@@ -552,15 +524,11 @@ actor CoreDataReadModelActor:
         matching query: AnimalReferenceQuery,
         page: ReadPageRequest
     ) async throws -> AnimalSummaryPage {
-        try Task.checkCancellation()
-        let herdID = try await selectedHerdID()
-        let context = contextFactory.makeReadContext()
-        let lookup = self.lookup
         let requestedCount = page.limit + 1
         let referenceDate = Date()
         let calendar = Calendar.current
 
-        return try await context.perform {
+        return try await performRead { context, herdID, lookup in
             try Task.checkCancellation()
             try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
@@ -619,12 +587,8 @@ actor CoreDataReadModelActor:
     }
 
     func containsAnimal(id: UUID) async throws -> Bool {
-        try Task.checkCancellation()
-        let herdID = try await selectedHerdID()
-        let context = contextFactory.makeReadContext()
-        let lookup = self.lookup
 
-        return try await context.perform {
+        return try await performRead { context, herdID, lookup in
             try Task.checkCancellation()
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
@@ -1040,13 +1004,9 @@ actor CoreDataReadModelActor:
     func fetchAnimalPastureOptions(
         limit: Int
     ) async throws -> [PastureOption] {
-        try Task.checkCancellation()
-        let herdID = try await selectedHerdID()
-        let context = contextFactory.makeReadContext()
-        let lookup = self.lookup
         let pageSize = Self.normalizedLimit(limit)
 
-        return try await context.perform {
+        return try await performRead { context, herdID, lookup in
             try Task.checkCancellation()
             try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
@@ -1109,12 +1069,8 @@ actor CoreDataReadModelActor:
     }
 
     func fetchHomeFieldCheckRecords() async throws -> HomeFieldCheckRecords {
-        try Task.checkCancellation()
-        let herdID = try await selectedHerdID()
-        let context = contextFactory.makeReadContext()
-        let lookup = self.lookup
 
-        return try await context.perform {
+        return try await performRead { context, herdID, lookup in
             try Task.checkCancellation()
             try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
@@ -1235,13 +1191,9 @@ actor CoreDataReadModelActor:
     func fetchHomeTreatmentTemplates(
         limit: Int
     ) async throws -> [WorkingTreatmentTemplateSummary] {
-        try Task.checkCancellation()
-        let herdID = try await selectedHerdID()
-        let context = contextFactory.makeReadContext()
-        let lookup = self.lookup
         let fetchLimit = Self.normalizedLimit(limit)
 
-        return try await context.perform {
+        return try await performRead { context, herdID, lookup in
             try Task.checkCancellation()
             try Self.pinCurrentQueryGenerationIfSupported(in: context)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
@@ -1289,11 +1241,24 @@ actor CoreDataReadModelActor:
         }
     }
 
-    private func selectedHerdID() async throws -> UUID {
-        guard let herdID = await currentHerdID() else {
-            throw HerdRepositoryError.missingHerd
+    /// Capture one immutable selection for the entire query. A switch or
+    /// root replacement during the background read invalidates its result.
+    private func performRead<Result: Sendable>(
+        _ operation: @escaping @Sendable (NSManagedObjectContext, UUID, CoreDataLookup) throws -> Result
+    ) async throws -> Result {
+        try Task.checkCancellation()
+        try contextFactory.validateHerdAccess()
+        let origin = await currentSelection()
+        guard let herdID = origin.id else { throw HerdRepositoryError.missingHerd }
+        let context = contextFactory.makeReadContext(expectedHerdRoot: origin.rootIdentity)
+        let lookup = self.lookup
+        let result = try await context.perform {
+            try operation(context, herdID, lookup)
         }
-        return herdID
+        try Task.checkCancellation()
+        try contextFactory.validateHerdAccess()
+        guard await currentSelection() == origin else { throw CancellationError() }
+        return result
     }
 
     private static func normalizedLimit(_ requestedLimit: Int) -> Int {

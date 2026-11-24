@@ -25,6 +25,8 @@ protocol CoreDataHerdOwnedManagedObject: CoreDataApplicationIdentifiedManagedObj
 }
 
 struct CoreDataLookup: Sendable {
+    static let expectedHerdRootKey = "yaHerd.expectedHerdRoot"
+
     func herd(
         id: UUID,
         in context: NSManagedObjectContext
@@ -40,6 +42,13 @@ struct CoreDataLookup: Sendable {
                 id: id,
                 herdID: nil
             )
+        }
+        if let root = matches.first,
+           let expected = context.userInfo[Self.expectedHerdRootKey] as? URL,
+           root.objectID.uriRepresentation() != expected {
+            // The UUID was reused in a different store or by a replacement
+            // root. Never redirect an existing context to that Herd.
+            throw CoreDataPersistenceError.unresolvedHerdStore(id: id)
         }
         return matches.first
     }

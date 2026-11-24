@@ -143,33 +143,33 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         // Give each independently awaited production query its own actor/executor.
         // All actors resolve the same selected Herd and the same Core Data store.
         let selectedHerdSelection = selection
-        let selectedHerdID: @MainActor @Sendable () -> UUID? = {
-            selectedHerdSelection.currentHerdID
+        let selectedHerd: @MainActor @Sendable () -> HerdSelectionSnapshot = {
+            selectedHerdSelection.snapshot
         }
         let dashboardQueryReader = CoreDataReadModelActor(
             contextFactory: assembly.contextFactory,
             lookup: assembly.lookup,
-            currentHerdID: selectedHerdID
+            currentSelection: selectedHerd
         )
         let homeFieldCheckQueryReader = CoreDataReadModelActor(
             contextFactory: assembly.contextFactory,
             lookup: assembly.lookup,
-            currentHerdID: selectedHerdID
+            currentSelection: selectedHerd
         )
         let homeWorkingQueryReader = CoreDataReadModelActor(
             contextFactory: assembly.contextFactory,
             lookup: assembly.lookup,
-            currentHerdID: selectedHerdID
+            currentSelection: selectedHerd
         )
         let animalListQueryReader = CoreDataReadModelActor(
             contextFactory: assembly.contextFactory,
             lookup: assembly.lookup,
-            currentHerdID: selectedHerdID
+            currentSelection: selectedHerd
         )
         let parentOptionQueryReader = CoreDataReadModelActor(
             contextFactory: assembly.contextFactory,
             lookup: assembly.lookup,
-            currentHerdID: selectedHerdID
+            currentSelection: selectedHerd
         )
         let animalListRepository = BackgroundQueryingAnimalListRepository(
             base: animalRepository,

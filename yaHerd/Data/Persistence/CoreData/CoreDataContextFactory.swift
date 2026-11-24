@@ -15,17 +15,25 @@ final class CoreDataContextFactory: Sendable {
         persistence.withLock { $0.herdImportState }
     }
 
-    func makeReadContext() -> NSManagedObjectContext {
-        persistence.withLock { container in
+    func makeReadContext(expectedHerdRoot: URL? = nil) -> NSManagedObjectContext {
+        let context = persistence.withLock { container in
             Self.makePrivateContext(
                 name: "CoreDataReadContext",
                 using: container
             )
         }
+        Self.bind(context, to: expectedHerdRoot)
+        return context
     }
 
-    func makeWriteContext() throws -> NSManagedObjectContext {
-        try persistence.withLock { container in
+    func validateHerdAccess() throws {
+        guard !herdImportState.blocksHerdAccess else {
+            throw HerdRepositoryError.accountUnavailable
+        }
+    }
+
+    func makeWriteContext(expectedHerdRoot: URL? = nil) throws -> NSManagedObjectContext {
+        let context = try persistence.withLock { container in
             guard container.accessMode == .readWrite else {
                 throw CoreDataPersistenceError.readOnlyStore
             }
@@ -36,6 +44,17 @@ final class CoreDataContextFactory: Sendable {
                 name: "CoreDataWriteContext",
                 using: container
             )
+        }
+        Self.bind(context, to: expectedHerdRoot)
+        return context
+    }
+
+    /// An expected root belongs to this context only. Unscoped inventory
+    /// and creation contexts remain independent of the active Herd.
+    private static func bind(_ context: NSManagedObjectContext, to root: URL?) {
+        guard let root else { return }
+        context.performAndWait {
+            context.userInfo[CoreDataLookup.expectedHerdRootKey] = root
         }
     }
 
