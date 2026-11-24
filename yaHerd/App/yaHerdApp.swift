@@ -299,6 +299,7 @@ private struct RunningAppView: View {
     private var navigationRestorationValidator: RepositoryAppNavigationRestorationValidator {
         RepositoryAppNavigationRestorationValidator(
             herdRepository: runtime.dependencies.herdRepository,
+            selection: runtime.herdSelection,
             animalRepository: runtime.dependencies.animalFeatureDependencies.detailRepository,
             pastureRepository: runtime.dependencies.pastureFeatureDependencies.existenceChecker,
             fieldCheckRepository: runtime.dependencies.fieldCheckFeatureDependencies.sessionDetailRepository,
@@ -392,11 +393,13 @@ enum AppNavigationSceneStorageAccess {
     static func restoreForSelectedHerd(
         navigation: AppNavigationState,
         selectedHerdID: UUID?,
+        selectedHerdRootIdentity: URL?,
         from payload: String,
         using validator: any AppNavigationRestorationValidating,
         dataAccessMode: AppDataAccessMode
     ) -> AppNavigationRestoreOutcome? {
         navigation.selectedHerdID = selectedHerdID
+        navigation.selectedHerdRootIdentity = selectedHerdRootIdentity
         return restore(
             navigation: navigation,
             from: payload,
@@ -462,6 +465,11 @@ private struct RootAppView: View {
                 NavigationStack {
                     HerdDirectoryView()
                 }
+            } else if !dataAccessMode.isRecoveryMode && (
+                !hasRestoredNavigation || navigation.selectedHerdID != herdSelection.currentHerdID ||
+                navigation.selectedHerdRootIdentity != herdSelection.selectedRootIdentity
+            ) {
+                ProgressView("Opening Herd…")
             } else {
                 MainTabView()
                     // Discard old Herd drafts and async state even after A → B → A.
@@ -479,15 +487,18 @@ private struct RootAppView: View {
                 restoreInitialNavigation(for: herdSelection.currentHerdID)
             }
             .onChange(of: herdSelection.selectionRevision) { _, _ in
-                if !hasRestoredNavigation,
-                   let selectedHerdID = herdSelection.currentHerdID,
-                   !dataAccessMode.isRecoveryMode {
+                if !hasRestoredNavigation, !dataAccessMode.isRecoveryMode {
+                    guard let selectedHerdID = herdSelection.currentHerdID else { return }
                     // The first selection after an import-pending chooser is
                     // the delayed startup, not a switch away from an open Herd.
                     restoreInitialNavigation(for: selectedHerdID)
                     return
                 }
-                navigation.resetForHerdChange(to: herdSelection.currentHerdID, force: true)
+                navigation.resetForHerdChange(
+                    to: herdSelection.currentHerdID,
+                    rootIdentity: herdSelection.selectedRootIdentity,
+                    force: true
+                )
                 hasRestoredNavigation = true
                 navigationRestorationDeferred = false
                 deferredNavigationBaseline = nil
@@ -561,6 +572,7 @@ private struct RootAppView: View {
         let outcome = AppNavigationSceneStorageAccess.restoreForSelectedHerd(
             navigation: navigation,
             selectedHerdID: selectedHerdID,
+            selectedHerdRootIdentity: herdSelection.selectedRootIdentity,
             from: navigationRestorationPayload,
             using: navigationRestorationValidator,
             dataAccessMode: dataAccessMode
@@ -584,7 +596,8 @@ private struct RootAppView: View {
               navigationRestorationDeferred,
               !dataAccessMode.isRecoveryMode,
               let activeHerdID = herdSelection.currentHerdID,
-              navigation.selectedHerdID == activeHerdID else { return }
+              navigation.selectedHerdID == activeHerdID,
+              navigation.selectedHerdRootIdentity == herdSelection.selectedRootIdentity else { return }
 
         let outcome = navigation.restorePreservingStoredSnapshot(
             from: navigationRestorationPayload,

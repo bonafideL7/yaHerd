@@ -193,9 +193,9 @@ final class HerdDirectoryController {
 
     @discardableResult
     func createOwnedHerd(named name: String) async throws -> HerdSummary {
+        guard !isCreatingHerd else { throw HerdDirectoryError.creationInProgress }
         initialRestorationPending = false
         selectionGeneration &+= 1
-        guard !isCreatingHerd else { throw HerdDirectoryError.creationInProgress }
         isCreatingHerd = true
         defer { isCreatingHerd = false }
 
@@ -236,11 +236,6 @@ final class HerdDirectoryController {
         do {
             let importState = readImportState()
             if importState.blocksHerdAccess {
-                inventoryState = importState == .accountChanged ? .accountChanged : .accountUnavailable
-                if importState == .accountChanged { initialRestorationPending = false }
-                selection.deferCurrentHerdUntilImportReady()
-                selectionGeneration &+= 1
-                herds = []
                 throw HerdRepositoryError.accountUnavailable
             }
             let inventory = try repository.fetchHerdInventory()

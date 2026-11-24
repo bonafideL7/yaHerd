@@ -76,9 +76,6 @@ final class AppCurrentHerdSelection: CurrentHerdSelectionReading {
         }
         // Metadata such as a renamed Herd does not change its selection revision.
         activeHerd = herd
-        if rememberedHerdID == herd.id {
-            remember(herd)
-        }
     }
 
     func deferCurrentHerdUntilImportReady() {

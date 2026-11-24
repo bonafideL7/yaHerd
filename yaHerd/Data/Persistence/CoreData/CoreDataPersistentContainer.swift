@@ -34,6 +34,7 @@ private final class HerdImportResults: Sendable {
         var imports: [String: Outcome] = [:]
         var setup: [String: Outcome] = [:]
         var accountChanged = false
+        var unauthenticatedStores: Set<String> = []
     }
 
     private let state = Mutex(State())
@@ -68,6 +69,11 @@ private final class HerdImportResults: Sendable {
                 }
                 state.imports[storeID] = value
             }
+            if outcome == .accountUnavailable {
+                state.unauthenticatedStores.insert(storeID)
+            } else if outcome == .complete {
+                state.unauthenticatedStores.remove(storeID)
+            }
             return true
         }
     }
@@ -79,6 +85,9 @@ private final class HerdImportResults: Sendable {
     func importState(for identifiers: [String?]) -> HerdImportState {
         state.withLock { state in
             if state.accountChanged { return .accountChanged }
+            if !state.unauthenticatedStores.isDisjoint(with: identifiers.compactMap { $0 }) {
+                return .accountUnavailable
+            }
             let outcomes: [HerdImportState] = identifiers.map { id in
                 guard let id else { return .waiting }
                 let setup = state.setup[id]?.state
