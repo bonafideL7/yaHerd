@@ -20,6 +20,10 @@ enum HerdInventoryState: Equatable {
     case available
     case incomplete
     case unavailable
+    case waitingForImport
+    case importUnavailable
+    case accountUnavailable
+    case accountChanged
 }
 
 /// Coordinates the Herd list with the authoritative, persisted app selection.
@@ -30,6 +34,7 @@ final class HerdDirectoryController {
     @ObservationIgnored private let repository: any HerdRepository
     @ObservationIgnored private let selection: AppCurrentHerdSelection
     @ObservationIgnored private let validateReadiness: (@MainActor (UUID) async throws -> Void)?
+    @ObservationIgnored private let readImportState: @MainActor () -> HerdImportState
     @ObservationIgnored private var selectionGeneration: UInt64 = 0
     @ObservationIgnored private var isCreatingHerd = false
 
@@ -39,14 +44,23 @@ final class HerdDirectoryController {
 
     var selectedHerdID: UUID? { selection.currentHerdID }
 
+    var canCreateHerd: Bool {
+        switch inventoryState {
+        case .available, .incomplete, .waitingForImport, .importUnavailable: true
+        case .loading, .unavailable, .accountUnavailable, .accountChanged: false
+        }
+    }
+
     init(
         repository: any HerdRepository,
         selection: AppCurrentHerdSelection,
-        validateReadiness: (@MainActor (UUID) async throws -> Void)? = nil
+        validateReadiness: (@MainActor (UUID) async throws -> Void)? = nil,
+        readImportState: @escaping @MainActor () -> HerdImportState = { .localOnly }
     ) {
         self.repository = repository
         self.selection = selection
         self.validateReadiness = validateReadiness
+        self.readImportState = readImportState
     }
 
     func refresh(reportErrors: Bool = true) {
@@ -88,10 +102,11 @@ final class HerdDirectoryController {
     func shouldContinueWaitingForHerd(id: UUID) -> Bool {
         refresh(reportErrors: false)
         switch inventoryState {
-        case .loading, .unavailable, .incomplete:
-            // An incomplete root may already have this UUID but cannot yet
-            // appear in the selectable list. Absence is not proof of removal.
+        case .loading, .unavailable, .incomplete, .waitingForImport, .importUnavailable:
+            // A pending or failed import is not proof of removal.
             return true
+        case .accountUnavailable, .accountChanged:
+            return false
         case .available:
             return herds.contains { $0.id == id }
         }
@@ -164,6 +179,7 @@ final class HerdDirectoryController {
         // A failed first inventory read is not proof that the cloud or local
         // database contains no Herds. Never create a new root in that state.
         _ = try readAccessibleHerds()
+        guard canCreateHerd else { throw HerdRepositoryError.incompleteOwnedHerdImport }
         let originatingSelection = selection.currentHerdID
         let originatingSelectionRevision = selection.selectionRevision
         let originatingGeneration = selectionGeneration
@@ -194,10 +210,30 @@ final class HerdDirectoryController {
 
     private func readAccessibleHerds() throws -> [AccessibleHerd] {
         do {
+            let importState = readImportState()
+            if importState.blocksHerdAccess {
+                inventoryState = importState == .accountChanged ? .accountChanged : .accountUnavailable
+                selection.deferCurrentHerdUntilImportReady()
+                selectionGeneration &+= 1
+                herds = []
+                throw HerdRepositoryError.accountUnavailable
+            }
             let inventory = try repository.fetchHerdInventory()
-            inventoryState = inventory.hasIncompleteRoots ? .incomplete : .available
+            if inventory.hasIncompleteRoots {
+                inventoryState = importState == .localOnly ? .unavailable : .incomplete
+            } else {
+                switch importState {
+                case .localOnly, .complete: inventoryState = .available
+                case .waiting: inventoryState = .waitingForImport
+                case .failed: inventoryState = .importUnavailable
+                case .accountUnavailable, .accountChanged: break
+                }
+            }
             return inventory.herds
         } catch {
+            if (error as? HerdRepositoryError) == .accountUnavailable {
+                throw error
+            }
             inventoryState = .unavailable
             // Every inventory caller must fail closed when the currently
             // selected root no longer identifies exactly one owning store.

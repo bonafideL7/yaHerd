@@ -8,11 +8,96 @@ enum CoreDataStoreAccessMode: Equatable, Sendable {
     case readOnly
 }
 
+/// Local SQLite contents alone cannot establish whether iCloud has finished importing.
+enum HerdImportState: Equatable, Sendable {
+    case localOnly
+    case waiting
+    case complete
+    case failed
+    case accountUnavailable
+    case accountChanged
+
+    var blocksHerdAccess: Bool {
+        self == .accountUnavailable || self == .accountChanged
+    }
+}
+
+/// Tracks store-qualified setup/import outcomes for this container lifetime.
+/// An export is never evidence of completed import.
+private final class HerdImportResults: Sendable {
+    private struct Outcome {
+        let startDate: Date
+        let state: HerdImportState
+    }
+
+    private struct State {
+        var imports: [String: Outcome] = [:]
+        var setup: [String: Outcome] = [:]
+        var accountChanged = false
+    }
+
+    private let state = Mutex(State())
+
+    func record(_ event: NSPersistentCloudKitContainer.Event) -> Bool {
+        guard event.type == .setup || event.type == .import else { return false }
+        let outcome: HerdImportState
+        if event.endDate == nil {
+            outcome = .waiting
+        } else if event.succeeded {
+            outcome = .complete
+        } else {
+            let error = event.error as NSError?
+            outcome = error?.domain == CKError.errorDomain &&
+                error?.code == CKError.Code.notAuthenticated.rawValue
+                ? .accountUnavailable : .failed
+        }
+        let value = Outcome(startDate: event.startDate, state: outcome)
+        let storeID = event.storeIdentifier
+        return state.withLock { state in
+            if event.type == .setup {
+                guard state.setup[storeID].map({ $0.startDate <= value.startDate }) ?? true else {
+                    return false
+                }
+                state.setup[storeID] = value
+                if outcome != .complete {
+                    state.imports.removeValue(forKey: storeID)
+                }
+            } else {
+                guard state.imports[storeID].map({ $0.startDate <= value.startDate }) ?? true else {
+                    return false
+                }
+                state.imports[storeID] = value
+            }
+            return true
+        }
+    }
+
+    func invalidateAccount() {
+        state.withLock { $0.accountChanged = true }
+    }
+
+    func importState(for identifiers: [String]) -> HerdImportState {
+        state.withLock { state in
+            if state.accountChanged { return .accountChanged }
+            let outcomes = identifiers.map { id in
+                let setup = state.setup[id]?.state
+                if let setup, setup != .complete { return setup }
+                return state.imports[id]?.state ?? .waiting
+            }
+            if outcomes.contains(.accountUnavailable) { return .accountUnavailable }
+            if outcomes.contains(.failed) { return .failed }
+            return !outcomes.isEmpty && outcomes.allSatisfy { $0 == .complete }
+                ? .complete : .waiting
+        }
+    }
+}
+
 final class CoreDataPersistentContainer {
     static let modelName = "yaHerdModel"
     static let storeFileName = "yaHerd.sqlite"
     static let sharedStoreFileName = "yaHerd-shared.sqlite"
     static let remoteStoreChangeNotification = Notification.Name.NSPersistentStoreRemoteChange
+    static let herdImportStateChanged = Notification.Name("yaHerd.herdImportStateChanged")
     // Must match the app's CloudKit capability when that capability is enabled.
     static let cloudKitContainerIdentifier = "iCloud.ltd.yaherd"
 
@@ -26,20 +111,34 @@ final class CoreDataPersistentContainer {
     let accessMode: CoreDataStoreAccessMode
     let storeURL: URL?
     private let cloudKitEventObserver: (any NSObjectProtocol)?
+    private let accountObserver: (any NSObjectProtocol)?
+    private let importResults: HerdImportResults?
+
+    var herdImportState: HerdImportState {
+        guard let importResults else { return .localOnly }
+        return importResults.importState(for: container.persistentStoreCoordinator.persistentStores.map(\.identifier))
+    }
 
     private init(
         container: NSPersistentContainer,
         accessMode: CoreDataStoreAccessMode,
         storeURL: URL?,
-        cloudKitEventObserver: (any NSObjectProtocol)? = nil
+        cloudKitEventObserver: (any NSObjectProtocol)? = nil,
+        accountObserver: (any NSObjectProtocol)? = nil,
+        importResults: HerdImportResults? = nil
     ) {
         self.container = container
         self.accessMode = accessMode
         self.storeURL = storeURL
         self.cloudKitEventObserver = cloudKitEventObserver
+        self.accountObserver = accountObserver
+        self.importResults = importResults
     }
 
     deinit {
+        if let accountObserver {
+            NotificationCenter.default.removeObserver(accountObserver)
+        }
         if let cloudKitEventObserver {
             NotificationCenter.default.removeObserver(cloudKitEventObserver)
         }
@@ -215,23 +314,43 @@ final class CoreDataPersistentContainer {
         )
         container.persistentStoreDescriptions = storeDescriptions
 
-        // Observe real Core Data / iCloud setup, upload and download events
-        // only in development. The unsigned simulator tests and Release builds
-        // never start the event monitor.
-        let eventObserver: (any NSObjectProtocol)?
-        #if DEBUG
-        eventObserver = cloudKitConfigured
-            ? CloudKitDevelopmentEventLog.observe(container: container)
-            : nil
-        var storesLoaded = false
-        defer {
-            if !storesLoaded, let eventObserver {
-                NotificationCenter.default.removeObserver(eventObserver)
+        // Subscribe before store loading so the first setup/import events are
+        // captured even when the initial import completes before the chooser opens.
+        let importResults = cloudKitConfigured ? HerdImportResults() : nil
+        let eventObserver = importResults.map { results in
+            NotificationCenter.default.addObserver(
+                forName: NSPersistentCloudKitContainer.eventChangedNotification,
+                object: container, queue: nil
+            ) { notification in
+                guard let event = notification.userInfo?[
+                    NSPersistentCloudKitContainer.eventNotificationUserInfoKey
+                ] as? NSPersistentCloudKitContainer.Event else { return }
+                #if DEBUG
+                CloudKitDevelopmentEventLog.record(event)
+                #endif
+                if results.record(event) {
+                    NotificationCenter.default.post(name: herdImportStateChanged, object: nil)
+                }
             }
         }
-        #else
-        eventObserver = nil
-        #endif
+        // A changed account is not the same as a transient network failure.
+        // Stop exposing this session's mirrored records until stores can be
+        // opened for the new account; full account isolation is a later stage.
+        let accountObserver = importResults.map { results in
+            NotificationCenter.default.addObserver(
+                forName: .CKAccountChanged, object: nil, queue: nil
+            ) { _ in
+                results.invalidateAccount()
+                NotificationCenter.default.post(name: herdImportStateChanged, object: nil)
+            }
+        }
+        var storesLoaded = false
+        defer {
+            if !storesLoaded {
+                if let eventObserver { NotificationCenter.default.removeObserver(eventObserver) }
+                if let accountObserver { NotificationCenter.default.removeObserver(accountObserver) }
+            }
+        }
 
         do {
             try await withCheckedThrowingContinuation {
@@ -272,8 +391,8 @@ final class CoreDataPersistentContainer {
             throw error
         }
 
-        #if DEBUG
         storesLoaded = true
+        #if DEBUG
         if cloudKitConfigured {
             ReliabilityLog.persistenceEvent(
                 "icloud-mirroring-active",
@@ -285,7 +404,9 @@ final class CoreDataPersistentContainer {
             container: container,
             accessMode: .readWrite,
             storeURL: storeDescriptions[0].url,
-            cloudKitEventObserver: eventObserver
+            cloudKitEventObserver: eventObserver,
+            accountObserver: accountObserver,
+            importResults: importResults
         )
     }
 
@@ -454,38 +575,26 @@ enum CloudKitDevelopmentEventLog {
         return succeeded ? "succeeded" : "failed"
     }
 
-    static func observe(container: NSPersistentCloudKitContainer) -> any NSObjectProtocol {
-        NotificationCenter.default.addObserver(
-            forName: NSPersistentCloudKitContainer.eventChangedNotification,
-            object: container,
-            queue: nil
-        ) { notification in
-            guard let event = notification.userInfo?[
-                NSPersistentCloudKitContainer.eventNotificationUserInfoKey
-            ] as? NSPersistentCloudKitContainer.Event else {
-                return
-            }
+    static func record(_ event: NSPersistentCloudKitContainer.Event) {
+        let action = operationName(for: event.type)
+        let state = status(endDate: event.endDate, succeeded: event.succeeded)
+        let store = event.storeIdentifier
+        let eventID = event.identifier.uuidString
 
-            let action = operationName(for: event.type)
-            let state = status(endDate: event.endDate, succeeded: event.succeeded)
-            let store = event.storeIdentifier
-            let eventID = event.identifier.uuidString
-
-            if let error = event.error, event.endDate != nil {
-                let failure = error as NSError
-                ReliabilityLog.persistence.error(
-                    "icloud_transfer action=\(action, privacy: .public) state=failed store=\(store, privacy: .public) event=\(eventID, privacy: .public) error_domain=\(failure.domain, privacy: .public) error_code=\(failure.code) error_description=\(failure.localizedDescription, privacy: .private)"
-                )
-                // Development console output is intentionally minimal so
-                // testers can identify failed transfers without OSLog filters.
-                NSLog("yaHerd iCloud %@ failed (error %@/%ld)",
-                      action, failure.domain, failure.code)
-            } else {
-                ReliabilityLog.persistence.notice(
-                    "icloud_transfer action=\(action, privacy: .public) state=\(state, privacy: .public) store=\(store, privacy: .public) event=\(eventID, privacy: .public)"
-                )
-                NSLog("yaHerd iCloud %@ %@", action, state)
-            }
+        if let error = event.error, event.endDate != nil {
+            let failure = error as NSError
+            ReliabilityLog.persistence.error(
+                "icloud_transfer action=\(action, privacy: .public) state=failed store=\(store, privacy: .public) event=\(eventID, privacy: .public) error_domain=\(failure.domain, privacy: .public) error_code=\(failure.code) error_description=\(failure.localizedDescription, privacy: .private)"
+            )
+            // Development console output is intentionally minimal so
+            // testers can identify failed transfers without OSLog filters.
+            NSLog("yaHerd iCloud %@ failed (error %@/%ld)",
+                  action, failure.domain, failure.code)
+        } else {
+            ReliabilityLog.persistence.notice(
+                "icloud_transfer action=\(action, privacy: .public) state=\(state, privacy: .public) store=\(store, privacy: .public) event=\(eventID, privacy: .public)"
+            )
+            NSLog("yaHerd iCloud %@ %@", action, state)
         }
     }
 }

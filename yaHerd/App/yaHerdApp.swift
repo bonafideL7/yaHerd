@@ -238,7 +238,8 @@ struct yaHerdApp: App {
                         ),
                         storageError: startupMessage,
                         herdSelection: persistence.currentHerdSelection,
-                        validateHerdReadiness: nil
+                        validateHerdReadiness: nil,
+                        readHerdImportState: { .localOnly }
                     )
                 )
             } catch {
@@ -290,7 +291,8 @@ struct yaHerdApp: App {
             recoveryContext: nil,
             storageError: nil,
             herdSelection: persistence.currentHerdSelection,
-            validateHerdReadiness: validateReadiness
+            validateHerdReadiness: validateReadiness,
+            readHerdImportState: { persistence.herdImportState }
         )
     }
 
@@ -363,6 +365,7 @@ private struct AppRuntime {
     let storageError: String?
     let herdSelection: AppCurrentHerdSelection
     let validateHerdReadiness: (@MainActor (UUID) async throws -> Void)?
+    let readHerdImportState: @MainActor () -> HerdImportState
 }
 
 private struct RunningAppView: View {
@@ -383,7 +386,8 @@ private struct RunningAppView: View {
         self._herdDirectory = State(initialValue: HerdDirectoryController(
             repository: runtime.dependencies.herdRepository,
             selection: runtime.herdSelection,
-            validateReadiness: runtime.validateHerdReadiness
+            validateReadiness: runtime.validateHerdReadiness,
+            readImportState: runtime.readHerdImportState
         ))
         self._tagColorLibrary = StateObject(
             wrappedValue: TagColorLibraryStore(
@@ -444,6 +448,18 @@ private struct RunningAppView: View {
             ) { _ in
                 // Remote imports and revoked shares may change membership
                 // without a scene transition or an open Herd chooser.
+                guard !runtime.dataAccessMode.isRecoveryMode else { return }
+                herdDirectory.refresh(reportErrors: false)
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: CoreDataPersistentContainer.herdImportStateChanged
+                ).receive(on: DispatchQueue.main)
+            ) { _ in
+                guard !runtime.dataAccessMode.isRecoveryMode else { return }
+                herdDirectory.refresh(reportErrors: false)
+            }
+            .task {
                 guard !runtime.dataAccessMode.isRecoveryMode else { return }
                 herdDirectory.refresh(reportErrors: false)
             }

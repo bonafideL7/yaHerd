@@ -763,11 +763,17 @@ final class CoreDataWorkingRepository:
             throw HerdRepositoryError.missingHerd
         }
 
+        let selectionRevision = selection.selectionRevision
         let gate = workingWriteGate
         await gate.acquire()
         await animalWriteBoundary.beginAnimalWrite()
 
         do {
+            try Task.checkCancellation()
+            guard selection.currentHerdID == herdID,
+                  selection.selectionRevision == selectionRevision else {
+                throw CancellationError()
+            }
             try pastureResidentWriteCoordinator.beginWorkingWrite()
         } catch {
             animalWriteBoundary.endAnimalWrite()

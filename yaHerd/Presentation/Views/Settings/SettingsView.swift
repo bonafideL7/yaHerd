@@ -383,6 +383,18 @@ struct HerdDirectoryView: View {
                         systemImage: "exclamationmark.triangle"
                     )
                     .foregroundStyle(.secondary)
+                } else if directory.inventoryState == .waitingForImport {
+                    Label("Waiting for iCloud Herd imports.", systemImage: "icloud.and.arrow.down")
+                        .foregroundStyle(.secondary)
+                } else if directory.inventoryState == .accountChanged {
+                    Label("The iCloud account changed. Reopen yaHerd to safely check Herd access.", systemImage: "exclamationmark.icloud")
+                        .foregroundStyle(.secondary)
+                } else if directory.inventoryState == .accountUnavailable {
+                    Label("iCloud account authorization is unavailable.", systemImage: "exclamationmark.icloud")
+                        .foregroundStyle(.secondary)
+                } else if directory.inventoryState == .importUnavailable {
+                    Label("iCloud import is unavailable. Previously downloaded Herds may still be accessible.", systemImage: "exclamationmark.icloud")
+                        .foregroundStyle(.secondary)
                 } else if directory.inventoryState == .incomplete {
                     Label(
                         "Some Herd records are incomplete and may still be importing. Refresh to check for newly available Herds.",
@@ -390,7 +402,7 @@ struct HerdDirectoryView: View {
                     )
                     .foregroundStyle(.secondary)
                 } else if directory.herds.isEmpty {
-                    Text("No Herds are available. If iCloud synchronization is still starting, refresh before creating a separate Herd.")
+                    Text("No Herds are currently available in the local inventory.")
                         .foregroundStyle(.secondary)
                 }
 
@@ -417,13 +429,11 @@ struct HerdDirectoryView: View {
                         showsCreatePrompt = true
                     } label: {
                         Label(
-                            directory.inventoryState == .incomplete ? "Create Separate Herd" : "Create Herd",
+                            directory.inventoryState == .available ? "Create Herd" : "Create Separate Herd",
                             systemImage: "plus"
                         )
                     }
-                    .disabled(isCreating || isOpeningHerd ||
-                              (directory.inventoryState != .available &&
-                               directory.inventoryState != .incomplete))
+                    .disabled(isCreating || isOpeningHerd || !directory.canCreateHerd)
                 } footer: {
                     Text("Creating a Herd adds a separate owned Herd. It does not join an invitation or replace incomplete imported records.")
                 }
@@ -470,9 +480,7 @@ struct HerdDirectoryView: View {
         .alert("Create Herd", isPresented: $showsCreatePrompt) {
             TextField("Herd name", text: $newHerdName)
             Button("Create") {
-                guard !isCreating, !isOpeningHerd,
-                      directory.inventoryState == .available ||
-                      directory.inventoryState == .incomplete else { return }
+                guard !isCreating, !isOpeningHerd, directory.canCreateHerd else { return }
                 validationTask?.cancel()
                 pendingHerd = nil
                 isCreating = true
@@ -487,7 +495,7 @@ struct HerdDirectoryView: View {
                         guard !Task.isCancelled, directory.selectedHerdID == created.id else {
                             return
                         }
-                        navigation.resetForHerdChange(to: created.id)
+                        // RootAppView owns selection-driven navigation reset/restoration.
                         navigation.dismissSheet()
                     } catch is CancellationError {
                         // A committed root is still available, but a dismissed
@@ -536,7 +544,7 @@ struct HerdDirectoryView: View {
             try await directory.selectHerdWhenReady(id: herd.id, expectedRoot: herd)
             guard !Task.isCancelled, openingState.isCurrent(attemptID) else { return }
             pendingHerd = nil
-            navigation.resetForHerdChange(to: herd.id)
+            // RootAppView owns selection-driven navigation reset/restoration.
             navigation.dismissSheet()
         } catch {
             // A canceled or superseded validation cannot publish old state.

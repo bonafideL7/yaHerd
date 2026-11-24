@@ -11,6 +11,10 @@ final class CoreDataContextFactory: Sendable {
         self.persistence = Mutex(persistence)
     }
 
+    var herdImportState: HerdImportState {
+        persistence.withLock { $0.herdImportState }
+    }
+
     func makeReadContext() -> NSManagedObjectContext {
         persistence.withLock { container in
             Self.makePrivateContext(
@@ -24,6 +28,9 @@ final class CoreDataContextFactory: Sendable {
         try persistence.withLock { container in
             guard container.accessMode == .readWrite else {
                 throw CoreDataPersistenceError.readOnlyStore
+            }
+            guard !container.herdImportState.blocksHerdAccess else {
+                throw HerdRepositoryError.accountUnavailable
             }
             return Self.makePrivateContext(
                 name: "CoreDataWriteContext",
