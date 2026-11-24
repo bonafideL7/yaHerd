@@ -4,18 +4,20 @@ import XCTest
 @MainActor
 final class ApplicationSettingsTests: XCTestCase {
     func testDefaultsAreTypedAndValidated() {
+        let herdID = UUID()
         let settings = ApplicationSettings(store: InMemoryApplicationSettingsStore())
 
         XCTAssertFalse(settings.isDashboardEnabled)
         XCTAssertFalse(settings.hardDeleteAnimals)
         XCTAssertEqual(settings.targetAcresPerHeadDefault, 3.0)
         XCTAssertEqual(settings.usableAcreagePercentDefault, 100)
-        XCTAssertEqual(settings.recentPastureIDs, [])
-        XCTAssertEqual(settings.homeDismissedSetupSuggestionIDs, [])
+        XCTAssertEqual(settings.recentPastureIDs(for: herdID), [])
+        XCTAssertEqual(settings.dismissedHomeSetupSuggestionIDs(for: herdID), [])
         XCTAssertTrue(settings.isHomeSetupSuggestionsExpanded)
     }
 
     func testLegacyKeysMigrateToCanonicalKeys() {
+        let herdID = UUID()
         let pastureID = UUID()
         let store = InMemoryApplicationSettingsStore(values: [
             "isDashboardEnabled": true,
@@ -33,8 +35,11 @@ final class ApplicationSettingsTests: XCTestCase {
         XCTAssertTrue(settings.isDashboardEnabled)
         XCTAssertEqual(settings.targetAcresPerHeadDefault, 4.5)
         XCTAssertEqual(settings.usableAcreagePercentDefault, 85)
-        XCTAssertEqual(settings.recentPastureIDs, [pastureID])
-        XCTAssertEqual(settings.homeDismissedSetupSuggestionIDs, ["addFirstPasture"])
+        // Unscoped legacy record preferences cannot identify their owning Herd.
+        XCTAssertEqual(settings.recentPastureIDs(for: herdID), [])
+        XCTAssertEqual(settings.dismissedHomeSetupSuggestionIDs(for: herdID), [])
+        XCTAssertEqual(storedValues[ApplicationSettingKey.recentPastureIDs.rawValue] as? [String: [String]], [:])
+        XCTAssertEqual(storedValues[ApplicationSettingKey.homeDismissedSetupSuggestionIDs.rawValue] as? [String: [String]], [:])
         XCTAssertFalse(settings.isHomeSetupSuggestionsExpanded)
         XCTAssertEqual(settings.legacyRecentPastureNames, ["North", "South"])
 
@@ -47,6 +52,7 @@ final class ApplicationSettingsTests: XCTestCase {
     }
 
     func testInvalidValuesAreClampedAndNormalizedBeforePersistence() {
+        let herdID = UUID()
         let firstID = UUID()
         let secondID = UUID()
         let thirdID = UUID()
@@ -57,13 +63,17 @@ final class ApplicationSettingsTests: XCTestCase {
 
         settings.targetAcresPerHeadDefault = -10
         settings.usableAcreagePercentDefault = 250
-        settings.recentPastureIDs = [firstID, firstID, secondID, thirdID, fourthID, fifthID]
-        settings.homeDismissedSetupSuggestionIDs = [" addFirstPasture ", ""]
+        settings.setRecentPastureIDs([firstID, firstID, secondID, thirdID, fourthID, fifthID], for: herdID)
+        settings.setDismissedHomeSetupSuggestionIDs([" addFirstPasture ", ""], for: herdID)
 
         XCTAssertEqual(settings.targetAcresPerHeadDefault, 0.25)
         XCTAssertEqual(settings.usableAcreagePercentDefault, 100)
-        XCTAssertEqual(settings.recentPastureIDs, [firstID, secondID, thirdID, fourthID])
-        XCTAssertEqual(settings.homeDismissedSetupSuggestionIDs, ["addFirstPasture"])
+        XCTAssertEqual(settings.recentPastureIDs(for: herdID), [firstID, secondID, thirdID, fourthID])
+        XCTAssertEqual(settings.dismissedHomeSetupSuggestionIDs(for: herdID), ["addFirstPasture"])
+
+        let otherHerdID = UUID()
+        XCTAssertEqual(settings.recentPastureIDs(for: otherHerdID), [])
+        XCTAssertEqual(settings.dismissedHomeSetupSuggestionIDs(for: otherHerdID), [])
 
         let storedValues = store.snapshot()
         XCTAssertEqual(
@@ -75,8 +85,12 @@ final class ApplicationSettingsTests: XCTestCase {
             100
         )
         XCTAssertEqual(
-            storedValues[ApplicationSettingKey.recentPastureIDs.rawValue] as? [String],
-            [firstID, secondID, thirdID, fourthID].map(\.uuidString)
+            storedValues[ApplicationSettingKey.recentPastureIDs.rawValue] as? [String: [String]],
+            [herdID.uuidString: [firstID, secondID, thirdID, fourthID].map(\.uuidString)]
+        )
+        XCTAssertEqual(
+            storedValues[ApplicationSettingKey.homeDismissedSetupSuggestionIDs.rawValue] as? [String: [String]],
+            [herdID.uuidString: ["addFirstPasture"]]
         )
     }
 
@@ -94,13 +108,14 @@ final class ApplicationSettingsTests: XCTestCase {
     }
 
     func testResetToDefaultsRestoresLocalPreferences() {
+        let herdID = UUID()
         let settings = ApplicationSettings(store: InMemoryApplicationSettingsStore())
         settings.isDashboardEnabled = true
         settings.hardDeleteAnimals = false
         settings.targetAcresPerHeadDefault = 8.0
         settings.usableAcreagePercentDefault = 60
-        settings.recentPastureIDs = [UUID()]
-        settings.homeDismissedSetupSuggestionIDs = ["addFirstPasture"]
+        settings.setRecentPastureIDs([UUID()], for: herdID)
+        settings.setDismissedHomeSetupSuggestionIDs(["addFirstPasture"], for: herdID)
         settings.isHomeSetupSuggestionsExpanded = false
 
         settings.resetToDefaults()
@@ -109,8 +124,8 @@ final class ApplicationSettingsTests: XCTestCase {
         XCTAssertFalse(settings.hardDeleteAnimals)
         XCTAssertEqual(settings.targetAcresPerHeadDefault, 3.0)
         XCTAssertEqual(settings.usableAcreagePercentDefault, 100)
-        XCTAssertEqual(settings.recentPastureIDs, [])
-        XCTAssertEqual(settings.homeDismissedSetupSuggestionIDs, [])
+        XCTAssertEqual(settings.recentPastureIDs(for: herdID), [])
+        XCTAssertEqual(settings.dismissedHomeSetupSuggestionIDs(for: herdID), [])
         XCTAssertTrue(settings.isHomeSetupSuggestionsExpanded)
     }
 }
