@@ -31,6 +31,10 @@ final class CoreDataContextFactory: Sendable {
         }
     }
 
+    func sharingMetadata(for objectIDs: [NSManagedObjectID]) -> [NSManagedObjectID: HerdSharingMetadata] {
+        persistence.withLock { $0.sharingMetadata(for: objectIDs) }
+    }
+
     var cloudStoreActivity: [String: CloudStoreActivity] {
         persistence.withLock { $0.cloudStoreActivity }
     }

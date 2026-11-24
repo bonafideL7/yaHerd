@@ -363,6 +363,11 @@ struct HerdDirectoryView: View {
                                 Text(herd.category == .owned ? "Owned" : "Shared")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                if let sharing = sharingDescription(for: herd.sharingMetadata) {
+                                    Text(sharing)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                             Spacer()
                             if directory.selectedHerdID == herd.id {
@@ -523,6 +528,35 @@ struct HerdDirectoryView: View {
             Button("OK", role: .cancel) { directory.dismissError() }
         } message: {
             Text(directory.errorMessage ?? "The Herd cannot be opened.")
+        }
+    }
+
+    private func sharingDescription(for metadata: HerdSharingMetadata) -> String? {
+        switch metadata {
+        case .notConfigured:
+            return nil
+        case .noCachedShare:
+            return "No locally known share"
+        case .unavailable:
+            return "Sharing information unavailable"
+        case let .shared(access, accepted, pending):
+            switch access {
+            case .owner:
+                if let accepted, let pending {
+                    return "Share owner · \(accepted) accepted · \(pending) pending (local)"
+                }
+                return "Share owner (local)"
+            case .readOnly:
+                return "Read-only access (last known)"
+            case .readWrite:
+                return "Read/write access (last known)"
+            case .pending:
+                return "Invitation pending (last known)"
+            case .removed:
+                return "Access removed (last known)"
+            case .unknown:
+                return "Share access unknown"
+            }
         }
     }
 

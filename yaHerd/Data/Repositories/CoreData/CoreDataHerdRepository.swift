@@ -53,6 +53,10 @@ final class CoreDataHerdRepository: HerdRepository {
             ]
             let roots = try context.fetch(request)
             let stores = context.persistentStoreCoordinator?.persistentStores ?? []
+            // Match metadata by permanent store-qualified object identity, not
+            // application UUID. A share-only notification can change this
+            // snapshot without changing a Herd row or its history token.
+            let sharing = self.contextFactory.sharingMetadata(for: roots.map(\.objectID))
             let ids = roots.compactMap(\.id)
             let ambiguousIDs = Set(Dictionary(grouping: ids, by: { $0 })
                 .filter { $0.value.count > 1 }.keys)
@@ -92,10 +96,20 @@ final class CoreDataHerdRepository: HerdRepository {
                 }
 
                 do {
+                    var metadata = sharing[root.objectID] ?? .unavailable
+                    if category == .shared {
+                        // A cached shared root without its share is not proof
+                        // of removal; preserve offline and incomplete imports.
+                        if metadata == .noCachedShare { metadata = .unavailable }
+                        // Explicit removal from imported metadata is evidence
+                        // of lost access even before the root is purged.
+                        if metadata.access == .removed { continue }
+                    }
                     available.append(AccessibleHerd(
                         summary: try root.toSummary(),
                         category: category,
-                        rootIdentity: root.objectID.uriRepresentation()
+                        rootIdentity: root.objectID.uriRepresentation(),
+                        sharingMetadata: metadata
                     ))
                 } catch let error as CoreDataHerdMappingError {
                     switch error {
