@@ -76,6 +76,7 @@ enum CoreDataHistoryError: Error {
     case invalidResult
     case missingTransactionFetchRequest
     case checkpointDidNotAdvance
+    case publicationRejected
 }
 
 /// The checkpoint is tied to the persistent store UUID as well as its file.
@@ -90,6 +91,7 @@ private struct HistoryPage: Sendable {
     let checkpoint: HistoryCheckpoint?
     let changes: PersistentHistoryChanges?
     let hasMore: Bool
+    let rebuiltCursor: Bool
 }
 
 /// One consumer owns the cursor for each store, even when several scenes are
@@ -151,7 +153,7 @@ actor CoreDataPersistentHistoryConsumer {
             do {
                 let hasMore = try await consume(store, publish: publish)
                 if hasMore { wakeups.requestProcessing() }
-            } catch is CancellationError {
+            } catch is CancellationError where Task.isCancelled {
                 return true
             } catch {
                 success = false
@@ -173,6 +175,7 @@ actor CoreDataPersistentHistoryConsumer {
         let loaded = try loadCheckpoint(for: store)
         var checkpoint = loaded.checkpoint
         var needsFullRefresh = loaded.needsFullRefresh
+        var rebuiltCursor = false
 
         for _ in 0..<Self.pagesPerStore {
             try Task.checkCancellation()
@@ -186,18 +189,32 @@ actor CoreDataPersistentHistoryConsumer {
             try contextFactory.validateHerdAccess()
             guard let next = page.checkpoint else { return false }
 
-            // A nil/invalid/expired cursor can legitimately restart at an
-            // earlier transaction. Otherwise forward progress is mandatory.
-            if !needsFullRefresh, page.changes?.requiresFullRefresh != true,
-               let previous = checkpoint?.transactionNumber,
-               let current = next.transactionNumber, current <= previous {
+            // Cursor recovery and broad feature invalidation are separate.
+            // A Herd-root change must never excuse a non-advancing cursor.
+            if page.rebuiltCursor {
+                guard !rebuiltCursor else {
+                    throw CoreDataHistoryError.checkpointDidNotAdvance
+                }
+                rebuiltCursor = true
+            } else if let previous = checkpoint?.transactionNumber,
+                      let current = next.transactionNumber, current <= previous {
                 throw CoreDataHistoryError.checkpointDidNotAdvance
             }
+            guard try contextFactory.historyStores().contains(store) else {
+                throw CoreDataHistoryError.storeChanged
+            }
             if let changes = page.changes, !(await publish(changes)) {
-                // No acknowledgement, no cursor advancement.
-                throw CancellationError()
+                // Rejection is not task cancellation. Leave this page pending
+                // on disk and let the independent store progress.
+                throw CoreDataHistoryError.publicationRejected
             }
 
+            // Access can change during the MainActor acknowledgement.
+            try Task.checkCancellation()
+            try contextFactory.validateHerdAccess()
+            guard try contextFactory.historyStores().contains(store) else {
+                throw CoreDataHistoryError.storeChanged
+            }
             // Only a successfully processed page is eligible for a checkpoint.
             // Persist even a page of entirely local transactions.
             pendingCheckpoints[store] = next
@@ -239,6 +256,7 @@ actor CoreDataPersistentHistoryConsumer {
     }
 
     private func persist(_ checkpoint: HistoryCheckpoint, for store: CoreDataHistoryStore) throws {
+        try contextFactory.validateHerdAccess()
         // A removed or replaced store cannot receive the previous store's token.
         guard try contextFactory.historyStores().contains(store) else {
             pendingCheckpoints.removeValue(forKey: store)
@@ -264,6 +282,7 @@ actor CoreDataPersistentHistoryConsumer {
                 throw CoreDataHistoryError.storeChanged
             }
 
+            var rebuildingCursor = needsFullRefresh
             var fullRefresh = needsFullRefresh
             var token: NSPersistentHistoryToken?
             if let encoded = checkpoint?.token {
@@ -271,14 +290,14 @@ actor CoreDataPersistentHistoryConsumer {
                     token = try NSKeyedUnarchiver.unarchivedObject(
                         ofClass: NSPersistentHistoryToken.self, from: encoded
                     )
-                    if token == nil { fullRefresh = true }
+                    if token == nil { rebuildingCursor = true }
                 } catch {
-                    fullRefresh = true
+                    rebuildingCursor = true
                     Self.logFailure(error, storeID: store.identifier)
                 }
             }
 
-            let transactions: [NSPersistentHistoryTransaction]
+            var transactions: [NSPersistentHistoryTransaction]
             do {
                 transactions = try Self.fetch(after: token, store: persistentStore, context: context)
             } catch let error as NSError
@@ -286,13 +305,22 @@ actor CoreDataPersistentHistoryConsumer {
                     error.code == NSPersistentHistoryTokenExpiredError {
                 // Lost history cannot be reconstructed from a date. Publish a
                 // broad refresh and establish a fresh cursor from retained history.
-                fullRefresh = true
+                rebuildingCursor = true
                 transactions = try Self.fetch(after: nil, store: persistentStore, context: context)
             }
 
+            // A validly archived token paired with inconsistent cursor metadata
+            // must not silently skip work or repeatedly publish the same page.
+            if !rebuildingCursor, let previous = checkpoint?.transactionNumber,
+               let first = transactions.first, first.transactionNumber <= previous {
+                rebuildingCursor = true
+                transactions = try Self.fetch(after: nil, store: persistentStore, context: context)
+            }
+            fullRefresh = fullRefresh || rebuildingCursor
+
             guard let last = transactions.last else {
                 guard fullRefresh else {
-                    return HistoryPage(checkpoint: nil, changes: nil, hasMore: false)
+                    return HistoryPage(checkpoint: nil, changes: nil, hasMore: false, rebuiltCursor: false)
                 }
                 return HistoryPage(
                     checkpoint: HistoryCheckpoint(
@@ -301,7 +329,8 @@ actor CoreDataPersistentHistoryConsumer {
                     changes: PersistentHistoryChanges(
                         storeID: store.identifier, entityNames: [], requiresFullRefresh: true
                     ),
-                    hasMore: false
+                    hasMore: false,
+                    rebuiltCursor: rebuildingCursor
                 )
             }
 
@@ -342,7 +371,8 @@ actor CoreDataPersistentHistoryConsumer {
                     transactionNumber: last.transactionNumber
                 ),
                 changes: changes,
-                hasMore: transactions.count >= Self.pageSize
+                hasMore: transactions.count >= Self.pageSize,
+                rebuiltCursor: rebuildingCursor
             )
         }
     }

@@ -69,7 +69,8 @@ final class HerdDirectoryController {
         self.initialRestorationPending = selection.currentHerdID == nil && selection.hasRememberedHerd
     }
 
-    func refresh(reportErrors: Bool = true) {
+    @discardableResult
+    func refresh(reportErrors: Bool = true) -> Bool {
         do {
             let accessible = try readAccessibleHerds()
             let previouslySelectedHerdID = selection.currentHerdID
@@ -82,6 +83,7 @@ final class HerdDirectoryController {
             if reportErrors {
                 errorMessage = nil
             }
+            return true
         } catch {
             // Background import refresh must not repeatedly present error
             // dialogs; manual refresh still reports actionable failures.
@@ -89,6 +91,7 @@ final class HerdDirectoryController {
             if reportErrors {
                 errorMessage = error.localizedDescription
             }
+            return false
         }
     }
 

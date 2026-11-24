@@ -17,12 +17,12 @@ final class AppRemoteHistoryCoordinator {
         let consumer = CoreDataPersistentHistoryConsumer(contextFactory: contextFactory)
         task = Task { @MainActor in
             await consumer.run(wakeups: wakeups, refreshInventory: {
-                herdDirectory.refresh(reportErrors: false)
+                _ = herdDirectory.refresh(reportErrors: false)
             }) { changes in
                 guard !contextFactory.herdImportState.blocksHerdAccess else { return false }
                 // Resolve access first; feature reloads must see the new selection.
-                herdDirectory.refresh(reportErrors: false)
-                guard !contextFactory.herdImportState.blocksHerdAccess else { return false }
+                guard herdDirectory.refresh(reportErrors: false),
+                      !contextFactory.herdImportState.blocksHerdAccess else { return false }
                 mutationCenter.recordRemoteChanges(
                     storeID: changes.storeID,
                     reasons: changes.reasons,
