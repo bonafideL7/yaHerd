@@ -87,8 +87,8 @@ final class CloudKitStage4Tests: XCTestCase {
         wakeups.requestProcessing()
         wakeups.finish()
         var iterator = wakeups.stream.makeAsyncIterator()
-        let first = await iterator.next()
-        let second = await iterator.next()
+        let first: Void? = await iterator.next()
+        let second: Void? = await iterator.next()
         XCTAssertNotNil(first)
         XCTAssertNil(second)
     }
