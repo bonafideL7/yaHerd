@@ -148,6 +148,20 @@ final class CoreDataHerdRepository: HerdRepository {
                         throw CoreDataPersistenceError.unscopedMultiStoreWrite
                     }
 
+                    // Do not mistake a partially imported owned root for an
+                    // empty private database. Shared roots do not block creation.
+                    let existingRequest = NSFetchRequest<CDHerd>(
+                        entityName: CDHerd.coreDataEntityName
+                    )
+                    existingRequest.affectedStores = [destination]
+                    for existing in try context.fetch(existingRequest) {
+                        do {
+                            _ = try existing.toSummary()
+                        } catch is CoreDataHerdMappingError {
+                            throw HerdRepositoryError.incompleteOwnedHerdImport
+                        }
+                    }
+
                     let id = UUID()
                     guard try CoreDataLookup().herd(id: id, in: context) == nil else {
                         throw CoreDataPersistenceError.duplicateApplicationID(
