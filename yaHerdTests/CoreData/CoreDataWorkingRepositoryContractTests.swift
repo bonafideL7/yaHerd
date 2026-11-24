@@ -341,7 +341,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         let readModel = CoreDataReadModelActor(
             contextFactory: environment.assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         do {
             _ = try await readModel.fetchDashboardRecords()
@@ -441,7 +441,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         let readModel = CoreDataReadModelActor(
             contextFactory: environment.assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         do {
             _ = try await readModel.fetchDashboardRecords()
@@ -519,7 +519,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         let readModel = CoreDataReadModelActor(
             contextFactory: environment.assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         do {
             _ = try await readModel.fetchHomeTreatmentTemplates(limit: 5)
@@ -1621,7 +1621,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         let readModel = CoreDataReadModelActor(
             contextFactory: environment.assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         do {
             _ = try await readModel.fetchDashboardRecords()
@@ -2006,7 +2006,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             CoreDataReadModelActor(
                 contextFactory: assembly.contextFactory,
                 lookup: assembly.lookup,
-                currentHerdID: { selection.currentHerdID }
+                currentSelection: { selection.snapshot }
             )
         }
 
@@ -2213,7 +2213,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             CoreDataReadModelActor(
                 contextFactory: assembly.contextFactory,
                 lookup: assembly.lookup,
-                currentHerdID: { selection.currentHerdID }
+                currentSelection: { selection.snapshot }
             )
         }
 
@@ -2425,12 +2425,12 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         let primaryDashboard = CoreDataReadModelActor(
             contextFactory: assembly.contextFactory,
             lookup: assembly.lookup,
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         let foreignDashboard = CoreDataReadModelActor(
             contextFactory: assembly.contextFactory,
             lookup: assembly.lookup,
-            currentHerdID: { foreignSelection.currentHerdID }
+            currentSelection: { foreignSelection.snapshot }
         )
         let healthyDashboard = try await primaryDashboard.fetchDashboardRecords()
         XCTAssertEqual(
@@ -2540,7 +2540,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         let readOnlyPrimaryDashboard = CoreDataReadModelActor(
             contextFactory: readOnlyAssembly.contextFactory,
             lookup: readOnlyAssembly.lookup,
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         await XCTAssertThrowsErrorAsync(
             try await readOnlyPrimaryDashboard.fetchDashboardRecords()
@@ -2564,7 +2564,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         let readOnlyForeignDashboard = CoreDataReadModelActor(
             contextFactory: readOnlyAssembly.contextFactory,
             lookup: readOnlyAssembly.lookup,
-            currentHerdID: { foreignSelection.currentHerdID }
+            currentSelection: { foreignSelection.snapshot }
         )
         let reopenedForeignDashboard = try await readOnlyForeignDashboard.fetchDashboardRecords()
         XCTAssertEqual(reopenedForeignDashboard.workingSessions.map(\.id), [foreignSessionID])
@@ -2632,7 +2632,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         let finishedReadOnlyDashboard = CoreDataReadModelActor(
             contextFactory: finishedReadOnlyAssembly.contextFactory,
             lookup: finishedReadOnlyAssembly.lookup,
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         await XCTAssertThrowsErrorAsync(
             try await finishedReadOnlyDashboard.fetchDashboardRecords()
