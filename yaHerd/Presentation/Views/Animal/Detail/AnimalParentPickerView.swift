@@ -132,6 +132,9 @@ struct AnimalParentPickerView: View {
                 originatingSelectionRevision: revision
             )
         }
+        .onChange(of: animalDependencies.mutationStream.animalRevision) { _, _ in
+            refreshOptions()
+        }
         .onChange(of: herdSelection.selectionRevision) { _, revision in
             if let openedSelectionRevision, revision != openedSelectionRevision {
                 dismiss()

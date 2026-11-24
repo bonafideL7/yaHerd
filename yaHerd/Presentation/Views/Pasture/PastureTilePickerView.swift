@@ -54,6 +54,10 @@ struct PastureTilePickerView: View {
             .task(id: herdSelection.selectionRevision) {
                 loadPastures()
             }
+            .onChange(of: pastureDependencies.mutationStream.pastureRevision) { _, _ in
+                guard isShowingCurrentHerdPastures else { return }
+                loadPastures()
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     ToolbarCancelButton { dismiss() }
