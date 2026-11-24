@@ -1,3 +1,4 @@
+@preconcurrency import CoreData
 import Foundation
 import XCTest
 @testable import yaHerd
@@ -206,6 +207,109 @@ final class CloudKitStage4Tests: XCTestCase {
         )
         XCTAssertEqual(missingDestination.selectedIDs, [animal])
         XCTAssertTrue(missingDestination.destinations.isEmpty)
+    }
+
+    func testSQLiteHistorySuppressesLocalWritesAndResumesIndependentStoreCheckpoints() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let factory = assembly.contextFactory
+        let stores = try factory.historyStores()
+        XCTAssertEqual(stores.count, 2)
+        let owned = try XCTUnwrap(stores.first { $0.url == harness.storeURL })
+        let shared = try XCTUnwrap(stores.first { $0.identifier != owned.identifier })
+
+        let initial = await processHistory(factory)
+        XCTAssertEqual(Set(initial.changes.map(\.storeID)), Set(stores.map(\.identifier)))
+        XCTAssertTrue(initial.changes.allSatisfy(\.requiresFullRefresh))
+        let ownedCheckpoint = try Data(contentsOf: owned.checkpointURL)
+        let sharedCheckpoint = try Data(contentsOf: shared.checkpointURL)
+
+        try insertHerd(in: owned, using: factory, author: nil)
+        let local = await processHistory(factory)
+        XCTAssertTrue(local.changes.isEmpty)
+        XCTAssertNotEqual(try Data(contentsOf: owned.checkpointURL), ownedCheckpoint)
+        XCTAssertEqual(try Data(contentsOf: shared.checkpointURL), sharedCheckpoint)
+
+        try insertHerd(in: shared, using: factory, author: "external-import")
+        let remote = await processHistory(factory)
+        XCTAssertEqual(remote.changes.map(\.storeID), [shared.identifier])
+        XCTAssertEqual(remote.changes.first?.reasons, [.herd])
+        let replay = await processHistory(factory)
+        XCTAssertTrue(replay.changes.isEmpty, "A new consumer must resume the durable cursor.")
+    }
+
+    func testSQLiteHistoryDoesNotAdvanceUnacknowledgedPageAndRebuildsCorruptCursor() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let factory = assembly.contextFactory
+        let stores = try factory.historyStores()
+        let owned = try XCTUnwrap(stores.first { $0.url == harness.storeURL })
+        let shared = try XCTUnwrap(stores.first { $0.identifier != owned.identifier })
+        _ = await processHistory(factory)
+        let ownedCheckpoint = try Data(contentsOf: owned.checkpointURL)
+        let sharedCheckpoint = try Data(contentsOf: shared.checkpointURL)
+
+        try insertHerd(in: owned, using: factory, author: "older-process")
+        let rejected = await processHistory(factory, acknowledge: false)
+        XCTAssertEqual(rejected.changes.map(\.storeID), [owned.identifier])
+        XCTAssertEqual(try Data(contentsOf: owned.checkpointURL), ownedCheckpoint)
+
+        let recovered = await processHistory(factory)
+        XCTAssertEqual(recovered.changes.map(\.storeID), [owned.identifier])
+        XCTAssertNotEqual(try Data(contentsOf: owned.checkpointURL), ownedCheckpoint)
+
+        try Data("not a checkpoint".utf8).write(to: owned.checkpointURL)
+        let rebuilt = await processHistory(factory)
+        XCTAssertEqual(rebuilt.changes.map(\.storeID), [owned.identifier])
+        XCTAssertEqual(rebuilt.changes.first?.requiresFullRefresh, true)
+        XCTAssertEqual(try Data(contentsOf: shared.checkpointURL), sharedCheckpoint)
+        let replay = await processHistory(factory)
+        XCTAssertTrue(replay.changes.isEmpty)
+    }
+
+    @MainActor
+    private final class HistoryRecorder {
+        var changes: [PersistentHistoryChanges] = []
+    }
+
+    private func processHistory(
+        _ factory: CoreDataContextFactory, acknowledge: Bool = true
+    ) async -> HistoryRecorder {
+        let recorder = HistoryRecorder()
+        let wakeups = CoreDataHistoryWakeups()
+        wakeups.requestProcessing()
+        wakeups.finish()
+        await CoreDataPersistentHistoryConsumer(contextFactory: factory).run(
+            wakeups: wakeups, refreshInventory: {},
+            publish: { changes in
+                recorder.changes.append(changes)
+                return acknowledge
+            }
+        )
+        return recorder
+    }
+
+    private func insertHerd(
+        in store: CoreDataHistoryStore, using factory: CoreDataContextFactory, author: String?
+    ) throws {
+        let context = try factory.makeWriteContext()
+        try context.performAndWait {
+            if let author { context.transactionAuthor = author }
+            let target = try XCTUnwrap(context.persistentStoreCoordinator?.persistentStores.first {
+                $0.identifier == store.identifier
+            })
+            let herd = CDHerd(context: context)
+            herd.id = UUID()
+            herd.name = "History fixture"
+            herd.createdAt = Date(timeIntervalSince1970: 100)
+            herd.updatedAt = Date(timeIntervalSince1970: 100)
+            context.assign(herd, to: target)
+            try context.save()
+        }
     }
 
     private func item(_ id: UUID, _ destination: UUID?) -> WorkingQueueItemSnapshot {

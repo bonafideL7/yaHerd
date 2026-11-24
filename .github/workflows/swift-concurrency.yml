@@ -142,3 +142,24 @@ jobs:
             ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+      - name: Run CloudKit Stage 4 regression tests
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_concurrency }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SIMULATOR_ID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; ids=[x["udid"] for runtime,items in d.items() if "SimRuntime.iOS-26" in runtime for x in items if x.get("isAvailable") and x["name"].startswith("iPhone")]; print(ids[0] if ids else "")')"
+          if [[ -z "$SIMULATOR_ID" ]]; then
+            echo 'An available iOS 26 iPhone simulator is required for Stage 4 tests.' >&2
+            exit 1
+          fi
+          xcodebuild \\
+            -project yaHerd.xcodeproj \\
+            -scheme yaHerd \\
+            -configuration Debug \\
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \\
+            -derivedDataPath "$GITHUB_WORKSPACE/.build/ConcurrencyDerivedData" \\
+            -parallel-testing-enabled NO \\
+            -only-testing:yaHerdTests/CloudKitStage4Tests \\
+            CODE_SIGNING_ALLOWED=NO \\
+            test
