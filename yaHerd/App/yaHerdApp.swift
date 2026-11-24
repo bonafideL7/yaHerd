@@ -177,7 +177,8 @@ struct yaHerdApp: App {
                         herdDirectory: HerdDirectoryController(
                             repository: dependencies.herdRepository,
                             selection: persistence.currentHerdSelection
-                        )
+                        ),
+                        remoteHistory: nil
                     )
                 )
             } catch {
@@ -225,6 +226,16 @@ struct yaHerdApp: App {
         #else
         validateReadiness = nil
         #endif
+        let herdDirectory = HerdDirectoryController(
+            repository: dependencies.herdRepository,
+            selection: persistence.currentHerdSelection,
+            validateReadiness: validateReadiness,
+            readImportState: { persistence.herdImportState }
+        )
+        let remoteHistory = persistence.makeRemoteHistoryCoordinator(
+            mutationCenter: dependencies.applicationMutationCenter,
+            herdDirectory: herdDirectory
+        )
         return AppRuntime(
             persistenceLifetime: persistence,
             dependencies: dependencies,
@@ -232,12 +243,8 @@ struct yaHerdApp: App {
             recoveryContext: nil,
             storageError: nil,
             herdSelection: persistence.currentHerdSelection,
-            herdDirectory: HerdDirectoryController(
-                repository: dependencies.herdRepository,
-                selection: persistence.currentHerdSelection,
-                validateReadiness: validateReadiness,
-                readImportState: { persistence.herdImportState }
-            )
+            herdDirectory: herdDirectory,
+            remoteHistory: remoteHistory
         )
     }
 
@@ -263,6 +270,7 @@ private struct AppRuntime {
     let storageError: String?
     let herdSelection: AppCurrentHerdSelection
     let herdDirectory: HerdDirectoryController
+    let remoteHistory: AppRemoteHistoryCoordinator?
 }
 
 private struct RunningAppView: View {
@@ -338,9 +346,10 @@ private struct RunningAppView: View {
                     for: CoreDataPersistentContainer.remoteStoreChangeNotification
                 ).receive(on: DispatchQueue.main)
             ) { _ in
-                // Remote imports and revoked shares may change membership
-                // without a scene transition or an open Herd chooser.
-                guard !runtime.dataAccessMode.isRecoveryMode else { return }
+                // Mirrored data changes are processed by the single history
+                // consumer, which refreshes inventory before publication.
+                guard !runtime.dataAccessMode.isRecoveryMode,
+                      runtime.remoteHistory == nil else { return }
                 herdDirectory.refresh(reportErrors: false)
             }
             .onReceive(
@@ -359,6 +368,7 @@ private struct RunningAppView: View {
                 if newPhase == .active {
                     if !runtime.dataAccessMode.isRecoveryMode {
                         herdDirectory.refresh(reportErrors: false)
+                        runtime.remoteHistory?.requestProcessing()
                     }
                     if runtime.herdSelection.currentHerdID != nil {
                         tagColorLibrary.refresh()

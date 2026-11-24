@@ -22,17 +22,34 @@ enum HerdImportState: Equatable, Sendable {
     }
 }
 
-/// Tracks store-qualified setup/import outcomes for this container lifetime.
-/// An export is never evidence of completed import.
-private final class HerdImportResults: Sendable {
-    private struct Outcome {
+/// A value-only snapshot of each operation for one loaded persistent store.
+/// An export outcome must never be substituted for an import outcome.
+struct CloudStoreActivity: Equatable, Sendable {
+    struct Outcome: Equatable, Sendable {
         let startDate: Date
+        let endDate: Date?
         let state: HerdImportState
+
+        func follows(_ previous: Self?) -> Bool {
+            guard let previous else { return true }
+            return startDate > previous.startDate ||
+                (startDate == previous.startDate && previous.endDate == nil && endDate != nil)
+        }
     }
+
+    var setup: Outcome?
+    var importing: Outcome?
+    var exporting: Outcome?
+}
+
+/// Tracks store-qualified setup/import/export outcomes for this container lifetime.
+private final class HerdImportResults: Sendable {
+    private typealias Outcome = CloudStoreActivity.Outcome
 
     private struct State {
         var imports: [String: Outcome] = [:]
         var setup: [String: Outcome] = [:]
+        var exports: [String: Outcome] = [:]
         var accountChanged = false
         var unauthenticatedStores: Set<String> = []
     }
@@ -40,7 +57,6 @@ private final class HerdImportResults: Sendable {
     private let state = Mutex(State())
 
     func record(_ event: NSPersistentCloudKitContainer.Event) -> Bool {
-        guard event.type == .setup || event.type == .import else { return false }
         let outcome: HerdImportState
         if event.endDate == nil {
             outcome = .waiting
@@ -52,22 +68,30 @@ private final class HerdImportResults: Sendable {
                 error?.code == CKError.Code.notAuthenticated.rawValue
                 ? .accountUnavailable : .failed
         }
-        let value = Outcome(startDate: event.startDate, state: outcome)
+        let value = Outcome(startDate: event.startDate, endDate: event.endDate, state: outcome)
         let storeID = event.storeIdentifier
         return state.withLock { state in
+            // Export activity is tracked independently and does not change
+            // the startup/selection import gate.
+            if event.type == .export {
+                if value.follows(state.exports[storeID]) {
+                    state.exports[storeID] = value
+                }
+                return false
+            }
             if event.type == .setup {
-                guard state.setup[storeID].map({ $0.startDate <= value.startDate }) ?? true else {
+                guard value.follows(state.setup[storeID]) else {
                     return false
                 }
                 state.setup[storeID] = value
                 if outcome != .complete {
                     state.imports.removeValue(forKey: storeID)
                 }
-            } else {
-                guard state.imports[storeID].map({ $0.startDate <= value.startDate }) ?? true else {
-                    return false
-                }
+            } else if event.type == .import {
+                guard value.follows(state.imports[storeID]) else { return false }
                 state.imports[storeID] = value
+            } else {
+                return false
             }
             if outcome == .accountUnavailable {
                 state.unauthenticatedStores.insert(storeID)
@@ -75,6 +99,18 @@ private final class HerdImportResults: Sendable {
                 state.unauthenticatedStores.remove(storeID)
             }
             return true
+        }
+    }
+
+    func activity(for identifiers: [String]) -> [String: CloudStoreActivity] {
+        state.withLock { state in
+            Dictionary(uniqueKeysWithValues: Set(identifiers).map { id in
+                (id, CloudStoreActivity(
+                    setup: state.setup[id],
+                    importing: state.imports[id],
+                    exporting: state.exports[id]
+                ))
+            })
         }
     }
 
@@ -123,6 +159,15 @@ final class CoreDataPersistentContainer {
     private let cloudKitEventObserver: (any NSObjectProtocol)?
     private let accountObserver: (any NSObjectProtocol)?
     private let importResults: HerdImportResults?
+    let historyWakeups: CoreDataHistoryWakeups?
+    private let historyObserver: (any NSObjectProtocol)?
+
+    var cloudStoreActivity: [String: CloudStoreActivity] {
+        let identifiers = container.persistentStoreCoordinator.persistentStores.compactMap { store -> String? in
+            store.identifier
+        }
+        return importResults?.activity(for: identifiers) ?? [:]
+    }
 
     var herdImportState: HerdImportState {
         guard let importResults else { return .localOnly }
@@ -135,7 +180,9 @@ final class CoreDataPersistentContainer {
         storeURL: URL?,
         cloudKitEventObserver: (any NSObjectProtocol)? = nil,
         accountObserver: (any NSObjectProtocol)? = nil,
-        importResults: HerdImportResults? = nil
+        importResults: HerdImportResults? = nil,
+        historyWakeups: CoreDataHistoryWakeups? = nil,
+        historyObserver: (any NSObjectProtocol)? = nil
     ) {
         self.container = container
         self.accessMode = accessMode
@@ -143,9 +190,15 @@ final class CoreDataPersistentContainer {
         self.cloudKitEventObserver = cloudKitEventObserver
         self.accountObserver = accountObserver
         self.importResults = importResults
+        self.historyWakeups = historyWakeups
+        self.historyObserver = historyObserver
     }
 
     deinit {
+        if let historyObserver {
+            NotificationCenter.default.removeObserver(historyObserver)
+        }
+        historyWakeups?.finish()
         if let accountObserver {
             NotificationCenter.default.removeObserver(accountObserver)
         }
@@ -327,6 +380,18 @@ final class CoreDataPersistentContainer {
         // Subscribe before store loading so the first setup/import events are
         // captured even when the initial import completes before the chooser opens.
         let importResults = cloudKitConfigured ? HerdImportResults() : nil
+        let historyWakeups = cloudKitConfigured ? CoreDataHistoryWakeups() : nil
+        // Notifications are scoped to this exact coordinator. They are wakeups,
+        // never checkpoint boundaries: each drain checks both store identities.
+        let historyObserver = historyWakeups.map { wakeups in
+            NotificationCenter.default.addObserver(
+                forName: remoteStoreChangeNotification,
+                object: container.persistentStoreCoordinator,
+                queue: nil
+            ) { _ in
+                wakeups.requestProcessing()
+            }
+        }
         let eventObserver = importResults.map { results in
             NotificationCenter.default.addObserver(
                 forName: NSPersistentCloudKitContainer.eventChangedNotification,
@@ -340,6 +405,11 @@ final class CoreDataPersistentContainer {
                 #endif
                 if results.record(event) {
                     NotificationCenter.default.post(name: CoreDataPersistentContainer.herdImportStateChanged, object: nil)
+                    // Even a failed import may have committed some transactions.
+                    // A setup/import completion is a second chance to catch up.
+                    if event.endDate != nil {
+                        historyWakeups?.requestProcessing()
+                    }
                 }
             }
         }
@@ -359,6 +429,8 @@ final class CoreDataPersistentContainer {
             if !storesLoaded {
                 if let eventObserver { NotificationCenter.default.removeObserver(eventObserver) }
                 if let accountObserver { NotificationCenter.default.removeObserver(accountObserver) }
+                if let historyObserver { NotificationCenter.default.removeObserver(historyObserver) }
+                historyWakeups?.finish()
             }
         }
 
@@ -416,7 +488,9 @@ final class CoreDataPersistentContainer {
             storeURL: storeDescriptions[0].url,
             cloudKitEventObserver: eventObserver,
             accountObserver: accountObserver,
-            importResults: importResults
+            importResults: importResults,
+            historyWakeups: historyWakeups,
+            historyObserver: historyObserver
         )
     }
 
@@ -594,7 +668,7 @@ enum CloudKitDevelopmentEventLog {
         if let error = event.error, event.endDate != nil {
             let failure = error as NSError
             ReliabilityLog.persistence.error(
-                "icloud_transfer action=\(action, privacy: .public) state=failed store=\(store, privacy: .public) event=\(eventID, privacy: .public) error_domain=\(failure.domain, privacy: .public) error_code=\(failure.code) error_description=\(failure.localizedDescription, privacy: .private)"
+                "icloud_transfer action=\(action, privacy: .public) state=failed store=\(store, privacy: .public) event=\(eventID, privacy: .public) error_domain=\(failure.domain, privacy: .public) error_code=\(failure.code) "
             )
             // Development console output is intentionally minimal so
             // testers can identify failed transfers without OSLog filters.

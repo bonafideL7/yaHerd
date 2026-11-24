@@ -1,11 +1,38 @@
 @preconcurrency import CoreData
 import Synchronization
+import Foundation
 
 /// Shares only the ability to create fresh private-queue contexts with read actors.
 /// The container is kept behind the same checked-Sendable Mutex pattern used by
 /// Core Data's write coordinators. No managed object or context is stored here.
 final class CoreDataContextFactory: Sendable {
     private let persistence: Mutex<CoreDataPersistentContainer>
+    // Only this running process can claim its own published local saves.
+    // Older or unknown authors are processed conservatively.
+    let localTransactionAuthor = "yaHerd.local." + UUID().uuidString
+
+    var historyWakeups: CoreDataHistoryWakeups? {
+        persistence.withLock { $0.historyWakeups }
+    }
+
+    func historyStores() throws -> [CoreDataHistoryStore] {
+        try persistence.withLock { container in
+            guard container.historyWakeups != nil else { return [] }
+            return try container.persistentStoreCoordinator.persistentStores.map { store in
+                let identifier: String? = store.identifier
+                guard store.type == NSSQLiteStoreType,
+                      let identifier, !identifier.isEmpty,
+                      let url = store.url, url.isFileURL else {
+                    throw CoreDataHistoryError.unidentifiedStore
+                }
+                return CoreDataHistoryStore(identifier: identifier, url: url)
+            }
+        }
+    }
+
+    var cloudStoreActivity: [String: CloudStoreActivity] {
+        persistence.withLock { $0.cloudStoreActivity }
+    }
 
     init(persistence: sending CoreDataPersistentContainer) {
         self.persistence = Mutex(persistence)
@@ -44,6 +71,10 @@ final class CoreDataContextFactory: Sendable {
                 name: "CoreDataWriteContext",
                 using: container
             )
+        }
+        let author = localTransactionAuthor
+        context.performAndWait {
+            context.transactionAuthor = author
         }
         Self.bind(context, to: expectedHerdRoot)
         return context
