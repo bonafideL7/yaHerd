@@ -48,6 +48,7 @@ struct WorkingSessionAnimalWorkView: View {
     @State var errorMessage: String?
     @State var showingError = false
     @State var isMutatingWork = false
+    @State private var remoteDraftChanged = false
     @State var editorHerdIdentity: WorkingQueueEditorHerdIdentity?
 
     init(sessionID: UUID, queueItemID: UUID) {
@@ -88,6 +89,7 @@ struct WorkingSessionAnimalWorkView: View {
             && dataAccessMode.allowsDataMutations
             && !isSessionLocked
             && !isMutatingWork
+            && !remoteDraftChanged
     }
 
     var isFemale: Bool {
@@ -279,6 +281,18 @@ struct WorkingSessionAnimalWorkView: View {
             case .local(.animal):
                 await revalidateSelectedSireAfterMutation()
             case .remote(_, let reasons, let fullRefresh):
+                if fullRefresh || reasons.contains(.working) || reasons.contains(.animal) ||
+                    reasons.contains(.tagColor) {
+                    let previous = snapshot
+                    viewModel.load()
+                    if let previous, previous != snapshot || viewModel.errorMessage != nil {
+                        // Retain entered work rather than reseeding over it.
+                        // Reopening is required to review the current record.
+                        remoteDraftChanged = true
+                        errorMessage = "This animal or working session changed. Your draft is retained; reopen the editor before saving."
+                        showingError = true
+                    }
+                }
                 // Mixed batches can affect both reference sets. A Working
                 // change can also alter the session's source/destination.
                 if fullRefresh || reasons.contains(.pasture) || reasons.contains(.working) {

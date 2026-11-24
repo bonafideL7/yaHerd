@@ -24,6 +24,7 @@ struct NewWorkingSessionView: View {
         workingRepository: EmptyWorkingRepository()
     )
 
+    @State private var lastCandidatePastureID: UUID?
     @State private var originatingHerdID: UUID?
     @State private var originatingHerdSelectionRevision: UInt64?
     @State private var date: Date = .now
@@ -153,7 +154,10 @@ struct NewWorkingSessionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isStarting && isPresentingOriginatingHerd)
         .interactiveDismissDisabled(isStarting && isPresentingOriginatingHerd)
-        .task(id: selectedPastureID) {
+        .task(id: WorkingSetupRefreshKey(
+            pastureID: selectedPastureID,
+            revision: workingDependencies.mutationStream.workingSessionRevision
+        )) {
             if originatingHerdSelectionRevision == nil {
                 originatingHerdID = herdSelection.currentHerdID
                 originatingHerdSelectionRevision = herdSelection.selectionRevision
@@ -164,13 +168,14 @@ struct NewWorkingSessionView: View {
                 animalReferenceQueryReader: animalReferenceQueryReader,
                 workingRepository: repository
             )
-            if !viewModel.hasLoaded {
-                viewModel.load()
-                seedSuggestedPastureIfNeeded()
-            }
+            let isInitialLoad = !viewModel.hasLoaded
+            viewModel.load()
+            if isInitialLoad { seedSuggestedPastureIfNeeded() }
             // A failed Pasture/template setup is not a valid form. Do not
             // request independent candidates or allow a partial session.
-            await loadCandidatesForSelectedPasture()
+            let preserveSelection = !isInitialLoad && lastCandidatePastureID == selectedPastureID
+            lastCandidatePastureID = selectedPastureID
+            await loadCandidatesForSelectedPasture(preserveSelection: preserveSelection)
         }
         .onChange(of: herdSelection.selectionRevision) { _, _ in
             guard originatingHerdSelectionRevision != nil,
@@ -339,7 +344,7 @@ struct NewWorkingSessionView: View {
         }
     }
 
-    private func loadCandidatesForSelectedPasture() async {
+    private func loadCandidatesForSelectedPasture(preserveSelection: Bool = false) async {
         guard isPresentingOriginatingHerd,
               viewModel.hasLoadedSetupSuccessfully else { return }
 
@@ -352,7 +357,11 @@ struct NewWorkingSessionView: View {
            viewModel.hasCurrentCandidates(
                pastureID: pastureID, selection: herdSelection
            ) {
-            resetAnimalSelection()
+            if preserveSelection {
+                selectedAnimalIDs.formIntersection(Set(eligibleAnimals.map(\.id)))
+            } else {
+                resetAnimalSelection()
+            }
         }
     }
 
@@ -437,4 +446,9 @@ struct NewWorkingSessionView: View {
             set: { if !$0 { viewModel.errorMessage = nil } }
         )
     }
+}
+
+private struct WorkingSetupRefreshKey: Equatable {
+    let pastureID: UUID?
+    let revision: UInt64
 }

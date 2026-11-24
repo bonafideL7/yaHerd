@@ -54,7 +54,7 @@ final class WorkingQueueItemEditorViewModel: ObservableObject {
                 sessionID: sessionID,
                 queueItemID: queueItemID
             )
-            errorMessage = nil
+            errorMessage = snapshot == nil ? "This animal is no longer in the working session." : nil
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }

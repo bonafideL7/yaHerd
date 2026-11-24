@@ -155,7 +155,13 @@ struct FieldCheckAnimalDetailView: View {
                     FieldCheckFindingEditorView(
                         suggestedTypes: [.pinkEye, .limping, .missingAnimal],
                         animals: model.sessionDetail?.animalChecks ?? [],
-                        finding: finding
+                        finding: finding,
+                    validateSave: {
+                        guard isSessionEditable,
+                              let current = try fieldCheckRepository.fetchSessionDetail(id: sessionID),
+                              !current.isCompleted, !current.isPastureArchived else { return false }
+                        return current.findings.contains(finding)
+                    }
                     ) { input in
                         guard isSessionEditable else { return }
                         Task { @MainActor in

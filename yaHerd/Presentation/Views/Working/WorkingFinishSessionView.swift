@@ -207,6 +207,17 @@ struct WorkingFinishSessionView: View {
                 }
                 seedExceptions()
             }
+            .onChange(of: workingDependencies.mutationStream.workingSessionRevision) { _, _ in
+                guard isViewingOriginatingHerd, !isFinishing else { return }
+                viewModel.load()
+                guard let session else { return }
+                let liveIDs = Set(session.queueItems.map(\.id))
+                exceptionAnimalIDs.formIntersection(liveIDs)
+                if requiresExplicitDestinationForEveryItem {
+                    exceptionAnimalIDs.formUnion(liveIDs)
+                }
+                revalidateExceptionDestinationsAgainstLivePastures()
+            }
             .onChange(of: viewModel.session?.id) { _, _ in
                 guard isViewingOriginatingHerd else { return }
                 seedExceptions(force: true)

@@ -419,7 +419,13 @@ struct FieldCheckSessionDetailView: View {
                 FieldCheckFindingEditorView(
                     suggestedTypes: suggestedFindingTypes,
                     animals: model.detail?.animalChecks ?? [],
-                    finding: finding
+                    finding: finding,
+                    validateSave: {
+                        guard canEditActiveCheck,
+                              let current = try repository.fetchSessionDetail(id: sessionID),
+                              !current.isCompleted, !current.isPastureArchived else { return false }
+                        return current.findings.contains(finding)
+                    }
                 ) { input in
                     guard canEditActiveCheck else { return }
                     Task { @MainActor in

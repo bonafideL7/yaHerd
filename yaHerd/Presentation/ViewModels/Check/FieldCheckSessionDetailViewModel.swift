@@ -17,6 +17,7 @@ final class FieldCheckSessionDetailViewModel {
     private(set) var detail: FieldCheckSessionDetailSnapshot?
     private(set) var quickAnimalTypeCountsDraft: [AnimalType: Int] = [:]
     private(set) var notesDraft = ""
+    private var notesBaseline = ""
     private(set) var isCompletingSession = false
     var errorMessage: String?
     var hasLoaded = false
@@ -63,6 +64,7 @@ final class FieldCheckSessionDetailViewModel {
             guard mayContinue() else { return false }
             detail = loadedDetail
             notesDraft = loadedDetail?.notes ?? ""
+            notesBaseline = notesDraft
             syncQuickCountDraftFromLoadedDetailIfIdle()
             errorMessage = nil
             markCurrentRevision(using: repository)
@@ -88,6 +90,7 @@ final class FieldCheckSessionDetailViewModel {
             let loadedDetail = try repository.fetchSessionDetail(id: sessionID)
             guard mayContinue() else { return false }
             if let loadedDetail {
+                let hadUnsavedNotes = normalizedNotes(notesDraft) != normalizedNotes(notesBaseline)
                 notesDraft = DraftRefreshPolicy.reconciledValue(
                     draft: notesDraft,
                     previouslyLoadedValue: previousDetail?.notes,
@@ -95,10 +98,18 @@ final class FieldCheckSessionDetailViewModel {
                     isSameRecord: previousDetail?.id == loadedDetail.id,
                     normalize: { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 )
+                if !hadUnsavedNotes || normalizedNotes(notesDraft) == normalizedNotes(loadedDetail.notes) {
+                    notesBaseline = loadedDetail.notes
+                }
             }
             detail = loadedDetail
             syncQuickCountDraftFromLoadedDetailIfIdle()
-            errorMessage = nil
+            if let loadedDetail, normalizedNotes(notesDraft) != normalizedNotes(loadedDetail.notes),
+               normalizedNotes(notesBaseline) != normalizedNotes(loadedDetail.notes) {
+                errorMessage = "Session notes changed on another device. Your draft is retained; review the current notes before saving."
+            } else {
+                errorMessage = nil
+            }
             return true
         } catch {
             guard mayContinue() else { return false }
@@ -115,6 +126,7 @@ final class FieldCheckSessionDetailViewModel {
         detail = nil
         quickAnimalTypeCountsDraft = [:]
         notesDraft = ""
+        notesBaseline = ""
         isCompletingSession = false
         errorMessage = nil
         hasLoaded = false
@@ -198,6 +210,10 @@ final class FieldCheckSessionDetailViewModel {
         isCompletingSession = false
     }
 
+    private func normalizedNotes(_ notes: String) -> String {
+        notes.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func persistNotesOperation(
         sessionID: UUID,
         using repository: any FieldCheckSessionDetailRepository,
@@ -208,15 +224,20 @@ final class FieldCheckSessionDetailViewModel {
             return true
         }
 
-        let normalizedDraft = notesDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedSaved = detail.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard normalizedDraft != normalizedSaved else {
+        let draft = notesDraft
+        guard normalizedNotes(draft) != normalizedNotes(detail.notes) else {
             return true
         }
 
         do {
-            try await repository.updateNotes(sessionID: sessionID, notes: notesDraft)
+            guard let current = try repository.fetchSessionDetail(id: sessionID),
+                  normalizedNotes(current.notes) == normalizedNotes(notesBaseline) else {
+                errorMessage = "Session notes changed or the session was removed. Your draft is retained; reopen the check before saving."
+                return false
+            }
+            try await repository.updateNotes(sessionID: sessionID, notes: draft)
             guard mayContinue() else { return false }
+            notesBaseline = draft
             refresh(sessionID: sessionID, using: repository)
             return true
         } catch {
