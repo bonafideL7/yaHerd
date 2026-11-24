@@ -124,7 +124,7 @@ private struct StorageActivityView: View {
 
     var body: some View {
         List {
-            Section("On This Device") {
+            Section {
                 if dataAccessMode.isRecoveryMode {
                     Label("Read-only recovery — changes are not saved", systemImage: "exclamationmark.triangle")
                 } else if activity.cloud?.accessState.blocksHerdAccess == true {
@@ -139,6 +139,8 @@ private struct StorageActivityView: View {
                         LabeledContent("Last local save", value: "None observed this session")
                     }
                 }
+            } header: {
+                Text("On This Device")
             } footer: {
                 Text("Local saves are recorded for this app session across all Herds. Saving on this device does not confirm an upload.")
             }
@@ -148,7 +150,7 @@ private struct StorageActivityView: View {
                     Text("Synchronization is disabled in recovery mode.")
                 }
             } else if let cloud = activity.cloud {
-                Section("iCloud") {
+                Section {
                     switch cloud.accessState {
                     case .accountChanged:
                         Label("Account changed. Reopen yaHerd to check access.", systemImage: "exclamationmark.icloud")
@@ -157,6 +159,8 @@ private struct StorageActivityView: View {
                     default:
                         Text("iCloud manages transfers automatically when available.")
                     }
+                } header: {
+                    Text("iCloud")
                 } footer: {
                     Text("These are the latest observed operations this session, not confirmation that every change has reached iCloud or another device.")
                 }
