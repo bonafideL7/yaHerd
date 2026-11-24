@@ -121,9 +121,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let preferences = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { preferences.removePersistentDomain(forName: suiteName) }
 
-        let graph = CoreDataAppPersistenceAssembly(
-            assembly: assembly,
-            currentHerdID: first.id,
+        let graph = CoreDataAppPersistenceAssembly.resolveHerdForChoice(
+            using: assembly,
+            requestedHerdID: first.id,
             selectionPreferences: preferences
         )
         let directory = HerdDirectoryController(
@@ -134,9 +134,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         try directory.selectHerd(id: second.id)
         XCTAssertEqual(graph.currentHerdSelection.currentHerdID, second.id)
 
-        let reopened = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
+        let reopened = CoreDataAppPersistenceAssembly.resolveHerdForChoice(
             using: assembly,
-            privateStoreURL: URL(fileURLWithPath: "/tmp/unused.sqlite"),
             selectionPreferences: preferences
         )
         XCTAssertEqual(reopened.currentHerdSelection.currentHerdID, second.id)
@@ -243,7 +242,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     @MainActor
     func testTwoStoreAppLoaderSelectsExistingSharedHerdWithoutChangingPrivateHerd() async throws {
         let harness = try CoreDataPersistenceHarness()
-        let existing = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
+        let existing = try await loadLocalGraph(at: harness.storeURL, createFixture: true)
         let privateHerdID = try existing.makeDependencies(dataAccessMode: .readWrite)
             .herdRepository.fetchCurrentHerd().id
 
@@ -268,11 +267,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             try writer.save()
         }
 
-        let sharedApp = try await CoreDataAppPersistenceAssembly.loadCloudKit(
-            at: harness.storeURL,
-            selectedHerdID: sharedHerdID,
-            mirroringEnabled: false
-        )
+        let sharedApp = try await loadCloudKitGraph(at: harness.storeURL, requestedHerdID: sharedHerdID)
         let sharedDependencies = sharedApp.makeDependencies(dataAccessMode: .readWrite)
         XCTAssertEqual(try sharedDependencies.herdRepository.fetchCurrentHerd().id, sharedHerdID)
 
@@ -295,11 +290,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
                 CDPasture.self, id: pasture.id, herdID: privateHerdID, in: read
             ))
         }
-        let privateApp = try await CoreDataAppPersistenceAssembly.loadCloudKit(
-            at: harness.storeURL,
-            selectedHerdID: privateHerdID,
-            mirroringEnabled: false
-        )
+        let privateApp = try await loadCloudKitGraph(at: harness.storeURL, requestedHerdID: privateHerdID)
         XCTAssertEqual(
             try privateApp.makeDependencies(dataAccessMode: .readWrite)
                 .herdRepository.fetchCurrentHerd().id,
@@ -310,16 +301,10 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     @MainActor
     func testTwoStoreAppLoaderRefusesMissingHerdWithoutCreatingStarterRecords() async throws {
         let harness = try CoreDataPersistenceHarness()
-        do {
-            _ = try await CoreDataAppPersistenceAssembly.loadCloudKit(
-                at: harness.storeURL,
-                selectedHerdID: UUID(),
-                mirroringEnabled: false
-            )
-            XCTFail("A missing or not-yet-imported Herd must not be replaced.")
-        } catch let error as HerdRepositoryError {
-            XCTAssertEqual(error, .missingHerd)
-        }
+        let app = try await loadCloudKitGraph(at: harness.storeURL, requestedHerdID: UUID())
+        XCTAssertNil(app.currentHerdSelection.currentHerdID)
+        XCTAssertTrue(try app.makeDependencies(dataAccessMode: .readWrite).herdRepository.fetchAccessibleHerds().isEmpty)
+
 
         let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
             storeURL: harness.storeURL,
@@ -358,16 +343,12 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             try writer.save()
         }
 
-        do {
-            _ = try await CoreDataAppPersistenceAssembly.loadCloudKit(
-                at: harness.storeURL,
-                selectedHerdID: selectedID,
-                mirroringEnabled: false
-            )
-            XCTFail("An incomplete imported Herd must not initialize the app graph.")
-        } catch let error as CoreDataHerdMappingError {
-            XCTAssertEqual(error, .missingName(herdID: selectedID))
-        }
+        let pending = try await loadCloudKitGraph(at: harness.storeURL, requestedHerdID: selectedID)
+        XCTAssertNil(pending.currentHerdSelection.currentHerdID)
+        let inventory = try pending.makeDependencies(dataAccessMode: .readWrite).herdRepository.fetchHerdInventory()
+        XCTAssertTrue(inventory.hasIncompleteRoots)
+        XCTAssertTrue(inventory.herds.isEmpty)
+
 
         let privateURL = harness.storeURL
         let read = assembly.contextFactory.makeReadContext()
@@ -393,11 +374,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             try writer.save()
         }
 
-        let app = try await CoreDataAppPersistenceAssembly.loadCloudKit(
-            at: harness.storeURL,
-            selectedHerdID: selectedID,
-            mirroringEnabled: false
-        )
+        let app = try await loadCloudKitGraph(at: harness.storeURL, requestedHerdID: selectedID)
         let summary = try app.makeDependencies(dataAccessMode: .readWrite)
             .herdRepository.fetchCurrentHerd()
         XCTAssertEqual(summary.id, selectedID)
@@ -427,23 +404,12 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             try writer.save()
         }
 
-        do {
-            _ = try await CoreDataAppPersistenceAssembly.loadCloudKit(
-                at: harness.storeURL,
-                selectedHerdID: duplicatedID,
-                mirroringEnabled: false
-            )
-            XCTFail("Duplicate selected Herd roots must never select either store.")
-        } catch let error as CoreDataPersistenceError {
-            XCTAssertEqual(
-                error,
-                .duplicateApplicationID(
-                    entity: CDHerd.coreDataEntityName,
-                    id: duplicatedID,
-                    herdID: nil
-                )
-            )
-        }
+        let app = try await loadCloudKitGraph(at: harness.storeURL, requestedHerdID: duplicatedID)
+        XCTAssertNil(app.currentHerdSelection.currentHerdID)
+        let inventory = try app.makeDependencies(dataAccessMode: .readWrite).herdRepository.fetchHerdInventory()
+        XCTAssertEqual(inventory.ambiguousHerdIDs, [duplicatedID])
+        XCTAssertTrue(inventory.herds.isEmpty)
+
     }
 
     #if DEBUG
@@ -575,9 +541,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     #endif
 
     @MainActor
-    func testDevelopmentTwoStoreStartupSelectsExistingPrivateHerdNotSharedHerd() async throws {
+    func testDevelopmentTwoStoreStartupRequiresChoiceBetweenOwnedAndSharedHerd() async throws {
         let harness = try CoreDataPersistenceHarness()
-        let local = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
+        let local = try await loadLocalGraph(at: harness.storeURL, createFixture: true)
         let originalID = try local.makeDependencies(dataAccessMode: .readWrite)
             .herdRepository.fetchCurrentHerd().id
 
@@ -601,9 +567,12 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             try writer.save()
         }
 
-        let reopened = try await CoreDataAppPersistenceAssembly.loadCloudKit(
-            at: harness.storeURL, mirroringEnabled: false
-        )
+        let reopened = try await loadCloudKitGraph(at: harness.storeURL)
+        XCTAssertNil(reopened.currentHerdSelection.currentHerdID)
+        let repository = reopened.makeDependencies(dataAccessMode: .readWrite).herdRepository
+        XCTAssertEqual(Set(try repository.fetchAccessibleHerds().map(\.id)), [originalID, sharedHerdID])
+        let directory = HerdDirectoryController(repository: repository, selection: reopened.currentHerdSelection)
+        try directory.selectHerd(id: originalID)
         XCTAssertEqual(
             try reopened.makeDependencies(dataAccessMode: .readWrite)
                 .herdRepository.fetchCurrentHerd().id,
@@ -641,11 +610,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             try writer.save()
         }
 
-        let app = try await CoreDataAppPersistenceAssembly.loadCloudKit(
-            at: harness.storeURL,
-            selectedHerdID: sharedHerdID,
-            mirroringEnabled: false
-        )
+        let app = try await loadCloudKitGraph(at: harness.storeURL, requestedHerdID: sharedHerdID)
         let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
         XCTAssertEqual(
             try dependencies.herdRepository.fetchCurrentHerd().id,
@@ -690,11 +655,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             mirroringEnabled: false
         )
 
-        XCTAssertThrowsError(try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
-            using: assembly, privateStoreURL: harness.storeURL
-        )) { error in
-            XCTAssertEqual(error as? HerdRepositoryError, .missingHerd)
-        }
+        let pending = CoreDataAppPersistenceAssembly.resolveHerdForChoice(using: assembly)
+        XCTAssertNil(pending.currentHerdSelection.currentHerdID)
 
         let expectedID = UUID()
         let privateStoreURL = harness.storeURL
@@ -713,8 +675,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
 
         // The same assembly now resolves the imported Herd. It must not create
         // a replacement root, swap stores, or require a new loader instance.
-        let app = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
-            using: assembly, privateStoreURL: harness.storeURL
+        let app = CoreDataAppPersistenceAssembly.resolveHerdForChoice(
+            using: assembly, requestedHerdID: expectedID
         )
         XCTAssertEqual(
             try app.makeDependencies(dataAccessMode: .readWrite)
@@ -757,8 +719,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             try writer.save()
         }
 
-        let app = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
-            using: assembly, privateStoreURL: storeURL
+        let app = CoreDataAppPersistenceAssembly.resolveHerdForChoice(
+            using: assembly, requestedHerdID: herdID
         )
         do {
             try await CloudKitDevelopmentLaunch.validateHomeReadiness(app)
@@ -816,14 +778,12 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             try writer.save()
         }
 
-        do {
-            _ = try await CoreDataAppPersistenceAssembly.loadCloudKit(
-                at: harness.storeURL, mirroringEnabled: false
-            )
-            XCTFail("A shared-only/import-pending store must not synthesize a private Herd.")
-        } catch let error as HerdRepositoryError {
-            XCTAssertEqual(error, .missingHerd)
-        }
+        let app = try await loadCloudKitGraph(at: harness.storeURL)
+        let available = try app.makeDependencies(dataAccessMode: .readWrite).herdRepository.fetchAccessibleHerds()
+        XCTAssertEqual(available.count, 1)
+        XCTAssertEqual(available.first?.category, .shared)
+        XCTAssertEqual(app.currentHerdSelection.currentHerdID, available.first?.id)
+
         let reader = dualStore.contextFactory.makeReadContext()
         let privateURL = harness.storeURL
         try reader.performAndWait {
@@ -849,22 +809,16 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             }
         }
 
-        do {
-            _ = try await CoreDataAppPersistenceAssembly.loadCloudKit(
-                at: harness.storeURL, mirroringEnabled: false
-            )
-            XCTFail("Auto-selection cannot choose among multiple owned Herds.")
-        } catch let error as CoreDataAppHerdBootstrapError {
-            XCTAssertEqual(error, .multipleLocalHerds(count: 2))
-        }
+        let app = try await loadCloudKitGraph(at: harness.storeURL)
+        XCTAssertNil(app.currentHerdSelection.currentHerdID)
+        XCTAssertEqual(try app.makeDependencies(dataAccessMode: .readWrite).herdRepository.fetchAccessibleHerds().count, 2)
+
     }
 
     @MainActor
     func testAppCutoverReopensDurableCoreDataHerdAndPastures() async throws {
         let harness = try CoreDataPersistenceHarness()
-        let first = try await CoreDataAppPersistenceAssembly.load(
-            at: harness.storeURL
-        )
+        let first = try await loadLocalGraph(at: harness.storeURL, createFixture: true)
         let firstDependencies = first.makeDependencies(dataAccessMode: .readWrite)
         let originalHerdID = try firstDependencies.herdRepository.fetchCurrentHerd().id
         let pasture = try firstDependencies.pastureFeatureDependencies.createRepository.create(
@@ -877,9 +831,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         )
         XCTAssertTrue(FileManager.default.fileExists(atPath: harness.storeURL.path))
 
-        let reopened = try await CoreDataAppPersistenceAssembly.load(
-            at: harness.storeURL
-        )
+        let reopened = try await loadLocalGraph(at: harness.storeURL)
         let reloadedDependencies = reopened.makeDependencies(dataAccessMode: .readWrite)
         XCTAssertEqual(
             try reloadedDependencies.herdRepository.fetchCurrentHerd().id,
@@ -952,7 +904,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         try marker.write(to: obsoleteFile)
         try marker.write(to: obsoleteJournal)
 
-        let first = try await CoreDataAppPersistenceAssembly.load(at: store)
+        let first = try await loadLocalGraph(at: store, createFixture: true)
         let firstHerdID = try first.makeDependencies(
             dataAccessMode: .readWrite
         ).herdRepository.fetchCurrentHerd().id
@@ -961,7 +913,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: obsoleteFile), marker)
         XCTAssertEqual(try Data(contentsOf: obsoleteJournal), marker)
 
-        let reopened = try await CoreDataAppPersistenceAssembly.load(at: store)
+        let reopened = try await loadLocalGraph(at: store)
         XCTAssertEqual(
             try reopened.makeDependencies(dataAccessMode: .readWrite)
                 .herdRepository.fetchCurrentHerd().id,
@@ -1310,7 +1262,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
 
         for (isLarge, expectedAnimals) in [(false, 18), (true, 480)] {
             let harness = try CoreDataPersistenceHarness()
-            let app = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
+            let app = try await loadLocalGraph(at: harness.storeURL, createFixture: true)
             let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
             let originalHerdID = try dependencies.herdRepository.fetchCurrentHerd().id
             guard let seeder = dependencies.animalFeatureDependencies.sampleDataSeeder else {
@@ -1321,9 +1273,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             XCTAssertTrue(try seeder.canSeedSampleData())
             let inserted: Bool
             if isLarge {
-                inserted = try await seeder.seedLargeSampleDataIfNeeded()
+                inserted = try await seeder.seedLargeSampleDataIfNeeded(for: originalHerdID, selectionRevision: app.currentHerdSelection.selectionRevision)
             } else {
-                inserted = try await seeder.seedSampleDataIfNeeded()
+                inserted = try await seeder.seedSampleDataIfNeeded(for: originalHerdID, selectionRevision: app.currentHerdSelection.selectionRevision)
             }
             XCTAssertTrue(inserted)
             XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, 1)
@@ -1366,7 +1318,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
                 .overviewReader.fetchOpenFindings(limit: 100)
             XCTAssertFalse(openFindings.isEmpty)
 
-            let repeated = try await seeder.seedLargeSampleDataIfNeeded()
+            let repeated = try await seeder.seedLargeSampleDataIfNeeded(for: originalHerdID, selectionRevision: app.currentHerdSelection.selectionRevision)
             XCTAssertFalse(repeated)
             XCTAssertFalse(try seeder.canSeedSampleData())
             XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, 1)
@@ -1375,7 +1327,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
                 expectedAnimals
             )
 
-            let reopened = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
+            let reopened = try await loadLocalGraph(at: harness.storeURL)
             let reopenedDependencies = reopened.makeDependencies(dataAccessMode: .readWrite)
             XCTAssertEqual(
                 try reopenedDependencies.herdRepository.fetchCurrentHerd().id,
@@ -1411,7 +1363,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
                 return XCTFail("Read-only app graph should still supply a guarded seed action")
             }
             do {
-                _ = try await readOnlySeeder.seedSampleDataIfNeeded()
+                _ = try await readOnlySeeder.seedSampleDataIfNeeded(for: originalHerdID, selectionRevision: reopened.currentHerdSelection.selectionRevision)
                 XCTFail("Read-only recovery must not permit sample writes")
             } catch {
                 XCTAssertTrue(error is LocalDataWritePolicy.WriteError)
@@ -1426,8 +1378,10 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     @MainActor
     func testSampleActionsDoNotModifyExistingPastureOrStandaloneGroup() async throws {
         let harness = try CoreDataPersistenceHarness()
-        let app = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
+        let app = try await loadLocalGraph(at: harness.storeURL, createFixture: true)
         let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
+        let herdID = try XCTUnwrap(app.currentHerdSelection.currentHerdID)
+        let revision = app.currentHerdSelection.selectionRevision
         let groups = dependencies.pastureFeatureDependencies.groupEditorRepository
         let groupReader = dependencies.pastureFeatureDependencies.groupDetailRepository
         guard let seeder = dependencies.animalFeatureDependencies.sampleDataSeeder else {
@@ -1457,8 +1411,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         )
         let groupOnlySequence = dependencies.applicationMutationCenter.currentSequence
         XCTAssertFalse(try seeder.canSeedSampleData())
-        let insertedCompact = try await seeder.seedSampleDataIfNeeded()
-        let insertedLarge = try await seeder.seedLargeSampleDataIfNeeded()
+        let insertedCompact = try await seeder.seedSampleDataIfNeeded(for: herdID, selectionRevision: revision)
+        let insertedLarge = try await seeder.seedLargeSampleDataIfNeeded(for: herdID, selectionRevision: revision)
         XCTAssertFalse(insertedCompact)
         XCTAssertFalse(insertedLarge)
         XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, groupOnlySequence)
@@ -1493,7 +1447,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             dependencies.applicationMutationCenter.animalRevision, groupCreatedRevision
         )
         XCTAssertFalse(try seeder.canSeedSampleData())
-        let repeatedLarge = try await seeder.seedLargeSampleDataIfNeeded()
+        let repeatedLarge = try await seeder.seedLargeSampleDataIfNeeded(for: herdID, selectionRevision: revision)
         XCTAssertFalse(repeatedLarge)
         XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, originalSequence)
         XCTAssertEqual(
@@ -1515,9 +1469,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
             assembly: assembly
         )
-        let graph = CoreDataAppPersistenceAssembly(
-            assembly: assembly, currentHerdID: herdID
-        ).makeDependencies(dataAccessMode: .readWrite)
+        let app = CoreDataAppPersistenceAssembly(assembly: assembly, currentHerdID: herdID)
+        let graph = app.makeDependencies(dataAccessMode: .readWrite)
+        let revision = app.currentHerdSelection.selectionRevision
         let seeder = try XCTUnwrap(graph.animalFeatureDependencies.sampleDataSeeder)
         let context = try assembly.contextFactory.makeWriteContext()
         let importedID = UUID()
@@ -1544,9 +1498,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         for seedLarge in [false, true] {
             do {
                 if seedLarge {
-                    _ = try await seeder.seedLargeSampleDataIfNeeded()
+                    _ = try await seeder.seedLargeSampleDataIfNeeded(for: herdID, selectionRevision: revision)
                 } else {
-                    _ = try await seeder.seedSampleDataIfNeeded()
+                    _ = try await seeder.seedSampleDataIfNeeded(for: herdID, selectionRevision: revision)
                 }
                 XCTFail("An orphaned template must abort the entire sample transaction.")
             } catch {
@@ -1571,7 +1525,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         }
 
         XCTAssertTrue(try seeder.canSeedSampleData())
-        let inserted = try await seeder.seedSampleDataIfNeeded()
+        let inserted = try await seeder.seedSampleDataIfNeeded(for: herdID, selectionRevision: revision)
         XCTAssertTrue(inserted)
         try context.performAndWait {
             let stored = try context.fetch(NSFetchRequest<CDWorkingTreatmentTemplate>(
@@ -1589,9 +1543,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
             assembly: assembly
         )
-        let graph = CoreDataAppPersistenceAssembly(
-            assembly: assembly, currentHerdID: herdID
-        ).makeDependencies(dataAccessMode: .readWrite)
+        let app = CoreDataAppPersistenceAssembly(assembly: assembly, currentHerdID: herdID)
+        let graph = app.makeDependencies(dataAccessMode: .readWrite)
+        let revision = app.currentHerdSelection.selectionRevision
         let seeder = try XCTUnwrap(graph.animalFeatureDependencies.sampleDataSeeder)
         let context = try assembly.contextFactory.makeWriteContext()
         let sessionID = UUID()
@@ -1633,9 +1587,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         for seedLarge in [false, true] {
             do {
                 if seedLarge {
-                    _ = try await seeder.seedLargeSampleDataIfNeeded()
+                    _ = try await seeder.seedLargeSampleDataIfNeeded(for: herdID, selectionRevision: revision)
                 } else {
-                    _ = try await seeder.seedSampleDataIfNeeded()
+                    _ = try await seeder.seedSampleDataIfNeeded(for: herdID, selectionRevision: revision)
                 }
                 XCTFail("An ownerless Working graph must not be overwritten by samples.")
             } catch {
@@ -1668,9 +1622,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
             assembly: assembly
         )
-        let graph = CoreDataAppPersistenceAssembly(
-            assembly: assembly, currentHerdID: herdID
-        ).makeDependencies(dataAccessMode: .readWrite)
+        let app = CoreDataAppPersistenceAssembly(assembly: assembly, currentHerdID: herdID)
+        let graph = app.makeDependencies(dataAccessMode: .readWrite)
+        let revision = app.currentHerdSelection.selectionRevision
         let seeder = try XCTUnwrap(graph.animalFeatureDependencies.sampleDataSeeder)
         let context = try assembly.contextFactory.makeWriteContext()
         let queueID = UUID()
@@ -1701,9 +1655,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         for seedLarge in [false, true] {
             do {
                 if seedLarge {
-                    _ = try await seeder.seedLargeSampleDataIfNeeded()
+                    _ = try await seeder.seedLargeSampleDataIfNeeded(for: herdID, selectionRevision: revision)
                 } else {
-                    _ = try await seeder.seedSampleDataIfNeeded()
+                    _ = try await seeder.seedSampleDataIfNeeded(for: herdID, selectionRevision: revision)
                 }
                 XCTFail("Sample seeding must not overwrite an imported queue item.")
             } catch {
@@ -1729,8 +1683,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             try context.save()
         }
         XCTAssertFalse(try seeder.canSeedSampleData())
-        let compactInserted = try await seeder.seedSampleDataIfNeeded()
-        let largeInserted = try await seeder.seedLargeSampleDataIfNeeded()
+        let compactInserted = try await seeder.seedSampleDataIfNeeded(for: herdID, selectionRevision: revision)
+        let largeInserted = try await seeder.seedLargeSampleDataIfNeeded(for: herdID, selectionRevision: revision)
         XCTAssertFalse(compactInserted)
         XCTAssertFalse(largeInserted)
         XCTAssertEqual(graph.applicationMutationCenter.currentSequence, 0)
@@ -1742,9 +1696,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
             assembly: assembly
         )
-        let graph = CoreDataAppPersistenceAssembly(
-            assembly: assembly, currentHerdID: herdID
-        ).makeDependencies(dataAccessMode: .readWrite)
+        let app = CoreDataAppPersistenceAssembly(assembly: assembly, currentHerdID: herdID)
+        let graph = app.makeDependencies(dataAccessMode: .readWrite)
+        let revision = app.currentHerdSelection.selectionRevision
         let seeder = try XCTUnwrap(graph.animalFeatureDependencies.sampleDataSeeder)
         let pastures = graph.pastureFeatureDependencies.listRepository
         let creator = graph.pastureFeatureDependencies.createRepository
@@ -1789,7 +1743,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             XCTAssertEqual($0 as? CoreDataReadModelError, expected)
         }
         do {
-            _ = try await seeder.seedSampleDataIfNeeded()
+            _ = try await seeder.seedSampleDataIfNeeded(for: herdID, selectionRevision: revision)
             XCTFail("Sample seeding must reject an ownerless imported Pasture.")
         } catch {
             XCTAssertEqual(error as? CoreDataReadModelError, expected)
@@ -1822,9 +1776,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
             assembly: assembly
         )
-        let graph = CoreDataAppPersistenceAssembly(
-            assembly: assembly, currentHerdID: herdID
-        ).makeDependencies(dataAccessMode: .readWrite)
+        let app = CoreDataAppPersistenceAssembly(assembly: assembly, currentHerdID: herdID)
+        let graph = app.makeDependencies(dataAccessMode: .readWrite)
+        let revision = app.currentHerdSelection.selectionRevision
         let seeder = try XCTUnwrap(graph.animalFeatureDependencies.sampleDataSeeder)
         let context = try assembly.contextFactory.makeWriteContext()
         let importedID = UUID()
@@ -1857,9 +1811,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         for seedLarge in [false, true] {
             do {
                 if seedLarge {
-                    _ = try await seeder.seedLargeSampleDataIfNeeded()
+                    _ = try await seeder.seedLargeSampleDataIfNeeded(for: herdID, selectionRevision: revision)
                 } else {
-                    _ = try await seeder.seedSampleDataIfNeeded()
+                    _ = try await seeder.seedSampleDataIfNeeded(for: herdID, selectionRevision: revision)
                 }
                 XCTFail("Seeding must reject an unattached imported treatment.")
             } catch {
@@ -1889,8 +1843,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             try context.save()
         }
         XCTAssertFalse(try seeder.canSeedSampleData())
-        let compactInserted = try await seeder.seedSampleDataIfNeeded()
-        let largeInserted = try await seeder.seedLargeSampleDataIfNeeded()
+        let compactInserted = try await seeder.seedSampleDataIfNeeded(for: herdID, selectionRevision: revision)
+        let largeInserted = try await seeder.seedLargeSampleDataIfNeeded(for: herdID, selectionRevision: revision)
         XCTAssertFalse(compactInserted)
         XCTAssertFalse(largeInserted)
         XCTAssertEqual(graph.applicationMutationCenter.currentSequence, 0)
@@ -1911,9 +1865,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
             assembly: assembly
         )
-        let graph = CoreDataAppPersistenceAssembly(
-            assembly: assembly, currentHerdID: herdID
-        ).makeDependencies(dataAccessMode: .readWrite)
+        let app = CoreDataAppPersistenceAssembly(assembly: assembly, currentHerdID: herdID)
+        let graph = app.makeDependencies(dataAccessMode: .readWrite)
+        let revision = app.currentHerdSelection.selectionRevision
         guard let seeder = graph.animalFeatureDependencies.sampleDataSeeder else {
             return XCTFail("Expected Core Data sample action")
         }
@@ -1930,7 +1884,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             )
         }
         do {
-            _ = try await seeder.seedSampleDataIfNeeded()
+            _ = try await seeder.seedSampleDataIfNeeded(for: herdID, selectionRevision: revision)
             XCTFail("A competing canonical Tag Color reservation must block the seed")
         } catch let error as CoreDataPersistenceError {
             guard case .tagColorMaterializationInProgress = error else {
@@ -2004,14 +1958,14 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
 
         // A template-only Herd is allowed. Seed preserves the control record
         // rather than inserting duplicate default-named templates.
-        let graph = CoreDataAppPersistenceAssembly(
-            assembly: assembly, currentHerdID: herdID
-        ).makeDependencies(dataAccessMode: .readWrite)
+        let app = CoreDataAppPersistenceAssembly(assembly: assembly, currentHerdID: herdID)
+        let graph = app.makeDependencies(dataAccessMode: .readWrite)
+        let revision = app.currentHerdSelection.selectionRevision
         let seeder = try XCTUnwrap(
             graph.animalFeatureDependencies.sampleDataSeeder
         )
         XCTAssertTrue(try seeder.canSeedSampleData())
-        let didSeed = try await seeder.seedSampleDataIfNeeded()
+        let didSeed = try await seeder.seedSampleDataIfNeeded(for: herdID, selectionRevision: revision)
         XCTAssertTrue(didSeed)
         let after = try templates.fetchTemplates()
         XCTAssertEqual(after.map(\.id), [originalID])
@@ -2039,6 +1993,41 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertEqual(try templates.fetchTemplates().count, 2)
         try templates.deleteTemplates(ids: [originalID, nextID])
         XCTAssertTrue(try templates.fetchTemplates().isEmpty)
+    }
+
+    @MainActor
+    private func loadCloudKitGraph(
+        at storeURL: URL, requestedHerdID: UUID? = nil
+    ) async throws -> CoreDataAppPersistenceAssembly {
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: storeURL, mirroringEnabled: false
+        )
+        let suiteName = "yaHerd.bootstrap.fixture.\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        return CoreDataAppPersistenceAssembly.resolveHerdForChoice(
+            using: assembly, requestedHerdID: requestedHerdID, selectionPreferences: defaults
+        )
+    }
+
+    @MainActor
+    private func loadLocalGraph(
+        at storeURL: URL, createFixture: Bool = false
+    ) async throws -> CoreDataAppPersistenceAssembly {
+        let suiteName = "yaHerd.bootstrap.fixture.\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let app = try await CoreDataAppPersistenceAssembly.load(
+            at: storeURL, selectionPreferences: defaults
+        )
+        if createFixture {
+            XCTAssertNil(app.currentHerdSelection.currentHerdID)
+            let repository = app.makeDependencies(dataAccessMode: .readWrite).herdRepository
+            let herd = try await repository.createOwnedHerd(named: "My Herd")
+            let directory = HerdDirectoryController(repository: repository, selection: app.currentHerdSelection)
+            try directory.selectHerd(id: herd.id)
+        }
+        return app
     }
 
 }
