@@ -239,7 +239,7 @@ final class CoreDataPersistentContainer {
                     continuation: continuation,
                     remaining: storeDescriptions.count
                 ))
-    
+
                 // Core Data calls this once for each store description. Do not
                 // report success after only the private store has finished loading.
                 container.loadPersistentStores { description, error in

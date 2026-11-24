@@ -110,64 +110,77 @@ final class RecoveryModeController: ObservableObject {
     defer { isCheckingPersistentStore = false }
 
     do {
-      let storeURL = try existingCoreDataStoreURL()
-      let assembly = try await CoreDataPersistenceAssembly.load(
-        storeURL: storeURL,
-        accessMode: .readOnly
-      )
-      // Reading the current store verifies that this is a usable Core Data
-      // graph rather than merely an openable empty SQLite file.
-      let context = assembly.contextFactory.makeReadContext()
-      let herdCount = try context.performAndWait {
-        try context.count(for: NSFetchRequest<CDHerd>(
-          entityName: CDHerd.coreDataEntityName
-        ))
-      }
-      // The legacy local-only startup expects one Herd, but the two-store
-      // topology can legitimately have no owned Herd (shared-only participant)
-      // or several owned Herds. A recovery health check must not mistake
-      // those valid store contents for corruption.
-      let sharedURL = storeURL.deletingLastPathComponent().appendingPathComponent(
+      let directory = try applicationSupportDirectoryURL()
+        .appendingPathComponent("yaHerd", isDirectory: true)
+      let sharedURL = directory.appendingPathComponent(
         CoreDataPersistentContainer.sharedStoreFileName
       )
       let sharedExists = fileManager.fileExists(atPath: sharedURL.path)
-      if !sharedExists && herdCount != 1 {
-        if herdCount == 0 {
-          throw HerdRepositoryError.missingHerd
+      let sharedJournalExists = ["-wal", "-shm", "-journal"].contains {
+        fileManager.fileExists(atPath: sharedURL.path + $0)
+      }
+      var openedStores: [String] = []
+      var failures: [String] = []
+
+      // Inspect each existing store independently. A failed shared store must
+      // not prevent diagnosis of the private store, or vice versa.
+      do {
+        let storeURL = try existingCoreDataStoreURL()
+        let herdCount = try await probeHerdCount(at: storeURL)
+        if !sharedExists && !sharedJournalExists && herdCount != 1 {
+          if herdCount == 0 {
+            throw HerdRepositoryError.missingHerd
+          }
+          throw CoreDataAppHerdBootstrapError.multipleLocalHerds(count: herdCount)
         }
-        throw CoreDataAppHerdBootstrapError.multipleLocalHerds(count: herdCount)
+        openedStores.append("Private store opened read-only.")
+      } catch {
+        failures.append("Private store: " + UserVisibleErrorMessage.make(error))
       }
 
-      // A healthy private store alone cannot establish that a failed
-      // private/shared startup is safe to retry. Probe the shared store too,
-      // without creating a missing shared store or starting CloudKit mirroring.
       if sharedExists {
-        let values = try sharedURL.resourceValues(forKeys: [.isRegularFileKey])
-        guard values.isRegularFile == true else {
-          throw RecoveryStoreProbeError.invalidSharedStore
+        do {
+          let values = try sharedURL.resourceValues(forKeys: [.isRegularFileKey])
+          guard values.isRegularFile == true else {
+            throw RecoveryStoreProbeError.invalidSharedStore
+          }
+          _ = try await probeHerdCount(at: sharedURL)
+          openedStores.append("Shared store opened read-only.")
+        } catch {
+          failures.append("Shared store: " + UserVisibleErrorMessage.make(error))
         }
-        let sharedAssembly = try await CoreDataPersistenceAssembly.load(
-          storeURL: sharedURL,
-          accessMode: .readOnly
-        )
-        let sharedContext = sharedAssembly.contextFactory.makeReadContext()
-        _ = try sharedContext.performAndWait {
-          try sharedContext.count(for: NSFetchRequest<CDHerd>(
-            entityName: CDHerd.coreDataEntityName
-          ))
-        }
-      } else if ["-wal", "-shm", "-journal"].contains(where: {
-        fileManager.fileExists(atPath: sharedURL.path + $0)
-      }) {
-        throw RecoveryStoreProbeError.missingSharedStore
+      } else if sharedJournalExists {
+        failures.append("Shared store: " + RecoveryStoreProbeError.missingSharedStore.localizedDescription)
       }
-      storeCheckResult = .succeeded(
-        "The existing Core Data store\(sharedExists ? "s" : "") opened read-only. No repair, migration, or write was performed. Recovery mode stays read-only for this launch. Restart yaHerd to retry normal storage."
-      )
+
+      if failures.isEmpty {
+        storeCheckResult = .succeeded(
+          (openedStores + ["No repair, migration, or write was performed. Recovery mode stays read-only for this launch. Restart yaHerd to retry normal storage."])
+            .joined(separator: "\n")
+        )
+      } else {
+        storeCheckResult = .failed(
+          (openedStores + failures + ["No repair, migration, or write was performed. Recovery mode remains read-only."])
+            .joined(separator: "\n")
+        )
+      }
     } catch {
       storeCheckResult = .failed(
         "The persistent Core Data store still could not be opened read-only: \(UserVisibleErrorMessage.make(error))"
       )
+    }
+  }
+
+  private func probeHerdCount(at storeURL: URL) async throws -> Int {
+    let assembly = try await CoreDataPersistenceAssembly.load(
+      storeURL: storeURL,
+      accessMode: .readOnly
+    )
+    let context = assembly.contextFactory.makeReadContext()
+    return try context.performAndWait {
+      try context.count(for: NSFetchRequest<CDHerd>(
+        entityName: CDHerd.coreDataEntityName
+      ))
     }
   }
 
