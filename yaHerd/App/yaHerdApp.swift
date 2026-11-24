@@ -277,7 +277,7 @@ private struct RunningAppView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var tagColorLibrary: TagColorLibraryStore
     @StateObject private var recoveryModeController: RecoveryModeController
-    @State private var storageActivity: StorageActivitySnapshot
+    @State private var storageActivity: StorageActivityController
     private var herdDirectory: HerdDirectoryController { runtime.herdDirectory }
 
     private let runtime: AppRuntime
@@ -289,7 +289,7 @@ private struct RunningAppView: View {
     ) {
         self.runtime = runtime
         self.applicationSettings = applicationSettings
-        self._storageActivity = State(initialValue: runtime.persistenceLifetime.storageActivity)
+        self._storageActivity = State(initialValue: StorageActivityController(assembly: runtime.persistenceLifetime))
         self._tagColorLibrary = StateObject(
             wrappedValue: TagColorLibraryStore(
                 repository: runtime.dependencies.tagColorRepository
@@ -326,7 +326,7 @@ private struct RunningAppView: View {
             .environment(applicationSettings)
             .environment(runtime.herdSelection)
             .environment(herdDirectory)
-            .environment(\.storageActivity, storageActivity)
+            .environment(storageActivity)
             .environmentObject(tagColorLibrary)
             .environment(\.appDataAccessMode, runtime.dataAccessMode)
             .environment(
@@ -373,16 +373,16 @@ private struct RunningAppView: View {
                     for: CoreDataPersistentContainer.storageActivityChanged
                 ).receive(on: DispatchQueue.main)
             ) { _ in
-                storageActivity = runtime.persistenceLifetime.storageActivity
+                storageActivity.refresh()
             }
             .task {
-                storageActivity = runtime.persistenceLifetime.storageActivity
+                storageActivity.refresh()
                 guard !runtime.dataAccessMode.isRecoveryMode else { return }
                 herdDirectory.refresh(reportErrors: false)
             }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
-                    storageActivity = runtime.persistenceLifetime.storageActivity
+                    storageActivity.refresh()
                     if !runtime.dataAccessMode.isRecoveryMode {
                         herdDirectory.refresh(reportErrors: false)
                         runtime.remoteHistory?.requestProcessing()
