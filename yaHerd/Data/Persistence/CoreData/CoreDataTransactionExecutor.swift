@@ -11,14 +11,16 @@ final class CoreDataTransactionExecutor {
 
     func performWrite<Result: Sendable>(
         herdID: UUID? = nil,
+        expectedHerdRoot: URL? = nil,
         beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil,
         afterTransaction: (@Sendable () -> Void)? = nil,
         _ operation: @escaping @Sendable (NSManagedObjectContext) throws -> Result
     ) async throws -> Result {
+        let contextFactory = self.contextFactory
         let context: NSManagedObjectContext
         do {
             try Task.checkCancellation()
-            context = try contextFactory.makeWriteContext()
+            context = try contextFactory.makeWriteContext(expectedHerdRoot: expectedHerdRoot)
         } catch {
             afterTransaction?()
             throw error
@@ -57,6 +59,7 @@ final class CoreDataTransactionExecutor {
                         try CoreDataLookup().prepareForSave(herdID: herdID, in: context)
                     }
 
+                    try contextFactory.validateHerdAccess()
                     // A Herd switch may cancel the caller while changes are
                     // staged. Roll them back unless the save has already begun.
                     try cancellation.withLock {
