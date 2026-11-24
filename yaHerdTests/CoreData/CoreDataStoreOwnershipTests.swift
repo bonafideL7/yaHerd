@@ -702,6 +702,90 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         }
     }
 
+    func testDeletingAnimalValidatesCascadeChildRelationshipsBeforeSave() async throws {
+        for foreignColor in [false, true] {
+            let assembly = try await CoreDataPersistenceAssembly.inMemory()
+            let selectedHerdID = UUID()
+            let foreignHerdID = UUID()
+            let animalID = UUID()
+            let tagID = UUID()
+            let colorID = UUID()
+            let colorHerdID = foreignColor ? foreignHerdID : selectedHerdID
+
+            let seed = try assembly.contextFactory.makeWriteContext()
+            try seed.performAndWait {
+                let selected = CDHerd(context: seed)
+                selected.id = selectedHerdID
+                selected.name = "Selected"
+                selected.createdAt = Date(timeIntervalSince1970: 100)
+                selected.updatedAt = Date(timeIntervalSince1970: 100)
+
+                let foreign = CDHerd(context: seed)
+                foreign.id = foreignHerdID
+                foreign.name = "Foreign"
+                foreign.createdAt = Date(timeIntervalSince1970: 100)
+                foreign.updatedAt = Date(timeIntervalSince1970: 100)
+
+                let animal = CDAnimal(context: seed)
+                animal.id = animalID
+                animal.name = "Cow"
+                animal.birthDate = Date(timeIntervalSince1970: 100)
+                animal.herd = selected
+
+                let color = CDTagColorDefinition(context: seed)
+                color.id = colorID
+                color.name = "Color"
+                color.herd = foreignColor ? foreign : selected
+
+                // The direct cascade child belongs to the selected Herd.
+                // Its committed color link is the indirect foreign inverse.
+                let tag = CDAnimalTag(context: seed)
+                tag.id = tagID
+                tag.number = "123"
+                tag.herd = selected
+                tag.animal = animal
+                tag.color = color
+                try seed.save()
+            }
+
+            do {
+                try await assembly.transactionExecutor.performWrite(herdID: selectedHerdID) { context in
+                    let animal = try XCTUnwrap(CoreDataLookup().herdOwned(
+                        CDAnimal.self, id: animalID, herdID: selectedHerdID, in: context
+                    ))
+                    context.delete(animal)
+                }
+                XCTAssertFalse(foreignColor, "A cascade must not alter a foreign Herd's inverse relationship.")
+            } catch let error as CoreDataPersistenceError {
+                guard foreignColor, case .wrongHerdMutation = error else {
+                    return XCTFail("Unexpected ownership failure: \(error)")
+                }
+            }
+
+            let read = assembly.contextFactory.makeReadContext()
+            try read.performAndWait {
+                let animal = try CoreDataLookup().herdOwned(
+                    CDAnimal.self, id: animalID, herdID: selectedHerdID, in: read
+                )
+                let tag = try CoreDataLookup().herdOwned(
+                    CDAnimalTag.self, id: tagID, herdID: selectedHerdID, in: read
+                )
+                let color = try XCTUnwrap(CoreDataLookup().herdOwned(
+                    CDTagColorDefinition.self, id: colorID, herdID: colorHerdID, in: read
+                ))
+                if foreignColor {
+                    XCTAssertNotNil(animal)
+                    XCTAssertEqual(tag?.color?.objectID, color.objectID)
+                    XCTAssertEqual(color.tags?.count, 1)
+                } else {
+                    XCTAssertNil(animal)
+                    XCTAssertNil(tag)
+                    XCTAssertEqual(color.tags?.count ?? 0, 0)
+                }
+            }
+        }
+    }
+
     func testDeletingSelectedGroupCannotNullifyForeignHerdPastureMembership() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let selectedHerdID = UUID()
