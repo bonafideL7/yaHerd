@@ -1433,7 +1433,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let readOnlyReader = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         for kind in [DashboardAnimalListKind.active, .unassigned, .workingPen] {
             do {
@@ -1454,7 +1454,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let foreignReadOnlyReader = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { foreignSelection.currentHerdID }
+            currentSelection: { foreignSelection.snapshot }
         )
         let unaffectedForeign = try await foreignReadOnlyReader.fetchDashboardAnimalRecords(
             kind: .active
@@ -1698,7 +1698,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let reopenedSelected = CoreDataReadModelActor(
             contextFactory: readOnly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         let reopenedFull = try await reopenedSelected.fetchDashboardRecords()
         let reopenedStandalone = try await reopenedSelected.fetchDashboardPastureRecords()
@@ -1713,7 +1713,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let reopenedForeign = CoreDataReadModelActor(
             contextFactory: readOnly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { foreignSelection.currentHerdID }
+            currentSelection: { foreignSelection.snapshot }
         )
         let foreignList = try await reopenedForeign.fetchDashboardPastureRecords()
         let foreignFull = try await reopenedForeign.fetchDashboardRecords()
@@ -1759,7 +1759,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let dashboardReader = CoreDataReadModelActor(
             contextFactory: assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         let healthyOverview = try await dashboardReader.fetchDashboardRecords()
         let healthyPastures = try await dashboardReader.fetchDashboardPastureRecords()
@@ -1862,7 +1862,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let reopenedDashboard = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         await XCTAssertThrowsErrorAsync(
             try await reopenedDashboard.fetchDashboardRecords()
@@ -1894,7 +1894,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let independentDashboard = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { independentSelection.currentHerdID }
+            currentSelection: { independentSelection.snapshot }
         )
         let independentPastures = try await independentDashboard.fetchDashboardPastureRecords()
         XCTAssertEqual(independentPastures.map(\.id), [foreignPastureID])
@@ -1993,7 +1993,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let reopenedAsync = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         XCTAssertEqual(try reopenedDirect.fetchParentOptions(excluding: nil), options)
         XCTAssertEqual(
@@ -2565,7 +2565,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let reopenedReader = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         do {
             _ = try await reopenedReader.fetchDashboardRecords()
@@ -3076,7 +3076,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let reader = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         let animalPage = try await reader.fetchAnimalSummaryPage(
             ReadPageRequest(offset: 0, limit: 10)
@@ -4838,7 +4838,7 @@ private final class CoreDataAnimalContractEnvironment {
         CoreDataReadModelActor(
             contextFactory: assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { self.selection.currentHerdID }
+            currentSelection: { self.selection.snapshot }
         )
     }
 
@@ -4846,7 +4846,7 @@ private final class CoreDataAnimalContractEnvironment {
         CoreDataReadModelActor(
             contextFactory: assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { self.selection.currentHerdID }
+            currentSelection: { self.selection.snapshot }
         )
     }
 
