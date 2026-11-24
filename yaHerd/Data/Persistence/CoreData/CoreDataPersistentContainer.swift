@@ -76,10 +76,11 @@ private final class HerdImportResults: Sendable {
         state.withLock { $0.accountChanged = true }
     }
 
-    func importState(for identifiers: [String]) -> HerdImportState {
+    func importState(for identifiers: [String?]) -> HerdImportState {
         state.withLock { state in
             if state.accountChanged { return .accountChanged }
-            let outcomes = identifiers.map { id in
+            let outcomes: [HerdImportState] = identifiers.map { id in
+                guard let id else { return .waiting }
                 let setup = state.setup[id]?.state
                 if let setup, setup != .complete { return setup }
                 return state.imports[id]?.state ?? .waiting
@@ -329,7 +330,7 @@ final class CoreDataPersistentContainer {
                 CloudKitDevelopmentEventLog.record(event)
                 #endif
                 if results.record(event) {
-                    NotificationCenter.default.post(name: herdImportStateChanged, object: nil)
+                    NotificationCenter.default.post(name: CoreDataPersistentContainer.herdImportStateChanged, object: nil)
                 }
             }
         }
@@ -341,7 +342,7 @@ final class CoreDataPersistentContainer {
                 forName: .CKAccountChanged, object: nil, queue: nil
             ) { _ in
                 results.invalidateAccount()
-                NotificationCenter.default.post(name: herdImportStateChanged, object: nil)
+                NotificationCenter.default.post(name: CoreDataPersistentContainer.herdImportStateChanged, object: nil)
             }
         }
         var storesLoaded = false
