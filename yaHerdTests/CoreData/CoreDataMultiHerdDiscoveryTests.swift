@@ -105,16 +105,10 @@ final class CoreDataMultiHerdDiscoveryTests: XCTestCase {
         let repository = CoreDataHerdRepository(
             selection: AppCurrentHerdSelection(), assembly: assembly
         )
-        XCTAssertThrowsError(try repository.fetchAccessibleHerds()) {
-            XCTAssertEqual(
-                $0 as? CoreDataPersistenceError,
-                .duplicateApplicationID(
-                    entity: CDHerd.coreDataEntityName,
-                    id: duplicatedID,
-                    herdID: nil
-                )
-            )
-        }
+        let inventory = try repository.fetchHerdInventory()
+        XCTAssertTrue(inventory.herds.isEmpty)
+        XCTAssertEqual(inventory.ambiguousHerdIDs, [duplicatedID])
+        XCTAssertTrue(try repository.fetchAccessibleHerds().isEmpty)
     }
 
     func testIncompleteImportedRootIsNotOfferedAsSelectable() async throws {

@@ -11,6 +11,7 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
         let workingSessionID = UUID()
         let navigation = AppNavigationState()
         navigation.selectedHerdID = herdID
+        navigation.selectedHerdRootIdentity = testHerdRootIdentity(herdID)
         navigation.herdRouter.path = [.animal(animalID)]
         navigation.herdRouter.searchPath = [.pasture(pastureID)]
         navigation.herdRouter.filter.pasture = .pasture(pastureID)
@@ -54,17 +55,17 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
     @MainActor
     func testEntityReadFailuresPreserveRoutesPastureFilterAndPriorHerdIdentity() {
         let selectedHerdID = UUID()
-        let refreshedHerdID = UUID()
         let animalID = UUID()
         let pastureID = UUID()
         let navigation = AppNavigationState()
         navigation.selectedHerdID = selectedHerdID
+        navigation.selectedHerdRootIdentity = testHerdRootIdentity(selectedHerdID)
         navigation.herdRouter.path = [.animal(animalID)]
         navigation.herdRouter.searchPath = [.pasture(pastureID)]
         navigation.herdRouter.filter.pasture = .pasture(pastureID)
 
         let validator = StubNavigationValidator(
-            currentHerdResult: .success(refreshedHerdID),
+            currentHerdResult: .success(selectedHerdID),
             animalResult: .failure(.readFailed),
             pastureResult: .failure(.readFailed)
         )
@@ -80,16 +81,16 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
     @MainActor
     func testLaterReadFailurePreservesEarlierConfirmedMissingRoute() {
         let selectedHerdID = UUID()
-        let refreshedHerdID = UUID()
         let animalID = UUID()
         let pastureID = UUID()
         let navigation = AppNavigationState()
         navigation.selectedHerdID = selectedHerdID
+        navigation.selectedHerdRootIdentity = testHerdRootIdentity(selectedHerdID)
         navigation.herdRouter.path = [.animal(animalID)]
         navigation.herdRouter.searchPath = [.pasture(pastureID)]
 
         let validator = StubNavigationValidator(
-            currentHerdResult: .success(refreshedHerdID),
+            currentHerdResult: .success(selectedHerdID),
             animalResult: .success(false),
             pastureResult: .failure(.readFailed)
         )
@@ -107,6 +108,8 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
         let animalID = UUID()
         let pastureID = UUID()
         let navigation = AppNavigationState()
+        navigation.selectedHerdID = herdID
+        navigation.selectedHerdRootIdentity = testHerdRootIdentity(herdID)
         navigation.herdRouter.path = [.animal(animalID)]
         navigation.herdRouter.searchPath = [.pasture(pastureID)]
         navigation.herdRouter.filter.pasture = .pasture(pastureID)
@@ -130,6 +133,8 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
         let herdID = UUID()
         let sessionID = UUID()
         let navigation = AppNavigationState()
+        navigation.selectedHerdID = herdID
+        navigation.selectedHerdRootIdentity = testHerdRootIdentity(herdID)
         navigation.openWorkArea(.session(sessionID))
 
         let validator = StubNavigationValidator(
@@ -151,6 +156,8 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
         let herdID = UUID()
         let sessionID = UUID()
         let navigation = AppNavigationState()
+        navigation.selectedHerdID = herdID
+        navigation.selectedHerdRootIdentity = testHerdRootIdentity(herdID)
         navigation.openFieldCheckArea(
             .session(FieldCheckSessionLaunchConfiguration(sessionID: sessionID))
         )
@@ -174,6 +181,8 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
         let herdID = UUID()
         let sessionID = UUID()
         let navigation = AppNavigationState()
+        navigation.selectedHerdID = herdID
+        navigation.selectedHerdRootIdentity = testHerdRootIdentity(herdID)
         navigation.openWorkArea(.session(sessionID))
 
         let validator = StubNavigationValidator(
@@ -194,6 +203,8 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
         let herdID = UUID()
         let sessionID = UUID()
         let navigation = AppNavigationState()
+        navigation.selectedHerdID = herdID
+        navigation.selectedHerdRootIdentity = testHerdRootIdentity(herdID)
         navigation.openFieldCheckArea(.sessions(.flaggedAnimals))
         navigation.workflowRouter.openFieldCheckSession(
             FieldCheckSessionLaunchConfiguration(sessionID: sessionID)
@@ -215,11 +226,14 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
     @MainActor
     func testCompletedWorkingSessionRemainsVisibleWhenStillPresent() {
         let sessionID = UUID()
+        let herdID = UUID()
         let navigation = AppNavigationState()
+        navigation.selectedHerdID = herdID
+        navigation.selectedHerdRootIdentity = testHerdRootIdentity(herdID)
         navigation.openWorkArea(.session(sessionID))
 
         let validator = StubNavigationValidator(
-            currentHerdResult: .success(UUID()),
+            currentHerdResult: .success(herdID),
             workingSessionResult: .success(false),
             workingSessionExistsResult: .success(true)
         )
@@ -235,7 +249,10 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
     func testCompletedFieldCheckWithFindingsRemainsVisibleWhenStillPresent() {
         let sessionID = UUID()
         let findingID = UUID()
+        let herdID = UUID()
         let navigation = AppNavigationState()
+        navigation.selectedHerdID = herdID
+        navigation.selectedHerdRootIdentity = testHerdRootIdentity(herdID)
         navigation.openFieldCheckArea(
             .session(FieldCheckSessionLaunchConfiguration(
                 sessionID: sessionID,
@@ -245,7 +262,7 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
         )
 
         let validator = StubNavigationValidator(
-            currentHerdResult: .success(UUID()),
+            currentHerdResult: .success(herdID),
             fieldCheckSessionResult: .success(false),
             fieldCheckSessionExistsResult: .success(true),
             focusedFindingResult: .success(true)
@@ -265,11 +282,14 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
     @MainActor
     func testHistoricalSessionExistenceReadFailurePreservesCurrentWorkflow() {
         let sessionID = UUID()
+        let herdID = UUID()
         let navigation = AppNavigationState()
+        navigation.selectedHerdID = herdID
+        navigation.selectedHerdRootIdentity = testHerdRootIdentity(herdID)
         navigation.openWorkArea(.session(sessionID))
 
         let validator = StubNavigationValidator(
-            currentHerdResult: .success(UUID()),
+            currentHerdResult: .success(herdID),
             workingSessionResult: .success(false),
             workingSessionExistsResult: .failure(.readFailed)
         )
@@ -287,6 +307,8 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
         let sessionID = UUID()
         let findingID = UUID()
         let navigation = AppNavigationState()
+        navigation.selectedHerdID = herdID
+        navigation.selectedHerdRootIdentity = testHerdRootIdentity(herdID)
         navigation.openFieldCheckArea(
             .session(
                 FieldCheckSessionLaunchConfiguration(
@@ -318,6 +340,8 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
         let sessionID = UUID()
         let findingID = UUID()
         let navigation = AppNavigationState()
+        navigation.selectedHerdID = herdID
+        navigation.selectedHerdRootIdentity = testHerdRootIdentity(herdID)
         navigation.openFieldCheckArea(
             .session(
                 FieldCheckSessionLaunchConfiguration(
@@ -385,6 +409,10 @@ private final class StubNavigationValidator:
 
     func currentHerdID() throws -> UUID? {
         try currentHerdResult.get()
+    }
+
+    func currentHerdRootIdentity() throws -> URL? {
+        try currentHerdID().map(testHerdRootIdentity)
     }
 
     func animalExists(id: UUID) throws -> Bool {

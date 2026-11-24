@@ -141,6 +141,8 @@ final class AppNavigationRestorationPreflightTests: XCTestCase {
         for usesFieldCheck in [true, false] {
             let saved = AppNavigationState()
             saved.selectedHerdID = durableHerdID
+
+            saved.selectedHerdRootIdentity = testHerdRootIdentity(durableHerdID)
             saved.selectedTab = .herd
             saved.herdRouter.path = [.animal(animalID), .pasture(pastureID)]
             saved.herdRouter.searchPath = [.pasture(pastureID)]
@@ -186,6 +188,8 @@ final class AppNavigationRestorationPreflightTests: XCTestCase {
             // recovery still cannot generate a replacement scene payload.
             recoveryNavigation.herdRouter.path = [.animal(UUID())]
             recoveryNavigation.selectedHerdID = ephemeralHerdID
+
+            recoveryNavigation.selectedHerdRootIdentity = testHerdRootIdentity(ephemeralHerdID)
             XCTAssertNil(
                 AppNavigationSceneStorageAccess.payload(
                     for: recoveryNavigation,
@@ -300,6 +304,8 @@ final class AppNavigationRestorationPreflightTests: XCTestCase {
         let source = AppNavigationState()
         source.selectedTab = .herd
         source.selectedHerdID = herdID
+
+        source.selectedHerdRootIdentity = testHerdRootIdentity(herdID)
         if let animalID {
             source.herdRouter.path = [.animal(animalID)]
         }
@@ -338,6 +344,10 @@ private final class PreflightStubNavigationValidator: AppNavigationRestorationVa
 
     func currentHerdID() throws -> UUID? {
         try currentHerdResult.get()
+    }
+
+    func currentHerdRootIdentity() throws -> URL? {
+        try currentHerdID().map(testHerdRootIdentity)
     }
 
     func animalExists(id: UUID) throws -> Bool {

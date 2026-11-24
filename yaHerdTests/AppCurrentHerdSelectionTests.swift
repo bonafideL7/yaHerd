@@ -11,7 +11,7 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
                 createdAt: Date(timeIntervalSince1970: 100),
                 updatedAt: Date(timeIntervalSince1970: 100)
             ),
-            category: .owned
+            category: .owned, rootIdentity: testHerdRootIdentity(id)
         )
     }
 
@@ -27,12 +27,12 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
         selection.restoreAccessibleHerd(from: [herd(idA), herd(idB)])
         XCTAssertEqual(selection.currentHerdID, idB)
 
-        selection.restoreAccessibleHerd(from: [herd(idA), herd(UUID())])
+        selection.revalidateActiveHerd(from: [herd(idA), herd(UUID())])
         XCTAssertNil(selection.currentHerdID)
         XCTAssertEqual(defaults.string(forKey: "selected"), idB.uuidString)
 
         // A temporarily empty import must not erase a previously chosen ID.
-        selection.restoreAccessibleHerd(from: [])
+        selection.revalidateActiveHerd(from: [])
         XCTAssertNil(selection.currentHerdID)
         XCTAssertEqual(defaults.string(forKey: "selected"), idB.uuidString)
 
@@ -61,9 +61,9 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
         XCTAssertEqual(selection.currentHerdID, idB)
         XCTAssertEqual(defaults.string(forKey: "selected"), idB.uuidString)
 
-        selection.select(nil)
+        selection.deferCurrentHerdUntilImportReady()
         XCTAssertNil(selection.currentHerdID)
-        XCTAssertNil(defaults.string(forKey: "selected"))
+        XCTAssertEqual(defaults.string(forKey: "selected"), idB.uuidString)
     }
 
     func testExplicitSelectionWinsOverStoredPreference() throws {
@@ -73,11 +73,29 @@ final class AppCurrentHerdSelectionTests: XCTestCase {
         let explicitID = UUID()
         let storedID = UUID()
         defaults.set(storedID.uuidString, forKey: "selected")
-        let selection = AppCurrentHerdSelection(
-            currentHerdID: explicitID, defaults: defaults, preferenceKey: "selected"
-        )
-        selection.restoreAccessibleHerd(from: [herd(explicitID), herd(storedID)])
+        let selection = AppCurrentHerdSelection(defaults: defaults, preferenceKey: "selected")
+        try selection.selectAccessibleHerd(explicitID, from: [herd(explicitID), herd(storedID)], remember: false)
+        XCTAssertEqual(defaults.string(forKey: "selected"), storedID.uuidString)
         XCTAssertEqual(selection.currentHerdID, explicitID)
+    }
+
+    func testReplacementRootWithSameApplicationIDInvalidatesSelectionAndCannotRestoreOldPreference() throws {
+        let suite = "stage3-replacement-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let id = UUID()
+        let original = herd(id)
+        let replacement = AccessibleHerd(summary: original.summary, category: .owned,
+                                         rootIdentity: testHerdRootIdentity(UUID()))
+        let selection = AppCurrentHerdSelection(defaults: defaults)
+        try selection.selectAccessibleHerd(id, from: [original])
+        let revision = selection.selectionRevision
+        selection.revalidateActiveHerd(from: [replacement])
+        XCTAssertNil(selection.currentHerdID)
+        XCTAssertGreaterThan(selection.selectionRevision, revision)
+        XCTAssertNil(selection.rememberedAccessibleHerd(from: [replacement]))
+        selection.restoreAccessibleHerd(from: [original])
+        XCTAssertEqual(selection.selectedRootIdentity, original.rootIdentity)
     }
 
     func testDuplicateInventoryIdentityCannotBeSelected() {

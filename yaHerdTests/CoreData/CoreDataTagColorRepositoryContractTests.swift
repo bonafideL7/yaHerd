@@ -1568,7 +1568,13 @@ private final class CoreDataTagColorContractEnvironment {
 
 @MainActor
 private final class CoreDataTagColorContractSelection: CurrentHerdSelectionReading {
-    var currentHerdID: UUID?
+    var currentHerdID: UUID? {
+        didSet {
+            if oldValue != currentHerdID { selectionRevision &+= 1 }
+        }
+    }
+    private(set) var selectionRevision: UInt64 = 0
+    var selectedRootIdentity: URL? { nil }
 }
 
 

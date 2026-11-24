@@ -1067,17 +1067,17 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     }
 
     @MainActor
-    func testAppCurrentHerdSelectionExposesOnlyTheSelectedApplicationID() {
+    func testAppCurrentHerdSelectionExposesOnlyTheSelectedApplicationID() throws {
         let firstID = UUID()
         let secondID = UUID()
         let selection = AppCurrentHerdSelection(currentHerdID: firstID)
 
         XCTAssertEqual(selection.currentHerdID, firstID)
 
-        selection.select(secondID)
+        try selection.selectAccessibleHerd(secondID, from: [testAccessibleHerd(firstID), testAccessibleHerd(secondID)])
         XCTAssertEqual(selection.currentHerdID, secondID)
 
-        selection.select(nil)
+        selection.deferCurrentHerdUntilImportReady()
         XCTAssertNil(selection.currentHerdID)
     }
 

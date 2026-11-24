@@ -6674,7 +6674,13 @@ private final class CoreDataAnimalContractEnvironment {
 
 @MainActor
 private final class CoreDataAnimalContractSelection: CurrentHerdSelectionReading {
-    var currentHerdID: UUID?
+    var currentHerdID: UUID? {
+        didSet {
+            if oldValue != currentHerdID { selectionRevision &+= 1 }
+        }
+    }
+    private(set) var selectionRevision: UInt64 = 0
+    var selectedRootIdentity: URL? { nil }
 }
 
 private enum CoreDataAnimalContractTestError: Error {

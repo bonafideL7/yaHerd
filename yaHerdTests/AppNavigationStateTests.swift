@@ -65,9 +65,12 @@ final class AppNavigationStateTests: XCTestCase {
         navigation.herdRouter.searchPath = [.animal(searchAnimalID)]
         navigation.handle(.openFinding(sessionID: sessionID, findingID: findingID))
 
+        let herdID = UUID()
+        navigation.selectedHerdID = herdID
+        navigation.selectedHerdRootIdentity = testHerdRootIdentity(herdID)
         let payload = try XCTUnwrap(navigation.restorationPayload())
         let restored = AppNavigationState()
-        restored.restore(from: payload, using: RestorableTestNavigationValidator())
+        restored.restore(from: payload, using: RestorableTestNavigationValidator(herdID: herdID))
 
         XCTAssertEqual(restored.snapshot, navigation.snapshot)
         XCTAssertEqual(restored.herdRouter.path, [.animal(animalID)])
@@ -176,9 +179,12 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertEqual(navigation.workflowRouter.route, .fieldCheckSessions(.openFindings))
         XCTAssertEqual(navigation.selectedTab, .home)
 
+        let herdID = UUID()
+        navigation.selectedHerdID = herdID
+        navigation.selectedHerdRootIdentity = testHerdRootIdentity(herdID)
         let payload = try XCTUnwrap(navigation.restorationPayload())
         let restored = AppNavigationState()
-        restored.restore(from: payload, using: RestorableTestNavigationValidator())
+        restored.restore(from: payload, using: RestorableTestNavigationValidator(herdID: herdID))
 
         XCTAssertTrue(restored.herdRouter.path.isEmpty)
         XCTAssertEqual(restored.fullScreenWorkflow, .fieldCheck)
@@ -220,9 +226,12 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertEqual(navigation.herdRouter.path, [.pasture(pastureID)])
         XCTAssertEqual(navigation.herdRouter.searchPath, [.animal(searchAnimalID)])
 
+        let herdID = UUID()
+        navigation.selectedHerdID = herdID
+        navigation.selectedHerdRootIdentity = testHerdRootIdentity(herdID)
         let payload = try XCTUnwrap(navigation.restorationPayload())
         let restored = AppNavigationState()
-        restored.restore(from: payload, using: RestorableTestNavigationValidator())
+        restored.restore(from: payload, using: RestorableTestNavigationValidator(herdID: herdID))
         XCTAssertEqual(restored.herdRouter.mode, .pastures)
         XCTAssertEqual(restored.herdRouter.searchPath, [.animal(searchAnimalID)])
     }
@@ -349,9 +358,12 @@ final class AppNavigationStateTests: XCTestCase {
         navigation.openSearch(query: "green 14")
         navigation.herdRouter.searchPath = [.animal(animalID)]
 
+        let herdID = UUID()
+        navigation.selectedHerdID = herdID
+        navigation.selectedHerdRootIdentity = testHerdRootIdentity(herdID)
         let payload = try XCTUnwrap(navigation.restorationPayload())
         let restored = AppNavigationState()
-        restored.restore(from: payload, using: RestorableTestNavigationValidator())
+        restored.restore(from: payload, using: RestorableTestNavigationValidator(herdID: herdID))
 
         XCTAssertEqual(restored.selectedTab, .search)
         XCTAssertEqual(restored.herdRouter.mode, .animals)
@@ -410,7 +422,9 @@ final class AppNavigationStateTests: XCTestCase {
 
 @MainActor
 private struct RestorableTestNavigationValidator: AppNavigationRestorationValidating {
-    func currentHerdID() throws -> UUID? { nil }
+    let herdID: UUID
+    func currentHerdID() throws -> UUID? { herdID }
+    func currentHerdRootIdentity() throws -> URL? { testHerdRootIdentity(herdID) }
     func animalExists(id: UUID) throws -> Bool { true }
     func pastureExists(id: UUID) throws -> Bool { true }
     func isActiveFieldCheckSession(id: UUID) throws -> Bool { true }
