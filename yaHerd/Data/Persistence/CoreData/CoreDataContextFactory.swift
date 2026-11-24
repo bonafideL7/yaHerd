@@ -17,7 +17,8 @@ final class CoreDataContextFactory: Sendable {
 
     func historyStores() throws -> [CoreDataHistoryStore] {
         try persistence.withLock { container in
-            guard container.historyWakeups != nil else { return [] }
+            // Store identity enumeration is independent of notification registration.
+            // Runtime consumption is started only when CloudKit wakeups are installed.
             return try container.persistentStoreCoordinator.persistentStores.map { store in
                 let identifier: String? = store.identifier
                 guard store.type == NSSQLiteStoreType,
