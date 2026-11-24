@@ -338,6 +338,11 @@ private struct RunningAppView: View {
                 \.workingSessionFeatureDependencies,
                 runtime.dependencies.workingSessionFeatureDependencies
             )
+            .onChange(of: runtime.dependencies.applicationMutationCenter.currentSequence) { _, _ in
+                guard !runtime.dataAccessMode.isRecoveryMode,
+                      runtime.herdSelection.currentHerdID != nil else { return }
+                tagColorLibrary.refresh()
+            }
             .onChange(of: runtime.herdSelection.selectionRevision) { _, _ in
                 tagColorLibrary.resetForHerdChange()
             }

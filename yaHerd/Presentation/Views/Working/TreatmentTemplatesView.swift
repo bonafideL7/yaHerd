@@ -112,6 +112,10 @@ struct TreatmentTemplatesView: View {
             errorMessage = nil
             showingError = false
         }
+        .onChange(of: workingDependencies.mutationStream.workingSessionRevision) { _, _ in
+            guard herdIdentity?.isCurrent(in: herdSelection) == true else { return }
+            viewModel.load()
+        }
         .onChange(of: showingAdd) { _, isPresented in
             guard !isPresented else { return }
             pendingAddHerdIdentity = nil

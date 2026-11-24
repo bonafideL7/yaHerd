@@ -85,7 +85,7 @@ struct AddAnimalView: View {
                 Text(viewModel.form.errorMessage ?? viewModel.errorMessage ?? "")
             }
         }
-        .task {
+        .task(id: animalDependencies.mutationStream.animalRevision) {
             viewModel.loadSupportData(using: repository, pastureRepository: pastureReferenceDataReader)
         }
         .sheet(isPresented: $showingAddTag) {

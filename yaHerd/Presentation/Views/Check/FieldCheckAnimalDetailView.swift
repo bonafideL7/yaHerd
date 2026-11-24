@@ -201,6 +201,14 @@ struct FieldCheckAnimalDetailView: View {
         } message: {
             Text(model.errorMessage ?? "Unknown error")
         }
+        .onChange(of: fieldCheckDependencies.mutationStream.fieldCheckRevision) { _, _ in
+            guard isPresentingOriginatingHerd else { return }
+            model.load(
+                animalID: animalID, sessionID: sessionID,
+                animalRepository: animalRepository,
+                fieldCheckRepository: fieldCheckRepository
+            )
+        }
         .onChange(of: herdSelection.selectionRevision) { _, _ in
             guard !isPresentingOriginatingHerd else { return }
             showingAddOffspring = false

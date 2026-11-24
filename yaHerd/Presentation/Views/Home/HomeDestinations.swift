@@ -95,7 +95,7 @@ struct PastureSessionStartListView: View {
         }
         .navigationTitle(kind.navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .task { await loadPastures() }
+        .task(id: fieldCheckDependencies.mutationStream.pastureRevision) { await loadPastures() }
     }
 
     private func pastureRow(_ row: PastureSessionStartRow) -> some View {

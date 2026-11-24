@@ -105,6 +105,15 @@ struct PastureGroupDetailView: View {
                 selection: herdSelection
             )
         }
+        .onChange(of: pastureDependencies.mutationStream.pastureRevision) { _, _ in
+            guard isSelectionCurrent else { return }
+            model.load(
+                groupID: groupID, using: repository,
+                expectedHerdID: originatingHerdID,
+                expectedSelectionRevision: originatingSelectionRevision,
+                selection: herdSelection
+            )
+        }
         .onChange(of: herdSelection.selectionRevision) { _, _ in
             model.resetForHerdChange()
         }

@@ -42,7 +42,7 @@ struct AnimalTimelineContainerView: View {
                 ProgressView()
             }
         }
-        .task {
+        .task(id: animalDependencies.mutationStream.animalRevision) {
             guard isOriginCurrent else {
                 dismiss()
                 return

@@ -98,6 +98,9 @@ struct PastureGroupListView: View {
         .task {
             model.load(using: repository, selection: herdSelection)
         }
+        .onChange(of: pastureDependencies.mutationStream.pastureRevision) { _, _ in
+            model.load(using: repository, selection: herdSelection)
+        }
         .onChange(of: herdSelection.selectionRevision) { _, _ in
             model.resetForHerdChange()
             model.load(using: repository, selection: herdSelection)

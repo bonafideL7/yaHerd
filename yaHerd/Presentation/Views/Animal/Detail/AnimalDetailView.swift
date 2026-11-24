@@ -278,6 +278,10 @@ struct AnimalDetailView: View {
                 }
             }
         }
+        .onChange(of: animalDependencies.mutationStream.animalRevision) { _, _ in
+            guard isViewingCurrentHerd else { return }
+            viewModel.load(animalID: animalID, using: repository, pastureRepository: pastureReferenceDataReader)
+        }
         .onChange(of: viewModel.errorMessage) { _, newValue in
             showingError = newValue != nil && isViewingCurrentHerd
         }

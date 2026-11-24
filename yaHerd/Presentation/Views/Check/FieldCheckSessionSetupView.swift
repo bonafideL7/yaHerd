@@ -82,6 +82,9 @@ struct FieldCheckSessionSetupView: View {
                 loadPastures()
             }
         }
+        .onChange(of: fieldCheckDependencies.mutationStream.fieldCheckRevision) { _, _ in
+            loadPastures()
+        }
         .onChange(of: herdSelection.selectionRevision) { _, _ in
             // The previous Herd's form state cannot become the new Herd's draft.
             model.configure(selection: herdSelection)
