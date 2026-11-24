@@ -342,15 +342,30 @@ if entitlements != expected_entitlements:
         "Xcode must select the APNs environment from the signing provisioning profile"
     )
 
-# Preserve the existing rule for every other entitlement file; approval is
-# limited to the app target's declared CloudKit entitlement, not arbitrary files.
+# The dedicated development configuration explicitly pins the CloudKit and
+# APNs environments so a manually initiated schema initialization cannot target
+# production. Normal Debug and Release retain automatic profile selection.
+development_entitlements_path = Path("yaHerd/yaHerd-iCloudDevelopment.entitlements")
+try:
+    development_entitlements = plistlib.loads(development_entitlements_path.read_bytes())
+except (OSError, ValueError, plistlib.InvalidFileException) as error:
+    failures.append(f"{development_entitlements_path}: cannot parse development entitlements: {error}")
+else:
+    if development_entitlements != {
+        **expected_entitlements,
+        "aps-environment": "development",
+        "com.apple.developer.icloud-container-environment": "Development",
+    }:
+        failures.append(f"{development_entitlements_path}: incorrect development-only capability configuration")
+
+# No other entitlement files may enable CloudKit.
 icloud_configuration = re.compile(
     r"\b(?:com\.apple\.developer\.(?:icloud|ubiquity)[A-Za-z0-9_.-]*|"
     r"com\.apple\.iCloud|iCloud\.[A-Za-z0-9_.-]+|CloudKit)\b",
     re.IGNORECASE,
 )
 for other_entitlements in Path(".").rglob("*.entitlements"):
-    if other_entitlements == entitlements_path:
+    if other_entitlements in (entitlements_path, development_entitlements_path):
         continue
     for line_number, line in enumerate(other_entitlements.read_text().splitlines(), start=1):
         if icloud_configuration.search(line):
@@ -371,10 +386,20 @@ if not release_settings or 'CODE_SIGN_IDENTITY = "Apple Development";' in releas
         "yaHerd.xcodeproj: Release must not force an Apple Development signing identity"
     )
 
-if project_text.count("CODE_SIGN_ENTITLEMENTS = yaHerd/yaHerd.entitlements;") != 3:
-    failures.append(
-        "yaHerd.xcodeproj: Debug, iCloudDevelopment and Release app builds must use iCloud entitlements"
-    )
+if project_text.count("CODE_SIGN_ENTITLEMENTS = yaHerd/yaHerd.entitlements;") != 2:
+    failures.append("yaHerd.xcodeproj: normal Debug and Release must use standard iCloud entitlements")
+
+development_app_settings = re.search(
+    r"F00000000000000000000002 /[*] iCloudDevelopment [*]/ = [{].*?buildSettings = [{](.*?)[\r\n][ \t]*[}];",
+    project_text,
+    re.S,
+)
+if (
+    project_text.count("CODE_SIGN_ENTITLEMENTS = yaHerd/yaHerd-iCloudDevelopment.entitlements;") != 1
+    or not development_app_settings
+    or "CODE_SIGN_ENTITLEMENTS = yaHerd/yaHerd-iCloudDevelopment.entitlements;" not in development_app_settings.group(1)
+):
+    failures.append("yaHerd.xcodeproj: only iCloudDevelopment must use development-only entitlements")
 
 # Stage 2 iCloud verification must be selected through an explicit Xcode
 # build configuration, never an invisible scheme environment variable or
@@ -404,7 +429,17 @@ for scheme, run_configuration in ((icloud_scheme, "iCloudDevelopment"), (default
     if not run_action or f'buildConfiguration = "{run_configuration}"' not in run_action.group(1):
         failures.append(f"{scheme}: unexpected Run build configuration")
     if run_action and "<EnvironmentVariables>" in run_action.group(1):
-        failures.append(f"{scheme}: Run must not contain hidden iCloud activation variables")
+        variables = re.findall(
+            r'<EnvironmentVariable\s+key\s*=\s*"([^"]+)"\s+value\s*=\s*"([^"]+)"\s+isEnabled\s*=\s*"([^"]+)"\s*>',
+            run_action.group(1),
+        )
+        allowed = {
+            ("YAHERD_VALIDATE_ICLOUD_SCHEMA", "1", "NO"),
+            ("YAHERD_CREATE_ICLOUD_DEV_SCHEMA", "1", "NO"),
+            ("YAHERD_ICLOUD_SCHEMA_VALIDATED", "1", "NO"),
+        }
+        if scheme != icloud_scheme or len(variables) != len(allowed) or set(variables) != allowed:
+            failures.append(f"{scheme}: only disabled, explicit development schema controls are permitted in Run")
 
 # Signed development CloudKit tests run inside the iOS app on a device.
 # Keep unsigned simulator CI, but allow the test bundle to be signed for
