@@ -358,8 +358,10 @@ actor CoreDataPersistentHistoryConsumer {
         guard let fetch = NSPersistentHistoryTransaction.fetchRequest else {
             throw CoreDataHistoryError.missingTransactionFetchRequest
         }
+        // Preserve Core Data's native history order for token-based paging.
+        // transactionNumber is a returned transaction property, not a fetchable
+        // key on the SQLite history entity. Sorting by it raises NSException.
         fetch.fetchLimit = pageSize
-        fetch.sortDescriptors = [NSSortDescriptor(key: "transactionNumber", ascending: true)]
         request.fetchRequest = fetch
         guard let result = try context.execute(request) as? NSPersistentHistoryResult else {
             throw CoreDataHistoryError.invalidResult

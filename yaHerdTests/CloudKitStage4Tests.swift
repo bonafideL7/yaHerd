@@ -271,6 +271,31 @@ final class CloudKitStage4Tests: XCTestCase {
         XCTAssertTrue(replay.changes.isEmpty)
     }
 
+    func testSQLiteHistoryPagesDoNotSkipRemoteTransactionsAcrossLocalWrites() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let factory = assembly.contextFactory
+        let owned = try XCTUnwrap(factory.historyStores().first { $0.url == harness.storeURL })
+        _ = await processHistory(factory)
+
+        // Put remote changes on both sides of the 128-transaction page boundary.
+        // Local transactions must advance the cursor without hiding remote ones.
+        try insertHerd(in: owned, using: factory, author: "external-import")
+        for _ in 0..<127 {
+            try insertHerd(in: owned, using: factory, author: nil)
+        }
+        try insertHerd(in: owned, using: factory, author: "external-import")
+
+        let consumed = await processHistory(factory)
+        XCTAssertEqual(consumed.changes.map(\.storeID), [owned.identifier, owned.identifier])
+        XCTAssertTrue(consumed.changes.allSatisfy { $0.reasons == [.herd] })
+
+        let resumed = await processHistory(factory)
+        XCTAssertTrue(resumed.changes.isEmpty)
+    }
+
     @MainActor
     private final class HistoryRecorder {
         var changes: [PersistentHistoryChanges] = []
