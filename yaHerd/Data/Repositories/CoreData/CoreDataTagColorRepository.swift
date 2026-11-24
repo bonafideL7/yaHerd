@@ -88,7 +88,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
             throw HerdRepositoryError.missingHerd
         }
 
-        let context = contextFactory.makeReadContext()
+        try contextFactory.validateHerdAccess()
+        let context = contextFactory.makeReadContext(expectedHerdRoot: selection.selectedRootIdentity)
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
@@ -461,7 +462,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
             return []
         }
 
-        let context = contextFactory.makeReadContext()
+        try contextFactory.validateHerdAccess()
+        let context = contextFactory.makeReadContext(expectedHerdRoot: selection.selectedRootIdentity)
         return try context.performAndWait {
             guard try lookup.herd(id: herdID, in: context) != nil else {
                 throw HerdRepositoryError.missingHerd
@@ -501,7 +503,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
         guard let herdID = selection.currentHerdID else {
             throw HerdRepositoryError.missingHerd
         }
-        let context = contextFactory.makeReadContext()
+        try contextFactory.validateHerdAccess()
+        let context = contextFactory.makeReadContext(expectedHerdRoot: selection.selectedRootIdentity)
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
@@ -529,7 +532,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
             requiresDefaultSlot: requiresDefaultSlot
         )
 
-        let context = try contextFactory.makeWriteContext()
+        let context = try contextFactory.makeWriteContext(expectedHerdRoot: selection.selectedRootIdentity)
         let beforeSave = self.beforeSave
         try context.performAndWait {
             do {
@@ -552,6 +555,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 if context.hasChanges {
                     try beforeSave?(context)
                     try lookup.prepareForSave(herdID: herdID, in: context)
+                try contextFactory.validateHerdAccess()
                     do {
                         try context.save()
                     } catch {

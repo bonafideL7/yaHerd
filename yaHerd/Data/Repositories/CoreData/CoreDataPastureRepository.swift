@@ -64,7 +64,8 @@ final class CoreDataPastureRepository:
 
     func fetchPastureDetail(id: UUID) throws -> PastureDetailSnapshot? {
         guard let herdID = selection.currentHerdID else { throw HerdRepositoryError.missingHerd }
-        let context = contextFactory.makeReadContext()
+        try contextFactory.validateHerdAccess()
+        let context = contextFactory.makeReadContext(expectedHerdRoot: selection.selectedRootIdentity)
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
             try CoreDataAnimalMutation.validateUnownedImportedPastures(herd: herd, in: context)
@@ -81,7 +82,8 @@ final class CoreDataPastureRepository:
 
     func fetchResidentAnimals(pastureID: UUID) throws -> [AnimalSummary] {
         guard let herdID = selection.currentHerdID else { throw HerdRepositoryError.missingHerd }
-        let context = contextFactory.makeReadContext()
+        try contextFactory.validateHerdAccess()
+        let context = contextFactory.makeReadContext(expectedHerdRoot: selection.selectedRootIdentity)
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
             try CoreDataAnimalMutation.validateUnownedImportedPastures(herd: herd, in: context)
@@ -240,7 +242,8 @@ final class CoreDataPastureRepository:
 
     func fetchPastureGroupDetail(id: UUID) throws -> PastureGroupDetailSnapshot? {
         guard let herdID = selection.currentHerdID else { throw HerdRepositoryError.missingHerd }
-        let context = contextFactory.makeReadContext()
+        try contextFactory.validateHerdAccess()
+        let context = contextFactory.makeReadContext(expectedHerdRoot: selection.selectedRootIdentity)
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
             _ = try Self.fetchGroups(herd: herd, in: context)
@@ -371,7 +374,8 @@ final class CoreDataPastureRepository:
 
     private func makeReadScope() throws -> (NSManagedObjectContext, UUID) {
         guard let herdID = selection.currentHerdID else { throw HerdRepositoryError.missingHerd }
-        return (contextFactory.makeReadContext(), herdID)
+        try contextFactory.validateHerdAccess()
+        return (contextFactory.makeReadContext(expectedHerdRoot: selection.selectedRootIdentity), herdID)
     }
 
     private func performWrite<Result: Sendable>(
@@ -380,7 +384,7 @@ final class CoreDataPastureRepository:
         guard let herdID = selection.currentHerdID else { throw HerdRepositoryError.missingHerd }
         try residentWriteCoordinator.beginPastureWrite()
         defer { residentWriteCoordinator.endPastureWrite() }
-        let context = try contextFactory.makeWriteContext()
+        let context = try contextFactory.makeWriteContext(expectedHerdRoot: selection.selectedRootIdentity)
         return try context.performAndWait {
             do {
                 guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
@@ -388,6 +392,7 @@ final class CoreDataPastureRepository:
                 let result = try operation(context, herd)
                 if context.hasChanges {
                     try lookup.prepareForSave(herdID: herdID, in: context)
+                try contextFactory.validateHerdAccess()
                     do {
                         try context.save()
                     } catch {

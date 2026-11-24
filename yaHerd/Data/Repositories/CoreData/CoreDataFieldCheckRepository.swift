@@ -870,7 +870,8 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
         guard let herdID = selection.currentHerdID else {
             throw HerdRepositoryError.missingHerd
         }
-        return (contextFactory.makeReadContext(), herdID)
+        try contextFactory.validateHerdAccess()
+        return (contextFactory.makeReadContext(expectedHerdRoot: selection.selectedRootIdentity), herdID)
     }
 
     private func performWrite<Result: Sendable>(
@@ -907,7 +908,7 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
         let animalWriteBoundary = self.animalWriteBoundary
         do {
             let result = try await transactionExecutor.performWrite(
-                herdID: herdID,
+                herdID: herdID, expectedHerdRoot: selection.selectedRootIdentity,
                 beforeSave: beforeSave,
                 afterTransaction: {
                     animalWriteBoundary.releaseFieldCheck()

@@ -809,7 +809,7 @@ final class CoreDataWorkingRepository:
         let animalWriteBoundary = self.animalWriteBoundary
         do {
             let result = try await transactionExecutor.performWrite(
-                herdID: herdID,
+                herdID: herdID, expectedHerdRoot: selection.selectedRootIdentity,
                 beforeSave: beforeSave,
                 afterTransaction: {
                     animalWriteBoundary.endAnimalWrite()
@@ -860,7 +860,8 @@ final class CoreDataWorkingRepository:
             return []
         }
 
-        let context = contextFactory.makeReadContext()
+        try contextFactory.validateHerdAccess()
+        let context = contextFactory.makeReadContext(expectedHerdRoot: selection.selectedRootIdentity)
         return try context.performAndWait {
             guard try lookup.herd(id: herdID, in: context) != nil else {
                 throw HerdRepositoryError.missingHerd
@@ -889,7 +890,8 @@ final class CoreDataWorkingRepository:
             return false
         }
 
-        let context = contextFactory.makeReadContext()
+        try contextFactory.validateHerdAccess()
+        let context = contextFactory.makeReadContext(expectedHerdRoot: selection.selectedRootIdentity)
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
@@ -911,7 +913,8 @@ final class CoreDataWorkingRepository:
         guard let herdID = selection.currentHerdID else {
             throw HerdRepositoryError.missingHerd
         }
-        return (contextFactory.makeReadContext(), herdID)
+        try contextFactory.validateHerdAccess()
+        return (contextFactory.makeReadContext(expectedHerdRoot: selection.selectedRootIdentity), herdID)
     }
 
     // Per-session graph checks cannot detect an application ID reused

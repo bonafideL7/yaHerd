@@ -26,7 +26,8 @@ final class CoreDataSampleDataSeeder: SampleDataSeeding {
         guard let herdID = selection.currentHerdID else {
             throw HerdRepositoryError.missingHerd
         }
-        let context = assembly.contextFactory.makeReadContext()
+        try assembly.contextFactory.validateHerdAccess()
+        let context = assembly.contextFactory.makeReadContext(expectedHerdRoot: selection.selectedRootIdentity)
         let lookup = assembly.lookup
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else {
@@ -90,7 +91,7 @@ final class CoreDataSampleDataSeeder: SampleDataSeeding {
             )
         }
         let lookup = assembly.lookup
-        let inserted = try await assembly.transactionExecutor.performWrite(herdID: herdID) { context in
+        let inserted = try await assembly.transactionExecutor.performWrite(herdID: herdID, expectedHerdRoot: selection.selectedRootIdentity) { context in
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }

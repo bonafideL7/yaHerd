@@ -47,7 +47,8 @@ final class CoreDataAnimalStatusReferenceRepository: AnimalStatusReferenceReadin
             throw HerdRepositoryError.missingHerd
         }
 
-        let context = contextFactory.makeReadContext()
+        try contextFactory.validateHerdAccess()
+        let context = contextFactory.makeReadContext(expectedHerdRoot: selection.selectedRootIdentity)
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd

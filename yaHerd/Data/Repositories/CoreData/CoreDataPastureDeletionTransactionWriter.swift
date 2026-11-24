@@ -60,7 +60,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
                   selection.selectionRevision == selectionRevision else {
                 throw CancellationError()
             }
-            let executed = try await transactionExecutor.performWrite(herdID: herdID, beforeSave: beforeSave) { context in
+            let executed = try await transactionExecutor.performWrite(herdID: herdID, expectedHerdRoot: selection.selectedRootIdentity, beforeSave: beforeSave) { context in
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
