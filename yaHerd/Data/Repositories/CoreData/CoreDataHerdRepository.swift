@@ -41,8 +41,11 @@ final class CoreDataHerdRepository: HerdRepository {
     }
 
     func fetchHerdInventory() throws -> HerdInventory {
+        guard !contextFactory.herdImportState.blocksHerdAccess else {
+            throw HerdRepositoryError.accountUnavailable
+        }
         let context = contextFactory.makeReadContext()
-        return try context.performAndWait {
+        let inventory = try context.performAndWait {
             let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
             request.sortDescriptors = [
                 NSSortDescriptor(key: "createdAt", ascending: true),
@@ -50,25 +53,20 @@ final class CoreDataHerdRepository: HerdRepository {
             ]
             let roots = try context.fetch(request)
             let stores = context.persistentStoreCoordinator?.persistentStores ?? []
-            var seenIDs = Set<UUID>()
+            let ids = roots.compactMap(\.id)
+            let ambiguousIDs = Set(Dictionary(grouping: ids, by: { $0 })
+                .filter { $0.value.count > 1 }.keys)
             var available: [AccessibleHerd] = []
             var hasIncompleteRoots = false
+            var hasIncompleteOwnedRoots = false
 
             for root in roots {
-                // A partially imported root without its UUID must not block
-                // valid accessible Herds. Leave it untouched while importing.
-                guard let id = root.id else {
-                    hasIncompleteRoots = true
-                    continue
-                }
-                guard seenIDs.insert(id).inserted else {
-                    throw CoreDataPersistenceError.duplicateApplicationID(
-                        entity: CDHerd.coreDataEntityName, id: id, herdID: nil
-                    )
-                }
                 guard let store = root.objectID.persistentStore,
                       stores.contains(where: { $0 === store }) else {
-                    throw CoreDataPersistenceError.unresolvedHerdStore(id: id)
+                    if let id = root.id {
+                        throw CoreDataPersistenceError.unresolvedHerdStore(id: id)
+                    }
+                    throw CoreDataPersistenceError.missingApplicationID(entity: CDHerd.coreDataEntityName)
                 }
                 let category: AccessibleHerd.Category
                 if stores.count == 1 {
@@ -80,27 +78,46 @@ final class CoreDataHerdRepository: HerdRepository {
                             CoreDataPersistentContainer.storeFileName {
                     category = .owned
                 } else {
-                    throw CoreDataPersistenceError.unresolvedHerdStore(id: id)
+                    if let id = root.id {
+                        throw CoreDataPersistenceError.unresolvedHerdStore(id: id)
+                    }
+                    throw CoreDataPersistenceError.missingApplicationID(entity: CDHerd.coreDataEntityName)
+                }
+
+                // Ambiguous UUIDs are excluded, not resolved to the first row.
+                // Other unambiguous Herds must remain available.
+                if let id = root.id, ambiguousIDs.contains(id) {
+                    if category == .owned { hasIncompleteOwnedRoots = true }
+                    continue
                 }
 
                 do {
                     available.append(AccessibleHerd(
-                        summary: try root.toSummary(), category: category
+                        summary: try root.toSummary(),
+                        category: category,
+                        rootIdentity: root.objectID.uriRepresentation()
                     ))
                 } catch let error as CoreDataHerdMappingError {
                     switch error {
-                    case .missingName, .missingCreatedAt, .missingUpdatedAt:
+                    case .missingID, .missingName, .missingCreatedAt, .missingUpdatedAt:
                         // Import can deliver the root before its metadata.
                         // Keep the original record untouched and undisplayed.
                         hasIncompleteRoots = true
-                        continue
-                    case .missingID:
-                        throw error
+                        if category == .owned { hasIncompleteOwnedRoots = true }
                     }
                 }
             }
-            return HerdInventory(herds: available, hasIncompleteRoots: hasIncompleteRoots)
+            return HerdInventory(
+                herds: available,
+                hasIncompleteRoots: hasIncompleteRoots,
+                hasIncompleteOwnedRoots: hasIncompleteOwnedRoots,
+                ambiguousHerdIDs: ambiguousIDs
+            )
         }
+        guard !contextFactory.herdImportState.blocksHerdAccess else {
+            throw HerdRepositoryError.accountUnavailable
+        }
+        return inventory
     }
 
     /// Explicit user action. A new owned root belongs only in the private
