@@ -105,6 +105,11 @@ actor CoreDataPersistentHistoryConsumer {
     // without republishing it in this process. A crash may replay it, never lose it.
     private var pendingCheckpoints: [CoreDataHistoryStore: HistoryCheckpoint] = [:]
 
+    // A successful import can finish without another retained history row.
+    // Previously incomplete reads still need a chance to reload. Remember
+    // acknowledged completions by store identity, not by notification count.
+    private var completedImports: [CoreDataHistoryStore: CloudStoreActivity.Outcome] = [:]
+
     init(contextFactory: CoreDataContextFactory) {
         self.contextFactory = contextFactory
     }
@@ -147,12 +152,36 @@ actor CoreDataPersistentHistoryConsumer {
             return false
         }
         pendingCheckpoints = pendingCheckpoints.filter { stores.contains($0.key) }
+        completedImports = completedImports.filter { stores.contains($0.key) }
+        let activity = contextFactory.cloudStoreActivity
         var success = true
         for store in stores {
             if Task.isCancelled || contextFactory.herdImportState.blocksHerdAccess { return true }
             do {
                 let hasMore = try await consume(store, publish: publish)
-                if hasMore { wakeups.requestProcessing() }
+                if hasMore {
+                    wakeups.requestProcessing()
+                } else if let completion = activity[store.identifier]?.importing,
+                          completion.state == .complete,
+                          completion.endDate != nil,
+                          completion.follows(completedImports[store]) {
+                    // Consume retained history first. An import completion is
+                    // also a retry boundary for previously incomplete reads,
+                    // even when the last page was already acknowledged.
+                    try Task.checkCancellation()
+                    try contextFactory.validateHerdAccess()
+                    guard try contextFactory.historyStores().contains(store) else {
+                        throw CoreDataHistoryError.storeChanged
+                    }
+                    guard await publish(PersistentHistoryChanges(
+                        storeID: store.identifier, entityNames: [], requiresFullRefresh: true
+                    )) else {
+                        throw CoreDataHistoryError.publicationRejected
+                    }
+                    try Task.checkCancellation()
+                    try contextFactory.validateHerdAccess()
+                    completedImports[store] = completion
+                }
             } catch is CancellationError where Task.isCancelled {
                 return true
             } catch {
