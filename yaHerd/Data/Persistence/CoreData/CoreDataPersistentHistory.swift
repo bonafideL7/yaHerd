@@ -370,7 +370,12 @@ actor CoreDataPersistentHistoryConsumer {
         guard let transactions = payload as? [NSPersistentHistoryTransaction] else {
             throw CoreDataHistoryError.invalidResult
         }
-        return transactions
+        // The history request can return more than its nested fetch limit.
+        // Bound the actual acknowledged page before choosing its final token.
+        // Sort the returned values, never the underlying history entity.
+        return Array(transactions.sorted {
+            $0.transactionNumber < $1.transactionNumber
+        }.prefix(pageSize))
     }
 
     private static func logFailure(_ error: Error, storeID: String?) {

@@ -288,9 +288,31 @@ final class CloudKitStage4Tests: XCTestCase {
         }
         try insertHerd(in: owned, using: factory, author: "external-import")
 
+        // Establish the actual persisted transaction count and newest token
+        // independently of the consumer's requested fetch limit.
+        let context = factory.makeReadContext()
+        let newestTransactionNumber = try context.performAndWait {
+            let store = try XCTUnwrap(context.persistentStoreCoordinator?.persistentStores.first {
+                $0.identifier == owned.identifier
+            })
+            let request = NSPersistentHistoryChangeRequest.fetchHistory(
+                after: nil as NSPersistentHistoryToken?
+            )
+            request.affectedStores = [store]
+            request.resultType = .transactionsOnly
+            let result = try XCTUnwrap(try context.execute(request) as? NSPersistentHistoryResult)
+            let transactions = try XCTUnwrap(result.result as? [NSPersistentHistoryTransaction])
+            XCTAssertEqual(transactions.count, 129)
+            return try XCTUnwrap(transactions.map(\.transactionNumber).max())
+        }
+
         let consumed = await processHistory(factory)
         XCTAssertEqual(consumed.changes.map(\.storeID), [owned.identifier, owned.identifier])
         XCTAssertTrue(consumed.changes.allSatisfy { $0.reasons == [.herd] })
+        let checkpoint = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: owned.checkpointURL)) as? [String: Any]
+        )
+        XCTAssertEqual(checkpoint["transactionNumber"] as? Int64, newestTransactionNumber)
 
         let resumed = await processHistory(factory)
         XCTAssertTrue(resumed.changes.isEmpty)
