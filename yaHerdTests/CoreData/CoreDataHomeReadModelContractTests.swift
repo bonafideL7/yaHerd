@@ -63,7 +63,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let readModel = CoreDataReadModelActor(
             contextFactory: environment.assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         do {
             _ = try await readModel.fetchDashboardPastureRecords()
@@ -122,7 +122,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let readModel = CoreDataReadModelActor(
             contextFactory: environment.assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         do {
             _ = try await readModel.fetchDashboardRecords()
@@ -184,7 +184,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let readModel = CoreDataReadModelActor(
             contextFactory: environment.assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         do {
             _ = try await readModel.fetchDashboardPastureRecords()
@@ -241,7 +241,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let readModel = CoreDataReadModelActor(
             contextFactory: environment.assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         let grazingDate = Date(timeIntervalSinceReferenceDate: 700_000)
 
@@ -366,7 +366,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let reader = CoreDataReadModelActor(
             contextFactory: environment.assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         await XCTAssertThrowsErrorAsync(
             try await reader.fetchHomeFieldCheckRecords()
@@ -428,7 +428,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
             let reopenedReader = CoreDataReadModelActor(
                 contextFactory: reopened.contextFactory,
                 lookup: CoreDataLookup(),
-                currentHerdID: { environment.selection.currentHerdID }
+                currentSelection: { environment.selection.snapshot }
             )
             await XCTAssertThrowsErrorAsync(
                 try await reopenedReader.fetchHomeFieldCheckRecords()
@@ -560,7 +560,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let reopenedReader = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         await XCTAssertThrowsErrorAsync(
             try await reopenedReader.fetchHomeFieldCheckRecords()
@@ -870,7 +870,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
                 let reopenedHome = CoreDataReadModelActor(
                     contextFactory: reopened.contextFactory,
                     lookup: CoreDataLookup(),
-                    currentHerdID: { environment.selection.currentHerdID }
+                    currentSelection: { environment.selection.snapshot }
                 )
                 await XCTAssertThrowsErrorAsync(
                     try await reopenedHome.fetchHomeFieldCheckRecords()
@@ -978,7 +978,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
             let reopenedReader = CoreDataReadModelActor(
                 contextFactory: reopened.contextFactory,
                 lookup: CoreDataLookup(),
-                currentHerdID: { environment.selection.currentHerdID }
+                currentSelection: { environment.selection.snapshot }
             )
             await XCTAssertThrowsErrorAsync(
                 try await reopenedReader.fetchHomeFieldCheckRecords()
@@ -1110,7 +1110,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let homeReader = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         await XCTAssertThrowsErrorAsync(
             try await homeReader.fetchHomeTreatmentTemplates(limit: 10)
@@ -1152,7 +1152,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let reader = CoreDataReadModelActor(
             contextFactory: environment.assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         let originalHome = try await reader.fetchHomeTreatmentTemplates(limit: 10)
         XCTAssertEqual(
@@ -1208,7 +1208,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let reopenedHome = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         await XCTAssertThrowsErrorAsync(
             try await reopenedHome.fetchHomeTreatmentTemplates(limit: 10)
@@ -1295,7 +1295,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let homeReader = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         let homeTemplates = try await homeReader.fetchHomeTreatmentTemplates(limit: 10)
         XCTAssertEqual(homeTemplates, expected)
@@ -1344,7 +1344,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let liveHomeReader = CoreDataReadModelActor(
             contextFactory: environment.assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         await XCTAssertThrowsErrorAsync(
             try await liveHomeReader.fetchHomeTreatmentTemplates(limit: 1)
@@ -1363,7 +1363,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let homeReader = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         await XCTAssertThrowsErrorAsync(
             try await homeReader.fetchHomeTreatmentTemplates(limit: 10)
@@ -1441,7 +1441,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let reader = CoreDataReadModelActor(
             contextFactory: environment.assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         let firstPage = try await reader.fetchHomeTreatmentTemplates(limit: 1)
         XCTAssertEqual(
@@ -1489,7 +1489,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         let reopenedReader = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { environment.selection.currentHerdID }
+            currentSelection: { environment.selection.snapshot }
         )
         await XCTAssertThrowsErrorAsync(
             try await reopenedReader.fetchHomeTreatmentTemplates(limit: 1)
@@ -1626,14 +1626,14 @@ private final class CoreDataHomeReadModelContractEnvironment {
                 CoreDataReadModelActor(
                     contextFactory: self.assembly.contextFactory,
                     lookup: CoreDataLookup(),
-                    currentHerdID: { self.selection.currentHerdID }
+                    currentSelection: { self.selection.snapshot }
                 )
             },
             makeHomeWorkingQueryReader: {
                 CoreDataReadModelActor(
                     contextFactory: self.assembly.contextFactory,
                     lookup: CoreDataLookup(),
-                    currentHerdID: { self.selection.currentHerdID }
+                    currentSelection: { self.selection.snapshot }
                 )
             }
         )
