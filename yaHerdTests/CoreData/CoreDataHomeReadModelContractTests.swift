@@ -1911,7 +1911,13 @@ private final class CoreDataHomeReadModelContractEnvironment {
 private final class CoreDataHomeReadModelContractSelection:
     CurrentHerdSelectionReading
 {
-    var currentHerdID: UUID?
+    var currentHerdID: UUID? {
+        didSet {
+            if oldValue != currentHerdID { selectionRevision &+= 1 }
+        }
+    }
+    private(set) var selectionRevision: UInt64 = 0
+    var selectedRootIdentity: URL? { nil }
 }
 
 extension CoreDataWorkingTreatmentTemplateRepository:

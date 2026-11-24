@@ -42,3 +42,15 @@ typealias TestPastureRepository =
     PastureGroupUpdating &
     PastureGroupDeleting &
     PastureGroupAssignmentWriting
+
+/// Stable store-qualified identities for tests that intentionally use a fake inventory.
+func testHerdRootIdentity(_ id: UUID) -> URL {
+    URL(fileURLWithPath: "/test-herds/" + id.uuidString)
+}
+
+func testAccessibleHerd(_ id: UUID, category: AccessibleHerd.Category = .owned) -> AccessibleHerd {
+    AccessibleHerd(
+        summary: HerdSummary(publicID: id, name: "Herd", createdAt: .distantPast, updatedAt: .distantPast),
+        category: category, rootIdentity: testHerdRootIdentity(id)
+    )
+}

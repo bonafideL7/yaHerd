@@ -15,7 +15,7 @@ final class CoreDataStage3StartupSelectionTests: XCTestCase {
             at: harness.storeURL, selectionPreferences: defaults
         )
         let repository = first.makeDependencies(dataAccessMode: .readWrite).herdRepository
-        let original = try repository.fetchCurrentHerd()
+        let original = try await repository.createOwnedHerd(named: "Original")
         let other = try await repository.createOwnedHerd(named: "Other")
 
         let reopened = try await CoreDataAppPersistenceAssembly.load(
@@ -49,8 +49,8 @@ final class CoreDataStage3StartupSelectionTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        let app = try CoreDataAppPersistenceAssembly.resolveCloudKitHerdForChoice(
-            using: assembly, privateStoreURL: harness.storeURL,
+        let app = CoreDataAppPersistenceAssembly.resolveHerdForChoice(
+            using: assembly,
             selectionPreferences: defaults
         )
         XCTAssertNil(app.currentHerdSelection.currentHerdID)
@@ -65,11 +65,12 @@ final class CoreDataStage3StartupSelectionTests: XCTestCase {
         let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
             storeURL: harness.storeURL, mirroringEnabled: false
         )
-        XCTAssertThrowsError(try CoreDataAppPersistenceAssembly.resolveCloudKitHerdForChoice(
-            using: assembly, privateStoreURL: harness.storeURL,
-            requestedHerdID: UUID()
-        )) { error in
-            XCTAssertEqual(error as? HerdRepositoryError, .missingHerd)
-        }
+        let repository = CoreDataHerdRepository(selection: AppCurrentHerdSelection(), assembly: assembly)
+        let existing = try await repository.createOwnedHerd(named: "Existing")
+        let app = CoreDataAppPersistenceAssembly.resolveHerdForChoice(
+            using: assembly, requestedHerdID: UUID()
+        )
+        XCTAssertNil(app.currentHerdSelection.currentHerdID)
+        XCTAssertEqual(try app.makeDependencies(dataAccessMode: .readWrite).herdRepository.fetchAccessibleHerds().map(\.id), [existing.id])
     }
 }
