@@ -8,20 +8,49 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
     private let assembly: CoreDataPersistenceAssembly
     private let selection: AppCurrentHerdSelection
 
-    init(assembly: CoreDataPersistenceAssembly, currentHerdID: UUID) {
+    var currentHerdSelection: AppCurrentHerdSelection { selection }
+
+    init(
+        assembly: CoreDataPersistenceAssembly,
+        currentHerdID: UUID?,
+        selectionPreferences: UserDefaults? = nil
+    ) {
         self.assembly = assembly
-        self.selection = AppCurrentHerdSelection(currentHerdID: currentHerdID)
+        self.selection = AppCurrentHerdSelection(
+            currentHerdID: currentHerdID, defaults: selectionPreferences
+        )
     }
 
     /// Production launch keeps one durable store and one selected Herd for all features.
-    static func load(at storeURL: URL) async throws -> CoreDataAppPersistenceAssembly {
+    static func load(
+        at storeURL: URL,
+        selectionPreferences: UserDefaults = .standard
+    ) async throws -> CoreDataAppPersistenceAssembly {
         let assembly = try await CoreDataPersistenceAssembly.load(storeURL: storeURL)
-        let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
-            assembly: assembly
-        )
+        let remembered = AppCurrentHerdSelection(defaults: selectionPreferences)
+        let repository = CoreDataHerdRepository(selection: remembered, assembly: assembly)
+        let available = try repository.fetchAccessibleHerds()
+        remembered.restoreAccessibleHerd(from: available)
+
+        let herdID: UUID?
+        if let selected = remembered.currentHerdID {
+            herdID = selected
+        } else if available.isEmpty {
+            // Only the strictly local first install creates the initial Herd.
+            // A mirrored import always follows the separate choice path.
+            herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+                assembly: assembly
+            )
+        } else {
+            // A missing or invalid remembered ID is not permission to select
+            // an arbitrary Herd, nor a storage failure.
+            herdID = nil
+        }
+
         return CoreDataAppPersistenceAssembly(
             assembly: assembly,
-            currentHerdID: herdID
+            currentHerdID: herdID,
+            selectionPreferences: selectionPreferences
         )
     }
 
@@ -52,19 +81,31 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
     static func resolveCloudKitHerd(
         using assembly: CoreDataPersistenceAssembly,
         privateStoreURL: URL,
-        selectedHerdID: UUID? = nil
+        selectedHerdID: UUID? = nil,
+        selectionPreferences: UserDefaults = .standard
     ) throws -> CoreDataAppPersistenceAssembly {
-        // The development activation path may select the one existing owned
-        // root. An explicit selection can target either private or shared.
-        // Neither path creates replacement Herds while import is in progress.
+        // The selected UUID is a locally persisted preference, never proof of
+        // CloudKit membership. Restore only IDs present in the loaded stores.
+        // An empty import must not create a replacement Herd.
         let herdID: UUID
         if let selectedHerdID {
             herdID = selectedHerdID
         } else {
-            herdID = try CoreDataAppHerdBootstrapper.resolveExistingPrivateHerdID(
-                assembly: assembly,
-                privateStoreURL: privateStoreURL
-            )
+            let remembered = AppCurrentHerdSelection(defaults: selectionPreferences)
+            let repository = CoreDataHerdRepository(selection: remembered, assembly: assembly)
+            // This legacy CloudKit resolver defaults only to an owned/private Herd.
+            // Shared Herds remain selectable through the explicit Stage 3 chooser.
+            let owned = try repository.fetchAccessibleHerds().filter { $0.category == .owned }
+            remembered.restoreAccessibleHerd(from: owned)
+            if let selected = remembered.currentHerdID {
+                herdID = selected
+            } else if owned.isEmpty {
+                throw HerdRepositoryError.missingHerd
+            } else {
+                throw CoreDataAppHerdBootstrapError.multipleLocalHerds(
+                    count: owned.count
+                )
+            }
         }
 
         let context = assembly.contextFactory.makeReadContext()
@@ -83,7 +124,41 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         }
         return CoreDataAppPersistenceAssembly(
             assembly: assembly,
-            currentHerdID: herdID
+            currentHerdID: herdID,
+            selectionPreferences: selectionPreferences
+        )
+    }
+
+    /// Stage 3 startup: enumerate owned and shared Herds without implicitly
+    /// creating a local root. If no valid selection exists, retain the loaded
+    /// stores and present the Herd chooser.
+    /// An explicit developer-selected ID still uses strict Stage 2 validation.
+    static func resolveCloudKitHerdForChoice(
+        using assembly: CoreDataPersistenceAssembly,
+        privateStoreURL: URL,
+        requestedHerdID: UUID? = nil,
+        selectionPreferences: UserDefaults = .standard
+    ) throws -> CoreDataAppPersistenceAssembly {
+        if let requestedHerdID {
+            return try resolveCloudKitHerd(
+                using: assembly,
+                privateStoreURL: privateStoreURL,
+                selectedHerdID: requestedHerdID,
+                selectionPreferences: selectionPreferences
+            )
+        }
+        let remembered = AppCurrentHerdSelection(defaults: selectionPreferences)
+        let repository = CoreDataHerdRepository(selection: remembered, assembly: assembly)
+        remembered.restoreAccessibleHerd(from: try repository.fetchAccessibleHerds())
+        guard let selectedID = remembered.currentHerdID else {
+            return CoreDataAppPersistenceAssembly(
+                assembly: assembly, currentHerdID: nil,
+                selectionPreferences: selectionPreferences
+            )
+        }
+        return try resolveCloudKitHerd(
+            using: assembly, privateStoreURL: privateStoreURL,
+            selectedHerdID: selectedID, selectionPreferences: selectionPreferences
         )
     }
 

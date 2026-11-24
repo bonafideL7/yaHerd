@@ -388,6 +388,17 @@ final class MutationPublishingHerdRepository: HerdRepository {
 
     func fetchCurrentHerd() throws -> HerdSummary { try base.fetchCurrentHerd() }
 
+    func fetchAccessibleHerds() throws -> [AccessibleHerd] {
+        try base.fetchAccessibleHerds()
+    }
+
+    func createOwnedHerd(named name: String) async throws -> HerdSummary {
+        try writePolicy.validateCanWrite()
+        let created = try await base.createOwnedHerd(named: name)
+        mutationRecorder.recordSuccessfulMutation(reason: .herd)
+        return created
+    }
+
     func renameCurrentHerd(to name: String) async throws -> HerdSummary {
         try writePolicy.validateCanWrite()
         let result = try await base.renameCurrentHerd(to: name)

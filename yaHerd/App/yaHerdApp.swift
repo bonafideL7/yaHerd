@@ -145,15 +145,16 @@ struct yaHerdApp: App {
                     mirroringEnabled: true
                 )
                 do {
-                    let candidate = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
+                    let candidate = try CoreDataAppPersistenceAssembly.resolveCloudKitHerdForChoice(
                         using: cloudKitAssembly,
                         privateStoreURL: storeURL,
-                        selectedHerdID: selectedHerdID
+                        requestedHerdID: selectedHerdID
                     )
-                    // An imported root can arrive before its owned records
-                    // and relationships. Preserve the mirroring engine and
-                    // defer Home instead of presenting partial data as corrupt.
-                    try await CloudKitDevelopmentLaunch.validateHomeReadiness(candidate)
+                    // A missing choice is not a corrupt import. Validate Home
+                    // only after an accessible Herd has been selected.
+                    if candidate.currentHerdSelection.currentHerdID != nil {
+                        try await CloudKitDevelopmentLaunch.validateHomeReadiness(candidate)
+                    }
                     persistence = candidate
                 } catch {
                     if CloudKitDevelopmentLaunch.isImportPending(error) {
@@ -226,7 +227,8 @@ struct yaHerdApp: App {
                         recoveryContext: RecoveryModeContext(
                             startupError: startupMessage
                         ),
-                        storageError: startupMessage
+                        storageError: startupMessage,
+                        herdSelection: persistence.currentHerdSelection
                     )
                 )
             } catch {
@@ -261,7 +263,8 @@ struct yaHerdApp: App {
             dependencies: dependencies,
             dataAccessMode: .readWrite,
             recoveryContext: nil,
-            storageError: nil
+            storageError: nil,
+            herdSelection: persistence.currentHerdSelection
         )
     }
 
@@ -276,12 +279,14 @@ struct yaHerdApp: App {
         defer { developmentImportCheckInProgress = false }
 
         do {
-            let persistence = try CoreDataAppPersistenceAssembly.resolveCloudKitHerd(
+            let persistence = try CoreDataAppPersistenceAssembly.resolveCloudKitHerdForChoice(
                 using: pending.assembly,
                 privateStoreURL: pending.privateStoreURL,
-                selectedHerdID: pending.selectedHerdID
+                requestedHerdID: pending.selectedHerdID
             )
-            try await CloudKitDevelopmentLaunch.validateHomeReadiness(persistence)
+            if persistence.currentHerdSelection.currentHerdID != nil {
+                try await CloudKitDevelopmentLaunch.validateHomeReadiness(persistence)
+            }
             bootstrapState = .ready(Self.makeRuntime(
                 persistence: persistence,
                 storageMode: .cloudKitDevelopment
@@ -330,12 +335,14 @@ private struct AppRuntime {
     let dataAccessMode: AppDataAccessMode
     let recoveryContext: RecoveryModeContext?
     let storageError: String?
+    let herdSelection: AppCurrentHerdSelection
 }
 
 private struct RunningAppView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var tagColorLibrary: TagColorLibraryStore
     @StateObject private var recoveryModeController: RecoveryModeController
+    @State private var herdDirectory: HerdDirectoryController
 
     private let runtime: AppRuntime
     private let applicationSettings: ApplicationSettings
@@ -346,6 +353,10 @@ private struct RunningAppView: View {
     ) {
         self.runtime = runtime
         self.applicationSettings = applicationSettings
+        self._herdDirectory = State(initialValue: HerdDirectoryController(
+            repository: runtime.dependencies.herdRepository,
+            selection: runtime.herdSelection
+        ))
         self._tagColorLibrary = StateObject(
             wrappedValue: TagColorLibraryStore(
                 repository: runtime.dependencies.tagColorRepository
@@ -379,6 +390,8 @@ private struct RunningAppView: View {
             navigationMutationRevision: runtime.dependencies.applicationMutationCenter.currentSequence
         )
             .environment(applicationSettings)
+            .environment(runtime.herdSelection)
+            .environment(herdDirectory)
             .environmentObject(tagColorLibrary)
             .environment(\.appDataAccessMode, runtime.dataAccessMode)
             .environment(
@@ -429,6 +442,8 @@ enum AppNavigationSceneStorageAccess {
 }
 
 private struct RootAppView: View {
+    @Environment(AppCurrentHerdSelection.self) private var herdSelection
+
     let storageError: String?
     let dataAccessMode: AppDataAccessMode
     let navigationRestorationValidator: any AppNavigationRestorationValidating
@@ -456,10 +471,21 @@ private struct RootAppView: View {
     }
 
     var body: some View {
-        MainTabView()
+        Group {
+            if herdSelection.currentHerdID == nil && !dataAccessMode.isRecoveryMode {
+                NavigationStack {
+                    HerdDirectoryView()
+                }
+            } else {
+                MainTabView()
+                    // Discard old Herd drafts and view-owned async state.
+                    .id(herdSelection.currentHerdID)
+            }
+        }
             .environment(navigation)
             .task {
                 guard !hasRestoredNavigation else { return }
+                navigation.selectedHerdID = herdSelection.currentHerdID
                 let outcome = AppNavigationSceneStorageAccess.restore(
                     navigation: navigation,
                     from: navigationRestorationPayload,
@@ -475,6 +501,17 @@ private struct RootAppView: View {
                         dataAccessMode: dataAccessMode
                       ) else { return }
                 navigationRestorationPayload = payload
+            }
+            .onChange(of: herdSelection.currentHerdID) { _, newHerdID in
+                navigation.resetForHerdChange(to: newHerdID)
+                hasRestoredNavigation = true
+                navigationRestorationDeferred = false
+                if let payload = AppNavigationSceneStorageAccess.payload(
+                    for: navigation,
+                    dataAccessMode: dataAccessMode
+                ) {
+                    navigationRestorationPayload = payload
+                }
             }
             .onChange(of: navigation.snapshot) { _, _ in
                 guard hasRestoredNavigation, !dataAccessMode.isRecoveryMode else { return }

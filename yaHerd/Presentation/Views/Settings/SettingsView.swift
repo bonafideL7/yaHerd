@@ -32,6 +32,16 @@ struct SettingsView: View {
 
             Section("Setup") {
                 NavigationLink {
+                    HerdDirectoryView()
+                } label: {
+                    SettingsRow(
+                        title: "Herds",
+                        subtitle: "Choose or create a Herd.",
+                        systemImage: "square.stack.3d.up"
+                    )
+                }
+
+                NavigationLink {
                     DashboardRulesView()
                 } label: {
                     SettingsRow(
@@ -319,5 +329,124 @@ private struct SettingsSaveAndCloseToolbarModifier: ViewModifier {
 extension View {
     func settingsSaveAndCloseToolbar() -> some View {
         modifier(SettingsSaveAndCloseToolbarModifier())
+    }
+}
+
+@MainActor
+struct HerdDirectoryView: View {
+    @Environment(HerdDirectoryController.self) private var directory
+    @Environment(AppNavigationState.self) private var navigation
+    @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(\.scenePhase) private var scenePhase
+
+    @State private var isCreating = false
+    @State private var showsCreatePrompt = false
+    @State private var newHerdName = ""
+
+    var body: some View {
+        List {
+            Section("Available Herds") {
+                ForEach(directory.herds) { herd in
+                    Button {
+                        do {
+                            try directory.selectHerd(id: herd.id)
+                            navigation.resetForHerdChange(to: herd.id)
+                            navigation.dismissSheet()
+                        } catch {
+                            directory.report(error)
+                        }
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(herd.name)
+                                    .foregroundStyle(.primary)
+                                Text(herd.category == .owned ? "Owned" : "Shared")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if directory.selectedHerdID == herd.id {
+                                Image(systemName: "checkmark")
+                                    .accessibilityLabel("Selected Herd")
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .disabled(dataAccessMode.isRecoveryMode || isCreating)
+                }
+
+                if directory.herds.isEmpty {
+                    Text("No complete Herds are available. iCloud records may still be importing; refresh before creating a new Herd.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !dataAccessMode.isRecoveryMode {
+                Section {
+                    Button {
+                        newHerdName = ""
+                        showsCreatePrompt = true
+                    } label: {
+                        Label("Create Herd", systemImage: "plus")
+                    }
+                    .disabled(isCreating)
+                } footer: {
+                    Text("Creating a Herd adds a new owned Herd. It does not join an invitation.")
+                }
+            }
+        }
+        .navigationTitle("Herds")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Refresh", systemImage: "arrow.clockwise") {
+                    directory.refresh()
+                }
+            }
+        }
+        .task {
+            directory.refresh()
+            // CloudKit can import a shared or owned Herd after the chooser
+            // appears. Refresh while this view remains visible, without
+            // reopening stores or creating replacement records.
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(5))
+                } catch {
+                    break
+                }
+                directory.refresh(reportErrors: false)
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { directory.refresh() }
+        }
+        .alert("Create Herd", isPresented: $showsCreatePrompt) {
+            TextField("Herd name", text: $newHerdName)
+            Button("Create") {
+                guard !isCreating else { return }
+                isCreating = true
+                Task { @MainActor in
+                    defer { isCreating = false }
+                    do {
+                        let created = try await directory.createOwnedHerd(named: newHerdName)
+                        navigation.resetForHerdChange(to: created.id)
+                        navigation.dismissSheet()
+                    } catch {
+                        directory.report(error)
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Create a separate owned Herd with its own animals and pastures.")
+        }
+        .alert("Herd Unavailable", isPresented: Binding(
+            get: { directory.errorMessage != nil },
+            set: { if !$0 { directory.dismissError() } }
+        )) {
+            Button("OK", role: .cancel) { directory.dismissError() }
+        } message: {
+            Text(directory.errorMessage ?? "The Herd cannot be opened.")
+        }
     }
 }
