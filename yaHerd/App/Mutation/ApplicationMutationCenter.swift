@@ -12,6 +12,7 @@ enum ApplicationFeatureArea: String, CaseIterable, Hashable, Sendable {
 
 enum ApplicationMutationSource: Equatable, Sendable {
     case local(DataMutationReason)
+    case remote(storeID: String, changedEntities: Set<String>, requiresFullRefresh: Bool)
 }
 
 struct ApplicationMutationEvent: Equatable, Sendable {
@@ -74,7 +75,22 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
     }
 
     func recordSuccessfulMutation(reason: DataMutationReason) {
-        publish(reason: reason)
+        publish(source: .local(reason), affectedAreas: affectedAreas(for: reason))
+    }
+
+    /// The history consumer acknowledges a batch only after this synchronous
+    /// publication. Use broad invalidation until entity mapping is audited.
+    func recordRemoteChanges(
+        storeID: String, changedEntities: Set<String>, requiresFullRefresh: Bool
+    ) {
+        publish(
+            source: .remote(
+                storeID: storeID,
+                changedEntities: changedEntities,
+                requiresFullRefresh: requiresFullRefresh
+            ),
+            affectedAreas: Set(ApplicationFeatureArea.allCases)
+        )
     }
 
     func revision(for area: ApplicationFeatureArea) -> UInt64 {
@@ -131,14 +147,15 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
         return stream
     }
 
-    private func publish(reason: DataMutationReason) {
-        let affectedAreas = affectedAreas(for: reason)
+    private func publish(
+        source: ApplicationMutationSource, affectedAreas: Set<ApplicationFeatureArea>
+    ) {
         incrementRevisions(for: affectedAreas)
 
         nextSequence &+= 1
         let event = ApplicationMutationEvent(
             sequence: nextSequence,
-            source: .local(reason),
+            source: source,
             affectedAreas: affectedAreas
         )
         latestEvent = event

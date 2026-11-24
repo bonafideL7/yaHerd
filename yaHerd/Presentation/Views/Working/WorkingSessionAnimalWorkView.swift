@@ -278,6 +278,11 @@ struct WorkingSessionAnimalWorkView: View {
                 guard !refreshSessionSourcePastureAfterMutation() else { return }
             case .local(.animal):
                 await revalidateSelectedSireAfterMutation()
+            case .remote:
+                // A history batch may include both Animal and Pasture changes.
+                refreshDestinationPasturesAfterMutation()
+                guard !refreshSessionSourcePastureAfterMutation() else { return }
+                await revalidateSelectedSireAfterMutation()
             case .local:
                 break
             }

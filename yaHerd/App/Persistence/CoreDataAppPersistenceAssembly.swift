@@ -92,6 +92,19 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         return CoreDataAppPersistenceAssembly(assembly: assembly, selection: candidate)
     }
 
+    func makeRemoteHistoryCoordinator(
+        mutationCenter: ApplicationMutationCenter,
+        herdDirectory: HerdDirectoryController
+    ) -> AppRemoteHistoryCoordinator? {
+        guard let wakeups = assembly.contextFactory.historyWakeups else { return nil }
+        return AppRemoteHistoryCoordinator(
+            contextFactory: assembly.contextFactory,
+            wakeups: wakeups,
+            mutationCenter: mutationCenter,
+            herdDirectory: herdDirectory
+        )
+    }
+
     func makeDependencies(dataAccessMode: AppDataAccessMode) -> AppDependencies {
         let mutationCenter = ApplicationMutationCenter()
         let recorder = ApplicationMutationPipeline(center: mutationCenter)
