@@ -1,0 +1,329 @@
+@preconcurrency import CoreData
+import Foundation
+import XCTest
+@testable import yaHerd
+
+@MainActor
+final class CoreDataHerdRepositoryContractTests: XCTestCase {
+    func testImportedHerdWithoutNamePreservesDataUntilHistoricalNameIsRestored() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let selection = TestCurrentHerdSelection()
+        let herdID = UUID()
+        let originalCreation = Date(timeIntervalSince1970: 1_700_000_000)
+        let originalUpdate = Date(timeIntervalSince1970: 1_700_000_500)
+
+        let seedContext = try assembly.contextFactory.makeWriteContext()
+        try seedContext.performAndWait {
+            let herd = CDHerd(context: seedContext)
+            herd.id = herdID
+            herd.name = nil
+            herd.createdAt = originalCreation
+            herd.updatedAt = originalUpdate
+            try seedContext.save()
+        }
+
+        selection.currentHerdID = herdID
+        let repository = CoreDataHerdRepository(selection: selection, assembly: assembly)
+        XCTAssertThrowsError(try repository.fetchCurrentHerd()) {
+            XCTAssertEqual($0 as? CoreDataHerdMappingError, .missingName(herdID: herdID))
+        }
+        do {
+            _ = try await repository.renameCurrentHerd(to: "Invented Name")
+            XCTFail("An imported Herd with no original name must not be overwritten.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataHerdMappingError, .missingName(herdID: herdID))
+        }
+
+        let verifyContext = assembly.contextFactory.makeReadContext()
+        try verifyContext.performAndWait {
+            let herd = try XCTUnwrap(CoreDataLookup().herd(id: herdID, in: verifyContext))
+            XCTAssertNil(herd.name)
+            XCTAssertEqual(herd.createdAt, originalCreation)
+            XCTAssertEqual(herd.updatedAt, originalUpdate)
+        }
+
+        let whitespaceContext = try assembly.contextFactory.makeWriteContext()
+        try whitespaceContext.performAndWait {
+            let herd = try XCTUnwrap(CoreDataLookup().herd(id: herdID, in: whitespaceContext))
+            herd.name = "  "
+            try whitespaceContext.save()
+        }
+        XCTAssertThrowsError(try repository.fetchCurrentHerd()) {
+            XCTAssertEqual($0 as? CoreDataHerdMappingError, .missingName(herdID: herdID))
+        }
+
+        let restoreContext = try assembly.contextFactory.makeWriteContext()
+        try restoreContext.performAndWait {
+            let herd = try XCTUnwrap(CoreDataLookup().herd(id: herdID, in: restoreContext))
+            XCTAssertEqual(herd.name, "  ")
+            herd.name = "Historical Herd"
+            try restoreContext.save()
+        }
+
+        let restored = try repository.fetchCurrentHerd()
+        XCTAssertEqual(restored.publicID, herdID)
+        XCTAssertEqual(restored.name, "Historical Herd")
+        XCTAssertEqual(restored.createdAt, originalCreation)
+        XCTAssertEqual(restored.updatedAt, originalUpdate)
+
+        let renamed = try await repository.renameCurrentHerd(to: "Renamed Herd")
+        XCTAssertEqual(renamed.publicID, herdID)
+        XCTAssertEqual(renamed.name, "Renamed Herd")
+        XCTAssertEqual(renamed.createdAt, originalCreation)
+        XCTAssertGreaterThan(renamed.updatedAt, originalUpdate)
+    }
+
+    func testIncompleteImportedHerdTimestampsBlockReadAndRenameWithoutDataLoss() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let selection = TestCurrentHerdSelection()
+        let herdID = UUID()
+        let originalCreation = Date(timeIntervalSince1970: 1_700_000_000)
+        let originalUpdate = Date(timeIntervalSince1970: 1_700_000_500)
+
+        let initialContext = try assembly.contextFactory.makeWriteContext()
+        try initialContext.performAndWait {
+            let herd = CDHerd(context: initialContext)
+            herd.id = herdID
+            herd.name = "Imported Herd"
+            herd.createdAt = nil
+            herd.updatedAt = nil
+            try initialContext.save()
+        }
+
+        selection.currentHerdID = herdID
+        let repository = CoreDataHerdRepository(selection: selection, assembly: assembly)
+        XCTAssertThrowsError(try repository.fetchCurrentHerd()) {
+            XCTAssertEqual(
+                $0 as? CoreDataHerdMappingError,
+                .missingCreatedAt(herdID: herdID)
+            )
+        }
+        do {
+            _ = try await repository.renameCurrentHerd(to: "Unexpected Rename")
+            XCTFail("An imported Herd missing its original metadata must not be renamed.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataHerdMappingError, .missingCreatedAt(herdID: herdID))
+        }
+
+        let creationContext = try assembly.contextFactory.makeWriteContext()
+        try creationContext.performAndWait {
+            let herd = try XCTUnwrap(CoreDataLookup().herd(id: herdID, in: creationContext))
+            XCTAssertEqual(herd.name, "Imported Herd")
+            XCTAssertNil(herd.createdAt)
+            XCTAssertNil(herd.updatedAt)
+            herd.createdAt = originalCreation
+            try creationContext.save()
+        }
+
+        XCTAssertThrowsError(try repository.fetchCurrentHerd()) {
+            XCTAssertEqual($0 as? CoreDataHerdMappingError, .missingUpdatedAt(herdID: herdID))
+        }
+        do {
+            _ = try await repository.renameCurrentHerd(to: "Still Invalid")
+            XCTFail("An imported Herd missing its original update date must not be renamed.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataHerdMappingError, .missingUpdatedAt(herdID: herdID))
+        }
+
+        let updateContext = try assembly.contextFactory.makeWriteContext()
+        try updateContext.performAndWait {
+            let herd = try XCTUnwrap(CoreDataLookup().herd(id: herdID, in: updateContext))
+            XCTAssertEqual(herd.name, "Imported Herd")
+            XCTAssertEqual(herd.createdAt, originalCreation)
+            XCTAssertNil(herd.updatedAt)
+            herd.updatedAt = originalUpdate
+            try updateContext.save()
+        }
+
+        let restored = try repository.fetchCurrentHerd()
+        XCTAssertEqual(restored.publicID, herdID)
+        XCTAssertEqual(restored.name, "Imported Herd")
+        XCTAssertEqual(restored.createdAt, originalCreation)
+        XCTAssertEqual(restored.updatedAt, originalUpdate)
+
+        let renamed = try await repository.renameCurrentHerd(to: "Restored Herd")
+        XCTAssertEqual(renamed.publicID, herdID)
+        XCTAssertEqual(renamed.name, "Restored Herd")
+        XCTAssertEqual(renamed.createdAt, originalCreation)
+        XCTAssertGreaterThan(renamed.updatedAt, originalUpdate)
+        XCTAssertEqual(try repository.fetchCurrentHerd(), renamed)
+    }
+
+    func testMissingReadAndRenameDoNotBootstrapHerd() async throws {
+        let harness = try await makeHarness()
+        try await HerdRepositoryContract.assertMissingReadAndRenameDoNotBootstrapHerd(
+            using: harness.fixture
+        )
+    }
+
+    func testRenameNormalizesNamePreservesIdentityAndSurvivesReload() async throws {
+        let harness = try await makeHarness()
+        try await HerdRepositoryContract.assertRenameNormalizesNamePreservesIdentityAndSurvivesReload(
+            using: harness.fixture
+        )
+    }
+
+    func testRenamePersistenceFailureRollsBackAndRepositoryRecovers() async throws {
+        let harness = try await makeHarness()
+        try await HerdRepositoryContract.assertRenamePersistenceFailureRollsBackAndRepositoryRecovers(
+            using: harness.fixture,
+            failureInjection: harness.failureInjection
+        )
+    }
+
+    func testEmptyRenameIsRejectedWithoutBootstrapping() async throws {
+        let harness = try await makeHarness()
+        try await HerdRepositoryContract.assertEmptyRenameIsRejectedWithoutBootstrapping(
+            using: harness.fixture
+        )
+    }
+
+    func testEmptyRenameDoesNotMutateExistingHerd() async throws {
+        let harness = try await makeHarness()
+        try await HerdRepositoryContract.assertEmptyRenameDoesNotMutateExistingHerd(
+            using: harness.fixture
+        )
+    }
+
+    func testCurrentHerdSelectionUsesApplicationIdentityAndScopesRename() async throws {
+        let harness = try await makeHarness()
+        try await HerdRepositoryContract.assertCurrentHerdSelectionUsesApplicationIdentityAndScopesRename(
+            using: harness.fixture
+        )
+    }
+
+    func testMissingCurrentHerdSelectionDoesNotInferStoredHerd() async throws {
+        let harness = try await makeHarness()
+        try await HerdRepositoryContract.assertMissingCurrentHerdSelectionDoesNotInferStoredHerd(
+            using: harness.fixture
+        )
+    }
+
+    func testStaleCurrentHerdSelectionDoesNotFallBackToAnotherStoredHerd() async throws {
+        let harness = try await makeHarness()
+        try await HerdRepositoryContract.assertStaleCurrentHerdSelectionDoesNotFallBackToAnotherStoredHerd(
+            using: harness.fixture
+        )
+    }
+
+    private func makeHarness() async throws -> Harness {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let selection = TestCurrentHerdSelection()
+
+        let fixture = HerdRepositoryContractFixture(
+            makeHerdRepository: {
+                CoreDataHerdRepository(
+                    selection: selection,
+                    assembly: assembly
+                )
+            },
+            selectionControl: HerdRepositorySelectionTestControl(
+                seedHerd: { id, name, createdAt, updatedAt in
+                    let context = try assembly.contextFactory.makeWriteContext()
+                    try context.performAndWait {
+                        let herd = CDHerd(context: context)
+                        herd.id = id
+                        herd.name = name
+                        herd.createdAt = createdAt
+                        herd.updatedAt = updatedAt
+                        try context.save()
+                    }
+                },
+                setCurrentHerdID: { id in
+                    selection.currentHerdID = id
+                },
+                persistedHerdRowCountsByID: {
+                    let context = assembly.contextFactory.makeReadContext()
+                    return try context.performAndWait {
+                        let request = NSFetchRequest<CDHerd>(
+                            entityName: CDHerd.coreDataEntityName
+                        )
+                        return try context.fetch(request).reduce(into: [UUID: Int]()) {
+                            $0[try $1.requiredID(), default: 0] += 1
+                        }
+                    }
+                }
+            ),
+            ownershipControl: HerdRepositoryOwnershipTestControl(
+                seedPasture: { id, herdID in
+                    let context = try assembly.contextFactory.makeWriteContext()
+                    try context.performAndWait {
+                        guard let herd = try CoreDataLookup().herd(
+                            id: herdID,
+                            in: context
+                        ) else {
+                            throw HerdRepositoryError.missingHerd
+                        }
+
+                        let pasture = CDPasture(context: context)
+                        pasture.id = id
+                        pasture.name = "Herd Contract Pasture"
+                        pasture.sortOrder = 0
+                        pasture.herd = herd
+                        try context.save()
+                    }
+                },
+                persistedPasture: { id in
+                    let context = assembly.contextFactory.makeReadContext()
+                    return try context.performAndWait {
+                        let request = NSFetchRequest<CDPasture>(
+                            entityName: CDPasture.coreDataEntityName
+                        )
+                        request.predicate = NSPredicate(
+                            format: "id == %@",
+                            id as NSUUID
+                        )
+                        request.fetchLimit = 2
+                        let matches = try context.fetch(request)
+                        guard matches.count <= 1 else {
+                            throw CoreDataPersistenceError.duplicateApplicationID(
+                                entity: CDPasture.coreDataEntityName,
+                                id: id,
+                                herdID: nil
+                            )
+                        }
+                        return try matches.first.map { pasture in
+                            let owner = try XCTUnwrap(pasture.herd)
+                            return HerdRepositoryOwnedPastureContractSnapshot(
+                                id: try pasture.requiredID(),
+                                herdID: try owner.requiredID()
+                            )
+                        }
+                    }
+                }
+            )
+        )
+
+        let failureInjection = HerdRepositoryRollbackFailureInjection {
+            repository,
+            name in
+            guard let repository = repository as? CoreDataHerdRepository else {
+                XCTFail("Core Data Herd contract runner received an unexpected repository type.")
+                return
+            }
+
+            _ = try await repository.renameCurrentHerd(
+                to: name,
+                beforeSave: { _ in
+                    throw HerdRepositoryRollbackInjectedError.afterRenameStaged
+                }
+            )
+        }
+
+        return Harness(
+            fixture: fixture,
+            failureInjection: failureInjection
+        )
+    }
+}
+
+@MainActor
+private final class TestCurrentHerdSelection: CurrentHerdSelectionReading {
+    var currentHerdID: UUID?
+}
+
+@MainActor
+private struct Harness {
+    let fixture: HerdRepositoryContractFixture
+    let failureInjection: HerdRepositoryRollbackFailureInjection
+}

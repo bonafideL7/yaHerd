@@ -7,6 +7,176 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		8D20BB2230B536A1006010E3 /* IdentityContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAEC30B536A1006010E3 /* IdentityContract.swift */; };
+		8D20BB2330B536A1006010E3 /* FieldCheckQuickCountRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0D30B536A1006010E3 /* FieldCheckQuickCountRulesTests.swift */; };
+		8D20BB2430B536A1006010E3 /* FieldCheckSessionDetailViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0E30B536A1006010E3 /* FieldCheckSessionDetailViewModelTests.swift */; };
+		8D20BB2530B536A1006010E3 /* CoreDataFieldCheckRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BACC30B536A1006010E3 /* CoreDataFieldCheckRepositoryContractTests.swift */; };
+		8D20BB2630B536A1006010E3 /* AnimalRepositoryContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BADB30B536A1006010E3 /* AnimalRepositoryContract.swift */; };
+		8D20BB2730B536A1006010E3 /* FieldCheckRepositoryContract+FindingMutationRollback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE230B536A1006010E3 /* FieldCheckRepositoryContract+FindingMutationRollback.swift */; };
+		8D20BB2830B536A1006010E3 /* FieldCheckRepositoryContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BADD30B536A1006010E3 /* FieldCheckRepositoryContract.swift */; };
+		8D20BB2930B536A1006010E3 /* WorkingDashboardReadModelContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF630B536A1006010E3 /* WorkingDashboardReadModelContract.swift */; };
+		8D20BB2A30B536A1006010E3 /* AppNavigationIdentityRevalidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0430B536A1006010E3 /* AppNavigationIdentityRevalidationTests.swift */; };
+		8D20BB2B30B536A1006010E3 /* AnimalAggregateCrossFeatureRevisionContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD930B536A1006010E3 /* AnimalAggregateCrossFeatureRevisionContract.swift */; };
+		8D20BB2C30B536A1006010E3 /* CoreDataMultiHerdDiscoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD030B536A1006010E3 /* CoreDataMultiHerdDiscoveryTests.swift */; };
+		8D20BB2D30B536A1006010E3 /* TagColorLibraryHistoricalLookupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1930B536A1006010E3 /* TagColorLibraryHistoricalLookupTests.swift */; };
+		8D20BB2E30B536A1006010E3 /* PastureTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1530B536A1006010E3 /* PastureTestSupport.swift */; };
+		8D20BB2F30B536A1006010E3 /* FieldCheckRepositoryContract+FailureContextRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE030B536A1006010E3 /* FieldCheckRepositoryContract+FailureContextRecovery.swift */; };
+		8D20BB3030B536A1006010E3 /* PersistenceTransactionPreconditionContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF330B536A1006010E3 /* PersistenceTransactionPreconditionContract.swift */; };
+		8D20BB3130B536A1006010E3 /* FieldCheckRepositoryContract+AtomicityRollback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BADF30B536A1006010E3 /* FieldCheckRepositoryContract+AtomicityRollback.swift */; };
+		8D20BB3230B536A1006010E3 /* AnimalAggregateTransactionContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BADA30B536A1006010E3 /* AnimalAggregateTransactionContract.swift */; };
+		8D20BB3330B536A1006010E3 /* WorkingCollectAnimalsEligibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1D30B536A1006010E3 /* WorkingCollectAnimalsEligibilityTests.swift */; };
+		8D20BB3430B536A1006010E3 /* ValidationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1B30B536A1006010E3 /* ValidationServiceTests.swift */; };
+		8D20BB3530B536A1006010E3 /* WorkingRepositoryContract+PlansTagsAndTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAFA30B536A1006010E3 /* WorkingRepositoryContract+PlansTagsAndTemplates.swift */; };
+		8D20BB3630B536A1006010E3 /* CoreDataStage3StartupSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD330B536A1006010E3 /* CoreDataStage3StartupSelectionTests.swift */; };
+		8D20BB3730B536A1006010E3 /* CoreDataCloudKitStoreConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0730B536A1006010E3 /* CoreDataCloudKitStoreConfigurationTests.swift */; };
+		8D20BB3830B536A1006010E3 /* AppCurrentHerdSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0230B536A1006010E3 /* AppCurrentHerdSelectionTests.swift */; };
+		8D20BB3930B536A1006010E3 /* CoreDataTagColorReferenceProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD530B536A1006010E3 /* CoreDataTagColorReferenceProbe.swift */; };
+		8D20BB3A30B536A1006010E3 /* PastureTileListViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1630B536A1006010E3 /* PastureTileListViewModelTests.swift */; };
+		8D20BB3B30B536A1006010E3 /* FieldCheckLinkedAnimalPickerRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0C30B536A1006010E3 /* FieldCheckLinkedAnimalPickerRulesTests.swift */; };
+		8D20BB3C30B536A1006010E3 /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1A30B536A1006010E3 /* TestSupport.swift */; };
+		8D20BB3D30B536A1006010E3 /* PastureRepositoryEdgeCaseContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF230B536A1006010E3 /* PastureRepositoryEdgeCaseContract.swift */; };
+		8D20BB3E30B536A1006010E3 /* FieldCheckRepositoryContract+AtomicityAndAttention.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BADE30B536A1006010E3 /* FieldCheckRepositoryContract+AtomicityAndAttention.swift */; };
+		8D20BB3F30B536A1006010E3 /* WorkingTreatmentPlanReferenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB2030B536A1006010E3 /* WorkingTreatmentPlanReferenceTests.swift */; };
+		8D20BB4030B536A1006010E3 /* AnimalEditorDraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAFE30B536A1006010E3 /* AnimalEditorDraftTests.swift */; };
+		8D20BB4130B536A1006010E3 /* PastureRepositoryContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF130B536A1006010E3 /* PastureRepositoryContract.swift */; };
+		8D20BB4230B536A1006010E3 /* MutationBoundaryContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAED30B536A1006010E3 /* MutationBoundaryContract.swift */; };
+		8D20BB4330B536A1006010E3 /* DashboardPresentationDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0930B536A1006010E3 /* DashboardPresentationDataTests.swift */; };
+		8D20BB4430B536A1006010E3 /* FieldCheckRepositoryContract+FindingReassignmentAndOrphanEdits.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE330B536A1006010E3 /* FieldCheckRepositoryContract+FindingReassignmentAndOrphanEdits.swift */; };
+		8D20BB4530B536A1006010E3 /* WorkingAnimalWorkTimestampTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1C30B536A1006010E3 /* WorkingAnimalWorkTimestampTests.swift */; };
+		8D20BB4630B536A1006010E3 /* WorkingSessionCompletionUseCaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1F30B536A1006010E3 /* WorkingSessionCompletionUseCaseTests.swift */; };
+		8D20BB4730B536A1006010E3 /* HomeSupportingReadModelContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAEB30B536A1006010E3 /* HomeSupportingReadModelContract.swift */; };
+		8D20BB4830B536A1006010E3 /* CoreDataPersistenceFoundationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD130B536A1006010E3 /* CoreDataPersistenceFoundationTests.swift */; };
+		8D20BB4930B536A1006010E3 /* CoreDataAnimalRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BACA30B536A1006010E3 /* CoreDataAnimalRepositoryContractTests.swift */; };
+		8D20BB4A30B536A1006010E3 /* CoreDataModelStructureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0830B536A1006010E3 /* CoreDataModelStructureTests.swift */; };
+		8D20BB4B30B536A1006010E3 /* AnimalListViewModelReloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0030B536A1006010E3 /* AnimalListViewModelReloadTests.swift */; };
+		8D20BB4C30B536A1006010E3 /* PastureDeletionTransactionContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAEF30B536A1006010E3 /* PastureDeletionTransactionContract.swift */; };
+		8D20BB4D30B536A1006010E3 /* AnimalInlineEntryViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAFF30B536A1006010E3 /* AnimalInlineEntryViewModelTests.swift */; };
+		8D20BB4E30B536A1006010E3 /* PersistenceTransactionRollbackContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF430B536A1006010E3 /* PersistenceTransactionRollbackContract.swift */; };
+		8D20BB4F30B536A1006010E3 /* FieldCheckRepositoryContract+RollbackEdgeCases.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE730B536A1006010E3 /* FieldCheckRepositoryContract+RollbackEdgeCases.swift */; };
+		8D20BB5030B536A1006010E3 /* PastureGroupInputValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1230B536A1006010E3 /* PastureGroupInputValidatorTests.swift */; };
+		8D20BB5130B536A1006010E3 /* WorkingQueueEditorIdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1E30B536A1006010E3 /* WorkingQueueEditorIdentityTests.swift */; };
+		8D20BB5230B536A1006010E3 /* HomeServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1030B536A1006010E3 /* HomeServiceTests.swift */; };
+		8D20BB5330B536A1006010E3 /* WorkingRepositoryContract+WorkData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAFB30B536A1006010E3 /* WorkingRepositoryContract+WorkData.swift */; };
+		8D20BB5430B536A1006010E3 /* AccessibleControlContrastTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAFD30B536A1006010E3 /* AccessibleControlContrastTests.swift */; };
+		8D20BB5530B536A1006010E3 /* AppNavigationStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0630B536A1006010E3 /* AppNavigationStateTests.swift */; };
+		8D20BB5630B536A1006010E3 /* AnimalSireInferencePolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0130B536A1006010E3 /* AnimalSireInferencePolicyTests.swift */; };
+		8D20BB5730B536A1006010E3 /* FieldCheckRepositoryContract+SessionScoping.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE830B536A1006010E3 /* FieldCheckRepositoryContract+SessionScoping.swift */; };
+		8D20BB5830B536A1006010E3 /* CoreDataTagColorRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD630B536A1006010E3 /* CoreDataTagColorRepositoryContractTests.swift */; };
+		8D20BB5930B536A1006010E3 /* WorkingRepositoryContract+Lifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF930B536A1006010E3 /* WorkingRepositoryContract+Lifecycle.swift */; };
+		8D20BB5A30B536A1006010E3 /* WorkingRepositoryContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF730B536A1006010E3 /* WorkingRepositoryContract.swift */; };
+		8D20BB5B30B536A1006010E3 /* CoreDataStoreOwnershipTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD430B536A1006010E3 /* CoreDataStoreOwnershipTests.swift */; };
+		8D20BB5C30B536A1006010E3 /* PastureMetricsAndPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1430B536A1006010E3 /* PastureMetricsAndPolicyTests.swift */; };
+		8D20BB5D30B536A1006010E3 /* WorkingRepositoryContract+AtomicityRollback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF830B536A1006010E3 /* WorkingRepositoryContract+AtomicityRollback.swift */; };
+		8D20BB5E30B536A1006010E3 /* FieldCheckRepositoryContract+FindingSnapshotMutation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE430B536A1006010E3 /* FieldCheckRepositoryContract+FindingSnapshotMutation.swift */; };
+		8D20BB5F30B536A1006010E3 /* FieldCheckRepositoryContract+FailureContextRecoveryAllWrites.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE130B536A1006010E3 /* FieldCheckRepositoryContract+FailureContextRecoveryAllWrites.swift */; };
+		8D20BB6030B536A1006010E3 /* NewWorkingSessionCandidateLoadingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1130B536A1006010E3 /* NewWorkingSessionCandidateLoadingTests.swift */; };
+		8D20BB6130B536A1006010E3 /* HerdRepositoryContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAEA30B536A1006010E3 /* HerdRepositoryContract.swift */; };
+		8D20BB6230B536A1006010E3 /* ApplicationSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0330B536A1006010E3 /* ApplicationSettingsTests.swift */; };
+		8D20BB6330B536A1006010E3 /* FieldCheckSessionLockRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0F30B536A1006010E3 /* FieldCheckSessionLockRulesTests.swift */; };
+		8D20BB6430B536A1006010E3 /* PastureDeletionWorkflowContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF030B536A1006010E3 /* PastureDeletionWorkflowContract.swift */; };
+		8D20BB6530B536A1006010E3 /* CoreDataPersistenceHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD230B536A1006010E3 /* CoreDataPersistenceHarness.swift */; };
+		8D20BB6630B536A1006010E3 /* CoreDataHerdRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BACD30B536A1006010E3 /* CoreDataHerdRepositoryContractTests.swift */; };
+		8D20BB6730B536A1006010E3 /* CoreDataWorkingRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD730B536A1006010E3 /* CoreDataWorkingRepositoryContractTests.swift */; };
+		8D20BB6830B536A1006010E3 /* AppNavigationRestorationPreflightTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0530B536A1006010E3 /* AppNavigationRestorationPreflightTests.swift */; };
+		8D20BB6930B536A1006010E3 /* PastureInputValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1330B536A1006010E3 /* PastureInputValidatorTests.swift */; };
+		8D20BB6A30B536A1006010E3 /* FieldCheckRepositoryContract+HistoryAndLocking.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE530B536A1006010E3 /* FieldCheckRepositoryContract+HistoryAndLocking.swift */; };
+		8D20BB6B30B536A1006010E3 /* CoreDataAppHerdBootstrapperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BACB30B536A1006010E3 /* CoreDataAppHerdBootstrapperTests.swift */; };
+		8D20BB6C30B536A1006010E3 /* FieldCheckRepositoryContract+MissingFindingSynchronization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE630B536A1006010E3 /* FieldCheckRepositoryContract+MissingFindingSynchronization.swift */; };
+		8D20BB6D30B536A1006010E3 /* TagColorRepositoryContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF530B536A1006010E3 /* TagColorRepositoryContract.swift */; };
+		8D20BB6E30B536A1006010E3 /* FieldCheckAnimalAttentionRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0B30B536A1006010E3 /* FieldCheckAnimalAttentionRulesTests.swift */; };
+		8D20BB6F30B536A1006010E3 /* CoreDataHomeReadModelContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BACF30B536A1006010E3 /* CoreDataHomeReadModelContractTests.swift */; };
+		8D20BB7030B536A1006010E3 /* PastureUseCaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1830B536A1006010E3 /* PastureUseCaseTests.swift */; };
+		8D20BB7130B536A1006010E3 /* CoreDataHerdSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BACE30B536A1006010E3 /* CoreDataHerdSelectionTests.swift */; };
+		8D20BB7230B536A1006010E3 /* AnimalRepositoryReadModelContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BADC30B536A1006010E3 /* AnimalRepositoryReadModelContract.swift */; };
+		8D20BB7330B536A1006010E3 /* PastureTilePickerViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1730B536A1006010E3 /* PastureTilePickerViewModelTests.swift */; };
+		8D20BB7430B536A1006010E3 /* HealthRepositoryContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE930B536A1006010E3 /* HealthRepositoryContract.swift */; };
+		8D20BB7530B536A1006010E3 /* FieldCheckAllSessionGroupsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0A30B536A1006010E3 /* FieldCheckAllSessionGroupsTests.swift */; };
+		8D20BB7630B536A1006010E3 /* PastureDashboardReadModelContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAEE30B536A1006010E3 /* PastureDashboardReadModelContract.swift */; };
+		8D20BB7730B536A1006010E3 /* IdentityContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAEC30B536A1006010E3 /* IdentityContract.swift */; };
+		8D20BB7830B536A1006010E3 /* FieldCheckQuickCountRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0D30B536A1006010E3 /* FieldCheckQuickCountRulesTests.swift */; };
+		8D20BB7930B536A1006010E3 /* FieldCheckSessionDetailViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0E30B536A1006010E3 /* FieldCheckSessionDetailViewModelTests.swift */; };
+		8D20BB7A30B536A1006010E3 /* CoreDataFieldCheckRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BACC30B536A1006010E3 /* CoreDataFieldCheckRepositoryContractTests.swift */; };
+		8D20BB7B30B536A1006010E3 /* AnimalRepositoryContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BADB30B536A1006010E3 /* AnimalRepositoryContract.swift */; };
+		8D20BB7C30B536A1006010E3 /* FieldCheckRepositoryContract+FindingMutationRollback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE230B536A1006010E3 /* FieldCheckRepositoryContract+FindingMutationRollback.swift */; };
+		8D20BB7D30B536A1006010E3 /* FieldCheckRepositoryContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BADD30B536A1006010E3 /* FieldCheckRepositoryContract.swift */; };
+		8D20BB7E30B536A1006010E3 /* WorkingDashboardReadModelContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF630B536A1006010E3 /* WorkingDashboardReadModelContract.swift */; };
+		8D20BB7F30B536A1006010E3 /* AppNavigationIdentityRevalidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0430B536A1006010E3 /* AppNavigationIdentityRevalidationTests.swift */; };
+		8D20BB8030B536A1006010E3 /* AnimalAggregateCrossFeatureRevisionContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD930B536A1006010E3 /* AnimalAggregateCrossFeatureRevisionContract.swift */; };
+		8D20BB8130B536A1006010E3 /* CoreDataMultiHerdDiscoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD030B536A1006010E3 /* CoreDataMultiHerdDiscoveryTests.swift */; };
+		8D20BB8230B536A1006010E3 /* TagColorLibraryHistoricalLookupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1930B536A1006010E3 /* TagColorLibraryHistoricalLookupTests.swift */; };
+		8D20BB8330B536A1006010E3 /* PastureTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1530B536A1006010E3 /* PastureTestSupport.swift */; };
+		8D20BB8430B536A1006010E3 /* FieldCheckRepositoryContract+FailureContextRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE030B536A1006010E3 /* FieldCheckRepositoryContract+FailureContextRecovery.swift */; };
+		8D20BB8530B536A1006010E3 /* PersistenceTransactionPreconditionContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF330B536A1006010E3 /* PersistenceTransactionPreconditionContract.swift */; };
+		8D20BB8630B536A1006010E3 /* FieldCheckRepositoryContract+AtomicityRollback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BADF30B536A1006010E3 /* FieldCheckRepositoryContract+AtomicityRollback.swift */; };
+		8D20BB8730B536A1006010E3 /* AnimalAggregateTransactionContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BADA30B536A1006010E3 /* AnimalAggregateTransactionContract.swift */; };
+		8D20BB8830B536A1006010E3 /* WorkingCollectAnimalsEligibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1D30B536A1006010E3 /* WorkingCollectAnimalsEligibilityTests.swift */; };
+		8D20BB8930B536A1006010E3 /* ValidationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1B30B536A1006010E3 /* ValidationServiceTests.swift */; };
+		8D20BB8A30B536A1006010E3 /* WorkingRepositoryContract+PlansTagsAndTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAFA30B536A1006010E3 /* WorkingRepositoryContract+PlansTagsAndTemplates.swift */; };
+		8D20BB8B30B536A1006010E3 /* CoreDataStage3StartupSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD330B536A1006010E3 /* CoreDataStage3StartupSelectionTests.swift */; };
+		8D20BB8C30B536A1006010E3 /* CoreDataCloudKitStoreConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0730B536A1006010E3 /* CoreDataCloudKitStoreConfigurationTests.swift */; };
+		8D20BB8D30B536A1006010E3 /* AppCurrentHerdSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0230B536A1006010E3 /* AppCurrentHerdSelectionTests.swift */; };
+		8D20BB8E30B536A1006010E3 /* CoreDataTagColorReferenceProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD530B536A1006010E3 /* CoreDataTagColorReferenceProbe.swift */; };
+		8D20BB8F30B536A1006010E3 /* PastureTileListViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1630B536A1006010E3 /* PastureTileListViewModelTests.swift */; };
+		8D20BB9030B536A1006010E3 /* FieldCheckLinkedAnimalPickerRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0C30B536A1006010E3 /* FieldCheckLinkedAnimalPickerRulesTests.swift */; };
+		8D20BB9130B536A1006010E3 /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1A30B536A1006010E3 /* TestSupport.swift */; };
+		8D20BB9230B536A1006010E3 /* PastureRepositoryEdgeCaseContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF230B536A1006010E3 /* PastureRepositoryEdgeCaseContract.swift */; };
+		8D20BB9330B536A1006010E3 /* FieldCheckRepositoryContract+AtomicityAndAttention.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BADE30B536A1006010E3 /* FieldCheckRepositoryContract+AtomicityAndAttention.swift */; };
+		8D20BB9430B536A1006010E3 /* WorkingTreatmentPlanReferenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB2030B536A1006010E3 /* WorkingTreatmentPlanReferenceTests.swift */; };
+		8D20BB9530B536A1006010E3 /* AnimalEditorDraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAFE30B536A1006010E3 /* AnimalEditorDraftTests.swift */; };
+		8D20BB9630B536A1006010E3 /* PastureRepositoryContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF130B536A1006010E3 /* PastureRepositoryContract.swift */; };
+		8D20BB9730B536A1006010E3 /* MutationBoundaryContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAED30B536A1006010E3 /* MutationBoundaryContract.swift */; };
+		8D20BB9830B536A1006010E3 /* DashboardPresentationDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0930B536A1006010E3 /* DashboardPresentationDataTests.swift */; };
+		8D20BB9930B536A1006010E3 /* FieldCheckRepositoryContract+FindingReassignmentAndOrphanEdits.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE330B536A1006010E3 /* FieldCheckRepositoryContract+FindingReassignmentAndOrphanEdits.swift */; };
+		8D20BB9A30B536A1006010E3 /* WorkingAnimalWorkTimestampTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1C30B536A1006010E3 /* WorkingAnimalWorkTimestampTests.swift */; };
+		8D20BB9B30B536A1006010E3 /* WorkingSessionCompletionUseCaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1F30B536A1006010E3 /* WorkingSessionCompletionUseCaseTests.swift */; };
+		8D20BB9C30B536A1006010E3 /* HomeSupportingReadModelContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAEB30B536A1006010E3 /* HomeSupportingReadModelContract.swift */; };
+		8D20BB9D30B536A1006010E3 /* CoreDataPersistenceFoundationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD130B536A1006010E3 /* CoreDataPersistenceFoundationTests.swift */; };
+		8D20BB9E30B536A1006010E3 /* CoreDataAnimalRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BACA30B536A1006010E3 /* CoreDataAnimalRepositoryContractTests.swift */; };
+		8D20BB9F30B536A1006010E3 /* CoreDataModelStructureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0830B536A1006010E3 /* CoreDataModelStructureTests.swift */; };
+		8D20BBA030B536A1006010E3 /* AnimalListViewModelReloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0030B536A1006010E3 /* AnimalListViewModelReloadTests.swift */; };
+		8D20BBA130B536A1006010E3 /* PastureDeletionTransactionContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAEF30B536A1006010E3 /* PastureDeletionTransactionContract.swift */; };
+		8D20BBA230B536A1006010E3 /* AnimalInlineEntryViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAFF30B536A1006010E3 /* AnimalInlineEntryViewModelTests.swift */; };
+		8D20BBA330B536A1006010E3 /* PersistenceTransactionRollbackContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF430B536A1006010E3 /* PersistenceTransactionRollbackContract.swift */; };
+		8D20BBA430B536A1006010E3 /* FieldCheckRepositoryContract+RollbackEdgeCases.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE730B536A1006010E3 /* FieldCheckRepositoryContract+RollbackEdgeCases.swift */; };
+		8D20BBA530B536A1006010E3 /* PastureGroupInputValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1230B536A1006010E3 /* PastureGroupInputValidatorTests.swift */; };
+		8D20BBA630B536A1006010E3 /* WorkingQueueEditorIdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1E30B536A1006010E3 /* WorkingQueueEditorIdentityTests.swift */; };
+		8D20BBA730B536A1006010E3 /* HomeServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1030B536A1006010E3 /* HomeServiceTests.swift */; };
+		8D20BBA830B536A1006010E3 /* WorkingRepositoryContract+WorkData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAFB30B536A1006010E3 /* WorkingRepositoryContract+WorkData.swift */; };
+		8D20BBA930B536A1006010E3 /* AccessibleControlContrastTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAFD30B536A1006010E3 /* AccessibleControlContrastTests.swift */; };
+		8D20BBAA30B536A1006010E3 /* AppNavigationStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0630B536A1006010E3 /* AppNavigationStateTests.swift */; };
+		8D20BBAB30B536A1006010E3 /* AnimalSireInferencePolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0130B536A1006010E3 /* AnimalSireInferencePolicyTests.swift */; };
+		8D20BBAC30B536A1006010E3 /* FieldCheckRepositoryContract+SessionScoping.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE830B536A1006010E3 /* FieldCheckRepositoryContract+SessionScoping.swift */; };
+		8D20BBAD30B536A1006010E3 /* CoreDataTagColorRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD630B536A1006010E3 /* CoreDataTagColorRepositoryContractTests.swift */; };
+		8D20BBAE30B536A1006010E3 /* WorkingRepositoryContract+Lifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF930B536A1006010E3 /* WorkingRepositoryContract+Lifecycle.swift */; };
+		8D20BBAF30B536A1006010E3 /* WorkingRepositoryContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF730B536A1006010E3 /* WorkingRepositoryContract.swift */; };
+		8D20BBB030B536A1006010E3 /* CoreDataStoreOwnershipTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD430B536A1006010E3 /* CoreDataStoreOwnershipTests.swift */; };
+		8D20BBB130B536A1006010E3 /* PastureMetricsAndPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1430B536A1006010E3 /* PastureMetricsAndPolicyTests.swift */; };
+		8D20BBB230B536A1006010E3 /* WorkingRepositoryContract+AtomicityRollback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF830B536A1006010E3 /* WorkingRepositoryContract+AtomicityRollback.swift */; };
+		8D20BBB330B536A1006010E3 /* FieldCheckRepositoryContract+FindingSnapshotMutation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE430B536A1006010E3 /* FieldCheckRepositoryContract+FindingSnapshotMutation.swift */; };
+		8D20BBB430B536A1006010E3 /* FieldCheckRepositoryContract+FailureContextRecoveryAllWrites.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE130B536A1006010E3 /* FieldCheckRepositoryContract+FailureContextRecoveryAllWrites.swift */; };
+		8D20BBB530B536A1006010E3 /* NewWorkingSessionCandidateLoadingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1130B536A1006010E3 /* NewWorkingSessionCandidateLoadingTests.swift */; };
+		8D20BBB630B536A1006010E3 /* HerdRepositoryContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAEA30B536A1006010E3 /* HerdRepositoryContract.swift */; };
+		8D20BBB730B536A1006010E3 /* ApplicationSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0330B536A1006010E3 /* ApplicationSettingsTests.swift */; };
+		8D20BBB830B536A1006010E3 /* FieldCheckSessionLockRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0F30B536A1006010E3 /* FieldCheckSessionLockRulesTests.swift */; };
+		8D20BBB930B536A1006010E3 /* PastureDeletionWorkflowContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF030B536A1006010E3 /* PastureDeletionWorkflowContract.swift */; };
+		8D20BBBA30B536A1006010E3 /* CoreDataPersistenceHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD230B536A1006010E3 /* CoreDataPersistenceHarness.swift */; };
+		8D20BBBB30B536A1006010E3 /* CoreDataHerdRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BACD30B536A1006010E3 /* CoreDataHerdRepositoryContractTests.swift */; };
+		8D20BBBC30B536A1006010E3 /* CoreDataWorkingRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAD730B536A1006010E3 /* CoreDataWorkingRepositoryContractTests.swift */; };
+		8D20BBBD30B536A1006010E3 /* AppNavigationRestorationPreflightTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0530B536A1006010E3 /* AppNavigationRestorationPreflightTests.swift */; };
+		8D20BBBE30B536A1006010E3 /* PastureInputValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1330B536A1006010E3 /* PastureInputValidatorTests.swift */; };
+		8D20BBBF30B536A1006010E3 /* FieldCheckRepositoryContract+HistoryAndLocking.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE530B536A1006010E3 /* FieldCheckRepositoryContract+HistoryAndLocking.swift */; };
+		8D20BBC030B536A1006010E3 /* CoreDataAppHerdBootstrapperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BACB30B536A1006010E3 /* CoreDataAppHerdBootstrapperTests.swift */; };
+		8D20BBC130B536A1006010E3 /* FieldCheckRepositoryContract+MissingFindingSynchronization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE630B536A1006010E3 /* FieldCheckRepositoryContract+MissingFindingSynchronization.swift */; };
+		8D20BBC230B536A1006010E3 /* TagColorRepositoryContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAF530B536A1006010E3 /* TagColorRepositoryContract.swift */; };
+		8D20BBC330B536A1006010E3 /* FieldCheckAnimalAttentionRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0B30B536A1006010E3 /* FieldCheckAnimalAttentionRulesTests.swift */; };
+		8D20BBC430B536A1006010E3 /* CoreDataHomeReadModelContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BACF30B536A1006010E3 /* CoreDataHomeReadModelContractTests.swift */; };
+		8D20BBC530B536A1006010E3 /* PastureUseCaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1830B536A1006010E3 /* PastureUseCaseTests.swift */; };
+		8D20BBC630B536A1006010E3 /* CoreDataHerdSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BACE30B536A1006010E3 /* CoreDataHerdSelectionTests.swift */; };
+		8D20BBC730B536A1006010E3 /* AnimalRepositoryReadModelContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BADC30B536A1006010E3 /* AnimalRepositoryReadModelContract.swift */; };
+		8D20BBC830B536A1006010E3 /* PastureTilePickerViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB1730B536A1006010E3 /* PastureTilePickerViewModelTests.swift */; };
+		8D20BBC930B536A1006010E3 /* HealthRepositoryContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAE930B536A1006010E3 /* HealthRepositoryContract.swift */; };
+		8D20BBCA30B536A1006010E3 /* FieldCheckAllSessionGroupsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BB0A30B536A1006010E3 /* FieldCheckAllSessionGroupsTests.swift */; };
+		8D20BBCB30B536A1006010E3 /* PastureDashboardReadModelContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D20BAEE30B536A1006010E3 /* PastureDashboardReadModelContract.swift */; };
 		8DF60AAE2EDD278F00AF766C /* LucideIcons in Frameworks */ = {isa = PBXBuildFile; productRef = 8DF60AAD2EDD278F00AF766C /* LucideIcons */; };
 /* End PBXBuildFile section */
 
@@ -21,6 +191,91 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		8D20BACA30B536A1006010E3 /* CoreDataAnimalRepositoryContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataAnimalRepositoryContractTests.swift; sourceTree = "<group>"; };
+		8D20BACB30B536A1006010E3 /* CoreDataAppHerdBootstrapperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataAppHerdBootstrapperTests.swift; sourceTree = "<group>"; };
+		8D20BACC30B536A1006010E3 /* CoreDataFieldCheckRepositoryContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataFieldCheckRepositoryContractTests.swift; sourceTree = "<group>"; };
+		8D20BACD30B536A1006010E3 /* CoreDataHerdRepositoryContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataHerdRepositoryContractTests.swift; sourceTree = "<group>"; };
+		8D20BACE30B536A1006010E3 /* CoreDataHerdSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataHerdSelectionTests.swift; sourceTree = "<group>"; };
+		8D20BACF30B536A1006010E3 /* CoreDataHomeReadModelContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataHomeReadModelContractTests.swift; sourceTree = "<group>"; };
+		8D20BAD030B536A1006010E3 /* CoreDataMultiHerdDiscoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataMultiHerdDiscoveryTests.swift; sourceTree = "<group>"; };
+		8D20BAD130B536A1006010E3 /* CoreDataPersistenceFoundationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataPersistenceFoundationTests.swift; sourceTree = "<group>"; };
+		8D20BAD230B536A1006010E3 /* CoreDataPersistenceHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataPersistenceHarness.swift; sourceTree = "<group>"; };
+		8D20BAD330B536A1006010E3 /* CoreDataStage3StartupSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataStage3StartupSelectionTests.swift; sourceTree = "<group>"; };
+		8D20BAD430B536A1006010E3 /* CoreDataStoreOwnershipTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataStoreOwnershipTests.swift; sourceTree = "<group>"; };
+		8D20BAD530B536A1006010E3 /* CoreDataTagColorReferenceProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataTagColorReferenceProbe.swift; sourceTree = "<group>"; };
+		8D20BAD630B536A1006010E3 /* CoreDataTagColorRepositoryContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataTagColorRepositoryContractTests.swift; sourceTree = "<group>"; };
+		8D20BAD730B536A1006010E3 /* CoreDataWorkingRepositoryContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataWorkingRepositoryContractTests.swift; sourceTree = "<group>"; };
+		8D20BAD930B536A1006010E3 /* AnimalAggregateCrossFeatureRevisionContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimalAggregateCrossFeatureRevisionContract.swift; sourceTree = "<group>"; };
+		8D20BADA30B536A1006010E3 /* AnimalAggregateTransactionContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimalAggregateTransactionContract.swift; sourceTree = "<group>"; };
+		8D20BADB30B536A1006010E3 /* AnimalRepositoryContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimalRepositoryContract.swift; sourceTree = "<group>"; };
+		8D20BADC30B536A1006010E3 /* AnimalRepositoryReadModelContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimalRepositoryReadModelContract.swift; sourceTree = "<group>"; };
+		8D20BADD30B536A1006010E3 /* FieldCheckRepositoryContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldCheckRepositoryContract.swift; sourceTree = "<group>"; };
+		8D20BADE30B536A1006010E3 /* FieldCheckRepositoryContract+AtomicityAndAttention.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FieldCheckRepositoryContract+AtomicityAndAttention.swift"; sourceTree = "<group>"; };
+		8D20BADF30B536A1006010E3 /* FieldCheckRepositoryContract+AtomicityRollback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FieldCheckRepositoryContract+AtomicityRollback.swift"; sourceTree = "<group>"; };
+		8D20BAE030B536A1006010E3 /* FieldCheckRepositoryContract+FailureContextRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FieldCheckRepositoryContract+FailureContextRecovery.swift"; sourceTree = "<group>"; };
+		8D20BAE130B536A1006010E3 /* FieldCheckRepositoryContract+FailureContextRecoveryAllWrites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FieldCheckRepositoryContract+FailureContextRecoveryAllWrites.swift"; sourceTree = "<group>"; };
+		8D20BAE230B536A1006010E3 /* FieldCheckRepositoryContract+FindingMutationRollback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FieldCheckRepositoryContract+FindingMutationRollback.swift"; sourceTree = "<group>"; };
+		8D20BAE330B536A1006010E3 /* FieldCheckRepositoryContract+FindingReassignmentAndOrphanEdits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FieldCheckRepositoryContract+FindingReassignmentAndOrphanEdits.swift"; sourceTree = "<group>"; };
+		8D20BAE430B536A1006010E3 /* FieldCheckRepositoryContract+FindingSnapshotMutation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FieldCheckRepositoryContract+FindingSnapshotMutation.swift"; sourceTree = "<group>"; };
+		8D20BAE530B536A1006010E3 /* FieldCheckRepositoryContract+HistoryAndLocking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FieldCheckRepositoryContract+HistoryAndLocking.swift"; sourceTree = "<group>"; };
+		8D20BAE630B536A1006010E3 /* FieldCheckRepositoryContract+MissingFindingSynchronization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FieldCheckRepositoryContract+MissingFindingSynchronization.swift"; sourceTree = "<group>"; };
+		8D20BAE730B536A1006010E3 /* FieldCheckRepositoryContract+RollbackEdgeCases.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FieldCheckRepositoryContract+RollbackEdgeCases.swift"; sourceTree = "<group>"; };
+		8D20BAE830B536A1006010E3 /* FieldCheckRepositoryContract+SessionScoping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FieldCheckRepositoryContract+SessionScoping.swift"; sourceTree = "<group>"; };
+		8D20BAE930B536A1006010E3 /* HealthRepositoryContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthRepositoryContract.swift; sourceTree = "<group>"; };
+		8D20BAEA30B536A1006010E3 /* HerdRepositoryContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdRepositoryContract.swift; sourceTree = "<group>"; };
+		8D20BAEB30B536A1006010E3 /* HomeSupportingReadModelContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeSupportingReadModelContract.swift; sourceTree = "<group>"; };
+		8D20BAEC30B536A1006010E3 /* IdentityContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityContract.swift; sourceTree = "<group>"; };
+		8D20BAED30B536A1006010E3 /* MutationBoundaryContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutationBoundaryContract.swift; sourceTree = "<group>"; };
+		8D20BAEE30B536A1006010E3 /* PastureDashboardReadModelContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastureDashboardReadModelContract.swift; sourceTree = "<group>"; };
+		8D20BAEF30B536A1006010E3 /* PastureDeletionTransactionContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastureDeletionTransactionContract.swift; sourceTree = "<group>"; };
+		8D20BAF030B536A1006010E3 /* PastureDeletionWorkflowContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastureDeletionWorkflowContract.swift; sourceTree = "<group>"; };
+		8D20BAF130B536A1006010E3 /* PastureRepositoryContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastureRepositoryContract.swift; sourceTree = "<group>"; };
+		8D20BAF230B536A1006010E3 /* PastureRepositoryEdgeCaseContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastureRepositoryEdgeCaseContract.swift; sourceTree = "<group>"; };
+		8D20BAF330B536A1006010E3 /* PersistenceTransactionPreconditionContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceTransactionPreconditionContract.swift; sourceTree = "<group>"; };
+		8D20BAF430B536A1006010E3 /* PersistenceTransactionRollbackContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceTransactionRollbackContract.swift; sourceTree = "<group>"; };
+		8D20BAF530B536A1006010E3 /* TagColorRepositoryContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagColorRepositoryContract.swift; sourceTree = "<group>"; };
+		8D20BAF630B536A1006010E3 /* WorkingDashboardReadModelContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkingDashboardReadModelContract.swift; sourceTree = "<group>"; };
+		8D20BAF730B536A1006010E3 /* WorkingRepositoryContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkingRepositoryContract.swift; sourceTree = "<group>"; };
+		8D20BAF830B536A1006010E3 /* WorkingRepositoryContract+AtomicityRollback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkingRepositoryContract+AtomicityRollback.swift"; sourceTree = "<group>"; };
+		8D20BAF930B536A1006010E3 /* WorkingRepositoryContract+Lifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkingRepositoryContract+Lifecycle.swift"; sourceTree = "<group>"; };
+		8D20BAFA30B536A1006010E3 /* WorkingRepositoryContract+PlansTagsAndTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkingRepositoryContract+PlansTagsAndTemplates.swift"; sourceTree = "<group>"; };
+		8D20BAFB30B536A1006010E3 /* WorkingRepositoryContract+WorkData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkingRepositoryContract+WorkData.swift"; sourceTree = "<group>"; };
+		8D20BAFD30B536A1006010E3 /* AccessibleControlContrastTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibleControlContrastTests.swift; sourceTree = "<group>"; };
+		8D20BAFE30B536A1006010E3 /* AnimalEditorDraftTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimalEditorDraftTests.swift; sourceTree = "<group>"; };
+		8D20BAFF30B536A1006010E3 /* AnimalInlineEntryViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimalInlineEntryViewModelTests.swift; sourceTree = "<group>"; };
+		8D20BB0030B536A1006010E3 /* AnimalListViewModelReloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimalListViewModelReloadTests.swift; sourceTree = "<group>"; };
+		8D20BB0130B536A1006010E3 /* AnimalSireInferencePolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimalSireInferencePolicyTests.swift; sourceTree = "<group>"; };
+		8D20BB0230B536A1006010E3 /* AppCurrentHerdSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCurrentHerdSelectionTests.swift; sourceTree = "<group>"; };
+		8D20BB0330B536A1006010E3 /* ApplicationSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationSettingsTests.swift; sourceTree = "<group>"; };
+		8D20BB0430B536A1006010E3 /* AppNavigationIdentityRevalidationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNavigationIdentityRevalidationTests.swift; sourceTree = "<group>"; };
+		8D20BB0530B536A1006010E3 /* AppNavigationRestorationPreflightTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNavigationRestorationPreflightTests.swift; sourceTree = "<group>"; };
+		8D20BB0630B536A1006010E3 /* AppNavigationStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNavigationStateTests.swift; sourceTree = "<group>"; };
+		8D20BB0730B536A1006010E3 /* CoreDataCloudKitStoreConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataCloudKitStoreConfigurationTests.swift; sourceTree = "<group>"; };
+		8D20BB0830B536A1006010E3 /* CoreDataModelStructureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataModelStructureTests.swift; sourceTree = "<group>"; };
+		8D20BB0930B536A1006010E3 /* DashboardPresentationDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardPresentationDataTests.swift; sourceTree = "<group>"; };
+		8D20BB0A30B536A1006010E3 /* FieldCheckAllSessionGroupsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldCheckAllSessionGroupsTests.swift; sourceTree = "<group>"; };
+		8D20BB0B30B536A1006010E3 /* FieldCheckAnimalAttentionRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldCheckAnimalAttentionRulesTests.swift; sourceTree = "<group>"; };
+		8D20BB0C30B536A1006010E3 /* FieldCheckLinkedAnimalPickerRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldCheckLinkedAnimalPickerRulesTests.swift; sourceTree = "<group>"; };
+		8D20BB0D30B536A1006010E3 /* FieldCheckQuickCountRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldCheckQuickCountRulesTests.swift; sourceTree = "<group>"; };
+		8D20BB0E30B536A1006010E3 /* FieldCheckSessionDetailViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldCheckSessionDetailViewModelTests.swift; sourceTree = "<group>"; };
+		8D20BB0F30B536A1006010E3 /* FieldCheckSessionLockRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldCheckSessionLockRulesTests.swift; sourceTree = "<group>"; };
+		8D20BB1030B536A1006010E3 /* HomeServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeServiceTests.swift; sourceTree = "<group>"; };
+		8D20BB1130B536A1006010E3 /* NewWorkingSessionCandidateLoadingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewWorkingSessionCandidateLoadingTests.swift; sourceTree = "<group>"; };
+		8D20BB1230B536A1006010E3 /* PastureGroupInputValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastureGroupInputValidatorTests.swift; sourceTree = "<group>"; };
+		8D20BB1330B536A1006010E3 /* PastureInputValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastureInputValidatorTests.swift; sourceTree = "<group>"; };
+		8D20BB1430B536A1006010E3 /* PastureMetricsAndPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastureMetricsAndPolicyTests.swift; sourceTree = "<group>"; };
+		8D20BB1530B536A1006010E3 /* PastureTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastureTestSupport.swift; sourceTree = "<group>"; };
+		8D20BB1630B536A1006010E3 /* PastureTileListViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastureTileListViewModelTests.swift; sourceTree = "<group>"; };
+		8D20BB1730B536A1006010E3 /* PastureTilePickerViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastureTilePickerViewModelTests.swift; sourceTree = "<group>"; };
+		8D20BB1830B536A1006010E3 /* PastureUseCaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastureUseCaseTests.swift; sourceTree = "<group>"; };
+		8D20BB1930B536A1006010E3 /* TagColorLibraryHistoricalLookupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagColorLibraryHistoricalLookupTests.swift; sourceTree = "<group>"; };
+		8D20BB1A30B536A1006010E3 /* TestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
+		8D20BB1B30B536A1006010E3 /* ValidationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValidationServiceTests.swift; sourceTree = "<group>"; };
+		8D20BB1C30B536A1006010E3 /* WorkingAnimalWorkTimestampTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkingAnimalWorkTimestampTests.swift; sourceTree = "<group>"; };
+		8D20BB1D30B536A1006010E3 /* WorkingCollectAnimalsEligibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkingCollectAnimalsEligibilityTests.swift; sourceTree = "<group>"; };
+		8D20BB1E30B536A1006010E3 /* WorkingQueueEditorIdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkingQueueEditorIdentityTests.swift; sourceTree = "<group>"; };
+		8D20BB1F30B536A1006010E3 /* WorkingSessionCompletionUseCaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkingSessionCompletionUseCaseTests.swift; sourceTree = "<group>"; };
+		8D20BB2030B536A1006010E3 /* WorkingTreatmentPlanReferenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkingTreatmentPlanReferenceTests.swift; sourceTree = "<group>"; };
 		8D40A28A2EDAA29E00C89DD2 /* yaHerd.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = yaHerd.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1B2C3D42F00111100000001 /* yaHerdTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = yaHerdTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -65,9 +320,118 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		8D20BAD830B536A1006010E3 /* CoreData */ = {
+			isa = PBXGroup;
+			children = (
+				8D20BACA30B536A1006010E3 /* CoreDataAnimalRepositoryContractTests.swift */,
+				8D20BACB30B536A1006010E3 /* CoreDataAppHerdBootstrapperTests.swift */,
+				8D20BACC30B536A1006010E3 /* CoreDataFieldCheckRepositoryContractTests.swift */,
+				8D20BACD30B536A1006010E3 /* CoreDataHerdRepositoryContractTests.swift */,
+				8D20BACE30B536A1006010E3 /* CoreDataHerdSelectionTests.swift */,
+				8D20BACF30B536A1006010E3 /* CoreDataHomeReadModelContractTests.swift */,
+				8D20BAD030B536A1006010E3 /* CoreDataMultiHerdDiscoveryTests.swift */,
+				8D20BAD130B536A1006010E3 /* CoreDataPersistenceFoundationTests.swift */,
+				8D20BAD230B536A1006010E3 /* CoreDataPersistenceHarness.swift */,
+				8D20BAD330B536A1006010E3 /* CoreDataStage3StartupSelectionTests.swift */,
+				8D20BAD430B536A1006010E3 /* CoreDataStoreOwnershipTests.swift */,
+				8D20BAD530B536A1006010E3 /* CoreDataTagColorReferenceProbe.swift */,
+				8D20BAD630B536A1006010E3 /* CoreDataTagColorRepositoryContractTests.swift */,
+				8D20BAD730B536A1006010E3 /* CoreDataWorkingRepositoryContractTests.swift */,
+			);
+			path = CoreData;
+			sourceTree = "<group>";
+		};
+		8D20BAFC30B536A1006010E3 /* RepositoryContracts */ = {
+			isa = PBXGroup;
+			children = (
+				8D20BAD930B536A1006010E3 /* AnimalAggregateCrossFeatureRevisionContract.swift */,
+				8D20BADA30B536A1006010E3 /* AnimalAggregateTransactionContract.swift */,
+				8D20BADB30B536A1006010E3 /* AnimalRepositoryContract.swift */,
+				8D20BADC30B536A1006010E3 /* AnimalRepositoryReadModelContract.swift */,
+				8D20BADD30B536A1006010E3 /* FieldCheckRepositoryContract.swift */,
+				8D20BADE30B536A1006010E3 /* FieldCheckRepositoryContract+AtomicityAndAttention.swift */,
+				8D20BADF30B536A1006010E3 /* FieldCheckRepositoryContract+AtomicityRollback.swift */,
+				8D20BAE030B536A1006010E3 /* FieldCheckRepositoryContract+FailureContextRecovery.swift */,
+				8D20BAE130B536A1006010E3 /* FieldCheckRepositoryContract+FailureContextRecoveryAllWrites.swift */,
+				8D20BAE230B536A1006010E3 /* FieldCheckRepositoryContract+FindingMutationRollback.swift */,
+				8D20BAE330B536A1006010E3 /* FieldCheckRepositoryContract+FindingReassignmentAndOrphanEdits.swift */,
+				8D20BAE430B536A1006010E3 /* FieldCheckRepositoryContract+FindingSnapshotMutation.swift */,
+				8D20BAE530B536A1006010E3 /* FieldCheckRepositoryContract+HistoryAndLocking.swift */,
+				8D20BAE630B536A1006010E3 /* FieldCheckRepositoryContract+MissingFindingSynchronization.swift */,
+				8D20BAE730B536A1006010E3 /* FieldCheckRepositoryContract+RollbackEdgeCases.swift */,
+				8D20BAE830B536A1006010E3 /* FieldCheckRepositoryContract+SessionScoping.swift */,
+				8D20BAE930B536A1006010E3 /* HealthRepositoryContract.swift */,
+				8D20BAEA30B536A1006010E3 /* HerdRepositoryContract.swift */,
+				8D20BAEB30B536A1006010E3 /* HomeSupportingReadModelContract.swift */,
+				8D20BAEC30B536A1006010E3 /* IdentityContract.swift */,
+				8D20BAED30B536A1006010E3 /* MutationBoundaryContract.swift */,
+				8D20BAEE30B536A1006010E3 /* PastureDashboardReadModelContract.swift */,
+				8D20BAEF30B536A1006010E3 /* PastureDeletionTransactionContract.swift */,
+				8D20BAF030B536A1006010E3 /* PastureDeletionWorkflowContract.swift */,
+				8D20BAF130B536A1006010E3 /* PastureRepositoryContract.swift */,
+				8D20BAF230B536A1006010E3 /* PastureRepositoryEdgeCaseContract.swift */,
+				8D20BAF330B536A1006010E3 /* PersistenceTransactionPreconditionContract.swift */,
+				8D20BAF430B536A1006010E3 /* PersistenceTransactionRollbackContract.swift */,
+				8D20BAF530B536A1006010E3 /* TagColorRepositoryContract.swift */,
+				8D20BAF630B536A1006010E3 /* WorkingDashboardReadModelContract.swift */,
+				8D20BAF730B536A1006010E3 /* WorkingRepositoryContract.swift */,
+				8D20BAF830B536A1006010E3 /* WorkingRepositoryContract+AtomicityRollback.swift */,
+				8D20BAF930B536A1006010E3 /* WorkingRepositoryContract+Lifecycle.swift */,
+				8D20BAFA30B536A1006010E3 /* WorkingRepositoryContract+PlansTagsAndTemplates.swift */,
+				8D20BAFB30B536A1006010E3 /* WorkingRepositoryContract+WorkData.swift */,
+			);
+			path = RepositoryContracts;
+			sourceTree = "<group>";
+		};
+		8D20BB2130B536A1006010E3 /* yaHerdTests */ = {
+			isa = PBXGroup;
+			children = (
+				8D20BAD830B536A1006010E3 /* CoreData */,
+				8D20BAFC30B536A1006010E3 /* RepositoryContracts */,
+				8D20BAFD30B536A1006010E3 /* AccessibleControlContrastTests.swift */,
+				8D20BAFE30B536A1006010E3 /* AnimalEditorDraftTests.swift */,
+				8D20BAFF30B536A1006010E3 /* AnimalInlineEntryViewModelTests.swift */,
+				8D20BB0030B536A1006010E3 /* AnimalListViewModelReloadTests.swift */,
+				8D20BB0130B536A1006010E3 /* AnimalSireInferencePolicyTests.swift */,
+				8D20BB0230B536A1006010E3 /* AppCurrentHerdSelectionTests.swift */,
+				8D20BB0330B536A1006010E3 /* ApplicationSettingsTests.swift */,
+				8D20BB0430B536A1006010E3 /* AppNavigationIdentityRevalidationTests.swift */,
+				8D20BB0530B536A1006010E3 /* AppNavigationRestorationPreflightTests.swift */,
+				8D20BB0630B536A1006010E3 /* AppNavigationStateTests.swift */,
+				8D20BB0730B536A1006010E3 /* CoreDataCloudKitStoreConfigurationTests.swift */,
+				8D20BB0830B536A1006010E3 /* CoreDataModelStructureTests.swift */,
+				8D20BB0930B536A1006010E3 /* DashboardPresentationDataTests.swift */,
+				8D20BB0A30B536A1006010E3 /* FieldCheckAllSessionGroupsTests.swift */,
+				8D20BB0B30B536A1006010E3 /* FieldCheckAnimalAttentionRulesTests.swift */,
+				8D20BB0C30B536A1006010E3 /* FieldCheckLinkedAnimalPickerRulesTests.swift */,
+				8D20BB0D30B536A1006010E3 /* FieldCheckQuickCountRulesTests.swift */,
+				8D20BB0E30B536A1006010E3 /* FieldCheckSessionDetailViewModelTests.swift */,
+				8D20BB0F30B536A1006010E3 /* FieldCheckSessionLockRulesTests.swift */,
+				8D20BB1030B536A1006010E3 /* HomeServiceTests.swift */,
+				8D20BB1130B536A1006010E3 /* NewWorkingSessionCandidateLoadingTests.swift */,
+				8D20BB1230B536A1006010E3 /* PastureGroupInputValidatorTests.swift */,
+				8D20BB1330B536A1006010E3 /* PastureInputValidatorTests.swift */,
+				8D20BB1430B536A1006010E3 /* PastureMetricsAndPolicyTests.swift */,
+				8D20BB1530B536A1006010E3 /* PastureTestSupport.swift */,
+				8D20BB1630B536A1006010E3 /* PastureTileListViewModelTests.swift */,
+				8D20BB1730B536A1006010E3 /* PastureTilePickerViewModelTests.swift */,
+				8D20BB1830B536A1006010E3 /* PastureUseCaseTests.swift */,
+				8D20BB1930B536A1006010E3 /* TagColorLibraryHistoricalLookupTests.swift */,
+				8D20BB1A30B536A1006010E3 /* TestSupport.swift */,
+				8D20BB1B30B536A1006010E3 /* ValidationServiceTests.swift */,
+				8D20BB1C30B536A1006010E3 /* WorkingAnimalWorkTimestampTests.swift */,
+				8D20BB1D30B536A1006010E3 /* WorkingCollectAnimalsEligibilityTests.swift */,
+				8D20BB1E30B536A1006010E3 /* WorkingQueueEditorIdentityTests.swift */,
+				8D20BB1F30B536A1006010E3 /* WorkingSessionCompletionUseCaseTests.swift */,
+				8D20BB2030B536A1006010E3 /* WorkingTreatmentPlanReferenceTests.swift */,
+			);
+			path = yaHerdTests;
+			sourceTree = "<group>";
+		};
 		8D40A2812EDAA29E00C89DD2 = {
 			isa = PBXGroup;
 			children = (
+				8D20BB2130B536A1006010E3 /* yaHerdTests */,
 				8D40A28C2EDAA29E00C89DD2 /* yaHerd */,
 				8D40A28B2EDAA29E00C89DD2 /* Products */,
 			);
@@ -199,6 +563,91 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8D20BB7730B536A1006010E3 /* IdentityContract.swift in Sources */,
+				8D20BB7830B536A1006010E3 /* FieldCheckQuickCountRulesTests.swift in Sources */,
+				8D20BB7930B536A1006010E3 /* FieldCheckSessionDetailViewModelTests.swift in Sources */,
+				8D20BB7A30B536A1006010E3 /* CoreDataFieldCheckRepositoryContractTests.swift in Sources */,
+				8D20BB7B30B536A1006010E3 /* AnimalRepositoryContract.swift in Sources */,
+				8D20BB7C30B536A1006010E3 /* FieldCheckRepositoryContract+FindingMutationRollback.swift in Sources */,
+				8D20BB7D30B536A1006010E3 /* FieldCheckRepositoryContract.swift in Sources */,
+				8D20BB7E30B536A1006010E3 /* WorkingDashboardReadModelContract.swift in Sources */,
+				8D20BB7F30B536A1006010E3 /* AppNavigationIdentityRevalidationTests.swift in Sources */,
+				8D20BB8030B536A1006010E3 /* AnimalAggregateCrossFeatureRevisionContract.swift in Sources */,
+				8D20BB8130B536A1006010E3 /* CoreDataMultiHerdDiscoveryTests.swift in Sources */,
+				8D20BB8230B536A1006010E3 /* TagColorLibraryHistoricalLookupTests.swift in Sources */,
+				8D20BB8330B536A1006010E3 /* PastureTestSupport.swift in Sources */,
+				8D20BB8430B536A1006010E3 /* FieldCheckRepositoryContract+FailureContextRecovery.swift in Sources */,
+				8D20BB8530B536A1006010E3 /* PersistenceTransactionPreconditionContract.swift in Sources */,
+				8D20BB8630B536A1006010E3 /* FieldCheckRepositoryContract+AtomicityRollback.swift in Sources */,
+				8D20BB8730B536A1006010E3 /* AnimalAggregateTransactionContract.swift in Sources */,
+				8D20BB8830B536A1006010E3 /* WorkingCollectAnimalsEligibilityTests.swift in Sources */,
+				8D20BB8930B536A1006010E3 /* ValidationServiceTests.swift in Sources */,
+				8D20BB8A30B536A1006010E3 /* WorkingRepositoryContract+PlansTagsAndTemplates.swift in Sources */,
+				8D20BB8B30B536A1006010E3 /* CoreDataStage3StartupSelectionTests.swift in Sources */,
+				8D20BB8C30B536A1006010E3 /* CoreDataCloudKitStoreConfigurationTests.swift in Sources */,
+				8D20BB8D30B536A1006010E3 /* AppCurrentHerdSelectionTests.swift in Sources */,
+				8D20BB8E30B536A1006010E3 /* CoreDataTagColorReferenceProbe.swift in Sources */,
+				8D20BB8F30B536A1006010E3 /* PastureTileListViewModelTests.swift in Sources */,
+				8D20BB9030B536A1006010E3 /* FieldCheckLinkedAnimalPickerRulesTests.swift in Sources */,
+				8D20BB9130B536A1006010E3 /* TestSupport.swift in Sources */,
+				8D20BB9230B536A1006010E3 /* PastureRepositoryEdgeCaseContract.swift in Sources */,
+				8D20BB9330B536A1006010E3 /* FieldCheckRepositoryContract+AtomicityAndAttention.swift in Sources */,
+				8D20BB9430B536A1006010E3 /* WorkingTreatmentPlanReferenceTests.swift in Sources */,
+				8D20BB9530B536A1006010E3 /* AnimalEditorDraftTests.swift in Sources */,
+				8D20BB9630B536A1006010E3 /* PastureRepositoryContract.swift in Sources */,
+				8D20BB9730B536A1006010E3 /* MutationBoundaryContract.swift in Sources */,
+				8D20BB9830B536A1006010E3 /* DashboardPresentationDataTests.swift in Sources */,
+				8D20BB9930B536A1006010E3 /* FieldCheckRepositoryContract+FindingReassignmentAndOrphanEdits.swift in Sources */,
+				8D20BB9A30B536A1006010E3 /* WorkingAnimalWorkTimestampTests.swift in Sources */,
+				8D20BB9B30B536A1006010E3 /* WorkingSessionCompletionUseCaseTests.swift in Sources */,
+				8D20BB9C30B536A1006010E3 /* HomeSupportingReadModelContract.swift in Sources */,
+				8D20BB9D30B536A1006010E3 /* CoreDataPersistenceFoundationTests.swift in Sources */,
+				8D20BB9E30B536A1006010E3 /* CoreDataAnimalRepositoryContractTests.swift in Sources */,
+				8D20BB9F30B536A1006010E3 /* CoreDataModelStructureTests.swift in Sources */,
+				8D20BBA030B536A1006010E3 /* AnimalListViewModelReloadTests.swift in Sources */,
+				8D20BBA130B536A1006010E3 /* PastureDeletionTransactionContract.swift in Sources */,
+				8D20BBA230B536A1006010E3 /* AnimalInlineEntryViewModelTests.swift in Sources */,
+				8D20BBA330B536A1006010E3 /* PersistenceTransactionRollbackContract.swift in Sources */,
+				8D20BBA430B536A1006010E3 /* FieldCheckRepositoryContract+RollbackEdgeCases.swift in Sources */,
+				8D20BBA530B536A1006010E3 /* PastureGroupInputValidatorTests.swift in Sources */,
+				8D20BBA630B536A1006010E3 /* WorkingQueueEditorIdentityTests.swift in Sources */,
+				8D20BBA730B536A1006010E3 /* HomeServiceTests.swift in Sources */,
+				8D20BBA830B536A1006010E3 /* WorkingRepositoryContract+WorkData.swift in Sources */,
+				8D20BBA930B536A1006010E3 /* AccessibleControlContrastTests.swift in Sources */,
+				8D20BBAA30B536A1006010E3 /* AppNavigationStateTests.swift in Sources */,
+				8D20BBAB30B536A1006010E3 /* AnimalSireInferencePolicyTests.swift in Sources */,
+				8D20BBAC30B536A1006010E3 /* FieldCheckRepositoryContract+SessionScoping.swift in Sources */,
+				8D20BBAD30B536A1006010E3 /* CoreDataTagColorRepositoryContractTests.swift in Sources */,
+				8D20BBAE30B536A1006010E3 /* WorkingRepositoryContract+Lifecycle.swift in Sources */,
+				8D20BBAF30B536A1006010E3 /* WorkingRepositoryContract.swift in Sources */,
+				8D20BBB030B536A1006010E3 /* CoreDataStoreOwnershipTests.swift in Sources */,
+				8D20BBB130B536A1006010E3 /* PastureMetricsAndPolicyTests.swift in Sources */,
+				8D20BBB230B536A1006010E3 /* WorkingRepositoryContract+AtomicityRollback.swift in Sources */,
+				8D20BBB330B536A1006010E3 /* FieldCheckRepositoryContract+FindingSnapshotMutation.swift in Sources */,
+				8D20BBB430B536A1006010E3 /* FieldCheckRepositoryContract+FailureContextRecoveryAllWrites.swift in Sources */,
+				8D20BBB530B536A1006010E3 /* NewWorkingSessionCandidateLoadingTests.swift in Sources */,
+				8D20BBB630B536A1006010E3 /* HerdRepositoryContract.swift in Sources */,
+				8D20BBB730B536A1006010E3 /* ApplicationSettingsTests.swift in Sources */,
+				8D20BBB830B536A1006010E3 /* FieldCheckSessionLockRulesTests.swift in Sources */,
+				8D20BBB930B536A1006010E3 /* PastureDeletionWorkflowContract.swift in Sources */,
+				8D20BBBA30B536A1006010E3 /* CoreDataPersistenceHarness.swift in Sources */,
+				8D20BBBB30B536A1006010E3 /* CoreDataHerdRepositoryContractTests.swift in Sources */,
+				8D20BBBC30B536A1006010E3 /* CoreDataWorkingRepositoryContractTests.swift in Sources */,
+				8D20BBBD30B536A1006010E3 /* AppNavigationRestorationPreflightTests.swift in Sources */,
+				8D20BBBE30B536A1006010E3 /* PastureInputValidatorTests.swift in Sources */,
+				8D20BBBF30B536A1006010E3 /* FieldCheckRepositoryContract+HistoryAndLocking.swift in Sources */,
+				8D20BBC030B536A1006010E3 /* CoreDataAppHerdBootstrapperTests.swift in Sources */,
+				8D20BBC130B536A1006010E3 /* FieldCheckRepositoryContract+MissingFindingSynchronization.swift in Sources */,
+				8D20BBC230B536A1006010E3 /* TagColorRepositoryContract.swift in Sources */,
+				8D20BBC330B536A1006010E3 /* FieldCheckAnimalAttentionRulesTests.swift in Sources */,
+				8D20BBC430B536A1006010E3 /* CoreDataHomeReadModelContractTests.swift in Sources */,
+				8D20BBC530B536A1006010E3 /* PastureUseCaseTests.swift in Sources */,
+				8D20BBC630B536A1006010E3 /* CoreDataHerdSelectionTests.swift in Sources */,
+				8D20BBC730B536A1006010E3 /* AnimalRepositoryReadModelContract.swift in Sources */,
+				8D20BBC830B536A1006010E3 /* PastureTilePickerViewModelTests.swift in Sources */,
+				8D20BBC930B536A1006010E3 /* HealthRepositoryContract.swift in Sources */,
+				8D20BBCA30B536A1006010E3 /* FieldCheckAllSessionGroupsTests.swift in Sources */,
+				8D20BBCB30B536A1006010E3 /* PastureDashboardReadModelContract.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -206,6 +655,91 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8D20BB2230B536A1006010E3 /* IdentityContract.swift in Sources */,
+				8D20BB2330B536A1006010E3 /* FieldCheckQuickCountRulesTests.swift in Sources */,
+				8D20BB2430B536A1006010E3 /* FieldCheckSessionDetailViewModelTests.swift in Sources */,
+				8D20BB2530B536A1006010E3 /* CoreDataFieldCheckRepositoryContractTests.swift in Sources */,
+				8D20BB2630B536A1006010E3 /* AnimalRepositoryContract.swift in Sources */,
+				8D20BB2730B536A1006010E3 /* FieldCheckRepositoryContract+FindingMutationRollback.swift in Sources */,
+				8D20BB2830B536A1006010E3 /* FieldCheckRepositoryContract.swift in Sources */,
+				8D20BB2930B536A1006010E3 /* WorkingDashboardReadModelContract.swift in Sources */,
+				8D20BB2A30B536A1006010E3 /* AppNavigationIdentityRevalidationTests.swift in Sources */,
+				8D20BB2B30B536A1006010E3 /* AnimalAggregateCrossFeatureRevisionContract.swift in Sources */,
+				8D20BB2C30B536A1006010E3 /* CoreDataMultiHerdDiscoveryTests.swift in Sources */,
+				8D20BB2D30B536A1006010E3 /* TagColorLibraryHistoricalLookupTests.swift in Sources */,
+				8D20BB2E30B536A1006010E3 /* PastureTestSupport.swift in Sources */,
+				8D20BB2F30B536A1006010E3 /* FieldCheckRepositoryContract+FailureContextRecovery.swift in Sources */,
+				8D20BB3030B536A1006010E3 /* PersistenceTransactionPreconditionContract.swift in Sources */,
+				8D20BB3130B536A1006010E3 /* FieldCheckRepositoryContract+AtomicityRollback.swift in Sources */,
+				8D20BB3230B536A1006010E3 /* AnimalAggregateTransactionContract.swift in Sources */,
+				8D20BB3330B536A1006010E3 /* WorkingCollectAnimalsEligibilityTests.swift in Sources */,
+				8D20BB3430B536A1006010E3 /* ValidationServiceTests.swift in Sources */,
+				8D20BB3530B536A1006010E3 /* WorkingRepositoryContract+PlansTagsAndTemplates.swift in Sources */,
+				8D20BB3630B536A1006010E3 /* CoreDataStage3StartupSelectionTests.swift in Sources */,
+				8D20BB3730B536A1006010E3 /* CoreDataCloudKitStoreConfigurationTests.swift in Sources */,
+				8D20BB3830B536A1006010E3 /* AppCurrentHerdSelectionTests.swift in Sources */,
+				8D20BB3930B536A1006010E3 /* CoreDataTagColorReferenceProbe.swift in Sources */,
+				8D20BB3A30B536A1006010E3 /* PastureTileListViewModelTests.swift in Sources */,
+				8D20BB3B30B536A1006010E3 /* FieldCheckLinkedAnimalPickerRulesTests.swift in Sources */,
+				8D20BB3C30B536A1006010E3 /* TestSupport.swift in Sources */,
+				8D20BB3D30B536A1006010E3 /* PastureRepositoryEdgeCaseContract.swift in Sources */,
+				8D20BB3E30B536A1006010E3 /* FieldCheckRepositoryContract+AtomicityAndAttention.swift in Sources */,
+				8D20BB3F30B536A1006010E3 /* WorkingTreatmentPlanReferenceTests.swift in Sources */,
+				8D20BB4030B536A1006010E3 /* AnimalEditorDraftTests.swift in Sources */,
+				8D20BB4130B536A1006010E3 /* PastureRepositoryContract.swift in Sources */,
+				8D20BB4230B536A1006010E3 /* MutationBoundaryContract.swift in Sources */,
+				8D20BB4330B536A1006010E3 /* DashboardPresentationDataTests.swift in Sources */,
+				8D20BB4430B536A1006010E3 /* FieldCheckRepositoryContract+FindingReassignmentAndOrphanEdits.swift in Sources */,
+				8D20BB4530B536A1006010E3 /* WorkingAnimalWorkTimestampTests.swift in Sources */,
+				8D20BB4630B536A1006010E3 /* WorkingSessionCompletionUseCaseTests.swift in Sources */,
+				8D20BB4730B536A1006010E3 /* HomeSupportingReadModelContract.swift in Sources */,
+				8D20BB4830B536A1006010E3 /* CoreDataPersistenceFoundationTests.swift in Sources */,
+				8D20BB4930B536A1006010E3 /* CoreDataAnimalRepositoryContractTests.swift in Sources */,
+				8D20BB4A30B536A1006010E3 /* CoreDataModelStructureTests.swift in Sources */,
+				8D20BB4B30B536A1006010E3 /* AnimalListViewModelReloadTests.swift in Sources */,
+				8D20BB4C30B536A1006010E3 /* PastureDeletionTransactionContract.swift in Sources */,
+				8D20BB4D30B536A1006010E3 /* AnimalInlineEntryViewModelTests.swift in Sources */,
+				8D20BB4E30B536A1006010E3 /* PersistenceTransactionRollbackContract.swift in Sources */,
+				8D20BB4F30B536A1006010E3 /* FieldCheckRepositoryContract+RollbackEdgeCases.swift in Sources */,
+				8D20BB5030B536A1006010E3 /* PastureGroupInputValidatorTests.swift in Sources */,
+				8D20BB5130B536A1006010E3 /* WorkingQueueEditorIdentityTests.swift in Sources */,
+				8D20BB5230B536A1006010E3 /* HomeServiceTests.swift in Sources */,
+				8D20BB5330B536A1006010E3 /* WorkingRepositoryContract+WorkData.swift in Sources */,
+				8D20BB5430B536A1006010E3 /* AccessibleControlContrastTests.swift in Sources */,
+				8D20BB5530B536A1006010E3 /* AppNavigationStateTests.swift in Sources */,
+				8D20BB5630B536A1006010E3 /* AnimalSireInferencePolicyTests.swift in Sources */,
+				8D20BB5730B536A1006010E3 /* FieldCheckRepositoryContract+SessionScoping.swift in Sources */,
+				8D20BB5830B536A1006010E3 /* CoreDataTagColorRepositoryContractTests.swift in Sources */,
+				8D20BB5930B536A1006010E3 /* WorkingRepositoryContract+Lifecycle.swift in Sources */,
+				8D20BB5A30B536A1006010E3 /* WorkingRepositoryContract.swift in Sources */,
+				8D20BB5B30B536A1006010E3 /* CoreDataStoreOwnershipTests.swift in Sources */,
+				8D20BB5C30B536A1006010E3 /* PastureMetricsAndPolicyTests.swift in Sources */,
+				8D20BB5D30B536A1006010E3 /* WorkingRepositoryContract+AtomicityRollback.swift in Sources */,
+				8D20BB5E30B536A1006010E3 /* FieldCheckRepositoryContract+FindingSnapshotMutation.swift in Sources */,
+				8D20BB5F30B536A1006010E3 /* FieldCheckRepositoryContract+FailureContextRecoveryAllWrites.swift in Sources */,
+				8D20BB6030B536A1006010E3 /* NewWorkingSessionCandidateLoadingTests.swift in Sources */,
+				8D20BB6130B536A1006010E3 /* HerdRepositoryContract.swift in Sources */,
+				8D20BB6230B536A1006010E3 /* ApplicationSettingsTests.swift in Sources */,
+				8D20BB6330B536A1006010E3 /* FieldCheckSessionLockRulesTests.swift in Sources */,
+				8D20BB6430B536A1006010E3 /* PastureDeletionWorkflowContract.swift in Sources */,
+				8D20BB6530B536A1006010E3 /* CoreDataPersistenceHarness.swift in Sources */,
+				8D20BB6630B536A1006010E3 /* CoreDataHerdRepositoryContractTests.swift in Sources */,
+				8D20BB6730B536A1006010E3 /* CoreDataWorkingRepositoryContractTests.swift in Sources */,
+				8D20BB6830B536A1006010E3 /* AppNavigationRestorationPreflightTests.swift in Sources */,
+				8D20BB6930B536A1006010E3 /* PastureInputValidatorTests.swift in Sources */,
+				8D20BB6A30B536A1006010E3 /* FieldCheckRepositoryContract+HistoryAndLocking.swift in Sources */,
+				8D20BB6B30B536A1006010E3 /* CoreDataAppHerdBootstrapperTests.swift in Sources */,
+				8D20BB6C30B536A1006010E3 /* FieldCheckRepositoryContract+MissingFindingSynchronization.swift in Sources */,
+				8D20BB6D30B536A1006010E3 /* TagColorRepositoryContract.swift in Sources */,
+				8D20BB6E30B536A1006010E3 /* FieldCheckAnimalAttentionRulesTests.swift in Sources */,
+				8D20BB6F30B536A1006010E3 /* CoreDataHomeReadModelContractTests.swift in Sources */,
+				8D20BB7030B536A1006010E3 /* PastureUseCaseTests.swift in Sources */,
+				8D20BB7130B536A1006010E3 /* CoreDataHerdSelectionTests.swift in Sources */,
+				8D20BB7230B536A1006010E3 /* AnimalRepositoryReadModelContract.swift in Sources */,
+				8D20BB7330B536A1006010E3 /* PastureTilePickerViewModelTests.swift in Sources */,
+				8D20BB7430B536A1006010E3 /* HealthRepositoryContract.swift in Sources */,
+				8D20BB7530B536A1006010E3 /* FieldCheckAllSessionGroupsTests.swift in Sources */,
+				8D20BB7630B536A1006010E3 /* PastureDashboardReadModelContract.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -544,7 +1078,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				"CODE_SIGNING_ALLOWED[sdk=iphoneos*]" = YES;
 				"CODE_SIGNING_REQUIRED[sdk=iphoneos*]" = YES;
-				CODE_SIGN_ENTITLEMENTS = yaHerd/yaHerd-iCloudDevelopment.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "yaHerd/yaHerd-iCloudDevelopment.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;

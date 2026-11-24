@@ -1,0 +1,1138 @@
+import XCTest
+@testable import yaHerd
+
+/// Persistence-neutral snapshot used only by the permanent health contract to verify durable child-record
+/// identity and fields that are not currently exposed by the public Animal read models.
+struct HealthRecordContractSnapshot: Equatable {
+    let id: UUID
+    let animalID: UUID?
+    let date: Date
+    let treatment: String
+    let notes: String?
+    let workingSessionID: UUID?
+}
+
+/// Persistence-neutral snapshot used only by the permanent health contract to verify durable pregnancy-check
+/// identity, optional payload, and relationships that are not currently exposed by the public Animal read models.
+struct PregnancyCheckContractSnapshot: Equatable {
+    let id: UUID
+    let animalID: UUID?
+    let date: Date
+    let resultRawValue: String
+    let technician: String?
+    let estimatedDaysPregnant: Int?
+    let dueDate: Date?
+    let sireAnimalID: UUID?
+    let workingSessionID: UUID?
+}
+
+/// Target-runner test control for facts that cannot be asserted through the current Domain read models.
+///
+/// This is not a production repository contract and must not expose SwiftData/Core Data model objects or contexts.
+/// The future Core Data runner should map persisted health rows into these persistence-neutral snapshots.
+@MainActor
+protocol HealthRepositoryContractTestControl {
+    func healthRecords(forAnimalID animalID: UUID) throws -> [HealthRecordContractSnapshot]
+    func pregnancyChecks(forAnimalID animalID: UUID) throws -> [PregnancyCheckContractSnapshot]
+
+    /// These unscoped probes must return every persisted row, including rows whose owner relationship is nil,
+    /// so the permanent contract can detect orphaned children instead of allowing a runner to filter them away.
+    func allHealthRecords() throws -> [HealthRecordContractSnapshot]
+    func allPregnancyChecks() throws -> [PregnancyCheckContractSnapshot]
+}
+
+/// Permanent persistence-neutral fixture for standalone Animal health and pregnancy behavior.
+///
+/// yaHerd does not currently have a separate `HealthRepository`; direct health and pregnancy mutations are owned by
+/// `AnimalRepository`. The historical Milestone 0 `HealthRepositoryContractTests` plan item is therefore expressed
+/// against the existing Animal Domain contracts rather than inventing a new repository solely for persistence work.
+@MainActor
+struct HealthRepositoryContractFixture {
+    let makeAnimalRepository: () -> any AnimalRepository
+    let makeTestControl: () -> any HealthRepositoryContractTestControl
+}
+
+/// Permanent persistence-neutral behavioral contract for standalone animal health history.
+///
+/// Ownership boundaries:
+/// - This contract owns direct Animal health-record and pregnancy-check child identity, complete persisted payload,
+///   sire-nullification behavior, orphan prevention, and animal hard-delete cascading.
+/// - This contract also owns the Animal type projection specifically derived from castration/banding health history.
+/// - This contract owns preservation of complete standalone health/pregnancy child snapshots across Animal archive
+///   and restore, including child UUIDs, payload, ownership, sire links, and Working-session links.
+/// - `AnimalRepositoryContract` owns Animal-facing archive/restore state, timeline ordering, and summary calculations
+///   such as latest treatment/pregnancy and expected-calving-date behavior.
+/// - `WorkingRepositoryContract` owns health/pregnancy rows generated from Working, their session linkage, editing,
+///   cleanup, and transaction rollback semantics.
+/// - Generic mutation publication and broad duplicate-identity enforcement remain separate Milestone 0 slices.
+@MainActor
+enum HealthRepositoryContract {
+    static func assertStandaloneHealthRecordsPreserveIdentityPayloadAndOwnership(
+        using fixture: HealthRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeAnimalRepository()
+        let animal = try repository.create(
+            input: makeAnimalInput(
+                name: "Health Contract Cow",
+                tagNumber: "H101",
+                sex: .female,
+                birthDate: date(year: 2020, month: 1, day: 10)
+            )
+        )
+        let controlAnimal = try repository.create(
+            input: makeAnimalInput(
+                name: "Health Contract Control",
+                tagNumber: "H102",
+                sex: .female,
+                birthDate: date(year: 2020, month: 1, day: 11)
+            )
+        )
+
+        let firstDate = date(year: 2026, month: 6, day: 10)
+        let firstTreatment = "Pinkeye treatment"
+        let firstNotes = "Left eye"
+        let firstResult = try repository.addHealthRecord(
+            animalID: animal.id,
+            input: HealthRecordInput(
+                date: firstDate,
+                treatment: firstTreatment,
+                notes: firstNotes
+            )
+        )
+        XCTAssertEqual(firstResult.id, animal.id, file: file, line: line)
+
+        let firstReload = try XCTUnwrap(
+            fixture.makeAnimalRepository().fetchAnimalDetail(id: animal.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(firstReload.id, animal.id, file: file, line: line)
+
+        let firstPersistedRecords = try fixture.makeTestControl().healthRecords(forAnimalID: animal.id)
+        XCTAssertEqual(firstPersistedRecords.count, 1, file: file, line: line)
+        let firstPersisted = try XCTUnwrap(firstPersistedRecords.first, file: file, line: line)
+        XCTAssertEqual(firstPersisted.animalID, animal.id, file: file, line: line)
+        XCTAssertEqual(firstPersisted.date, firstDate, file: file, line: line)
+        XCTAssertEqual(firstPersisted.treatment, firstTreatment, file: file, line: line)
+        XCTAssertEqual(firstPersisted.notes, firstNotes, file: file, line: line)
+        XCTAssertNil(
+            firstPersisted.workingSessionID,
+            "A health record added directly from Animal must not acquire a Working-session relationship.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            try fixture.makeTestControl().healthRecords(forAnimalID: controlAnimal.id).isEmpty,
+            "Adding health history to one animal must not create history for an unrelated animal.",
+            file: file,
+            line: line
+        )
+
+        let secondDate = date(year: 2026, month: 5, day: 20)
+        let secondTreatment = "Backdated vaccination"
+        _ = try fixture.makeAnimalRepository().addHealthRecord(
+            animalID: animal.id,
+            input: HealthRecordInput(
+                date: secondDate,
+                treatment: secondTreatment,
+                notes: nil
+            )
+        )
+
+        let reloadedRecords = try fixture.makeTestControl().healthRecords(forAnimalID: animal.id)
+        XCTAssertEqual(reloadedRecords.count, 2, file: file, line: line)
+        XCTAssertEqual(
+            Set(reloadedRecords.map(\.id)).count,
+            2,
+            "Each durable health record must have its own application UUID.",
+            file: file,
+            line: line
+        )
+        let reloadedFirst = try XCTUnwrap(
+            reloadedRecords.first { $0.id == firstPersisted.id },
+            "Adding another record must preserve the original health-record UUID.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedFirst.animalID, animal.id, file: file, line: line)
+        XCTAssertEqual(reloadedFirst.date, firstDate, file: file, line: line)
+        XCTAssertEqual(reloadedFirst.treatment, firstTreatment, file: file, line: line)
+        XCTAssertEqual(reloadedFirst.notes, firstNotes, file: file, line: line)
+        XCTAssertNil(reloadedFirst.workingSessionID, file: file, line: line)
+
+        let reloadedSecond = try XCTUnwrap(
+            reloadedRecords.first { $0.id != firstPersisted.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedSecond.animalID, animal.id, file: file, line: line)
+        XCTAssertEqual(reloadedSecond.date, secondDate, file: file, line: line)
+        XCTAssertEqual(reloadedSecond.treatment, secondTreatment, file: file, line: line)
+        XCTAssertNil(
+            reloadedSecond.notes,
+            "A nil health-record note must remain nil after persistence rather than becoming an empty string.",
+            file: file,
+            line: line
+        )
+        XCTAssertNil(reloadedSecond.workingSessionID, file: file, line: line)
+    }
+
+    static func assertStandalonePregnancyChecksPreserveIdentityPayloadAndSire(
+        using fixture: HealthRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeAnimalRepository()
+        let cow = try repository.create(
+            input: makeAnimalInput(
+                name: "Pregnancy Contract Cow",
+                tagNumber: "P201",
+                sex: .female,
+                birthDate: date(year: 2020, month: 2, day: 10)
+            )
+        )
+        let sire = try repository.create(
+            input: makeAnimalInput(
+                name: "Pregnancy Contract Sire",
+                tagNumber: "P202",
+                sex: .male,
+                birthDate: date(year: 2018, month: 2, day: 10)
+            )
+        )
+        let controlAnimal = try repository.create(
+            input: makeAnimalInput(
+                name: "Pregnancy Contract Control",
+                tagNumber: "P203",
+                sex: .female,
+                birthDate: date(year: 2021, month: 2, day: 10)
+            )
+        )
+
+        let pregnancyDate = date(year: 2026, month: 6, day: 12)
+        let dueDate = date(year: 2026, month: 12, day: 20)
+        let technician = "Contract Technician"
+        let result = try repository.addPregnancyCheck(
+            animalID: cow.id,
+            input: PregnancyCheckInput(
+                date: pregnancyDate,
+                result: .pregnant,
+                technician: technician,
+                estimatedDaysPregnant: 110,
+                dueDate: dueDate,
+                sireAnimalID: sire.id
+            )
+        )
+        XCTAssertEqual(result.id, cow.id, file: file, line: line)
+
+        let firstReloadRecords = try fixture.makeTestControl().pregnancyChecks(forAnimalID: cow.id)
+        XCTAssertEqual(firstReloadRecords.count, 1, file: file, line: line)
+        let firstPersisted = try XCTUnwrap(firstReloadRecords.first, file: file, line: line)
+        XCTAssertEqual(firstPersisted.animalID, cow.id, file: file, line: line)
+        XCTAssertEqual(firstPersisted.date, pregnancyDate, file: file, line: line)
+        XCTAssertEqual(firstPersisted.resultRawValue, PregnancyResult.pregnant.rawValue, file: file, line: line)
+        XCTAssertEqual(firstPersisted.technician, technician, file: file, line: line)
+        XCTAssertEqual(firstPersisted.estimatedDaysPregnant, 110, file: file, line: line)
+        XCTAssertEqual(firstPersisted.dueDate, dueDate, file: file, line: line)
+        XCTAssertEqual(firstPersisted.sireAnimalID, sire.id, file: file, line: line)
+        XCTAssertNil(
+            firstPersisted.workingSessionID,
+            "A pregnancy check added directly from Animal must not acquire a Working-session relationship.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            try fixture.makeTestControl().pregnancyChecks(forAnimalID: controlAnimal.id).isEmpty,
+            "Adding a pregnancy check to one animal must not create a check for an unrelated animal.",
+            file: file,
+            line: line
+        )
+
+        let backdatedDate = date(year: 2026, month: 4, day: 1)
+        _ = try fixture.makeAnimalRepository().addPregnancyCheck(
+            animalID: cow.id,
+            input: PregnancyCheckInput(
+                date: backdatedDate,
+                result: .open,
+                technician: nil,
+                estimatedDaysPregnant: nil,
+                dueDate: nil,
+                sireAnimalID: nil
+            )
+        )
+
+        let reloadedRecords = try fixture.makeTestControl().pregnancyChecks(forAnimalID: cow.id)
+        XCTAssertEqual(reloadedRecords.count, 2, file: file, line: line)
+        XCTAssertEqual(
+            Set(reloadedRecords.map(\.id)).count,
+            2,
+            "Each durable pregnancy check must have its own application UUID.",
+            file: file,
+            line: line
+        )
+        let reloadedFirst = try XCTUnwrap(
+            reloadedRecords.first { $0.id == firstPersisted.id },
+            "Adding another pregnancy check must preserve the original check UUID.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedFirst.animalID, cow.id, file: file, line: line)
+        XCTAssertEqual(reloadedFirst.date, pregnancyDate, file: file, line: line)
+        XCTAssertEqual(reloadedFirst.resultRawValue, PregnancyResult.pregnant.rawValue, file: file, line: line)
+        XCTAssertEqual(reloadedFirst.technician, technician, file: file, line: line)
+        XCTAssertEqual(reloadedFirst.estimatedDaysPregnant, 110, file: file, line: line)
+        XCTAssertEqual(reloadedFirst.dueDate, dueDate, file: file, line: line)
+        XCTAssertEqual(reloadedFirst.sireAnimalID, sire.id, file: file, line: line)
+        XCTAssertNil(reloadedFirst.workingSessionID, file: file, line: line)
+
+        let reloadedBackdated = try XCTUnwrap(
+            reloadedRecords.first { $0.id != firstPersisted.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedBackdated.animalID, cow.id, file: file, line: line)
+        XCTAssertEqual(reloadedBackdated.date, backdatedDate, file: file, line: line)
+        XCTAssertEqual(reloadedBackdated.resultRawValue, PregnancyResult.open.rawValue, file: file, line: line)
+        XCTAssertNil(reloadedBackdated.technician, file: file, line: line)
+        XCTAssertNil(reloadedBackdated.estimatedDaysPregnant, file: file, line: line)
+        XCTAssertNil(reloadedBackdated.dueDate, file: file, line: line)
+        XCTAssertNil(reloadedBackdated.sireAnimalID, file: file, line: line)
+        XCTAssertNil(reloadedBackdated.workingSessionID, file: file, line: line)
+    }
+
+    static func assertArchiveRestorePreservesCompleteChildSnapshots(
+        using fixture: HealthRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeAnimalRepository()
+        let animal = try repository.create(
+            input: makeAnimalInput(
+                name: "Health Archive Contract Cow",
+                tagNumber: "A301",
+                sex: .female,
+                birthDate: date(year: 2020, month: 3, day: 1)
+            )
+        )
+        let sire = try repository.create(
+            input: makeAnimalInput(
+                name: "Health Archive Contract Sire",
+                tagNumber: "A302",
+                sex: .male,
+                birthDate: date(year: 2018, month: 3, day: 1)
+            )
+        )
+        let controlAnimal = try repository.create(
+            input: makeAnimalInput(
+                name: "Health Archive Contract Control",
+                tagNumber: "A303",
+                sex: .female,
+                birthDate: date(year: 2021, month: 3, day: 1)
+            )
+        )
+
+        _ = try repository.addHealthRecord(
+            animalID: animal.id,
+            input: HealthRecordInput(
+                date: date(year: 2026, month: 7, day: 1),
+                treatment: "Archive contract treatment",
+                notes: "Preserve exact child snapshot"
+            )
+        )
+        _ = try repository.addPregnancyCheck(
+            animalID: animal.id,
+            input: PregnancyCheckInput(
+                date: date(year: 2026, month: 7, day: 2),
+                result: .pregnant,
+                technician: "Archive Contract Tech",
+                estimatedDaysPregnant: 95,
+                dueDate: date(year: 2027, month: 1, day: 7),
+                sireAnimalID: sire.id
+            )
+        )
+        _ = try repository.addHealthRecord(
+            animalID: controlAnimal.id,
+            input: HealthRecordInput(
+                date: date(year: 2026, month: 7, day: 3),
+                treatment: "Unrelated archive control treatment",
+                notes: nil
+            )
+        )
+        _ = try repository.addPregnancyCheck(
+            animalID: controlAnimal.id,
+            input: PregnancyCheckInput(
+                date: date(year: 2026, month: 7, day: 4),
+                result: .open,
+                technician: "Unrelated Archive Control Tech",
+                estimatedDaysPregnant: nil,
+                dueDate: nil,
+                sireAnimalID: nil
+            )
+        )
+
+        let beforeControl = fixture.makeTestControl()
+        let healthBeforeArchive = sortedHealth(try beforeControl.allHealthRecords())
+        let pregnancyBeforeArchive = sortedPregnancy(try beforeControl.allPregnancyChecks())
+        XCTAssertEqual(
+            try beforeControl.healthRecords(forAnimalID: animal.id).count,
+            1,
+            "The archive lifecycle probe requires the target standalone health child to exist before archive.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try beforeControl.pregnancyChecks(forAnimalID: animal.id).count,
+            1,
+            "The archive lifecycle probe requires the target standalone pregnancy child to exist before archive.",
+            file: file,
+            line: line
+        )
+
+        try repository.archive(ids: [animal.id])
+
+        let archivedRepository = fixture.makeAnimalRepository()
+        let archivedAnimal = try XCTUnwrap(
+            archivedRepository.fetchAnimalDetail(id: animal.id),
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(archivedAnimal.isArchived, file: file, line: line)
+
+        let archivedControl = fixture.makeTestControl()
+        XCTAssertEqual(
+            sortedHealth(try archivedControl.allHealthRecords()),
+            healthBeforeArchive,
+            "Archiving an animal must preserve every health child exactly, including UUID, payload, ownership, and Working-session linkage.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            sortedPregnancy(try archivedControl.allPregnancyChecks()),
+            pregnancyBeforeArchive,
+            "Archiving an animal must preserve every pregnancy child exactly, including UUID, payload, ownership, sire, and Working-session linkage.",
+            file: file,
+            line: line
+        )
+
+        try archivedRepository.restore(ids: [animal.id])
+
+        let restoredRepository = fixture.makeAnimalRepository()
+        let restoredAnimal = try XCTUnwrap(
+            restoredRepository.fetchAnimalDetail(id: animal.id),
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(restoredAnimal.isArchived, file: file, line: line)
+        XCTAssertNil(restoredAnimal.archivedAt, file: file, line: line)
+
+        let restoredControl = fixture.makeTestControl()
+        XCTAssertEqual(
+            sortedHealth(try restoredControl.allHealthRecords()),
+            healthBeforeArchive,
+            "Restoring an animal must preserve every health child exactly rather than recreating, deleting, or mutating history.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            sortedPregnancy(try restoredControl.allPregnancyChecks()),
+            pregnancyBeforeArchive,
+            "Restoring an animal must preserve every pregnancy child exactly rather than recreating, deleting, or mutating history.",
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertDeletingPregnancySireNullifiesOnlySireRelationship(
+        using fixture: HealthRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeAnimalRepository()
+        let cow = try repository.create(
+            input: makeAnimalInput(
+                name: "Sire Nullify Contract Cow",
+                tagNumber: "P301",
+                sex: .female,
+                birthDate: date(year: 2020, month: 3, day: 10)
+            )
+        )
+        let sire = try repository.create(
+            input: makeAnimalInput(
+                name: "Sire Nullify Contract Bull",
+                tagNumber: "P302",
+                sex: .male,
+                birthDate: date(year: 2017, month: 3, day: 10)
+            )
+        )
+        let controlAnimal = try repository.create(
+            input: makeAnimalInput(
+                name: "Sire Nullify Contract Control",
+                tagNumber: "P303",
+                sex: .female,
+                birthDate: date(year: 2021, month: 3, day: 10)
+            )
+        )
+
+        let checkDate = date(year: 2026, month: 6, day: 15)
+        let dueDate = date(year: 2027, month: 1, day: 20)
+        _ = try repository.addPregnancyCheck(
+            animalID: cow.id,
+            input: PregnancyCheckInput(
+                date: checkDate,
+                result: .pregnant,
+                technician: "Contract Tech",
+                estimatedDaysPregnant: 80,
+                dueDate: dueDate,
+                sireAnimalID: sire.id
+            )
+        )
+        _ = try repository.addPregnancyCheck(
+            animalID: controlAnimal.id,
+            input: PregnancyCheckInput(
+                date: date(year: 2026, month: 6, day: 16),
+                result: .open,
+                technician: "Unrelated Contract Tech",
+                estimatedDaysPregnant: nil,
+                dueDate: nil,
+                sireAnimalID: nil
+            )
+        )
+
+        let beforeControl = fixture.makeTestControl()
+        let beforeDelete = try XCTUnwrap(
+            beforeControl.pregnancyChecks(forAnimalID: cow.id).first,
+            file: file,
+            line: line
+        )
+        let unrelatedBeforeDelete = try XCTUnwrap(
+            beforeControl.pregnancyChecks(forAnimalID: controlAnimal.id).first,
+            file: file,
+            line: line
+        )
+        let allBeforeDelete = sortedPregnancy(try beforeControl.allPregnancyChecks())
+        XCTAssertEqual(beforeDelete.sireAnimalID, sire.id, file: file, line: line)
+        let cowBeforeDelete = try XCTUnwrap(
+            repository.fetchAnimalDetail(id: cow.id),
+            file: file,
+            line: line
+        )
+        let controlAnimalBeforeDelete = try XCTUnwrap(
+            repository.fetchAnimalDetail(id: controlAnimal.id),
+            file: file,
+            line: line
+        )
+
+        try fixture.makeAnimalRepository().delete(ids: [sire.id])
+
+        let afterControl = fixture.makeTestControl()
+        let afterDeleteRecords = try afterControl.pregnancyChecks(forAnimalID: cow.id)
+        XCTAssertEqual(
+            afterDeleteRecords.count,
+            1,
+            "Deleting a breeding sire must not delete a pregnancy check owned by another animal.",
+            file: file,
+            line: line
+        )
+        let afterDelete = try XCTUnwrap(afterDeleteRecords.first, file: file, line: line)
+        let expectedAfterDelete = PregnancyCheckContractSnapshot(
+            id: beforeDelete.id,
+            animalID: beforeDelete.animalID,
+            date: beforeDelete.date,
+            resultRawValue: beforeDelete.resultRawValue,
+            technician: beforeDelete.technician,
+            estimatedDaysPregnant: beforeDelete.estimatedDaysPregnant,
+            dueDate: beforeDelete.dueDate,
+            sireAnimalID: nil,
+            workingSessionID: beforeDelete.workingSessionID
+        )
+        XCTAssertEqual(
+            afterDelete,
+            expectedAfterDelete,
+            "Deleting the sire may nullify only the live sire relationship; the complete historical pregnancy payload must remain unchanged.",
+            file: file,
+            line: line
+        )
+
+        let unrelatedAfterDelete = try XCTUnwrap(
+            afterControl.pregnancyChecks(forAnimalID: controlAnimal.id).first,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            unrelatedAfterDelete,
+            unrelatedBeforeDelete,
+            "Deleting one breeding sire must not mutate an unrelated animal's pregnancy history.",
+            file: file,
+            line: line
+        )
+
+        let expectedAllAfterDelete = sortedPregnancy(
+            allBeforeDelete.map { snapshot in
+                snapshot.id == beforeDelete.id ? expectedAfterDelete : snapshot
+            }
+        )
+        XCTAssertEqual(
+            sortedPregnancy(try afterControl.allPregnancyChecks()),
+            expectedAllAfterDelete,
+            "Sire deletion must preserve every other pregnancy row and may change only the target row's sire relationship.",
+            file: file,
+            line: line
+        )
+        let survivorRepository = fixture.makeAnimalRepository()
+        let cowAfterDelete = try XCTUnwrap(
+            survivorRepository.fetchAnimalDetail(id: cow.id),
+            "Deleting the sire must not delete the pregnancy-check owner.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            cowAfterDelete.isArchived,
+            cowBeforeDelete.isArchived,
+            "Deleting the sire must preserve the pregnancy-check owner's archive state.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            cowAfterDelete.archivedAt,
+            cowBeforeDelete.archivedAt,
+            "Deleting the sire must preserve the pregnancy-check owner's archive timestamp.",
+            file: file,
+            line: line
+        )
+        let controlAnimalAfterDelete = try XCTUnwrap(
+            survivorRepository.fetchAnimalDetail(id: controlAnimal.id),
+            "Deleting the sire must not delete the unrelated control animal.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            controlAnimalAfterDelete.isArchived,
+            controlAnimalBeforeDelete.isArchived,
+            "Deleting the sire must preserve the unrelated control animal's archive state.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            controlAnimalAfterDelete.archivedAt,
+            controlAnimalBeforeDelete.archivedAt,
+            "Deleting the sire must preserve the unrelated control animal's archive timestamp.",
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertHardDeletingAnimalCascadesOwnedHealthHistory(
+        using fixture: HealthRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeAnimalRepository()
+        let animal = try repository.create(
+            input: makeAnimalInput(
+                name: "Health Cascade Contract Cow",
+                tagNumber: "H401",
+                sex: .female,
+                birthDate: date(year: 2020, month: 4, day: 10)
+            )
+        )
+        let sire = try repository.create(
+            input: makeAnimalInput(
+                name: "Health Cascade Contract Sire",
+                tagNumber: "H402",
+                sex: .male,
+                birthDate: date(year: 2017, month: 4, day: 10)
+            )
+        )
+        let controlAnimal = try repository.create(
+            input: makeAnimalInput(
+                name: "Health Cascade Contract Control",
+                tagNumber: "H403",
+                sex: .female,
+                birthDate: date(year: 2021, month: 4, day: 10)
+            )
+        )
+
+        _ = try repository.addHealthRecord(
+            animalID: animal.id,
+            input: HealthRecordInput(
+                date: date(year: 2026, month: 6, day: 20),
+                treatment: "Cascade contract treatment",
+                notes: "Must disappear with owner"
+            )
+        )
+        _ = try repository.addPregnancyCheck(
+            animalID: animal.id,
+            input: PregnancyCheckInput(
+                date: date(year: 2026, month: 6, day: 21),
+                result: .pregnant,
+                technician: "Cascade Tech",
+                estimatedDaysPregnant: 70,
+                dueDate: date(year: 2027, month: 2, day: 1),
+                sireAnimalID: sire.id
+            )
+        )
+        _ = try repository.addHealthRecord(
+            animalID: controlAnimal.id,
+            input: HealthRecordInput(
+                date: date(year: 2026, month: 6, day: 22),
+                treatment: "Unrelated control treatment",
+                notes: "Must survive another animal's deletion"
+            )
+        )
+        _ = try repository.addPregnancyCheck(
+            animalID: controlAnimal.id,
+            input: PregnancyCheckInput(
+                date: date(year: 2026, month: 6, day: 23),
+                result: .open,
+                technician: "Unrelated Cascade Tech",
+                estimatedDaysPregnant: nil,
+                dueDate: nil,
+                sireAnimalID: nil
+            )
+        )
+
+        let beforeControl = fixture.makeTestControl()
+        let ownedHealth = try beforeControl.healthRecords(forAnimalID: animal.id)
+        let ownedPregnancy = try beforeControl.pregnancyChecks(forAnimalID: animal.id)
+        let unrelatedHealth = try beforeControl.healthRecords(forAnimalID: controlAnimal.id)
+        let unrelatedPregnancy = try beforeControl.pregnancyChecks(forAnimalID: controlAnimal.id)
+        XCTAssertEqual(ownedHealth.count, 1, file: file, line: line)
+        XCTAssertEqual(ownedPregnancy.count, 1, file: file, line: line)
+        XCTAssertEqual(unrelatedHealth.count, 1, file: file, line: line)
+        XCTAssertEqual(unrelatedPregnancy.count, 1, file: file, line: line)
+
+        let ownedHealthIDs = Set(ownedHealth.map(\.id))
+        let ownedPregnancyIDs = Set(ownedPregnancy.map(\.id))
+        let allHealthBeforeDelete = sortedHealth(try beforeControl.allHealthRecords())
+        let allPregnancyBeforeDelete = sortedPregnancy(try beforeControl.allPregnancyChecks())
+        let sireBeforeDelete = try XCTUnwrap(
+            repository.fetchAnimalDetail(id: sire.id),
+            file: file,
+            line: line
+        )
+        let controlAnimalBeforeDelete = try XCTUnwrap(
+            repository.fetchAnimalDetail(id: controlAnimal.id),
+            file: file,
+            line: line
+        )
+
+        try fixture.makeAnimalRepository().delete(ids: [animal.id])
+
+        let reloadedControl = fixture.makeTestControl()
+        XCTAssertTrue(
+            try reloadedControl.healthRecords(forAnimalID: animal.id).isEmpty,
+            "Hard deleting an animal must cascade its owned standalone health records.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            try reloadedControl.pregnancyChecks(forAnimalID: animal.id).isEmpty,
+            "Hard deleting an animal must cascade its owned standalone pregnancy checks.",
+            file: file,
+            line: line
+        )
+
+        let allHealthAfterDelete = sortedHealth(try reloadedControl.allHealthRecords())
+        let allPregnancyAfterDelete = sortedPregnancy(try reloadedControl.allPregnancyChecks())
+        XCTAssertEqual(
+            allHealthAfterDelete,
+            sortedHealth(allHealthBeforeDelete.filter { !ownedHealthIDs.contains($0.id) }),
+            "Hard deleting an animal must remove exactly its owned health child UUIDs without reassigning them or deleting unrelated history.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            allPregnancyAfterDelete,
+            sortedPregnancy(allPregnancyBeforeDelete.filter { !ownedPregnancyIDs.contains($0.id) }),
+            "Hard deleting an animal must remove exactly its owned pregnancy child UUIDs without reassigning them or deleting unrelated history.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try reloadedControl.healthRecords(forAnimalID: controlAnimal.id),
+            unrelatedHealth,
+            "Hard deleting one animal must preserve unrelated health history exactly.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try reloadedControl.pregnancyChecks(forAnimalID: controlAnimal.id),
+            unrelatedPregnancy,
+            "Hard deleting one animal must preserve unrelated pregnancy history exactly.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            allHealthAfterDelete.contains { $0.animalID == nil },
+            "A hard-deleted animal must not leave ownerless health rows behind.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            allPregnancyAfterDelete.contains { $0.animalID == nil },
+            "A hard-deleted animal must not leave ownerless pregnancy rows behind.",
+            file: file,
+            line: line
+        )
+        let survivorRepository = fixture.makeAnimalRepository()
+        let sireAfterDelete = try XCTUnwrap(
+            survivorRepository.fetchAnimalDetail(id: sire.id),
+            "Deleting the pregnancy-check owner must not delete the referenced breeding sire.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            sireAfterDelete.isArchived,
+            sireBeforeDelete.isArchived,
+            "Deleting the pregnancy-check owner must preserve the referenced sire's archive state.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            sireAfterDelete.archivedAt,
+            sireBeforeDelete.archivedAt,
+            "Deleting the pregnancy-check owner must preserve the referenced sire's archive timestamp.",
+            file: file,
+            line: line
+        )
+        let controlAnimalAfterDelete = try XCTUnwrap(
+            survivorRepository.fetchAnimalDetail(id: controlAnimal.id),
+            "Deleting one animal must not delete the unrelated control animal.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            controlAnimalAfterDelete.isArchived,
+            controlAnimalBeforeDelete.isArchived,
+            "Deleting one animal must preserve the unrelated control animal's archive state.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            controlAnimalAfterDelete.archivedAt,
+            controlAnimalBeforeDelete.archivedAt,
+            "Deleting one animal must preserve the unrelated control animal's archive timestamp.",
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertCastrationHealthRecordUpdatesAnimalReadModels(
+        using fixture: HealthRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeAnimalRepository()
+        let animal = try repository.create(
+            input: makeAnimalInput(
+                name: "Health Classification Contract Bull",
+                tagNumber: "H450",
+                sex: .male,
+                birthDate: date(year: 2022, month: 1, day: 10)
+            )
+        )
+        let controlAnimal = try repository.create(
+            input: makeAnimalInput(
+                name: "Health Classification Control Bull",
+                tagNumber: "H451",
+                sex: .male,
+                birthDate: date(year: 2022, month: 1, day: 11)
+            )
+        )
+
+        XCTAssertEqual(animal.animalType, .bull, file: file, line: line)
+        XCTAssertEqual(controlAnimal.animalType, .bull, file: file, line: line)
+
+        let updated = try repository.addHealthRecord(
+            animalID: animal.id,
+            input: HealthRecordInput(
+                date: date(year: 2026, month: 6, day: 23),
+                treatment: "Castration",
+                notes: nil
+            )
+        )
+
+        XCTAssertEqual(
+            updated.animalType,
+            .steer,
+            "A persisted castration health record must immediately affect the Animal detail projection.",
+            file: file,
+            line: line
+        )
+
+        let reloadedRepository = fixture.makeAnimalRepository()
+        let reloadedDetail = try XCTUnwrap(
+            reloadedRepository.fetchAnimalDetail(id: animal.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloadedDetail.animalType,
+            .steer,
+            "Health-derived Animal type must survive a fresh repository reload.",
+            file: file,
+            line: line
+        )
+
+        let reloadedSummary = try XCTUnwrap(
+            reloadedRepository.fetchAnimals().first { $0.id == animal.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloadedSummary.animalType,
+            .steer,
+            "The Animal summary projection must derive steer status from persisted castration history.",
+            file: file,
+            line: line
+        )
+
+        let controlSummary = try XCTUnwrap(
+            reloadedRepository.fetchAnimals().first { $0.id == controlAnimal.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            controlSummary.animalType,
+            .bull,
+            "Adding castration history to one animal must not change an unrelated male animal's type.",
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertMissingAnimalMutationsDoNotCreateOrphans(
+        using fixture: HealthRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeAnimalRepository()
+        let controlAnimal = try repository.create(
+            input: makeAnimalInput(
+                name: "Missing Animal Contract Control",
+                tagNumber: "H501",
+                sex: .female,
+                birthDate: date(year: 2020, month: 5, day: 10)
+            )
+        )
+        _ = try repository.addHealthRecord(
+            animalID: controlAnimal.id,
+            input: HealthRecordInput(
+                date: date(year: 2026, month: 6, day: 25),
+                treatment: "Existing control treatment",
+                notes: nil
+            )
+        )
+        _ = try repository.addPregnancyCheck(
+            animalID: controlAnimal.id,
+            input: PregnancyCheckInput(
+                date: date(year: 2026, month: 6, day: 26),
+                result: .open,
+                technician: nil,
+                estimatedDaysPregnant: nil,
+                dueDate: nil,
+                sireAnimalID: nil
+            )
+        )
+
+        let beforeHealth = sortedHealth(try fixture.makeTestControl().allHealthRecords())
+        let beforePregnancy = sortedPregnancy(try fixture.makeTestControl().allPregnancyChecks())
+        let beforeControlHealthCount = try fixture.makeTestControl().healthRecords(forAnimalID: controlAnimal.id).count
+        let beforeControlPregnancyCount = try fixture.makeTestControl().pregnancyChecks(forAnimalID: controlAnimal.id).count
+        let missingAnimalID = UUID()
+
+        assertAnimalNotFound(file: file, line: line) {
+            _ = try repository.addHealthRecord(
+                animalID: missingAnimalID,
+                input: HealthRecordInput(
+                    date: date(year: 2026, month: 7, day: 1),
+                    treatment: "Must not persist",
+                    notes: "Missing owner"
+                )
+            )
+        }
+
+        XCTAssertEqual(
+            sortedHealth(try fixture.makeTestControl().allHealthRecords()),
+            beforeHealth,
+            "A failed health mutation for a missing animal must not create an orphan or alter existing health history.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            sortedPregnancy(try fixture.makeTestControl().allPregnancyChecks()),
+            beforePregnancy,
+            "A failed health mutation must not alter pregnancy history.",
+            file: file,
+            line: line
+        )
+
+        let recoveryHealthDate = date(year: 2026, month: 7, day: 3)
+        _ = try repository.addHealthRecord(
+            animalID: controlAnimal.id,
+            input: HealthRecordInput(
+                date: recoveryHealthDate,
+                treatment: "Post-failure recovery treatment",
+                notes: "Same repository instance"
+            )
+        )
+        let recoveredHealth = try fixture.makeTestControl().healthRecords(forAnimalID: controlAnimal.id)
+        XCTAssertEqual(
+            recoveredHealth.count,
+            beforeControlHealthCount + 1,
+            "The same repository instance must remain usable for a successful health write after a failed write.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            recoveredHealth.contains {
+                $0.date == recoveryHealthDate
+                    && $0.treatment == "Post-failure recovery treatment"
+                    && $0.animalID == controlAnimal.id
+            },
+            file: file,
+            line: line
+        )
+
+        let healthBeforePregnancyFailure = sortedHealth(
+            try fixture.makeTestControl().allHealthRecords()
+        )
+
+        assertAnimalNotFound(file: file, line: line) {
+            _ = try repository.addPregnancyCheck(
+                animalID: missingAnimalID,
+                input: PregnancyCheckInput(
+                    date: date(year: 2026, month: 7, day: 2),
+                    result: .pregnant,
+                    technician: "Must not persist",
+                    estimatedDaysPregnant: 50,
+                    dueDate: nil,
+                    sireAnimalID: nil
+                )
+            )
+        }
+
+        XCTAssertEqual(
+            sortedPregnancy(try fixture.makeTestControl().allPregnancyChecks()),
+            beforePregnancy,
+            "A failed pregnancy mutation for a missing animal must not create an orphan or alter existing pregnancy history.",
+            file: file,
+            line: line
+        )
+
+        XCTAssertEqual(
+            sortedHealth(try fixture.makeTestControl().allHealthRecords()),
+            healthBeforePregnancyFailure,
+            "A failed pregnancy mutation must not delete or alter health history, including a successful health write made after an earlier failure.",
+            file: file,
+            line: line
+        )
+
+        let recoveryPregnancyDate = date(year: 2026, month: 7, day: 4)
+        _ = try repository.addPregnancyCheck(
+            animalID: controlAnimal.id,
+            input: PregnancyCheckInput(
+                date: recoveryPregnancyDate,
+                result: .unknown,
+                technician: "Recovery Tech",
+                estimatedDaysPregnant: nil,
+                dueDate: nil,
+                sireAnimalID: nil
+            )
+        )
+        let recoveredPregnancy = try fixture.makeTestControl().pregnancyChecks(forAnimalID: controlAnimal.id)
+        XCTAssertEqual(
+            recoveredPregnancy.count,
+            beforeControlPregnancyCount + 1,
+            "The same repository instance must remain usable for a successful pregnancy write after a failed write.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            recoveredPregnancy.contains {
+                $0.date == recoveryPregnancyDate
+                    && $0.resultRawValue == PregnancyResult.unknown.rawValue
+                    && $0.animalID == controlAnimal.id
+            },
+            file: file,
+            line: line
+        )
+
+        XCTAssertFalse(
+            try fixture.makeTestControl().allHealthRecords().contains { $0.animalID == nil },
+            "Failure recovery must not leave ownerless health rows behind.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            try fixture.makeTestControl().allPregnancyChecks().contains { $0.animalID == nil },
+            "Failure recovery must not leave ownerless pregnancy rows behind.",
+            file: file,
+            line: line
+        )
+    }
+
+    private static func makeAnimalInput(
+        name: String,
+        tagNumber: String,
+        sex: Sex,
+        birthDate: Date
+    ) -> AnimalInput {
+        AnimalInput(
+            name: name,
+            tagNumber: tagNumber,
+            tagColorID: nil,
+            sex: sex,
+            birthDate: birthDate,
+            status: .active,
+            pastureID: nil,
+            sireID: nil,
+            damID: nil,
+            distinguishingFeatures: [],
+            saleDate: nil,
+            salePrice: nil,
+            reasonSold: nil,
+            deathDate: nil,
+            causeOfDeath: nil,
+            statusReferenceID: nil
+        )
+    }
+
+    private static func date(year: Int, month: Int, day: Int) -> Date {
+        var components = DateComponents()
+        components.calendar = Calendar(identifier: .gregorian)
+        components.timeZone = TimeZone(secondsFromGMT: 0)
+        components.year = year
+        components.month = month
+        components.day = day
+        return components.date!
+    }
+
+    private static func sortedHealth(
+        _ records: [HealthRecordContractSnapshot]
+    ) -> [HealthRecordContractSnapshot] {
+        records.sorted { $0.id.uuidString < $1.id.uuidString }
+    }
+
+    private static func sortedPregnancy(
+        _ records: [PregnancyCheckContractSnapshot]
+    ) -> [PregnancyCheckContractSnapshot] {
+        records.sorted { $0.id.uuidString < $1.id.uuidString }
+    }
+
+    private static func assertAnimalNotFound(
+        file: StaticString,
+        line: UInt,
+        _ operation: () throws -> Void
+    ) {
+        do {
+            try operation()
+            XCTFail("Expected AnimalValidationError.animalNotFound.", file: file, line: line)
+        } catch let error as AnimalValidationError {
+            XCTAssertEqual(error, .animalNotFound, file: file, line: line)
+        } catch {
+            XCTFail("Expected AnimalValidationError.animalNotFound, got \(error).", file: file, line: line)
+        }
+    }
+}
