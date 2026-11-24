@@ -1,9 +1,39 @@
+import CloudKit
 import Foundation
 import XCTest
 @testable import yaHerd
 
 @MainActor
 final class HerdDirectoryAccessRevalidationTests: XCTestCase {
+    func testStoreImportOutcomesAreIndependentOfExportsAndRecoverFromSetupFailure() {
+        let results = HerdImportResults()
+        let stores: [String?] = ["private", "shared"]
+        let accountError = NSError(
+            domain: CKError.errorDomain,
+            code: CKError.Code.notAuthenticated.rawValue
+        )
+
+        XCTAssertEqual(results.state(for: stores), .waiting)
+        XCTAssertTrue(results.record(storeID: "private", type: .import, succeeded: true, error: nil))
+        XCTAssertEqual(results.state(for: stores), .waiting)
+        XCTAssertTrue(results.record(storeID: "shared", type: .import, succeeded: true, error: nil))
+        XCTAssertEqual(results.state(for: stores), .complete)
+
+        XCTAssertFalse(results.record(storeID: "private", type: .export, succeeded: false, error: accountError))
+        XCTAssertFalse(results.record(storeID: "private", type: .export, succeeded: true, error: nil))
+        XCTAssertEqual(results.state(for: stores), .complete)
+
+        XCTAssertTrue(results.record(storeID: "shared", type: .setup, succeeded: false, error: accountError))
+        XCTAssertEqual(results.state(for: stores), .accountUnavailable)
+        XCTAssertTrue(results.record(storeID: "shared", type: .setup, succeeded: true, error: nil))
+        XCTAssertEqual(results.state(for: stores), .waiting)
+        XCTAssertTrue(results.record(storeID: "shared", type: .import, succeeded: false, error: nil))
+        XCTAssertEqual(results.state(for: stores), .failed)
+        XCTAssertTrue(results.record(storeID: "shared", type: .import, succeeded: true, error: nil))
+        XCTAssertEqual(results.state(for: stores), .complete)
+        XCTAssertEqual(results.state(for: ["private", nil]), .waiting)
+    }
+
     func testEmptyMirroredInventoryDistinguishesPendingImportFromCompletedImport() {
         var importState = HerdImportState.waiting
         let directory = HerdDirectoryController(
