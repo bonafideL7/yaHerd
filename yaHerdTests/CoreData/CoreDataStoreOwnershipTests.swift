@@ -192,7 +192,7 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         let matchingPastureID = UUID()
 
         let writer = try assembly.contextFactory.makeWriteContext()
-        try writer.performAndWait {
+        let (privateRootIdentity, sharedRootIdentity) = try writer.performAndWait {
             let privateHerd = Self.makeHerd(
                 id: privateHerdID, name: "Private", in: writer, store: privateStore
             )
@@ -208,17 +208,22 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
                 in: writer, store: sharedStore
             )
             try writer.save()
+            return (privateHerd.objectID.uriRepresentation(), sharedHerd.objectID.uriRepresentation())
         }
 
         let privateReader = CoreDataReadModelActor(
             contextFactory: assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { privateHerdID }
+            currentSelection: {
+                HerdSelectionSnapshot(id: privateHerdID, revision: 0, rootIdentity: privateRootIdentity)
+            }
         )
         let sharedReader = CoreDataReadModelActor(
             contextFactory: assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { sharedHerdID }
+            currentSelection: {
+                HerdSelectionSnapshot(id: sharedHerdID, revision: 0, rootIdentity: sharedRootIdentity)
+            }
         )
 
         let privatePastures = try await privateReader.fetchDashboardPastureRecords()
@@ -1165,8 +1170,8 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
         let sharedHerdID = UUID()
 
         let writer = try assembly.contextFactory.makeWriteContext()
-        try writer.performAndWait {
-            _ = Self.makeHerd(
+        let (privateRootIdentity, sharedRootIdentity) = try writer.performAndWait {
+            let privateHerd = Self.makeHerd(
                 id: privateHerdID, name: "Private Herd", in: writer, store: privateStore
             )
             let sharedHerd = Self.makeHerd(
@@ -1182,17 +1187,22 @@ final class CoreDataStoreOwnershipTests: XCTestCase {
             incomplete.treatmentTemplateNameSnapshot = "Imported Session"
             writer.assign(incomplete, to: sharedStore)
             try writer.save()
+            return (privateHerd.objectID.uriRepresentation(), sharedHerd.objectID.uriRepresentation())
         }
 
         let privateReader = CoreDataReadModelActor(
             contextFactory: assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { privateHerdID }
+            currentSelection: {
+                HerdSelectionSnapshot(id: privateHerdID, revision: 0, rootIdentity: privateRootIdentity)
+            }
         )
         let sharedReader = CoreDataReadModelActor(
             contextFactory: assembly.contextFactory,
             lookup: CoreDataLookup(),
-            currentHerdID: { sharedHerdID }
+            currentSelection: {
+                HerdSelectionSnapshot(id: sharedHerdID, revision: 0, rootIdentity: sharedRootIdentity)
+            }
         )
 
         let privateDashboard = try await privateReader.fetchDashboardRecords()

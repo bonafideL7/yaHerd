@@ -23,7 +23,8 @@ final class AnimalInlineEntryViewModelTests: XCTestCase {
         )
         viewModel.birthDate = .distantPast
 
-        viewModel.beginNew()
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        viewModel.beginNew(selection: selection)
 
         XCTAssertEqual(viewModel.birthDate, calendar.startOfDay(for: fixedNow))
     }
