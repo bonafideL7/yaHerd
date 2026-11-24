@@ -366,12 +366,13 @@ enum AppRestorableWorkflow: Codable, Equatable {
 }
 
 struct AppNavigationSnapshot: Codable, Equatable {
-    static let currentVersion = 3
+    static let currentVersion = 4
     static let supportedVersions = 1...currentVersion
 
     var version: Int = currentVersion
     var selectedTab: AppTab
     var selectedHerdID: UUID?
+    var selectedHerdRootIdentity: URL?
     var herdRouter: HerdRouterSnapshot
     var activeWorkflow: AppRestorableWorkflow?
 
@@ -379,6 +380,7 @@ struct AppNavigationSnapshot: Codable, Equatable {
         case version
         case selectedTab
         case selectedHerdID
+        case selectedHerdRootIdentity
         case herdRouter
         case activeWorkflow
         case workflowRouter
@@ -389,12 +391,14 @@ struct AppNavigationSnapshot: Codable, Equatable {
         version: Int = currentVersion,
         selectedTab: AppTab,
         selectedHerdID: UUID?,
+        selectedHerdRootIdentity: URL? = nil,
         herdRouter: HerdRouterSnapshot,
         activeWorkflow: AppRestorableWorkflow?
     ) {
         self.version = version
         self.selectedTab = selectedTab
         self.selectedHerdID = selectedHerdID
+        self.selectedHerdRootIdentity = selectedHerdRootIdentity
         self.herdRouter = herdRouter
         self.activeWorkflow = activeWorkflow
     }
@@ -404,6 +408,7 @@ struct AppNavigationSnapshot: Codable, Equatable {
         try container.encode(version, forKey: .version)
         try container.encode(selectedTab, forKey: .selectedTab)
         try container.encodeIfPresent(selectedHerdID, forKey: .selectedHerdID)
+        try container.encodeIfPresent(selectedHerdRootIdentity, forKey: .selectedHerdRootIdentity)
         try container.encode(herdRouter, forKey: .herdRouter)
         try container.encodeIfPresent(activeWorkflow, forKey: .activeWorkflow)
     }
@@ -413,6 +418,7 @@ struct AppNavigationSnapshot: Codable, Equatable {
         version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
         selectedTab = try container.decode(AppTab.self, forKey: .selectedTab)
         selectedHerdID = try container.decodeIfPresent(UUID.self, forKey: .selectedHerdID)
+        selectedHerdRootIdentity = try container.decodeIfPresent(URL.self, forKey: .selectedHerdRootIdentity)
         herdRouter = try container.decode(HerdRouterSnapshot.self, forKey: .herdRouter)
 
         if let workflow = try container.decodeIfPresent(AppRestorableWorkflow.self, forKey: .activeWorkflow) {
@@ -456,6 +462,7 @@ private struct LegacyWorkflowRouterSnapshot: Codable {
 @MainActor
 protocol AppNavigationRestorationValidating {
     func currentHerdID() throws -> UUID?
+    func currentHerdRootIdentity() throws -> URL?
     func animalExists(id: UUID) throws -> Bool
     func pastureExists(id: UUID) throws -> Bool
     // Durable restoration admits only active sessions.
@@ -469,6 +476,7 @@ protocol AppNavigationRestorationValidating {
 @MainActor
 struct RepositoryAppNavigationRestorationValidator: AppNavigationRestorationValidating {
     let herdRepository: any HerdRepository
+    let selection: any CurrentHerdSelectionReading
     let animalRepository: any AnimalDetailReading
     let pastureRepository: any PastureExistenceChecking
     let fieldCheckRepository: any FieldCheckSessionDetailReading
@@ -476,6 +484,10 @@ struct RepositoryAppNavigationRestorationValidator: AppNavigationRestorationVali
 
     func currentHerdID() throws -> UUID? {
         try herdRepository.fetchCurrentHerd().id
+    }
+
+    func currentHerdRootIdentity() throws -> URL? {
+        selection.selectedRootIdentity
     }
 
     func animalExists(id: UUID) throws -> Bool {
@@ -517,6 +529,7 @@ struct RepositoryAppNavigationRestorationValidator: AppNavigationRestorationVali
 final class AppNavigationState {
     var selectedTab: AppTab = .home
     var selectedHerdID: UUID?
+    var selectedHerdRootIdentity: URL?
     let herdRouter = HerdRouter()
     let workflowRouter = WorkflowRouter()
     var presentedSheet: AppPresentedSheet?
@@ -542,6 +555,7 @@ final class AppNavigationState {
         AppNavigationSnapshot(
             selectedTab: selectedTab,
             selectedHerdID: selectedHerdID,
+            selectedHerdRootIdentity: selectedHerdRootIdentity,
             herdRouter: herdRouter.snapshot,
             activeWorkflow: restorableWorkflow
         )
@@ -557,6 +571,7 @@ final class AppNavigationState {
     ) {
         resetTransientPresentations()
         selectedHerdID = try? validator.currentHerdID()
+        selectedHerdRootIdentity = try? validator.currentHerdRootIdentity()
 
         guard let snapshot = decodeSnapshot(from: payload) else { return }
 
@@ -565,7 +580,9 @@ final class AppNavigationState {
 
         // Without an explicit Herd identity, a stored snapshot cannot own
         // any current Herd's record routes, filters, or workflow state.
-        guard let selectedHerdID, snapshot.selectedHerdID == selectedHerdID else {
+        guard let selectedHerdID, let selectedHerdRootIdentity,
+              snapshot.selectedHerdID == selectedHerdID,
+              snapshot.selectedHerdRootIdentity == selectedHerdRootIdentity else {
             // No list state from a previous Herd is safe to restore.
             selectedTab = .home
             herdRouter.resetForHerdChange()
@@ -583,11 +600,12 @@ final class AppNavigationState {
     /// Called after the selected Herd has been validated and changed by the
     /// application's authoritative Herd selection. No old record identity,
     /// modal workflow, or search filter is safe to carry across Herds.
-    func resetForHerdChange(to herdID: UUID?, force: Bool = false) {
+    func resetForHerdChange(to herdID: UUID?, rootIdentity: URL? = nil, force: Bool = false) {
         // A new selection revision invalidates the prior navigation even when
         // a rapid Herd A → B → A switch ends on the original UUID.
-        guard force || selectedHerdID != herdID else { return }
+        guard force || selectedHerdID != herdID || selectedHerdRootIdentity != rootIdentity else { return }
         selectedHerdID = herdID
+        selectedHerdRootIdentity = rootIdentity
         selectedTab = .home
         herdRouter.resetForHerdChange()
         resetTransientPresentations()
@@ -787,7 +805,9 @@ final class AppNavigationState {
         // destination. The validator reads through the current Herd's scoped
         // repositories; a missing target or transient read failure fails closed.
         guard let selectedHerdID,
-              (try? validator.currentHerdID()) == selectedHerdID else { return false }
+              let selectedHerdRootIdentity,
+              (try? validator.currentHerdID()) == selectedHerdID,
+              (try? validator.currentHerdRootIdentity()) == selectedHerdRootIdentity else { return false }
 
         do {
             let exists: Bool

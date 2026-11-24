@@ -126,13 +126,7 @@ final class RecoveryModeController: ObservableObject {
       // not prevent diagnosis of the private store, or vice versa.
       do {
         let storeURL = try existingCoreDataStoreURL()
-        let herdCount = try await probeHerdCount(at: storeURL)
-        if !sharedExists && !sharedJournalExists && herdCount != 1 {
-          if herdCount == 0 {
-            throw HerdRepositoryError.missingHerd
-          }
-          throw CoreDataAppHerdBootstrapError.multipleLocalHerds(count: herdCount)
-        }
+        _ = try await probeHerdCount(at: storeURL)
         openedStores.append("Private store opened read-only.")
       } catch {
         failures.append("Private store: " + UserVisibleErrorMessage.make(error))

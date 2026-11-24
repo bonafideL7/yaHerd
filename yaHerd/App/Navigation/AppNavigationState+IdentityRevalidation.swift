@@ -28,16 +28,18 @@ extension AppNavigationState {
     ) {
         do {
             let currentHerdID = try validator.currentHerdID()
+            let currentRootIdentity = try validator.currentHerdRootIdentity()
             // A confirmed change in Herd identity invalidates every route and
             // filter from the previous Herd. Do this before probing old record
             // UUIDs: a matching UUID in the new Herd does not identify the
             // same record, and a read failure cannot reinstate the old Herd.
-            if let previousHerdID = selectedHerdID, previousHerdID != currentHerdID {
-                resetForHerdChange(to: currentHerdID)
+            if selectedHerdID != currentHerdID || selectedHerdRootIdentity != currentRootIdentity {
+                resetForHerdChange(to: currentHerdID, rootIdentity: currentRootIdentity)
                 return
             }
-            guard currentHerdID != nil else {
+            guard currentHerdID != nil, currentRootIdentity != nil else {
                 selectedHerdID = nil
+                selectedHerdRootIdentity = nil
                 clearIdentityBoundDestinations()
                 return
             }

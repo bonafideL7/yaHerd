@@ -49,6 +49,7 @@ extension AppNavigationState {
 @MainActor
 private struct PreflightedAppNavigationRestorationValidator: AppNavigationRestorationValidating {
     private let herdID: UUID?
+    private let rootIdentity: URL?
     private let animalResults: [UUID: Bool]
     private let pastureResults: [UUID: Bool]
     private let fieldCheckSessionResults: [UUID: Bool]
@@ -60,10 +61,13 @@ private struct PreflightedAppNavigationRestorationValidator: AppNavigationRestor
     ) throws {
         let herdID = try base.currentHerdID()
         self.herdID = herdID
+        let rootIdentity = try base.currentHerdRootIdentity()
+        self.rootIdentity = rootIdentity
 
         // A legacy snapshot without a Herd ID cannot validate records or
         // criteria against a newly selected Herd.
-        guard snapshot.selectedHerdID == herdID else {
+        guard let rootIdentity, snapshot.selectedHerdID == herdID,
+              snapshot.selectedHerdRootIdentity == rootIdentity else {
             animalResults = [:]
             pastureResults = [:]
             fieldCheckSessionResults = [:]
@@ -117,6 +121,10 @@ private struct PreflightedAppNavigationRestorationValidator: AppNavigationRestor
 
     func currentHerdID() throws -> UUID? {
         herdID
+    }
+
+    func currentHerdRootIdentity() throws -> URL? {
+        rootIdentity
     }
 
     func animalExists(id: UUID) throws -> Bool {
