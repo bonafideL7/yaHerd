@@ -254,6 +254,7 @@ private struct TreatmentTemplateDetailView: View {
     @StateObject private var viewModel: WorkingTreatmentTemplateDetailViewModel
 
     @State private var nameDraft = ""
+    @State private var baseline: WorkingTreatmentTemplateDetailSnapshot?
     @State private var herdIdentity: WorkingQueueEditorHerdIdentity?
     @State private var plannedTreatments: [WorkingTreatmentPlanItem] = []
     @State private var errorMessage: String?
@@ -271,11 +272,8 @@ private struct TreatmentTemplateDetailView: View {
     }
 
     private var hasUnsavedChanges: Bool {
-        guard let template = viewModel.visibleTemplate(
-            identity: herdIdentity,
-            selection: herdSelection
-        ) else { return false }
-        return nameDraft != template.name || plannedTreatments != template.plannedTreatments
+        guard let baseline else { return false }
+        return nameDraft != baseline.name || plannedTreatments != baseline.plannedTreatments
     }
 
     var body: some View {
@@ -366,8 +364,12 @@ private struct TreatmentTemplateDetailView: View {
             viewModel.configure(repository: repository)
             refreshTemplate()
         }
+        .onChange(of: workingDependencies.mutationStream.workingSessionRevision) { _, _ in
+            refreshTemplate()
+        }
         .onChange(of: herdSelection.selectionRevision) { _, _ in
             viewModel.clear()
+            baseline = nil
             nameDraft = ""
             plannedTreatments = []
             showingDiscardConfirmation = false
@@ -382,14 +384,24 @@ private struct TreatmentTemplateDetailView: View {
 
     private func refreshTemplate() {
         guard herdIdentity?.isCurrent(in: herdSelection) == true else { return }
+        let preserveDraft = hasUnsavedChanges
         viewModel.load()
         if let template = viewModel.visibleTemplate(
             identity: herdIdentity,
             selection: herdSelection
         ) {
-            nameDraft = template.name
-            plannedTreatments = template.plannedTreatments
-        } else {
+            if preserveDraft {
+                if let baseline, baseline != template {
+                    errorMessage = "This treatment set changed on another device. Your draft is retained; reopen the editor before saving."
+                    showingError = true
+                }
+            } else {
+                baseline = template
+                nameDraft = template.name
+                plannedTreatments = template.plannedTreatments
+            }
+        } else if !preserveDraft {
+            baseline = nil
             nameDraft = ""
             plannedTreatments = []
         }
@@ -400,6 +412,18 @@ private struct TreatmentTemplateDetailView: View {
             identity: herdIdentity,
             selection: herdSelection
         ) else { return }
+        guard let baseline else { return }
+        do {
+            guard try repository.fetchTemplateDetail(id: template.id) == baseline else {
+                errorMessage = "This treatment set changed or was removed. Your draft is retained; reopen it before saving."
+                showingError = true
+                return
+            }
+        } catch {
+            errorMessage = UserVisibleErrorMessage.make(error)
+            showingError = true
+            return
+        }
         let trimmedName = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
         let cleanedTreatments = plannedTreatments

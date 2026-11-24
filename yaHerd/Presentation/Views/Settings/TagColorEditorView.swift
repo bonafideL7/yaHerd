@@ -110,6 +110,24 @@ struct TagColorEditorView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     ToolbarSaveButton {
+                        guard isCurrentSelection else {
+                            saveErrorMessage = staleSelectionMessage
+                            return
+                        }
+                        if let existing {
+                            do {
+                                guard let current = try tagColorLibrary.readCurrentDefinition(id: existing.id),
+                                      current.name == existing.name,
+                                      current.prefix == existing.prefix,
+                                      current.rgba == existing.rgba else {
+                                    saveErrorMessage = "This tag color changed or was removed. Your draft is retained; reopen it before saving."
+                                    return
+                                }
+                            } catch {
+                                saveErrorMessage = UserVisibleErrorMessage.make(error)
+                                return
+                            }
+                        }
                         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !trimmedName.isEmpty else { return }
 
