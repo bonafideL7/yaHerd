@@ -65,12 +65,14 @@ final class AnimalEditorDraftTests: XCTestCase {
 @MainActor
 final class AnimalParentPickerViewModelTests: XCTestCase {
     func testParentChoicesPreserveSuggestedSexFallbackAndFormattedTagSearch() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let revision = selection.selectionRevision
         let bull = parentOption(tag: "B10", sex: .male)
         let cow = parentOption(tag: "C20", sex: .female)
         let reader = ParentOptionQueryProbe(items: [bull, cow])
         let model = AnimalParentPickerViewModel()
 
-        await model.load(excluding: cow.id, using: reader)
+        await model.load(excluding: cow.id, using: reader, selection: selection, originatingSelectionRevision: revision)
         XCTAssertTrue(model.hasLoaded)
         XCTAssertNil(model.errorMessage)
         XCTAssertEqual(model.items.map(\.id), [bull.id, cow.id])
@@ -102,16 +104,18 @@ final class AnimalParentPickerViewModelTests: XCTestCase {
     }
 
     func testParentChoicesFailedRefreshNeverExposesStaleOptionsAndCanRetry() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let revision = selection.selectionRevision
         let option = parentOption(tag: "P01", sex: .male)
         let reader = ParentOptionQueryProbe(items: [option])
         let model = AnimalParentPickerViewModel()
 
-        await model.load(excluding: nil, using: reader)
+        await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: revision)
         XCTAssertTrue(model.hasLoaded)
         XCTAssertEqual(model.items.map(\.id), [option.id])
 
         await reader.setFailure(true)
-        await model.load(excluding: nil, using: reader)
+        await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: revision)
         XCTAssertFalse(model.hasLoaded)
         XCTAssertFalse(model.isLoading)
         XCTAssertTrue(model.items.isEmpty)
@@ -121,23 +125,25 @@ final class AnimalParentPickerViewModelTests: XCTestCase {
         )
 
         await reader.setFailure(false)
-        await model.load(excluding: nil, using: reader)
+        await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: revision)
         XCTAssertTrue(model.hasLoaded)
         XCTAssertNil(model.errorMessage)
         XCTAssertEqual(model.items.map(\.id), [option.id])
     }
 
     func testOutdatedParentOptionRequestCannotOverwriteNewerRefresh() async {
+        let selection = AppCurrentHerdSelection(currentHerdID: UUID())
+        let revision = selection.selectionRevision
         let oldOption = parentOption(tag: "OLD", sex: .male)
         let newOption = parentOption(tag: "NEW", sex: .female)
         let reader = ParentOptionQueryProbe(items: [newOption], initialPausedResult: [oldOption])
         let model = AnimalParentPickerViewModel()
 
         let older = Task { @MainActor in
-            await model.load(excluding: nil, using: reader)
+            await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: revision)
         }
         await reader.waitForFirstRequest()
-        await model.load(excluding: nil, using: reader)
+        await model.load(excluding: nil, using: reader, selection: selection, originatingSelectionRevision: revision)
         XCTAssertEqual(model.items.map(\.id), [newOption.id])
 
         await reader.releaseFirstRequest()
