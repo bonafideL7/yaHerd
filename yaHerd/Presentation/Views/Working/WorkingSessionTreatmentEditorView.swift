@@ -16,6 +16,7 @@ struct WorkingSessionTreatmentEditorView: View {
     @State private var plannedTreatments: [WorkingTreatmentPlanItem]
     @State private var isSaving = false
     @State private var planChanged = false
+    @State private var validationReadFailed = false
     @State private var showingDiscardConfirmation = false
     @State private var showingError = false
     @State private var errorMessage: String?
@@ -36,6 +37,7 @@ struct WorkingSessionTreatmentEditorView: View {
             && editorHerdIdentity?.isCurrent(in: herdSelection) == true
             && !isSaving
             && !planChanged
+            && !validationReadFailed
             && hasUnsavedChanges
             && plannedTreatments.allSatisfy {
                 !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -45,6 +47,14 @@ struct WorkingSessionTreatmentEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if validationReadFailed {
+                    Section {
+                        Button("Retry Validation") { revalidatePlan() }
+                            .disabled(isSaving || editorHerdIdentity?.isCurrent(in: herdSelection) != true)
+                    } footer: {
+                        Text("The current treatment plan could not be read. Retry to continue saving your retained draft.")
+                    }
+                }
                 Section {
                     if plannedTreatments.isEmpty {
                         Text("No planned treatments")
@@ -102,27 +112,16 @@ struct WorkingSessionTreatmentEditorView: View {
                 Text("Unsaved changes to this session's treatment plan will be lost.")
             }
             .alert("Can't Update Treatments", isPresented: $showingError) {
+                if validationReadFailed {
+                    Button("Retry Validation") { revalidatePlan() }
+                }
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(errorMessage ?? "Unknown error")
             }
         }
         .onChange(of: workingDependencies.mutationStream.workingSessionRevision) { _, _ in
-            guard editorHerdIdentity?.isCurrent(in: herdSelection) == true, !isSaving else { return }
-            do {
-                guard let session = try repository.fetchSessionDetail(id: sessionID),
-                      session.status == .active, session.plannedTreatments == initialTreatments else {
-                    planChanged = true
-                    errorMessage = "This session or its treatment plan changed. Your draft is retained; reopen the editor before saving."
-                    showingError = true
-                    return
-                }
-                planChanged = false
-            } catch {
-                planChanged = true
-                errorMessage = UserVisibleErrorMessage.make(error)
-                showingError = true
-            }
+            revalidatePlan()
         }
         .task {
             // Bind a presented editor to one Herd selection generation.
@@ -130,6 +129,31 @@ struct WorkingSessionTreatmentEditorView: View {
             if editorHerdIdentity == nil {
                 editorHerdIdentity = WorkingQueueEditorHerdIdentity(selection: herdSelection)
             }
+            revalidatePlan()
+        }
+    }
+
+    private func revalidatePlan() {
+        guard editorHerdIdentity?.isCurrent(in: herdSelection) == true, !isSaving else { return }
+        do {
+            try WorkingSessionTreatmentPlanSave.validate(
+                sessionID: sessionID,
+                initialTreatments: initialTreatments,
+                repository: repository
+            )
+            planChanged = false
+            validationReadFailed = false
+            errorMessage = nil
+            showingError = false
+        } catch let conflict as WorkingSessionTreatmentPlanSave.ValidationError {
+            planChanged = true
+            validationReadFailed = false
+            errorMessage = UserVisibleErrorMessage.make(conflict)
+            showingError = true
+        } catch {
+            validationReadFailed = true
+            errorMessage = UserVisibleErrorMessage.make(error)
+            showingError = true
         }
     }
 
@@ -163,6 +187,11 @@ struct WorkingSessionTreatmentEditorView: View {
             } catch {
                 guard !Task.isCancelled,
                       editorHerdIdentity.isCurrent(in: herdSelection) else { return }
+                if error is WorkingSessionTreatmentPlanSave.ValidationError {
+                    planChanged = true
+                }
+                // Other save errors remain retryable through Save, whose
+                // execution always validates the current plan before writing.
                 errorMessage = UserVisibleErrorMessage.make(error)
                 showingError = true
             }
@@ -188,6 +217,20 @@ enum WorkingSessionTreatmentPlanSave {
         }
     }
 
+    static func validate(
+        sessionID: UUID,
+        initialTreatments: [WorkingTreatmentPlanItem],
+        repository: any WorkingSessionDetailReader
+    ) throws {
+        guard let currentSession = try repository.fetchSessionDetail(id: sessionID),
+              currentSession.status == .active else {
+            throw ValidationError.inactiveSession
+        }
+        guard currentSession.plannedTreatments == initialTreatments else {
+            throw ValidationError.treatmentsChanged
+        }
+    }
+
     static func execute(
         sessionID: UUID,
         initialTreatments: [WorkingTreatmentPlanItem],
@@ -199,13 +242,11 @@ enum WorkingSessionTreatmentPlanSave {
         guard !Task.isCancelled,
               editorIdentity.isCurrent(in: selection) else { return false }
 
-        guard let currentSession = try repository.fetchSessionDetail(id: sessionID),
-              currentSession.status == .active else {
-            throw ValidationError.inactiveSession
-        }
-        guard currentSession.plannedTreatments == initialTreatments else {
-            throw ValidationError.treatmentsChanged
-        }
+        try validate(
+            sessionID: sessionID,
+            initialTreatments: initialTreatments,
+            repository: repository
+        )
 
         guard !Task.isCancelled,
               editorIdentity.isCurrent(in: selection) else { return false }
