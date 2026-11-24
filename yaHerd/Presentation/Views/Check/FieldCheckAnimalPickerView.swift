@@ -458,8 +458,9 @@ struct FieldCheckTrackedAnimalPickerView: View {
         .navigationBarBackButtonHidden(model.isSubmittingSelection)
         .interactiveDismissDisabled(model.isSubmittingSelection)
         .searchable(text: $model.searchText, prompt: "Search animals")
-        .task {
+        .task(id: fieldCheckDependencies.mutationStream.fieldCheckRevision) {
             guard isPresentingOriginatingHerd else { return }
+            pendingAnimal = nil
             await model.load(
                 for: session,
                 using: animalReferenceQueryReader,

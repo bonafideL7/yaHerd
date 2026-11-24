@@ -106,7 +106,9 @@ struct WorkingCollectAnimalsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .interactiveDismissDisabled(isCollecting)
             .searchable(text: $searchText, prompt: "Search tag")
-            .task { await load() }
+            .task(id: workingDependencies.mutationStream.workingSessionRevision) {
+                await load(preserveSelection: true)
+            }
             .onDisappear { collectionTask?.cancel() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -144,8 +146,9 @@ struct WorkingCollectAnimalsView: View {
     }
 
     @MainActor
-    private func load() async {
+    private func load(preserveSelection: Bool = false) async {
         guard !isCollecting else { return }
+        let priorSelection = preserveSelection ? selectedAnimalIDs : []
         let token = UUID()
         loadToken = token
         isLoading = true
@@ -176,6 +179,7 @@ struct WorkingCollectAnimalsView: View {
             guard token == loadToken else { return }
             session = loadedSession
             availableAnimals = candidates
+            selectedAnimalIDs = priorSelection.intersection(Set(candidates.map(\.id)))
             isLoading = false
         } catch is CancellationError {
             if token == loadToken {

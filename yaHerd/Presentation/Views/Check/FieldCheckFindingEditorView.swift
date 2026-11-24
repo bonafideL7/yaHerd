@@ -6,7 +6,9 @@ struct FieldCheckFindingEditorView: View {
     let suggestedTypes: [FieldCheckFindingType]
     let animals: [FieldCheckAnimalCheckSnapshot]
     let finding: FieldCheckFindingSnapshot?
+    let validateSave: () throws -> Bool
     let onSave: (FieldCheckFindingInput) -> Void
+    @State private var saveError: String?
 
     @State private var recordedAt: Date
     @State private var type: FieldCheckFindingType
@@ -21,11 +23,13 @@ struct FieldCheckFindingEditorView: View {
         finding: FieldCheckFindingSnapshot? = nil,
         initialType: FieldCheckFindingType? = nil,
         initialAnimalID: UUID? = nil,
+        validateSave: @escaping () throws -> Bool = { true },
         onSave: @escaping (FieldCheckFindingInput) -> Void
     ) {
         self.suggestedTypes = suggestedTypes
         self.animals = animals
         self.finding = finding
+        self.validateSave = validateSave
         self.onSave = onSave
 
         let resolvedType = finding?.type ?? initialType ?? suggestedTypes.first ?? .generalObservation
@@ -131,6 +135,15 @@ struct FieldCheckFindingEditorView: View {
 
             ToolbarItem(placement: .confirmationAction) {
                 ToolbarSaveButton {
+                    do {
+                        guard try validateSave() else {
+                            saveError = "This finding or session changed. Your draft is retained; reopen the editor before saving."
+                            return
+                        }
+                    } catch {
+                        saveError = UserVisibleErrorMessage.make(error)
+                        return
+                    }
                     onSave(
                         FieldCheckFindingInput(
                             recordedAt: recordedAt,
@@ -145,6 +158,14 @@ struct FieldCheckFindingEditorView: View {
                 }
                 .disabled(!canSave)
             }
+        }
+        .alert("Unable to Save Finding", isPresented: Binding(
+            get: { saveError != nil },
+            set: { if !$0 { saveError = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(saveError ?? "")
         }
         .onChange(of: type) { _, newType in
             severity = FieldCheckFindingRules.defaultSeverity(for: newType)
