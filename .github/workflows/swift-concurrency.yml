@@ -16,13 +16,8 @@ on:
         required: true
         type: boolean
         default: true
-      run_tests:
-        description: Run iOS Simulator automated tests
-        required: true
-        type: boolean
-        default: true
       full_verification:
-        description: Also run Release, build-for-testing, and device builds
+        description: Also run Release simulator and unsigned device builds
         required: true
         type: boolean
         default: false
@@ -44,7 +39,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ inputs.run_architecture }}" != "true" && "${{ inputs.run_concurrency }}" != "true" && "${{ inputs.run_tests }}" != "true" ]]; then
+          if [[ "${{ inputs.run_architecture }}" != "true" && "${{ inputs.run_concurrency }}" != "true" ]]; then
             echo "Select at least one verification option." >&2
             exit 1
           fi
@@ -74,18 +69,6 @@ jobs:
             exit 1
           fi
 
-      # A missing XCTest suite must fail immediately, not spend minutes
-      # launching a simulator that executes zero tests.
-      - name: Require automated test sources
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_tests }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ ! -d yaHerdTests ]] || ! find yaHerdTests -type f -name '*Tests.swift' -print -quit | grep -q .; then
-            echo "No yaHerdTests sources found. Required automated verification cannot run." >&2
-            exit 1
-          fi
-
       - name: Verify privacy manifest
         shell: bash
         run: |
@@ -93,7 +76,7 @@ jobs:
           bash Scripts/verify-privacy.sh
 
       - name: Select Xcode 26
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_concurrency || inputs.run_tests }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_concurrency }}
         shell: bash
         run: |
           set -euo pipefail
@@ -118,13 +101,12 @@ jobs:
         shell: bash
         env:
           YAHERD_FULL_VERIFY: ${{ github.event_name == 'workflow_dispatch' && inputs.full_verification && '1' || '0' }}
-          YAHERD_TESTS_BUILD_APP: ${{ (github.event_name != 'workflow_dispatch' || inputs.run_tests) && '1' || '0' }}
         run: |
           set -euo pipefail
           bash Scripts/verify-concurrency.sh
 
-      # Normal Debug simulator tests compile the entire app. Only compile the
-      # separate development-only CloudKit path when relevant files changed.
+      # The Debug build above compiles the app. Compile the additional
+      # development-only CloudKit path when relevant files changed.
       - name: Detect iCloud Development build scope
         if: ${{ github.event_name == 'pull_request' }}
         id: icloud_scope
@@ -135,12 +117,12 @@ jobs:
           set -euo pipefail
           git -c protocol.version=2 fetch -q --no-tags --depth=1 origin "$BASE_SHA"
           changed_files="$(git diff --name-only --no-renames "$BASE_SHA" HEAD)"
-          if grep -Eq '^(yaHerd\.xcodeproj/|yaHerd/yaHerd\.entitlements$|yaHerd/yaHerdApp\.swift$|yaHerd/App/|yaHerd/Data/(CoreData/|Persistence/|Repositories/CoreData/)|\.github/workflows/swift-concurrency\.yml$)' <<< "$changed_files"; then
+          if grep -Eq '^(yaHerd\.xcodeproj/|yaHerd/[^/]+\.entitlements$|yaHerd/yaHerdApp\.swift$|yaHerd/App/|yaHerd/Data/(CoreData/|Persistence/|Repositories/CoreData/)|\.github/workflows/swift-concurrency\.yml$)' <<< "$changed_files"; then
             echo 'required=true' >> "$GITHUB_OUTPUT"
             echo 'iCloud Development compilation required for affected source or settings.'
           else
             echo 'required=false' >> "$GITHUB_OUTPUT"
-            echo 'Dedicated iCloud Development compilation not needed; Debug simulator tests still run.'
+            echo 'Dedicated iCloud Development compilation not needed; Debug simulator build still runs.'
           fi
 
       - name: Build dedicated iCloud Development configuration
@@ -160,87 +142,3 @@ jobs:
             ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO \
             build
-
-      - name: Run iOS Simulator tests
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_tests }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          # Discover an installed iOS 26 iPhone simulator on the runner.
-          SIMULATOR_ID="$(xcrun simctl list -j devices available | python3 -c '
-          import json
-          import sys
-          devices = json.load(sys.stdin).get("devices", {})
-          for runtime, entries in devices.items():
-              if "SimRuntime.iOS-26" not in runtime:
-                  continue
-              for device in entries:
-                  if device.get("isAvailable", True) and device.get("name", "").startswith("iPhone"):
-                      print(device["udid"])
-                      sys.exit(0)
-          ')"
-
-          if [[ -z "$SIMULATOR_ID" ]]; then
-            echo "An available iOS 26 iPhone simulator is required to run yaHerdTests." >&2
-            xcrun simctl list devices available >&2
-            exit 1
-          fi
-
-          BUILD_LOG="$(mktemp)"
-          BOOT_LOG="$(mktemp)"
-          TEST_LOG="$(mktemp)"
-          trap 'rm -f "$BUILD_LOG" "$BOOT_LOG" "$TEST_LOG"' EXIT
-
-          # A cold simulator can spend minutes booting after compilation.
-          # Boot concurrently with test compilation instead of serially.
-          echo "Starting iOS simulator $SIMULATOR_ID while building test products."
-          xcrun simctl bootstatus "$SIMULATOR_ID" -b >"$BOOT_LOG" 2>&1 &
-          SIMULATOR_BOOT_PID=$!
-
-          if ! xcodebuild \
-            -project yaHerd.xcodeproj \
-            -scheme yaHerd \
-            -configuration Debug \
-            -destination "generic/platform=iOS Simulator" \
-            -derivedDataPath "$GITHUB_WORKSPACE/.build/ConcurrencyDerivedData" \
-            -parallel-testing-enabled NO \
-            ARCHS=arm64 \
-            CODE_SIGNING_ALLOWED=NO \
-            build-for-testing >"$BUILD_LOG" 2>&1; then
-            echo 'Debug test compilation failed:' >&2
-            grep -E -i 'error:|fatal|command .* failed|failed to|BUILD FAILED' "$BUILD_LOG" | tail -n 80 >&2 || true
-            tail -n 80 "$BUILD_LOG" >&2
-            exit 1
-          fi
-          echo 'Debug app and test target compiled successfully.'
-
-          if ! wait "$SIMULATOR_BOOT_PID"; then
-            cat "$BOOT_LOG" >&2
-            echo "The simulator failed to finish booting." >&2
-            exit 1
-          fi
-
-          # Use exactly the built test products; do not recompile when running.
-          TEST_RUN_FILE="$(find "$GITHUB_WORKSPACE/.build/ConcurrencyDerivedData/Build/Products" \
-            -maxdepth 1 -type f -name 'yaHerd*iphonesimulator*.xctestrun' -print -quit)"
-          if [[ -z "$TEST_RUN_FILE" || ! -f "$TEST_RUN_FILE" ]]; then
-            echo "No yaHerd .xctestrun manifest was generated by build-for-testing." >&2
-            exit 1
-          fi
-
-          echo "Running yaHerdTests on booted simulator $SIMULATOR_ID"
-          xcodebuild \
-            -xctestrun "$TEST_RUN_FILE" \
-            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
-            -parallel-testing-enabled NO \
-            CODE_SIGNING_ALLOWED=NO \
-            test-without-building 2>&1 | tee "$TEST_LOG"
-
-          # Xcode can print TEST SUCCEEDED even when the scheme executes zero
-          # tests. A real XCTest summary is required for the PR gate to pass.
-          if ! grep -q "Test Suite 'yaHerdTests.xctest' passed" "$TEST_LOG" ||
-             ! grep -Eq 'Executed [1-9][0-9]* tests, with ([0-9]+ tests? skipped and )?0 failures' "$TEST_LOG"; then
-            echo "yaHerdTests did not execute successfully (or executed zero tests)." >&2
-            exit 1
-          fi

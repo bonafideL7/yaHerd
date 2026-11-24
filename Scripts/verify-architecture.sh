@@ -441,33 +441,6 @@ for scheme, run_configuration in ((icloud_scheme, "iCloudDevelopment"), (default
         if scheme != icloud_scheme or len(variables) != len(allowed) or set(variables) != allowed:
             failures.append(f"{scheme}: only disabled, explicit development schema controls are permitted in Run")
 
-# Signed development CloudKit tests run inside the iOS app on a device.
-# Keep unsigned simulator CI, but allow the test bundle to be signed for
-# iphoneos so the opt-in schema and populated-store tests can actually run.
-for config_id, config_name in (
-    ("A1B2C3D42F00111100000008", "Debug"),
-    ("A1B2C3D42F00111100000009", "Release"),
-):
-    match = re.search(
-        rf"{config_id} /\* {config_name} \*/ = \{{.*?buildSettings = \{{(.*?)\n\s*\}};",
-        project_text,
-        re.S,
-    )
-    if not match:
-        failures.append(f"yaHerd.xcodeproj: missing {config_name} test target settings")
-        continue
-    settings = match.group(1)
-    required = (
-        "CODE_SIGNING_ALLOWED = NO;",
-        '"CODE_SIGNING_ALLOWED[sdk=iphoneos*]" = YES;',
-        "CODE_SIGN_STYLE = Automatic;",
-        "DEVELOPMENT_TEAM = 4N9V8MB838;",
-    )
-    if any(item not in settings for item in required):
-        failures.append(
-            f"yaHerd.xcodeproj: {config_name} tests must sign on iphoneos "
-            "while keeping simulator CI unsigned"
-        )
 for capability in ("com.apple.iCloud", "com.apple.Push", "com.apple.BackgroundModes"):
     enabled = re.findall(rf"\b{re.escape(capability)}\s*=\s*\{{\s*enabled\s*=\s*1;", project_text)
     if len(enabled) != 1:

@@ -172,13 +172,11 @@ verify_target_settings() {
   fi
 }
 
-# The PR gate verifies the settings used by the actual compile below. Full verification
-# additionally checks Release and the test target configurations.
+# The PR gate verifies the settings used by the actual compile below.
+# Full verification additionally checks Release.
 verify_target_settings yaHerd Debug
 if [[ "$FULL_VERIFY" == "1" ]]; then
   verify_target_settings yaHerd Release
-  verify_target_settings yaHerdTests Debug
-  verify_target_settings yaHerdTests Release
 fi
 
 # Prove the selected compiler is actually enforcing an unambiguously unsafe Swift 6
@@ -267,19 +265,12 @@ run_xcodebuild_gate() {
   echo "$label passed."
 }
 
-# When simulator tests run in the same job, xcodebuild test compiles the app
-# and test target. Keep the compiler-policy checks above, but avoid rebuilding
-# the app here. Standalone concurrency verification retains its Debug build.
-if [[ "${YAHERD_TESTS_BUILD_APP:-0}" != "1" ]]; then
-  run_xcodebuild_gate \
-    'Debug iOS Simulator build' \
-    -configuration Debug \
-    -sdk iphonesimulator \
-    -destination 'generic/platform=iOS Simulator' \
-    build
-else
-  echo 'Debug app build delegated to the iOS Simulator test step.'
-fi
+run_xcodebuild_gate \
+  'Debug iOS Simulator build' \
+  -configuration Debug \
+  -sdk iphonesimulator \
+  -destination 'generic/platform=iOS Simulator' \
+  build
 
 if [[ "$FULL_VERIFY" == "1" ]]; then
   run_xcodebuild_gate \
@@ -288,13 +279,6 @@ if [[ "$FULL_VERIFY" == "1" ]]; then
     -sdk iphonesimulator \
     -destination 'generic/platform=iOS Simulator' \
     build
-
-  run_xcodebuild_gate \
-    'Debug build-for-testing' \
-    -configuration Debug \
-    -sdk iphonesimulator \
-    -destination 'generic/platform=iOS Simulator' \
-    build-for-testing
 
   run_xcodebuild_gate \
     'Release iOS device build' \

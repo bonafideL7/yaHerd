@@ -20,18 +20,14 @@ Before changing production code:
 - If a fix grows into repeated workarounds, reassess the design rather than stacking patches.
 - Do not modify unrelated features or restore files or infrastructure intentionally removed by the user.
 
-## Test-driven implementation and test maintenance
+## Production verification
 
-Automated tests are part of normal implementation and defect correction, not optional work deferred until PR verification. ChatGPT is responsible for creating, maintaining, and running tests as needed; Codex remains a reviewer only.
+The automated application test suite was intentionally removed. Do not write or restore automated application tests unless explicitly requested by the user.
 
-- Before editing production code, inspect relevant existing tests and production call paths. Identify behavior, contracts, invariants, and cross-feature effects at risk. Tests describe intended behavior but do not override current user requirements or actual production behavior.
-- For a defect, first write or adjust a focused regression test that demonstrates the defect. For new functionality, define expected success, failure, boundary, and persistence behavior in tests before implementing it. Reuse current fixtures and repository contracts; avoid redundant coverage and unnecessary test scaffolding.
-- Implement the smallest correct production change, keeping affected tests and fixtures in sync *during* the change. Interface or model changes must account for affected callers and tests in the same work, not in a subsequent repair PR.
-- If an existing test disagrees with changed code, investigate whether the implementation is wrong, the intended behavior changed, or the test is defective. Preserve valid assertions; do not disable, delete, weaken, or skip tests to get a green build.
-- Before each implementation commit, review the affected test diff and perform available compilation, targeted test execution, and direct execution-path inspection. Resolve failures before committing when test execution is available. When Xcode/simulators are unavailable locally, explicitly disclose the limitation, use a GitHub-hosted verification run as early as possible in development, inspect its failures, and do not represent unexecuted tests as passing.
-- A successful production build or `build-for-testing` does not mean tests executed. Every non-draft PR must run the existing automated test suite on GitHub Actions; a failed, cancelled, or skipped required verification is not acceptable for merging. Keep the required CI check enforced by branch protection.
-- Before merging, review the complete diff and require successful CI test execution and appropriate Codex code review. A passing test suite is necessary but not sufficient evidence of correct runtime behavior; perform physical-device or other integration verification where the feature requires it.
-- Keep test changes focused on the actual feature or defect; do not restore retired infrastructure or create unrelated process artifacts.
+- Inspect the current production code, affected callers, and behavior before implementing changes. Preserve valid application invariants and transaction semantics.
+- Before submitting a PR, inspect the production diff and use available compilation, architecture checks, and direct execution-path inspection. Every non-draft PR must pass the GitHub Actions production verification workflow. Do not bypass or weaken production checks to obtain a passing result.
+- A successful build is not evidence of runtime behavior or CloudKit synchronization. Perform applicable manual and device verification when the environment supports it; report unexecuted verification accurately.
+- Keep verification focused; do not restore retired infrastructure or create separate process artifacts.
 
 ## Persistence direction
 
@@ -56,19 +52,19 @@ For any CloudKit, sharing, Herd selection, Core Data model compatibility, or rel
 - If a technical approach in the specification conflicts with current code or verified platform behavior, investigate and select the smallest correct solution. Obtain approval before altering a product requirement; update the approved specification when warranted.
 - ChatGPT inspects the final production diff, performs available builds and the applicable manual cases defined in Section 5 of the specification, and reports pass/fail/not-executed with environment limitations. Codex reviews the actual PR for production defects; ChatGPT fixes confirmed findings. Compilation or an absence of review comments does not establish cross-account synchronization.
 
-This user-requested specification is an exception to the restriction on creating additional Markdown documents. Related automated tests and CI changes follow the test-driven implementation requirements above; unrelated documentation and tracking frameworks remain out of scope.
+This user-requested specification is an exception to the restriction on creating additional Markdown documents. Related CI changes follow the production verification requirements above; unrelated documentation and tracking frameworks remain out of scope.
 
 ## CloudKit stage branches, integration, and final review
 
 CloudKit work uses **one retained branch per numbered stage**, `feature/cloudkit-stage1`, `feature/cloudkit-stage2`, and so on. `feature/cloudkit-collaboration` remains the cumulative integration branch and is **not** the release branch. This workflow applies only to CloudKit; unrelated work retains its normal process.
 
-- Each `feature/cloudkit-stageN` is the durable working branch for that stage, including its tests, review fixes, and required verification. Do not delete or repurpose a stage branch after its work is accepted. Do not treat a passing workstream PR as acceptance of the entire stage.
-- For focused changes, create a short-lived workstream branch from the corresponding stage branch and open the PR **into that same stage branch**, not into `feature/cloudkit-collaboration` or `main`. Review the actual stage-scoped diff and related production paths. Each non-draft PR must execute the GitHub Actions test suite and receive substantive Codex code review before merging.
-- Stage acceptance requires every applicable acceptance criterion in `Info/CLOUDKIT_COLLABORATION.md`, including actual existing-data and CloudKit validation where specified. Keep an incomplete stage on its stage branch; do not integrate it merely because its code compiles or its synthetic tests pass.
+- Each `feature/cloudkit-stageN` is the durable working branch for that stage, including its production changes, review fixes, and required verification. Do not delete or repurpose a stage branch after its work is accepted. Do not treat a passing workstream PR as acceptance of the entire stage.
+- For focused changes, create a short-lived workstream branch from the corresponding stage branch and open the PR **into that same stage branch**, not into `feature/cloudkit-collaboration` or `main`. Review the actual stage-scoped diff and related production paths. Each non-draft PR must pass GitHub Actions production verification and receive substantive Codex code review before merging.
+- Stage acceptance requires every applicable acceptance criterion in `Info/CLOUDKIT_COLLABORATION.md`, including actual existing-data and CloudKit validation where specified. Keep an incomplete stage on its stage branch; do not integrate it merely because its code compiles or static verification passes.
 - Start the next stage from the **accepted preceding stage** and preserve its history. Do not treat branch ancestry or earlier partial integration as proof that a prerequisite stage passed. Stage 2 was already branched from the current Stage 1 implementation and contains an initial, non-activated store-configuration change; it remains incomplete until Stage 1 is accepted and Stage 2 passes its own criteria.
-- Only after a stage is fully accepted, submit or update its stage-to-`feature/cloudkit-collaboration` PR. Verify the final stage diff against the integration head, resolve actual review findings, and require successful GitHub Actions tests before integration. Preserve the stage branch after integration. Where historical partial stage commits are **already** on the integration branch, do not duplicate, reset, or force-rewrite them; integrate only outstanding changes and explicitly validate the complete stage before calling it finished.
+- Only after a stage is fully accepted, submit or update its stage-to-`feature/cloudkit-collaboration` PR. Verify the final stage diff against the integration head, resolve actual review findings, and require successful GitHub Actions production verification before integration. Preserve the stage branch after integration. Where historical partial stage commits are **already** on the integration branch, do not duplicate, reset, or force-rewrite them; integrate only outstanding changes and explicitly validate the complete stage before calling it finished.
 - Keep one **draft feature-integration PR from `feature/cloudkit-collaboration` into `main`** throughout implementation. Do not mark it ready or merge it until every stage and the full release gates are satisfied.
-- Before the final merge, review the cumulative feature diff, re-run the full suite against the latest integration head, resolve reviews, and complete the real-device, multi-account, development/production CloudKit checks specified for release. Earlier passing PRs are not proof of integrated behavior.
+- Before the final merge, review the cumulative feature diff, re-run full production verification against the latest integration head, resolve reviews, and complete the real-device, multi-account, development/production CloudKit checks specified for release. Earlier passing PRs are not proof of integrated behavior.
 - Incorporate intervening `main` changes carefully, without discarding approved code, breaking dependent stage branches, or changing existing user data.
 
 ## Codex code review
