@@ -17,8 +17,56 @@ enum HerdImportState: Equatable, Sendable {
     case accountUnavailable
 }
 
-private final class HerdImportResults: Sendable {
-    let states = Mutex<[String: HerdImportState]>([:])
+final class HerdImportResults: Sendable {
+    private struct Outcomes {
+        var imports: [String: HerdImportState] = [:]
+        var setupFailures: [String: HerdImportState] = [:]
+    }
+
+    private let outcomes = Mutex(Outcomes())
+
+    @discardableResult
+    func record(
+        storeID: String,
+        type: NSPersistentCloudKitContainer.EventType,
+        succeeded: Bool,
+        error: NSError?
+    ) -> Bool {
+        // An export does not establish whether an import completed.
+        guard type == .import || type == .setup else { return false }
+        let failure: HerdImportState = error?.domain == CKError.errorDomain &&
+            error?.code == CKError.Code.notAuthenticated.rawValue
+            ? .accountUnavailable : .failed
+        outcomes.withLock { state in
+            if type == .import {
+                state.imports[storeID] = succeeded ? .complete : failure
+                if succeeded {
+                    state.setupFailures.removeValue(forKey: storeID)
+                }
+            } else if succeeded {
+                state.setupFailures.removeValue(forKey: storeID)
+            } else {
+                state.setupFailures[storeID] = failure
+                // Setup failure invalidates the earlier import outcome.
+                state.imports.removeValue(forKey: storeID)
+            }
+        }
+        return true
+    }
+
+    func state(for identifiers: [String?]) -> HerdImportState {
+        outcomes.withLock { outcomes in
+            let states: [HerdImportState] = identifiers.map { identifier in
+                guard let identifier else { return .waiting }
+                return outcomes.setupFailures[identifier]
+                    ?? outcomes.imports[identifier] ?? .waiting
+            }
+            if states.contains(.accountUnavailable) { return .accountUnavailable }
+            if states.contains(.failed) { return .failed }
+            return !states.isEmpty && states.allSatisfy { $0 == .complete }
+                ? .complete : .waiting
+        }
+    }
 }
 
 final class CoreDataPersistentContainer {
@@ -47,13 +95,7 @@ final class CoreDataPersistentContainer {
     var herdImportState: HerdImportState {
         guard let importResults else { return .localOnly }
         let identifiers = container.persistentStoreCoordinator.persistentStores.map(\.identifier)
-        return importResults.states.withLock { results in
-            let states = identifiers.map { results[$0] ?? .waiting }
-            if states.contains(.accountUnavailable) { return .accountUnavailable }
-            if states.contains(.failed) { return .failed }
-            return !states.isEmpty && states.allSatisfy { $0 == .complete }
-                ? .complete : .waiting
-        }
+        return importResults.state(for: identifiers)
     }
 
     private init(
@@ -259,18 +301,12 @@ final class CoreDataPersistentContainer {
                     NSPersistentCloudKitContainer.eventNotificationUserInfoKey
                 ] as? NSPersistentCloudKitContainer.Event,
                       event.endDate != nil else { return }
-                let state: HerdImportState
-                if !event.succeeded {
-                    let error = event.error as NSError?
-                    state = error?.domain == CKError.errorDomain &&
-                        error?.code == CKError.Code.notAuthenticated.rawValue
-                        ? .accountUnavailable : .failed
-                } else if event.type == .import {
-                    state = .complete
-                } else {
-                    return
-                }
-                results.states.withLock { $0[event.storeIdentifier] = state }
+                guard results.record(
+                    storeID: event.storeIdentifier,
+                    type: event.type,
+                    succeeded: event.succeeded,
+                    error: event.error as NSError?
+                ) else { return }
                 NotificationCenter.default.post(name: CoreDataPersistentContainer.herdImportStateChanged, object: nil)
             }
         }
