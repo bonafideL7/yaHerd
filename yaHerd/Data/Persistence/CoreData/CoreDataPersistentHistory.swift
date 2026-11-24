@@ -31,8 +31,43 @@ struct CoreDataHistoryStore: Hashable, Sendable {
 /// contents, user records or Core Data history objects leave that queue.
 struct PersistentHistoryChanges: Sendable {
     let storeID: String
-    let entityNames: Set<String>
+    let reasons: Set<DataMutationReason>
     let requiresFullRefresh: Bool
+
+    /// Translate Core Data entity names at the persistence boundary. Consumers
+    /// see the same domain mutation reasons as locally committed changes.
+    /// Classify child-only transactions too; CloudKit can import a child
+    /// without a corresponding parent change in the same history page.
+    init(storeID: String, entityNames: Set<String>, requiresFullRefresh: Bool) {
+        self.storeID = storeID
+        var reasons = Set<DataMutationReason>()
+        var needsFullRefresh = requiresFullRefresh || entityNames.isEmpty
+        for entity in entityNames {
+            switch entity {
+            case "Herd":
+                reasons.insert(.herd)
+                // Root changes may alter access, identity or the entire graph.
+                needsFullRefresh = true
+            case "TagColorDefinition":
+                reasons.insert(.tagColor)
+            case "AnimalStatusReference", "Animal", "AnimalTag",
+                 "MovementRecord", "StatusRecord", "HealthRecord", "PregnancyCheck":
+                reasons.insert(.animal)
+            case "Pasture", "PastureGroup":
+                reasons.insert(.pasture)
+            case "FieldCheckSession", "FieldCheckAnimalCheck", "FieldCheckFinding":
+                reasons.insert(.fieldCheck)
+            case "WorkingSession", "WorkingQueueItem", "WorkingTreatmentRecord",
+                 "WorkingTreatmentTemplate":
+                reasons.insert(.working)
+            default:
+                // An unrecognized entity cannot safely be ignored.
+                needsFullRefresh = true
+            }
+        }
+        self.reasons = reasons
+        self.requiresFullRefresh = needsFullRefresh
+    }
 }
 
 enum CoreDataHistoryError: Error {
