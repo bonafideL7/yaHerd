@@ -25,6 +25,8 @@ struct AccessibleHerd: Identifiable, Equatable, Sendable {
 
     let summary: HerdSummary
     let category: Category
+    /// Local store-qualified identity of the actual root, not its application UUID.
+    let rootIdentity: URL
 
     var id: UUID { summary.id }
     var name: String { summary.name }
@@ -35,4 +37,6 @@ struct AccessibleHerd: Identifiable, Equatable, Sendable {
 struct HerdInventory: Sendable {
     let herds: [AccessibleHerd]
     let hasIncompleteRoots: Bool
+    let hasIncompleteOwnedRoots: Bool
+    let ambiguousHerdIDs: Set<UUID>
 }

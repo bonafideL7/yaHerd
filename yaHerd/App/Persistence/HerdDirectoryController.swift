@@ -24,6 +24,7 @@ enum HerdInventoryState: Equatable {
     case importUnavailable
     case accountUnavailable
     case accountChanged
+    case ambiguous
 }
 
 /// Coordinates the Herd list with the authoritative, persisted app selection.
@@ -33,10 +34,13 @@ enum HerdInventoryState: Equatable {
 final class HerdDirectoryController {
     @ObservationIgnored private let repository: any HerdRepository
     @ObservationIgnored private let selection: AppCurrentHerdSelection
-    @ObservationIgnored private let validateReadiness: (@MainActor (UUID) async throws -> Void)?
+    @ObservationIgnored private let validateReadiness: (@MainActor (AccessibleHerd) async throws -> Void)?
     @ObservationIgnored private let readImportState: @MainActor () -> HerdImportState
     @ObservationIgnored private var selectionGeneration: UInt64 = 0
     @ObservationIgnored private var isCreatingHerd = false
+    @ObservationIgnored private var initialRestorationPending: Bool
+    @ObservationIgnored private var isRestoring = false
+    private var hasIncompleteOwnedRoots = false
 
     private(set) var herds: [AccessibleHerd] = []
     private(set) var inventoryState: HerdInventoryState = .loading
@@ -45,42 +49,34 @@ final class HerdDirectoryController {
     var selectedHerdID: UUID? { selection.currentHerdID }
 
     var canCreateHerd: Bool {
+        guard !hasIncompleteOwnedRoots else { return false }
         switch inventoryState {
-        case .available, .incomplete, .waitingForImport, .importUnavailable: true
-        case .loading, .unavailable, .accountUnavailable, .accountChanged: false
+        case .available, .incomplete, .waitingForImport, .importUnavailable: return true
+        case .loading, .unavailable, .accountUnavailable, .accountChanged, .ambiguous: return false
         }
     }
 
     init(
         repository: any HerdRepository,
         selection: AppCurrentHerdSelection,
-        validateReadiness: (@MainActor (UUID) async throws -> Void)? = nil,
+        validateReadiness: (@MainActor (AccessibleHerd) async throws -> Void)? = nil,
         readImportState: @escaping @MainActor () -> HerdImportState = { .localOnly }
     ) {
         self.repository = repository
         self.selection = selection
         self.validateReadiness = validateReadiness
         self.readImportState = readImportState
+        self.initialRestorationPending = selection.currentHerdID == nil && selection.hasRememberedHerd
     }
 
     func refresh(reportErrors: Bool = true) {
         do {
             let accessible = try readAccessibleHerds()
             let previouslySelectedHerdID = selection.currentHerdID
-            if let previouslySelectedHerdID,
-               let previous = herds.first(where: { $0.id == previouslySelectedHerdID }),
-               let refreshed = accessible.first(where: { $0.id == previouslySelectedHerdID }),
-               (previous.category != refreshed.category ||
-                previous.summary.createdAt != refreshed.summary.createdAt) {
-                // The same UUID now identifies a different store or Herd root.
-                // Do not carry the old selection into that replacement Herd.
-                // A user may reopen it through the graph-readiness preflight.
-                selection.deferCurrentHerdUntilImportReady()
-            } else {
-                selection.revalidateActiveHerd(from: accessible)
-            }
+            selection.revalidateActiveHerd(from: accessible)
             if selection.currentHerdID != previouslySelectedHerdID {
                 selectionGeneration &+= 1
+                initialRestorationPending = false
             }
             herds = accessible
             if reportErrors {
@@ -107,12 +103,13 @@ final class HerdDirectoryController {
             return true
         case .accountUnavailable, .accountChanged:
             return false
-        case .available:
+        case .available, .ambiguous:
             return herds.contains { $0.id == id }
         }
     }
 
     func selectHerd(id: UUID) throws {
+        initialRestorationPending = false
         let accessible = try readAccessibleHerds()
         try selection.selectAccessibleHerd(id, from: accessible)
         selectionGeneration &+= 1
@@ -121,7 +118,15 @@ final class HerdDirectoryController {
     }
 
     /// Do not publish a partially imported Herd into the active repository graph.
-    func selectHerdWhenReady(id: UUID, expectedRoot: AccessibleHerd? = nil) async throws {
+    func selectHerdWhenReady(
+        id: UUID,
+        expectedRoot: AccessibleHerd? = nil,
+        restoring: Bool = false
+    ) async throws {
+        if !restoring {
+            initialRestorationPending = false
+            selectionGeneration &+= 1
+        }
         let accessible = try readAccessibleHerds()
         let matching = accessible.filter { $0.id == id }
         guard matching.count == 1, let originalHerd = matching.first else {
@@ -133,14 +138,14 @@ final class HerdDirectoryController {
         if let expectedRoot,
            (expectedRoot.id != originalHerd.id ||
             expectedRoot.category != originalHerd.category ||
-            expectedRoot.summary.createdAt != originalHerd.summary.createdAt) {
+            expectedRoot.rootIdentity != originalHerd.rootIdentity) {
             throw HerdDirectoryError.pendingHerdUnavailable
         }
         let previousSelection = selection.currentHerdID
         let originatingSelectionRevision = selection.selectionRevision
         let originatingGeneration = selectionGeneration
         do {
-            try await validateReadiness?(id)
+            try await validateReadiness?(originalHerd)
         } catch {
             // Cancellation may race with an import-readiness failure. Report
             // cancellation rather than letting the chooser schedule a retry.
@@ -160,17 +165,36 @@ final class HerdDirectoryController {
         let currentMatching = current.filter { $0.id == id }
         guard currentMatching.count == 1,
               currentMatching[0].category == originalHerd.category,
-              currentMatching[0].summary.createdAt == originalHerd.summary.createdAt else {
-            throw CancellationError()
+              currentMatching[0].rootIdentity == originalHerd.rootIdentity else {
+            throw HerdDirectoryError.pendingHerdUnavailable
         }
         try selection.selectAccessibleHerd(id, from: current)
+        initialRestorationPending = false
         selectionGeneration &+= 1
         herds = current
         errorMessage = nil
     }
 
+    /// Restore only the exact remembered root, after its records are ready.
+    /// User selection or creation takes precedence over any pending startup retry.
+    func restoreRememberedHerdIfReady() async {
+        guard initialRestorationPending, !isRestoring,
+              selection.currentHerdID == nil,
+              let herd = selection.rememberedAccessibleHerd(from: herds) else { return }
+        isRestoring = true
+        defer { isRestoring = false }
+        do {
+            try await selectHerdWhenReady(id: herd.id, expectedRoot: herd, restoring: true)
+        } catch {
+            // Retain the preference and let import/inventory refresh retry.
+            // Manual choice remains available at every point.
+        }
+    }
+
     @discardableResult
     func createOwnedHerd(named name: String) async throws -> HerdSummary {
+        initialRestorationPending = false
+        selectionGeneration &+= 1
         guard !isCreatingHerd else { throw HerdDirectoryError.creationInProgress }
         isCreatingHerd = true
         defer { isCreatingHerd = false }
@@ -213,13 +237,17 @@ final class HerdDirectoryController {
             let importState = readImportState()
             if importState.blocksHerdAccess {
                 inventoryState = importState == .accountChanged ? .accountChanged : .accountUnavailable
+                if importState == .accountChanged { initialRestorationPending = false }
                 selection.deferCurrentHerdUntilImportReady()
                 selectionGeneration &+= 1
                 herds = []
                 throw HerdRepositoryError.accountUnavailable
             }
             let inventory = try repository.fetchHerdInventory()
-            if inventory.hasIncompleteRoots {
+            hasIncompleteOwnedRoots = inventory.hasIncompleteOwnedRoots
+            if !inventory.ambiguousHerdIDs.isEmpty {
+                inventoryState = .ambiguous
+            } else if inventory.hasIncompleteRoots {
                 inventoryState = importState == .localOnly ? .unavailable : .incomplete
             } else {
                 switch importState {
@@ -232,6 +260,12 @@ final class HerdDirectoryController {
             return inventory.herds
         } catch {
             if (error as? HerdRepositoryError) == .accountUnavailable {
+                let state = readImportState()
+                inventoryState = state == .accountChanged ? .accountChanged : .accountUnavailable
+                if state == .accountChanged { initialRestorationPending = false }
+                selection.deferCurrentHerdUntilImportReady()
+                selectionGeneration &+= 1
+                herds = []
                 throw error
             }
             inventoryState = .unavailable

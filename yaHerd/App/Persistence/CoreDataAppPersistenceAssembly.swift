@@ -11,156 +11,63 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
     var currentHerdSelection: AppCurrentHerdSelection { selection }
     var herdImportState: HerdImportState { assembly.contextFactory.herdImportState }
 
-    init(
+    private init(
         assembly: CoreDataPersistenceAssembly,
-        currentHerdID: UUID?,
-        selectionPreferences: UserDefaults? = nil
+        selection: AppCurrentHerdSelection
     ) {
         self.assembly = assembly
-        self.selection = AppCurrentHerdSelection(
-            currentHerdID: currentHerdID, defaults: selectionPreferences
+        self.selection = selection
+    }
+
+    convenience init(
+        assembly: CoreDataPersistenceAssembly,
+        currentHerdID: UUID?
+    ) {
+        self.init(
+            assembly: assembly,
+            selection: AppCurrentHerdSelection(currentHerdID: currentHerdID)
         )
     }
 
-    /// Discover existing Herds without writing an implicit root on first launch.
-    /// The chooser provides explicit creation when the local store is empty.
+    /// Store opening and Herd discovery are distinct: an inventory failure
+    /// must not discard successfully loaded stores or create a substitute root.
     static func load(
         at storeURL: URL,
         selectionPreferences: UserDefaults = .standard
     ) async throws -> CoreDataAppPersistenceAssembly {
         let assembly = try await CoreDataPersistenceAssembly.load(storeURL: storeURL)
-        // A local-only store cannot be mid-CloudKit import. Preserve errors for
-        // incomplete existing roots instead of presenting them as a new install.
-        _ = try CoreDataAppHerdBootstrapper.fetchHerdIDs(
-            using: assembly.contextFactory
-        )
-        let remembered = AppCurrentHerdSelection(defaults: selectionPreferences)
-        let repository = CoreDataHerdRepository(selection: remembered, assembly: assembly)
-        remembered.restoreAccessibleHerd(from: try repository.fetchAccessibleHerds())
-
-        return CoreDataAppPersistenceAssembly(
-            assembly: assembly,
-            currentHerdID: remembered.currentHerdID,
-            selectionPreferences: selectionPreferences
-        )
+        return resolveHerdForChoice(using: assembly, selectionPreferences: selectionPreferences)
     }
 
-    /// Stage 2 application path. An explicit ID selects an existing private
-    /// or shared Herd; otherwise use the one existing complete owned Herd.
-    /// A mirrored store may still be importing: never create replacement
-    /// Herd records or upload synthetic data during that interval.
-    /// Normal startup remains local-only until signed schema validation
-    /// and the Herd-selection lifecycle are ready.
-    static func loadCloudKit(
-        at storeURL: URL,
-        selectedHerdID: UUID? = nil,
-        mirroringEnabled: Bool,
-        selectionPreferences: UserDefaults = .standard
-    ) async throws -> CoreDataAppPersistenceAssembly {
-        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
-            storeURL: storeURL,
-            mirroringEnabled: mirroringEnabled
-        )
-        return try resolveCloudKitHerd(
-            using: assembly, privateStoreURL: storeURL,
-            selectedHerdID: selectedHerdID,
-            selectionPreferences: selectionPreferences
-        )
-    }
-
-    /// Resolve a Herd against an already loaded dual-store assembly. Retaining
-    /// this assembly while a newly installed device awaits CloudKit import
-    /// keeps its mirroring engine alive; rechecking must never bootstrap a
-    /// replacement Herd or reopen the persistent stores.
-    static func resolveCloudKitHerd(
+    static func resolveHerdForChoice(
         using assembly: CoreDataPersistenceAssembly,
-        privateStoreURL: URL,
-        selectedHerdID: UUID? = nil,
-        selectionPreferences: UserDefaults = .standard
-    ) throws -> CoreDataAppPersistenceAssembly {
-        // The selected UUID is a locally persisted preference, never proof of
-        // CloudKit membership. Restore only IDs present in the loaded stores.
-        // An empty import must not create a replacement Herd.
-        let herdID: UUID
-        if let selectedHerdID {
-            herdID = selectedHerdID
-        } else {
-            let remembered = AppCurrentHerdSelection(defaults: selectionPreferences)
-            let repository = CoreDataHerdRepository(selection: remembered, assembly: assembly)
-            // This legacy CloudKit resolver defaults only to an owned/private Herd.
-            // Shared Herds remain selectable through the explicit Stage 3 chooser.
-            let owned = try repository.fetchAccessibleHerds().filter { $0.category == .owned }
-            remembered.restoreAccessibleHerd(from: owned)
-            if let selected = remembered.currentHerdID {
-                herdID = selected
-            } else if owned.isEmpty {
-                throw HerdRepositoryError.missingHerd
-            } else {
-                throw CoreDataAppHerdBootstrapError.multipleLocalHerds(
-                    count: owned.count
-                )
-            }
-        }
-
-        let context = assembly.contextFactory.makeReadContext()
-        let lookup = assembly.lookup
-        try context.performAndWait {
-            guard let herd = try lookup.herd(id: herdID, in: context) else {
-                throw HerdRepositoryError.missingHerd
-            }
-            // A CloudKit import can expose the root UUID before its required
-            // fields. Defer the app graph rather than treating a partial Herd
-            // as ready or creating a replacement starter Herd.
-            _ = try herd.toSummary()
-            guard try lookup.store(forHerdID: herdID, in: context) != nil else {
-                throw HerdRepositoryError.missingHerd
-            }
-        }
-        return CoreDataAppPersistenceAssembly(
-            assembly: assembly,
-            currentHerdID: herdID,
-            selectionPreferences: selectionPreferences
-        )
-    }
-
-    /// Stage 3 startup: enumerate owned and shared Herds without implicitly
-    /// creating a local root. If no valid selection exists, retain the loaded
-    /// stores and present the Herd chooser.
-    /// An explicit developer-selected ID still uses strict Stage 2 validation.
-    static func resolveCloudKitHerdForChoice(
-        using assembly: CoreDataPersistenceAssembly,
-        privateStoreURL: URL,
         requestedHerdID: UUID? = nil,
         selectionPreferences: UserDefaults = .standard
-    ) throws -> CoreDataAppPersistenceAssembly {
-        if let requestedHerdID {
-            return try resolveCloudKitHerd(
-                using: assembly,
-                privateStoreURL: privateStoreURL,
-                selectedHerdID: requestedHerdID,
-                selectionPreferences: selectionPreferences
-            )
-        }
-        let remembered = AppCurrentHerdSelection(defaults: selectionPreferences)
-        let repository = CoreDataHerdRepository(selection: remembered, assembly: assembly)
+    ) -> CoreDataAppPersistenceAssembly {
+        let selection = AppCurrentHerdSelection(defaults: selectionPreferences)
+        let repository = CoreDataHerdRepository(selection: selection, assembly: assembly)
         do {
-            remembered.restoreAccessibleHerd(from: try repository.fetchAccessibleHerds())
-            if let selectedID = remembered.currentHerdID {
-                return try resolveCloudKitHerd(
-                    using: assembly, privateStoreURL: privateStoreURL,
-                    selectedHerdID: selectedID, selectionPreferences: selectionPreferences
+            let inventory = try repository.fetchHerdInventory()
+            if let requestedHerdID {
+                try selection.selectAccessibleHerd(
+                    requestedHerdID, from: inventory.herds, remember: false
+                )
+            } else {
+                // Never auto-pick the first imported root just because other
+                // owned/shared roots have not arrived yet.
+                let importState = assembly.contextFactory.herdImportState
+                selection.restoreAccessibleHerd(
+                    from: inventory.herds,
+                    allowAutomaticChoice: !inventory.hasIncompleteRoots &&
+                        inventory.ambiguousHerdIDs.isEmpty &&
+                        (importState == .localOnly || importState == .complete)
                 )
             }
         } catch {
-            // Both stores are already open. An inventory or root-validation
-            // failure is not proof of storage loss or an empty installation.
-            // Keep the original assembly alive and let the chooser re-read
-            // the inventory, report the error and permit explicit recovery.
+            // Keep the original stores active; the chooser re-reads inventory
+            // and reports the error. No automatic Herd creation occurs.
         }
-        return CoreDataAppPersistenceAssembly(
-            assembly: assembly, currentHerdID: nil,
-            selectionPreferences: selectionPreferences
-        )
+        return CoreDataAppPersistenceAssembly(assembly: assembly, selection: selection)
     }
 
     /// A failed disk open must never trigger a SwiftData fallback or write to
@@ -179,8 +86,10 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
 
     /// Probe the chosen Herd through the same loaded stores without changing
     /// the active Herd or writing a selected-Herd preference.
-    func makeReadinessCandidate(for herdID: UUID) -> CoreDataAppPersistenceAssembly {
-        CoreDataAppPersistenceAssembly(assembly: assembly, currentHerdID: herdID)
+    func makeReadinessCandidate(for herd: AccessibleHerd) throws -> CoreDataAppPersistenceAssembly {
+        let candidate = AppCurrentHerdSelection()
+        try candidate.selectAccessibleHerd(herd.id, from: [herd], remember: false)
+        return CoreDataAppPersistenceAssembly(assembly: assembly, selection: candidate)
     }
 
     func makeDependencies(dataAccessMode: AppDataAccessMode) -> AppDependencies {

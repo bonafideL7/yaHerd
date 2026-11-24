@@ -11,10 +11,6 @@ import SwiftUI
 struct yaHerdApp: App {
     @State private var bootstrapState: AppBootstrapState = .loading
     @State private var bootstrapStarted = false
-    #if DEBUG
-    @State private var developmentImportCheckInProgress = false
-    #endif
-
     private let applicationSettings: ApplicationSettings
 
     init() {
@@ -52,34 +48,6 @@ struct yaHerdApp: App {
                         Text(message)
                     }
 
-                case .developmentImportPending:
-                    ContentUnavailableView {
-                        Label("Waiting for iCloud Herd", systemImage: "icloud.and.arrow.down")
-                    } description: {
-                        Text("The Herd or some of its related records have not finished importing. " +
-                            "yaHerd is keeping iCloud active and will check again without " +
-                            "creating or replacing any Herd data.")
-                    } actions: {
-                        Button("Check Again") {
-                            Task { @MainActor in await retryPendingDevelopmentImport() }
-                        }
-                    }
-                    .task {
-                        // The development-only integration path must remain active
-                        // until the imported root is complete. Check without
-                        // reopening stores or creating any local Herd records.
-                        while !Task.isCancelled {
-                            do {
-                                try await Task.sleep(for: .seconds(3))
-                            } catch {
-                                break
-                            }
-                            await retryPendingDevelopmentImport()
-                            guard case .developmentImportPending = bootstrapState else {
-                                break
-                            }
-                        }
-                    }
                 #endif
                 }
             }
@@ -144,51 +112,19 @@ struct yaHerdApp: App {
                     storeURL: storeURL,
                     mirroringEnabled: true
                 )
-                do {
-                    let candidate = try CoreDataAppPersistenceAssembly.resolveCloudKitHerdForChoice(
-                        using: cloudKitAssembly,
-                        privateStoreURL: storeURL,
-                        requestedHerdID: selectedHerdID
-                    )
-                    // An imported Herd root may precede its child records.
-                    // For a remembered selection, leave other accessible Herds
-                    // usable through the chooser while this graph catches up.
-                    if candidate.currentHerdSelection.currentHerdID != nil {
-                        do {
-                            try await CloudKitDevelopmentLaunch.validateHomeReadiness(candidate)
-                        } catch {
-                            guard selectedHerdID == nil,
-                                  CloudKitDevelopmentLaunch.isImportPending(error) else {
-                                throw error
-                            }
-                            candidate.currentHerdSelection.deferCurrentHerdUntilImportReady()
-                        }
+                let candidate = CoreDataAppPersistenceAssembly.resolveHerdForChoice(
+                    using: cloudKitAssembly, requestedHerdID: selectedHerdID
+                )
+                // Keep the chooser and the opened stores available even when
+                // the selected graph is incomplete or cannot safely be read.
+                if candidate.currentHerdSelection.currentHerdID != nil {
+                    do {
+                        try await CloudKitDevelopmentLaunch.validateHomeReadiness(candidate)
+                    } catch {
+                        candidate.currentHerdSelection.deferCurrentHerdUntilImportReady()
                     }
-                    persistence = candidate
-                } catch {
-                    if CloudKitDevelopmentLaunch.isImportPending(error) {
-                        AppLaunchDiagnostics.record(
-                            actualStorageMode: .cloudKitDevelopmentBlocked
-                        )
-                        return .developmentImportPending(
-                            CloudKitDevelopmentPendingImport(
-                                assembly: cloudKitAssembly,
-                                privateStoreURL: storeURL,
-                                selectedHerdID: selectedHerdID
-                            )
-                        )
-                    }
-                    // Both stores opened successfully. A rejected import graph
-                    // is not a SQLite failure and must not start recovery.
-                    let message = CloudKitDevelopmentLaunch.nonStorageStartupMessage(
-                        for: error
-                    ) ?? error.localizedDescription
-                    AppLaunchDiagnostics.record(
-                        actualStorageMode: .cloudKitDevelopmentBlocked,
-                        startupError: message
-                    )
-                    return .developmentMirroringBlocked(message)
                 }
+                persistence = candidate
                 storageMode = .cloudKitDevelopment
             }
             #else
@@ -264,18 +200,21 @@ struct yaHerdApp: App {
         persistence: CoreDataAppPersistenceAssembly,
         storageMode: AppLaunchStorageMode
     ) -> AppRuntime {
+        if persistence.herdImportState.blocksHerdAccess {
+            persistence.currentHerdSelection.deferCurrentHerdUntilImportReady()
+        }
         let dependencies = persistence.makeDependencies(dataAccessMode: .readWrite)
         AppLaunchDiagnostics.record(actualStorageMode: storageMode)
         #if DEBUG
         NSLog("yaHerd active storage mode: %@", storageMode.displayName)
         #endif
-        let validateReadiness: (@MainActor (UUID) async throws -> Void)?
+        let validateReadiness: (@MainActor (AccessibleHerd) async throws -> Void)?
         #if DEBUG
         if storageMode == .cloudKitDevelopment {
-            validateReadiness = { herdID in
-                // The probe uses existing stores without changing the live selection.
+            validateReadiness = { herd in
+                // Probe the exact selected root without changing live selection.
                 try await CloudKitDevelopmentLaunch.validateHomeReadiness(
-                    persistence.makeReadinessCandidate(for: herdID)
+                    persistence.makeReadinessCandidate(for: herd)
                 )
             }
         } else {
@@ -296,43 +235,6 @@ struct yaHerdApp: App {
         )
     }
 
-    #if DEBUG
-    @MainActor
-    private func retryPendingDevelopmentImport() async {
-        guard !developmentImportCheckInProgress,
-              case .developmentImportPending(let pending) = bootstrapState else {
-            return
-        }
-        developmentImportCheckInProgress = true
-        defer { developmentImportCheckInProgress = false }
-
-        do {
-            let persistence = try CoreDataAppPersistenceAssembly.resolveCloudKitHerdForChoice(
-                using: pending.assembly,
-                privateStoreURL: pending.privateStoreURL,
-                requestedHerdID: pending.selectedHerdID
-            )
-            if persistence.currentHerdSelection.currentHerdID != nil {
-                try await CloudKitDevelopmentLaunch.validateHomeReadiness(persistence)
-            }
-            bootstrapState = .ready(Self.makeRuntime(
-                persistence: persistence,
-                storageMode: .cloudKitDevelopment
-            ))
-        } catch {
-            guard !CloudKitDevelopmentLaunch.isImportPending(error) else {
-                return
-            }
-            let message = CloudKitDevelopmentLaunch.nonStorageStartupMessage(for: error)
-                ?? error.localizedDescription
-            AppLaunchDiagnostics.record(
-                actualStorageMode: .cloudKitDevelopmentBlocked,
-                startupError: message
-            )
-            bootstrapState = .developmentMirroringBlocked(message)
-        }
-    }
-    #endif
 }
 
 private enum AppBootstrapState {
@@ -342,18 +244,8 @@ private enum AppBootstrapState {
     case developmentMirroringBlocked(String)
     #if DEBUG
     case developmentSchemaResult(String)
-    case developmentImportPending(CloudKitDevelopmentPendingImport)
     #endif
 }
-
-#if DEBUG
-@MainActor
-private struct CloudKitDevelopmentPendingImport {
-    let assembly: CoreDataPersistenceAssembly
-    let privateStoreURL: URL
-    let selectedHerdID: UUID?
-}
-#endif
 
 private struct AppRuntime {
     // Retain the one Core Data assembly for the app lifetime. Presentation sees
@@ -364,7 +256,7 @@ private struct AppRuntime {
     let recoveryContext: RecoveryModeContext?
     let storageError: String?
     let herdSelection: AppCurrentHerdSelection
-    let validateHerdReadiness: (@MainActor (UUID) async throws -> Void)?
+    let validateHerdReadiness: (@MainActor (AccessibleHerd) async throws -> Void)?
     let readHerdImportState: @MainActor () -> HerdImportState
 }
 

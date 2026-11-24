@@ -9,12 +9,21 @@ import Foundation
 protocol CurrentHerdSelectionReading: AnyObject {
     var currentHerdID: UUID? { get }
     var selectionRevision: UInt64 { get }
+    var selectedRootIdentity: URL? { get }
 }
 
-// Static test selections have no incarnation changes. The application
-// selection overrides this with its monotonically increasing revision.
+struct HerdSelectionSnapshot: Equatable, Sendable {
+    let id: UUID?
+    let revision: UInt64
+    let rootIdentity: URL?
+}
+
 extension CurrentHerdSelectionReading {
-    var selectionRevision: UInt64 { 0 }
+    var snapshot: HerdSelectionSnapshot {
+        HerdSelectionSnapshot(
+            id: currentHerdID, revision: selectionRevision, rootIdentity: selectedRootIdentity
+        )
+    }
 }
 
 @MainActor
@@ -50,6 +59,11 @@ enum HerdRepositoryError: LocalizedError, Equatable, Sendable {
 /// The Core Data adapter overrides this to report partial CloudKit imports.
 extension HerdRepository {
     func fetchHerdInventory() throws -> HerdInventory {
-        HerdInventory(herds: try fetchAccessibleHerds(), hasIncompleteRoots: false)
+        HerdInventory(
+            herds: try fetchAccessibleHerds(),
+            hasIncompleteRoots: false,
+            hasIncompleteOwnedRoots: false,
+            ambiguousHerdIDs: []
+        )
     }
 }

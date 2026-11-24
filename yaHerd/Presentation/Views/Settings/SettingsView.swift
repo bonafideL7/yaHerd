@@ -383,6 +383,9 @@ struct HerdDirectoryView: View {
                         systemImage: "exclamationmark.triangle"
                     )
                     .foregroundStyle(.secondary)
+                } else if directory.inventoryState == .ambiguous {
+                    Label("Some Herds have duplicate identities and cannot be opened. Other available Herds can still be selected.", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.secondary)
                 } else if directory.inventoryState == .waitingForImport {
                     Label("Waiting for iCloud Herd imports.", systemImage: "icloud.and.arrow.down")
                         .foregroundStyle(.secondary)
@@ -457,6 +460,8 @@ struct HerdDirectoryView: View {
                     // Do not await an uncooperative canceled validation here:
                     // the retry loop must remain free to open another Herd.
                     beginOpeningHerd(herd: pendingHerd)
+                } else if !isOpeningHerd && !isCreating {
+                    await directory.restoreRememberedHerdIfReady()
                 }
                 do {
                     try await Task.sleep(for: .seconds(5))
