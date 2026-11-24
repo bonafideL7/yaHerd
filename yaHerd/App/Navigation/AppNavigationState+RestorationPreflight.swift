@@ -15,13 +15,7 @@ extension AppNavigationState {
         from payload: String,
         using validator: any AppNavigationRestorationValidating
     ) -> AppNavigationRestoreOutcome {
-        guard let snapshot = restorationSnapshotForPreflight(from: payload) else {
-            // There is no valid durable snapshot to protect. Preserve the existing behavior for an
-            // empty, corrupt, or unsupported payload so the app can establish the current herd ID.
-            restore(from: payload, using: validator)
-            return .applied
-        }
-
+        let snapshot = restorationSnapshotForPreflight(from: payload)
         do {
             let preflightedValidator = try PreflightedAppNavigationRestorationValidator(
                 snapshot: snapshot,
@@ -56,7 +50,7 @@ private struct PreflightedAppNavigationRestorationValidator: AppNavigationRestor
     private let workingSessionResults: [UUID: Bool]
 
     init(
-        snapshot: AppNavigationSnapshot,
+        snapshot: AppNavigationSnapshot?,
         base: any AppNavigationRestorationValidating
     ) throws {
         let herdID = try base.currentHerdID()
@@ -66,7 +60,7 @@ private struct PreflightedAppNavigationRestorationValidator: AppNavigationRestor
 
         // A legacy snapshot without a Herd ID cannot validate records or
         // criteria against a newly selected Herd.
-        guard let rootIdentity, snapshot.selectedHerdID == herdID,
+        guard let snapshot, let rootIdentity, snapshot.selectedHerdID == herdID,
               snapshot.selectedHerdRootIdentity == rootIdentity else {
             animalResults = [:]
             pastureResults = [:]

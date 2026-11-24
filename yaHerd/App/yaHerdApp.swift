@@ -174,8 +174,10 @@ struct yaHerdApp: App {
                         ),
                         storageError: startupMessage,
                         herdSelection: persistence.currentHerdSelection,
-                        validateHerdReadiness: nil,
-                        readHerdImportState: { .localOnly }
+                        herdDirectory: HerdDirectoryController(
+                            repository: dependencies.herdRepository,
+                            selection: persistence.currentHerdSelection
+                        )
                     )
                 )
             } catch {
@@ -230,8 +232,12 @@ struct yaHerdApp: App {
             recoveryContext: nil,
             storageError: nil,
             herdSelection: persistence.currentHerdSelection,
-            validateHerdReadiness: validateReadiness,
-            readHerdImportState: { persistence.herdImportState }
+            herdDirectory: HerdDirectoryController(
+                repository: dependencies.herdRepository,
+                selection: persistence.currentHerdSelection,
+                validateReadiness: validateReadiness,
+                readImportState: { persistence.herdImportState }
+            )
         )
     }
 
@@ -256,15 +262,14 @@ private struct AppRuntime {
     let recoveryContext: RecoveryModeContext?
     let storageError: String?
     let herdSelection: AppCurrentHerdSelection
-    let validateHerdReadiness: (@MainActor (AccessibleHerd) async throws -> Void)?
-    let readHerdImportState: @MainActor () -> HerdImportState
+    let herdDirectory: HerdDirectoryController
 }
 
 private struct RunningAppView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var tagColorLibrary: TagColorLibraryStore
     @StateObject private var recoveryModeController: RecoveryModeController
-    @State private var herdDirectory: HerdDirectoryController
+    private var herdDirectory: HerdDirectoryController { runtime.herdDirectory }
 
     private let runtime: AppRuntime
     private let applicationSettings: ApplicationSettings
@@ -275,12 +280,6 @@ private struct RunningAppView: View {
     ) {
         self.runtime = runtime
         self.applicationSettings = applicationSettings
-        self._herdDirectory = State(initialValue: HerdDirectoryController(
-            repository: runtime.dependencies.herdRepository,
-            selection: runtime.herdSelection,
-            validateReadiness: runtime.validateHerdReadiness,
-            readImportState: runtime.readHerdImportState
-        ))
         self._tagColorLibrary = StateObject(
             wrappedValue: TagColorLibraryStore(
                 repository: runtime.dependencies.tagColorRepository
