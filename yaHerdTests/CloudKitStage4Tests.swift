@@ -255,7 +255,7 @@ final class CloudKitStage4Tests: XCTestCase {
 
         try insertHerd(in: owned, using: factory, author: "older-process")
         let rejected = await processHistory(factory, acknowledge: false)
-        XCTAssertEqual(rejected.changes.map(\.storeID), [owned.identifier])
+        XCTAssertEqual(rejected.changes.map(\.storeID), [owned.identifier, owned.identifier])
         XCTAssertEqual(try Data(contentsOf: owned.checkpointURL), ownedCheckpoint)
 
         let recovered = await processHistory(factory)
@@ -316,6 +316,71 @@ final class CloudKitStage4Tests: XCTestCase {
 
         let resumed = await processHistory(factory)
         XCTAssertTrue(resumed.changes.isEmpty)
+    }
+
+    func testSQLiteHistoryRejectedStoreDoesNotBlockIndependentStore() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let factory = assembly.contextFactory
+        let stores = try factory.historyStores()
+        let rejected = try XCTUnwrap(stores.first)
+        let accepted = try XCTUnwrap(stores.last)
+        XCTAssertNotEqual(rejected, accepted)
+        _ = await processHistory(factory)
+        let rejectedCheckpoint = try Data(contentsOf: rejected.checkpointURL)
+        let acceptedCheckpoint = try Data(contentsOf: accepted.checkpointURL)
+        try insertHerd(in: rejected, using: factory, author: "external-import")
+        try insertHerd(in: accepted, using: factory, author: "external-import")
+
+        let recorder = HistoryRecorder()
+        let wakeups = CoreDataHistoryWakeups()
+        wakeups.requestProcessing()
+        wakeups.finish()
+        await CoreDataPersistentHistoryConsumer(contextFactory: factory).run(
+            wakeups: wakeups, refreshInventory: {},
+            publish: { changes in
+                recorder.changes.append(changes)
+                return changes.storeID != rejected.identifier
+            }
+        )
+
+        XCTAssertEqual(recorder.changes.filter { $0.storeID == rejected.identifier }.count, 2)
+        XCTAssertEqual(recorder.changes.filter { $0.storeID == accepted.identifier }.count, 1)
+        XCTAssertEqual(try Data(contentsOf: rejected.checkpointURL), rejectedCheckpoint)
+        XCTAssertNotEqual(try Data(contentsOf: accepted.checkpointURL), acceptedCheckpoint)
+
+        let resumed = await processHistory(factory)
+        XCTAssertEqual(resumed.changes.map(\.storeID), [rejected.identifier])
+    }
+
+    func testSQLiteHistoryRebuildsInconsistentCursorDespiteBroadInvalidation() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await CoreDataPersistenceAssembly.loadCloudKit(
+            storeURL: harness.storeURL, mirroringEnabled: false
+        )
+        let factory = assembly.contextFactory
+        let owned = try XCTUnwrap(factory.historyStores().first { $0.url == harness.storeURL })
+        try insertHerd(in: owned, using: factory, author: "external-import")
+        _ = await processHistory(factory)
+        var checkpoint = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: owned.checkpointURL)) as? [String: Any]
+        )
+        checkpoint["transactionNumber"] = 1_000_000
+        try JSONSerialization.data(withJSONObject: checkpoint).write(to: owned.checkpointURL)
+
+        try insertHerd(in: owned, using: factory, author: "external-import")
+        let recovered = await processHistory(factory)
+        XCTAssertEqual(recovered.changes.map(\.storeID), [owned.identifier])
+        XCTAssertEqual(recovered.changes.first?.requiresFullRefresh, true)
+        let saved = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: owned.checkpointURL)) as? [String: Any]
+        )
+        let number = try XCTUnwrap(saved["transactionNumber"] as? Int64)
+        XCTAssertLessThan(number, 1_000_000)
+        let replay = await processHistory(factory)
+        XCTAssertTrue(replay.changes.isEmpty)
     }
 
     @MainActor
