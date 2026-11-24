@@ -278,11 +278,17 @@ struct WorkingSessionAnimalWorkView: View {
                 guard !refreshSessionSourcePastureAfterMutation() else { return }
             case .local(.animal):
                 await revalidateSelectedSireAfterMutation()
-            case .remote:
-                // A history batch may include both Animal and Pasture changes.
-                refreshDestinationPasturesAfterMutation()
-                guard !refreshSessionSourcePastureAfterMutation() else { return }
-                await revalidateSelectedSireAfterMutation()
+            case .remote(_, let reasons, let fullRefresh):
+                // Mixed batches can affect both reference sets. A Working
+                // change can also alter the session's source/destination.
+                if fullRefresh || reasons.contains(.pasture) || reasons.contains(.working) {
+                    refreshDestinationPasturesAfterMutation()
+                    guard !refreshSessionSourcePastureAfterMutation() else { return }
+                }
+                if fullRefresh || reasons.contains(.animal) || reasons.contains(.working) ||
+                    reasons.contains(.tagColor) {
+                    await revalidateSelectedSireAfterMutation()
+                }
             case .local:
                 break
             }

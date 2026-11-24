@@ -12,7 +12,7 @@ enum ApplicationFeatureArea: String, CaseIterable, Hashable, Sendable {
 
 enum ApplicationMutationSource: Equatable, Sendable {
     case local(DataMutationReason)
-    case remote(storeID: String, changedEntities: Set<String>, requiresFullRefresh: Bool)
+    case remote(storeID: String, reasons: Set<DataMutationReason>, requiresFullRefresh: Bool)
 }
 
 struct ApplicationMutationEvent: Equatable, Sendable {
@@ -48,8 +48,9 @@ protocol SuccessfulMutationRecording {
     func recordSuccessfulMutation(reason: DataMutationReason)
 }
 
-/// Central application change stream. Repository decorators publish only after a local command
-/// succeeds so dependent screens can invalidate stale read models without persistence coupling.
+/// Central application change stream. Repository decorators publish after a local
+/// command succeeds; the history consumer publishes after a remote batch is read.
+/// Both paths use the same feature revisions and event subscriptions.
 @MainActor
 @Observable
 final class ApplicationMutationCenter: ApplicationMutationStreaming {
@@ -78,18 +79,24 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
         publish(source: .local(reason), affectedAreas: affectedAreas(for: reason))
     }
 
-    /// The history consumer acknowledges a batch only after this synchronous
-    /// publication. Use broad invalidation until entity mapping is audited.
+    /// A mixed history batch emits one event and increments each affected
+    /// revision once, using the same dependency mapping as local mutations.
     func recordRemoteChanges(
-        storeID: String, changedEntities: Set<String>, requiresFullRefresh: Bool
+        storeID: String, reasons: Set<DataMutationReason>, requiresFullRefresh: Bool
     ) {
+        let fullRefresh = requiresFullRefresh || reasons.isEmpty || reasons.contains(.herd)
+        let areas = fullRefresh
+            ? Set(ApplicationFeatureArea.allCases)
+            : reasons.reduce(into: Set<ApplicationFeatureArea>()) { areas, reason in
+                areas.formUnion(affectedAreas(for: reason))
+            }
         publish(
             source: .remote(
                 storeID: storeID,
-                changedEntities: changedEntities,
-                requiresFullRefresh: requiresFullRefresh
+                reasons: reasons,
+                requiresFullRefresh: fullRefresh
             ),
-            affectedAreas: Set(ApplicationFeatureArea.allCases)
+            affectedAreas: areas
         )
     }
 

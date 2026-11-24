@@ -25,7 +25,7 @@ final class AppRemoteHistoryCoordinator {
                 guard !contextFactory.herdImportState.blocksHerdAccess else { return false }
                 mutationCenter.recordRemoteChanges(
                     storeID: changes.storeID,
-                    changedEntities: changes.entityNames,
+                    reasons: changes.reasons,
                     requiresFullRefresh: changes.requiresFullRefresh
                 )
                 return true

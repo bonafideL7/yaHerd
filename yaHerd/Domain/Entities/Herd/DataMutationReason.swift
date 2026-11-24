@@ -1,4 +1,4 @@
-enum DataMutationReason: Equatable, Sendable {
+enum DataMutationReason: Hashable, Sendable {
     case herd
     case animal
     case pasture
