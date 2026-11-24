@@ -213,11 +213,14 @@ final class CoreDataPersistentContainer {
     var cloudStorageActivity: CloudStorageActivity? {
         guard importResults != nil else { return nil }
         let stores = container.persistentStoreCoordinator.persistentStores
-        let activity = cloudStoreActivity
+        let activitiesByID = cloudStoreActivity
         func activity(for fileName: String) -> CloudStoreActivity? {
-            guard let store = stores.first(where: { $0.url?.lastPathComponent == fileName }),
-                  let identifier: String = store.identifier else { return nil }
-            return activity[identifier]
+            guard let store = stores.first(where: { $0.url?.lastPathComponent == fileName }) else {
+                return nil
+            }
+            let identifier: String? = store.identifier
+            guard let identifier else { return nil }
+            return activitiesByID[identifier]
         }
         return CloudStorageActivity(
             accessState: herdImportState,
