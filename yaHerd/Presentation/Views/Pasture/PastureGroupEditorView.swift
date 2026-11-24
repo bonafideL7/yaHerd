@@ -8,6 +8,7 @@ struct PastureGroupEditorView: View {
 
     @State private var model = PastureGroupFormViewModel()
     @State private var hasPreparedForm = false
+    @State private var editingBaseline: PastureGroupDetailSnapshot?
     @State private var originatingHerdID: UUID?
     @State private var originatingSelectionRevision: UInt64?
 
@@ -70,6 +71,7 @@ struct PastureGroupEditorView: View {
         originatingHerdID = herdSelection.currentHerdID
         originatingSelectionRevision = herdSelection.selectionRevision
         if let group {
+            editingBaseline = group
             model.populate(from: group)
         }
     }
@@ -79,9 +81,16 @@ struct PastureGroupEditorView: View {
             guard let originatingHerdID, let originatingSelectionRevision else {
                 throw CancellationError()
             }
-            if let group {
+            if let baseline = editingBaseline {
+                guard let current = try pastureDependencies.groupDetailRepository.fetchPastureGroupDetail(id: baseline.id),
+                      current.name == baseline.name,
+                      current.grazeDays == baseline.grazeDays,
+                      current.restDays == baseline.restDays else {
+                    model.errorMessage = "This group changed or was removed. Your draft is retained; reopen the editor before saving."
+                    return
+                }
                 try model.update(
-                    id: group.id,
+                    id: baseline.id,
                     using: repository,
                     expectedHerdID: originatingHerdID,
                     expectedSelectionRevision: originatingSelectionRevision,

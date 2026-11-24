@@ -131,6 +131,10 @@ final class TagColorLibraryStore: ObservableObject {
         }
     }
 
+    func readCurrentDefinition(id: UUID) throws -> TagColorSnapshot? {
+        try repository.fetchColor(id: id)
+    }
+
     func refresh() {
         load()
     }

@@ -6,6 +6,7 @@ import Observation
 final class AnimalInlineEntryViewModel {
     @ObservationIgnored private let dateProvider: any DateProviding
     @ObservationIgnored private let calendar: Calendar
+    @ObservationIgnored private var editingBaseline: AnimalDetailSnapshot?
     @ObservationIgnored private var draftHerdID: UUID?
     @ObservationIgnored private var draftSelectionRevision: UInt64?
 
@@ -48,6 +49,7 @@ final class AnimalInlineEntryViewModel {
         }
         draftHerdID = herdID
         draftSelectionRevision = selection.selectionRevision
+        editingBaseline = nil
         editingAnimalID = nil
         isActive = true
         identity = UUID()
@@ -74,6 +76,7 @@ final class AnimalInlineEntryViewModel {
         }
         draftHerdID = herdID
         draftSelectionRevision = selection.selectionRevision
+        editingBaseline = detail
         editingAnimalID = animal.id
         isActive = true
         identity = animal.id
@@ -112,6 +115,7 @@ final class AnimalInlineEntryViewModel {
         draftHerdID = nil
         draftSelectionRevision = nil
         isActive = false
+        editingBaseline = nil
         editingAnimalID = nil
         text = ""
         sex = .unknown
@@ -153,6 +157,11 @@ final class AnimalInlineEntryViewModel {
         defer { isCommitting = false }
 
         if let editingAnimalID {
+            guard let baseline = editingBaseline,
+                  let current = try repository.fetchAnimalDetail(id: editingAnimalID),
+                  !AnimalDetailViewModel.editableValuesChanged(from: baseline, to: current) else {
+                throw StaleAnimalInlineDraftError()
+            }
             try updateInlineAnimal(id: editingAnimalID, text: trimmedText, colors: colors, defaultTagColorID: defaultTagColorID, using: repository)
             clearCommittedEntry()
         } else {
@@ -218,6 +227,7 @@ final class AnimalInlineEntryViewModel {
         draftHerdID = nil
         draftSelectionRevision = nil
         isActive = false
+        editingBaseline = nil
         editingAnimalID = nil
         text = ""
         sex = .unknown
@@ -229,5 +239,11 @@ final class AnimalInlineEntryViewModel {
         dam = ""
         identity = UUID()
         ignoresNextFocusLoss = false
+    }
+}
+
+private struct StaleAnimalInlineDraftError: LocalizedError {
+    var errorDescription: String? {
+        "This animal changed or was removed. Your draft is retained; reopen the inline editor before saving."
     }
 }

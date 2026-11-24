@@ -18,6 +18,7 @@ final class AnimalDetailViewModel {
     var pendingScrollTarget: AnimalEditorScrollTarget?
     var preparedOffspringEditor: PreparedAnimalEditor?
 
+    @ObservationIgnored private var editingBaseline: AnimalDetailSnapshot?
     @ObservationIgnored private var editingHerdID: UUID?
     @ObservationIgnored private var editingSelectionRevision: UInt64?
     @ObservationIgnored private var viewingHerdID: UUID?
@@ -68,6 +69,11 @@ final class AnimalDetailViewModel {
         do {
             let loadedDetail = try repository.fetchAnimalDetail(id: animalID)
             detail = loadedDetail
+            errorMessage = nil
+            if isEditing, let baseline = editingBaseline,
+               loadedDetail.map({ Self.editableValuesChanged(from: baseline, to: $0) }) != false {
+                errorMessage = "This animal changed or was removed. Your draft is retained; cancel editing and reopen it before saving."
+            }
             preparedOffspringEditor = try PrepareOffspringDraftUseCase(repository: repository).execute(forDamID: animalID)
             if let loadedDetail, !isEditing {
                 form.populate(from: loadedDetail)
@@ -81,6 +87,7 @@ final class AnimalDetailViewModel {
     func beginEditing(selection: AppCurrentHerdSelection) {
         guard validateViewingSelection(selection),
               let detail, let herdID = selection.currentHerdID else { return }
+        editingBaseline = detail
         editingHerdID = herdID
         editingSelectionRevision = selection.selectionRevision
         form.populate(from: detail)
@@ -90,6 +97,7 @@ final class AnimalDetailViewModel {
     }
 
     func cancelEditing() {
+        editingBaseline = nil
         editingHerdID = nil
         editingSelectionRevision = nil
         guard let detail else {
@@ -121,6 +129,12 @@ final class AnimalDetailViewModel {
         }
 
         do {
+            guard let baseline = editingBaseline,
+                  let current = try repository.fetchAnimalDetail(id: animalID),
+                  !Self.editableValuesChanged(from: baseline, to: current) else {
+                errorMessage = "This animal changed or was removed. Your draft is retained; reopen the editor before saving."
+                return
+            }
             let input = try form.makeInput(defaultTagColorID: defaultTagColorID)
             let updated = try UpdateAnimalWithTagsUseCase(repository: repository).execute(
                 animalID: animalID,
@@ -134,12 +148,36 @@ final class AnimalDetailViewModel {
             draftTags = updated.activeTags + updated.inactiveTags
             pendingScrollTarget = nil
             isEditing = false
+            self.editingBaseline = nil
             self.editingHerdID = nil
             self.editingSelectionRevision = nil
             errorMessage = nil
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
+    }
+
+    /// Compare persisted editable fields, not derived ages, counts or labels.
+    static func editableValuesChanged(
+        from baseline: AnimalDetailSnapshot, to current: AnimalDetailSnapshot
+    ) -> Bool {
+        baseline.name != current.name ||
+            baseline.displayTagNumber != current.displayTagNumber ||
+            baseline.displayTagColorID != current.displayTagColorID ||
+            baseline.sex != current.sex ||
+            baseline.birthDate != current.birthDate ||
+            baseline.status != current.status ||
+            baseline.pastureID != current.pastureID ||
+            baseline.sireID != current.sireID || baseline.sire != current.sire ||
+            baseline.damID != current.damID || baseline.dam != current.dam ||
+            baseline.distinguishingFeatures != current.distinguishingFeatures ||
+            baseline.saleDate != current.saleDate || baseline.salePrice != current.salePrice ||
+            baseline.reasonSold != current.reasonSold ||
+            baseline.deathDate != current.deathDate || baseline.causeOfDeath != current.causeOfDeath ||
+            baseline.statusReferenceID != current.statusReferenceID ||
+            baseline.isArchived != current.isArchived ||
+            baseline.activeTags != current.activeTags ||
+            baseline.inactiveTags != current.inactiveTags
     }
 
     func addTag(animalID: UUID, number: String, colorID: UUID?, isPrimary: Bool, using repository: any AnimalDetailRepository) {
@@ -242,6 +280,7 @@ final class AnimalDetailViewModel {
     ) {
         guard validateViewingSelection(selection),
               let detail, let herdID = selection.currentHerdID else { return }
+        editingBaseline = detail
         editingHerdID = herdID
         editingSelectionRevision = selection.selectionRevision
         form.populate(from: detail)

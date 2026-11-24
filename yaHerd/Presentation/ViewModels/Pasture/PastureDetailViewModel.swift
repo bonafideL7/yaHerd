@@ -39,6 +39,7 @@ final class PastureDetailViewModel {
     var isEditing = false
     var hasLoaded = false
     var errorMessage: String?
+    private var editingBaseline: PastureDetailSnapshot?
     private var loadedPastureID: UUID?
     private var lastLoadedRevision: UInt64 = 0
 
@@ -152,14 +153,23 @@ final class PastureDetailViewModel {
         defer { hasLoaded = true }
 
         do {
-            let loadedDetail = try LoadPastureDetailUseCase(repository: repository).execute(id: pastureID)
+            guard let loadedDetail = try repository.fetchPastureDetail(id: pastureID) else {
+                detail = nil
+                residentAnimals = []
+                errorMessage = "This pasture is no longer available."
+                return true
+            }
+            let residents = try repository.fetchResidentAnimals(pastureID: pastureID)
             detail = loadedDetail
-            residentAnimals = try repository.fetchResidentAnimals(pastureID: pastureID)
+            residentAnimals = residents
             loadedPastureID = pastureID
+            errorMessage = nil
             if !isEditing {
                 form.populate(from: loadedDetail)
+            } else if let baseline = editingBaseline,
+                      Self.editableValuesChanged(from: baseline, to: loadedDetail) {
+                errorMessage = "This pasture changed on another device. Your draft is retained; reopen the editor before saving."
             }
-            errorMessage = nil
             return true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
@@ -181,11 +191,13 @@ final class PastureDetailViewModel {
             return
         }
         guard let detail else { return }
+        editingBaseline = detail
         form.populate(from: detail)
         isEditing = true
     }
 
     func cancelEditing() {
+        editingBaseline = nil
         guard let detail else {
             isEditing = false
             return
@@ -196,7 +208,7 @@ final class PastureDetailViewModel {
 
     func save(
         pastureID: UUID,
-        using repository: any PastureUpdateRepository & PastureResidentAnimalReader,
+        using repository: any PastureDetailEditingRepository,
         expectedHerdID: UUID,
         expectedSelectionRevision: UInt64,
         selection: AppCurrentHerdSelection
@@ -211,6 +223,12 @@ final class PastureDetailViewModel {
         }
 
         do {
+            guard let baseline = editingBaseline,
+                  let current = try repository.fetchPastureDetail(id: pastureID),
+                  !Self.editableValuesChanged(from: baseline, to: current) else {
+                errorMessage = "This pasture changed or was removed. Your draft is retained; reopen the editor before saving."
+                return
+            }
             let input = try form.makeUpdateInput()
             let updated = try UpdatePastureUseCase(repository: repository).execute(
                 id: pastureID,
@@ -220,6 +238,7 @@ final class PastureDetailViewModel {
             residentAnimals = try repository.fetchResidentAnimals(pastureID: pastureID)
             loadedPastureID = pastureID
             form.populate(from: updated)
+            editingBaseline = nil
             isEditing = false
             errorMessage = nil
         } catch {
@@ -247,7 +266,17 @@ final class PastureDetailViewModel {
             && selection.selectionRevision == expectedSelectionRevision
     }
 
+    private static func editableValuesChanged(
+        from baseline: PastureDetailSnapshot, to current: PastureDetailSnapshot
+    ) -> Bool {
+        baseline.name != current.name ||
+            baseline.acreage != current.acreage ||
+            baseline.usableAcreage != current.usableAcreage ||
+            baseline.targetAcresPerHead != current.targetAcresPerHead
+    }
+
     private func resetForPastureChange() {
+        editingBaseline = nil
         detail = nil
         residentAnimals = []
         isEditing = false
