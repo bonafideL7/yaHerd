@@ -49,6 +49,7 @@ struct WorkingSessionAnimalWorkView: View {
     @State var showingError = false
     @State var isMutatingWork = false
     @State private var remoteDraftChanged = false
+    @State private var remoteReadFailed = false
     @State var editorHerdIdentity: WorkingQueueEditorHerdIdentity?
 
     init(sessionID: UUID, queueItemID: UUID) {
@@ -90,6 +91,7 @@ struct WorkingSessionAnimalWorkView: View {
             && !isSessionLocked
             && !isMutatingWork
             && !remoteDraftChanged
+            && !remoteReadFailed
     }
 
     var isFemale: Bool {
@@ -283,15 +285,7 @@ struct WorkingSessionAnimalWorkView: View {
             case .remote(_, let reasons, let fullRefresh):
                 if fullRefresh || reasons.contains(.working) || reasons.contains(.animal) ||
                     reasons.contains(.tagColor) {
-                    let previous = snapshot
-                    viewModel.load()
-                    if let previous, previous != snapshot || viewModel.errorMessage != nil {
-                        // Retain entered work rather than reseeding over it.
-                        // Reopening is required to review the current record.
-                        remoteDraftChanged = true
-                        errorMessage = "This animal or working session changed. Your draft is retained; reopen the editor before saving."
-                        showingError = true
-                    }
+                    _ = revalidateWorkSnapshot()
                 }
                 // Mixed batches can affect both reference sets. A Working
                 // change can also alter the session's source/destination.
@@ -307,6 +301,27 @@ struct WorkingSessionAnimalWorkView: View {
                 break
             }
         }
+    }
+
+    /// Re-read before a mutation as well as after a remote event. A failed
+    /// read is retryable, whereas an actual change invalidates the draft.
+    @discardableResult
+    func revalidateWorkSnapshot() -> Bool {
+        guard isPresentingCurrentHerd, !remoteDraftChanged else { return false }
+        let previous = snapshot
+        viewModel.load()
+        if viewModel.errorMessage != nil {
+            remoteReadFailed = true
+            return false
+        }
+        remoteReadFailed = false
+        if let previous, previous != snapshot {
+            remoteDraftChanged = true
+            errorMessage = "This animal or working session changed. Your draft is retained; reopen the editor before saving."
+            showingError = true
+            return false
+        }
+        return snapshot != nil
     }
 
     @MainActor

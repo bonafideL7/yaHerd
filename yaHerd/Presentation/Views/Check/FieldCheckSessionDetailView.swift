@@ -306,11 +306,17 @@ struct FieldCheckSessionDetailView: View {
                 originatingHerdSelectionRevision = herdSelection.selectionRevision
             }
             guard isPresentingOriginatingHerd else { return }
-            model.load(
-                sessionID: sessionID,
-                using: repository,
-                mayContinue: originatingHerdReadAllowed
-            )
+            if model.hasLoaded {
+                model.refresh(
+                    sessionID: sessionID, using: repository,
+                    mayContinue: originatingHerdReadAllowed
+                )
+            } else {
+                model.load(
+                    sessionID: sessionID, using: repository,
+                    mayContinue: originatingHerdReadAllowed
+                )
+            }
             syncSelectedPane()
             applyInitialFindingRouteIfNeeded()
         }
