@@ -84,6 +84,12 @@ final class AnimalDetailViewModel {
         }
     }
 
+    var hasUnsavedEdits: Bool {
+        guard let baseline = editingBaseline ?? detail else { return false }
+        return form.draft.hasChanges(comparedTo: baseline) ||
+            draftTags != (baseline.activeTags + baseline.inactiveTags)
+    }
+
     func beginEditing(selection: AppCurrentHerdSelection) {
         guard validateViewingSelection(selection),
               let detail, let herdID = selection.currentHerdID else { return }

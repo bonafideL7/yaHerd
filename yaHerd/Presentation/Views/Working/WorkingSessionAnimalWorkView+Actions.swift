@@ -63,7 +63,7 @@ extension WorkingSessionAnimalWorkView {
             showsPrimaryToggle: false,
             requiresNumber: true
         ) { number, colorID, _ in
-            guard allowsEditing else { return }
+            guard allowsEditing, revalidateWorkSnapshot() else { return }
             isMutatingWork = true
             Task { @MainActor in
                 defer { isMutatingWork = false }
@@ -165,7 +165,7 @@ extension WorkingSessionAnimalWorkView {
     }
 
     func addTreatmentToSession(at index: Int) {
-        guard allowsEditing,
+        guard allowsEditing, revalidateWorkSnapshot(),
               let snapshot,
               treatmentEntries.indices.contains(index) else {
             return
@@ -267,7 +267,7 @@ extension WorkingSessionAnimalWorkView {
     }
 
     func saveWork() {
-        guard allowsEditing,
+        guard allowsEditing, revalidateWorkSnapshot(),
               !destinationSelectionRequiresReview,
               let snapshot else {
             return
@@ -413,7 +413,7 @@ extension WorkingSessionAnimalWorkView {
     }
 
     func deleteWorkData() {
-        guard allowsEditing, let snapshot else { return }
+        guard allowsEditing, revalidateWorkSnapshot(), let snapshot else { return }
 
         isMutatingWork = true
         Task { @MainActor in

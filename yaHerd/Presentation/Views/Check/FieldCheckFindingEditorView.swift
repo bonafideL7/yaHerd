@@ -71,7 +71,8 @@ struct FieldCheckFindingEditorView: View {
     }
 
     private var canSave: Bool {
-        !requiresLinkedAnimal || selectedAnimalID != nil
+        if selectedAnimalID != nil { return selectedAnimal != nil }
+        return !requiresLinkedAnimal
     }
 
     private var selectedAnimal: FieldCheckAnimalCheckSnapshot? {
@@ -80,7 +81,9 @@ struct FieldCheckFindingEditorView: View {
     }
 
     private var selectedAnimalSummary: String {
-        guard let selectedAnimal else { return "None" }
+        guard let selectedAnimal else {
+            return selectedAnimalID == nil ? "None" : "Animal no longer available"
+        }
 
         let trimmedName = selectedAnimal.animalName.trimmingCharacters(in: .whitespacesAndNewlines)
         let title = trimmedName.isEmpty
@@ -170,12 +173,7 @@ struct FieldCheckFindingEditorView: View {
         .onChange(of: type) { _, newType in
             severity = FieldCheckFindingRules.defaultSeverity(for: newType)
         }
-        .onChange(of: animals.compactMap(\.animalID)) { _, currentAnimalIDs in
-            guard let selectedAnimalID,
-                  !currentAnimalIDs.contains(selectedAnimalID)
-            else { return }
-            self.selectedAnimalID = nil
-        }
+ 
     }
 
     private var animalLinkSection: some View {

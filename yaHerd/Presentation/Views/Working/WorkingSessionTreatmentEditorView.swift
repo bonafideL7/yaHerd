@@ -15,6 +15,7 @@ struct WorkingSessionTreatmentEditorView: View {
 
     @State private var plannedTreatments: [WorkingTreatmentPlanItem]
     @State private var isSaving = false
+    @State private var planChanged = false
     @State private var showingDiscardConfirmation = false
     @State private var showingError = false
     @State private var errorMessage: String?
@@ -34,6 +35,7 @@ struct WorkingSessionTreatmentEditorView: View {
         dataAccessMode.allowsDataMutations
             && editorHerdIdentity?.isCurrent(in: herdSelection) == true
             && !isSaving
+            && !planChanged
             && hasUnsavedChanges
             && plannedTreatments.allSatisfy {
                 !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -103,6 +105,23 @@ struct WorkingSessionTreatmentEditorView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(errorMessage ?? "Unknown error")
+            }
+        }
+        .onChange(of: workingDependencies.mutationStream.workingSessionRevision) { _, _ in
+            guard editorHerdIdentity?.isCurrent(in: herdSelection) == true, !isSaving else { return }
+            do {
+                guard let session = try repository.fetchSessionDetail(id: sessionID),
+                      session.status == .active, session.plannedTreatments == initialTreatments else {
+                    planChanged = true
+                    errorMessage = "This session or its treatment plan changed. Your draft is retained; reopen the editor before saving."
+                    showingError = true
+                    return
+                }
+                planChanged = false
+            } catch {
+                planChanged = true
+                errorMessage = UserVisibleErrorMessage.make(error)
+                showingError = true
             }
         }
         .task {

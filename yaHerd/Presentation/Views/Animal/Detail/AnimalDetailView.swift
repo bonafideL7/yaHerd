@@ -440,10 +440,7 @@ struct AnimalDetailView: View {
     }
 
     private var canSaveChanges: Bool {
-        guard let detail = viewModel.detail else { return false }
-        let draftChanged = viewModel.form.draft.hasChanges(comparedTo: detail)
-        let tagChanged = viewModel.draftTags != (detail.activeTags + detail.inactiveTags)
-        return draftChanged || tagChanged
+        viewModel.hasUnsavedEdits
     }
 
     private func scrollFormIfNeeded(using proxy: ScrollViewProxy) {

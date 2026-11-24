@@ -154,7 +154,7 @@ struct WorkingCollectAnimalsView: View {
         isLoading = true
         session = nil
         availableAnimals = []
-        selectedAnimalIDs = []
+        if !preserveSelection { selectedAnimalIDs = [] }
         loadErrorMessage = nil
         errorMessage = nil
         showingError = false
