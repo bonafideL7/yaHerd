@@ -21,7 +21,8 @@ final class PastureGroupDetailViewModel {
     var allPastures: [PastureSummary] = []
     var errorMessage: String?
     var hasLoaded = false
-    var isPresentingEditGroup = false
+    // Presentation identity is captured when editing begins, independently of live reads.
+    var editingGroup: PastureGroupDetailSnapshot?
 
     var navigationTitle: String {
         detail?.name ?? "Pasture Group"
@@ -68,7 +69,6 @@ final class PastureGroupDetailViewModel {
             // A failed refresh cannot authorize edits through retained rows.
             detail = nil
             allPastures = []
-            isPresentingEditGroup = false
             hasLoaded = true
             errorMessage = UserVisibleErrorMessage.make(error)
         }
@@ -85,8 +85,8 @@ final class PastureGroupDetailViewModel {
             resetForHerdChange()
             return
         }
-        guard detail != nil else { return }
-        isPresentingEditGroup = true
+        guard let detail else { return }
+        editingGroup = detail
     }
 
     func reloadAfterSave(
@@ -109,7 +109,7 @@ final class PastureGroupDetailViewModel {
         allPastures = []
         errorMessage = nil
         hasLoaded = false
-        isPresentingEditGroup = false
+        editingGroup = nil
     }
 
     func toggleAssignment(

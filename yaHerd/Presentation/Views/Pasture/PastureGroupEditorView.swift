@@ -8,7 +8,6 @@ struct PastureGroupEditorView: View {
 
     @State private var model = PastureGroupFormViewModel()
     @State private var hasPreparedForm = false
-    @State private var editingBaseline: PastureGroupDetailSnapshot?
     @State private var originatingHerdID: UUID?
     @State private var originatingSelectionRevision: UInt64?
 
@@ -71,17 +70,18 @@ struct PastureGroupEditorView: View {
         originatingHerdID = herdSelection.currentHerdID
         originatingSelectionRevision = herdSelection.selectionRevision
         if let group {
-            editingBaseline = group
             model.populate(from: group)
         }
     }
 
     private func save() {
         do {
-            guard let originatingHerdID, let originatingSelectionRevision else {
+            guard let originatingHerdID, let originatingSelectionRevision,
+                  herdSelection.currentHerdID == originatingHerdID,
+                  herdSelection.selectionRevision == originatingSelectionRevision else {
                 throw CancellationError()
             }
-            if let baseline = editingBaseline {
+            if let baseline = group {
                 guard let current = try pastureDependencies.groupDetailRepository.fetchPastureGroupDetail(id: baseline.id),
                       current.name == baseline.name,
                       current.grazeDays == baseline.grazeDays,

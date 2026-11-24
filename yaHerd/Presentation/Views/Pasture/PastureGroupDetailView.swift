@@ -85,9 +85,9 @@ struct PastureGroupDetailView: View {
                 .disabled(model.detail == nil || !isSelectionCurrent)
             }
         }
-        .sheet(isPresented: $model.isPresentingEditGroup) {
-            if isSelectionCurrent, let detail = model.detail {
-                PastureGroupEditorView(group: detail) {
+        .sheet(item: $model.editingGroup) { openingGroup in
+            if isSelectionCurrent {
+                PastureGroupEditorView(group: openingGroup) {
                     model.reloadAfterSave(
                         groupID: groupID, using: repository,
                         expectedHerdID: originatingHerdID,
@@ -126,7 +126,7 @@ struct PastureGroupDetailView: View {
 
     private var errorBinding: Binding<Bool> {
         Binding(
-            get: { model.errorMessage != nil },
+            get: { model.editingGroup == nil && model.errorMessage != nil },
             set: { newValue in
                 if !newValue {
                     model.clearError()
