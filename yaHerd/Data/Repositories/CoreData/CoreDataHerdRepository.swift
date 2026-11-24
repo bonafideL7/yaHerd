@@ -136,6 +136,7 @@ final class CoreDataHerdRepository: HerdRepository {
             throw HerdRepositoryError.emptyName
         }
 
+        let contextFactory = self.contextFactory
         let context = try contextFactory.makeWriteContext()
         // Swift task cancellation is not automatically visible inside Core
         // Data's private queue. A dismissed chooser must not save its Create.
@@ -200,6 +201,7 @@ final class CoreDataHerdRepository: HerdRepository {
                     try cancellation.withLock {
                         if $0 { throw CancellationError() }
                     }
+                    try contextFactory.validateHerdAccess()
                     do {
                         try context.save()
                     } catch {
@@ -226,7 +228,8 @@ final class CoreDataHerdRepository: HerdRepository {
             throw HerdRepositoryError.missingHerd
         }
 
-        let context = contextFactory.makeReadContext()
+        try contextFactory.validateHerdAccess()
+        let context = contextFactory.makeReadContext(expectedHerdRoot: selection.selectedRootIdentity)
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
@@ -253,7 +256,9 @@ final class CoreDataHerdRepository: HerdRepository {
 
         let mutationDate = Date()
         let lookup = self.lookup
-        return try await transactionExecutor.performWrite(herdID: herdID, beforeSave: beforeSave) { context in
+        return try await transactionExecutor.performWrite(
+            herdID: herdID, expectedHerdRoot: selection.selectedRootIdentity, beforeSave: beforeSave
+        ) { context in
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
