@@ -44,11 +44,6 @@
 			path = yaHerd;
 			sourceTree = "<group>";
 		};
-		A1B2C3D42F00111100000002 /* yaHerdTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = yaHerdTests;
-			sourceTree = "<group>";
-		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -74,7 +69,6 @@
 			isa = PBXGroup;
 			children = (
 				8D40A28C2EDAA29E00C89DD2 /* yaHerd */,
-				A1B2C3D42F00111100000002 /* yaHerdTests */,
 				8D40A28B2EDAA29E00C89DD2 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -126,9 +120,6 @@
 			);
 			dependencies = (
 				A1B2C3D42F0011110000000B /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				A1B2C3D42F00111100000002 /* yaHerdTests */,
 			);
 			name = yaHerdTests;
 			packageProductDependencies = (
