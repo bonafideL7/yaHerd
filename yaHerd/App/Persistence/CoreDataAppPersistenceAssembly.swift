@@ -140,6 +140,22 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         try await assembly.contextFactory.acceptHerdInvitation(invitation)
     }
 
+    func importedInvitationRoots(identities: Set<String>, roots: [URL]) throws -> Set<String> {
+        try assembly.contextFactory.importedInvitationRoots(identities: identities, roots: roots)
+    }
+
+    func leaveSelectedHerd() async throws {
+        let snapshot = selection.snapshot
+        guard let root = snapshot.rootIdentity, snapshot.id != nil else {
+            throw HerdRepositoryError.missingHerd
+        }
+        try await assembly.contextFactory.leaveJoinedHerd(rootIdentity: root)
+        // Do not deactivate a different Herd selected during the network request.
+        if selection.snapshot == snapshot {
+            selection.deferCurrentHerdUntilImportReady()
+        }
+    }
+
     func makeRemoteHistoryCoordinator(
         mutationCenter: ApplicationMutationCenter,
         herdDirectory: HerdDirectoryController

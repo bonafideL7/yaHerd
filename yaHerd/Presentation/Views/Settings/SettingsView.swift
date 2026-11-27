@@ -475,6 +475,8 @@ struct HerdDirectoryView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(HerdSharingController.self) private var sharing: HerdSharingController?
     @Environment(StorageActivityController.self) private var storageActivity: StorageActivityController?
+    @ObservedObject private var invitations = HerdInvitationInbox.shared
+    @State private var showsLeaveConfirmation = false
     @State private var sharingTask: Task<Void, Never>?
 
     @State private var isCreating = false
@@ -489,6 +491,19 @@ struct HerdDirectoryView: View {
 
     var body: some View {
         List {
+            if !invitations.importingIdentities.isEmpty {
+                Section("Accepted Invitations") {
+                    ProgressView("Waiting for \(invitations.importingIdentities.count) shared Herd invitation(s) to import")
+                    Text("An accepted invitation is not yet an available Herd. Records must arrive from iCloud.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if invitations.availableCount > 0 {
+                Section {
+                    Label("Shared Herd invitation import completed", systemImage: "checkmark.circle")
+                }
+            }
             Section("Available Herds") {
                 ForEach(directory.herds) { herd in
                     Button {
@@ -615,6 +630,21 @@ struct HerdDirectoryView: View {
                     Text("Invite specific people to this entire Herd with read-only or read/write access.")
                 }
             }
+            if !dataAccessMode.isRecoveryMode,
+               let sharing,
+               let cloud = storageActivity?.snapshot.cloud,
+               !cloud.accessState.blocksHerdAccess,
+               let herd = directory.herds.first(where: { $0.id == directory.selectedHerdID }),
+               herd.category == .shared,
+               herd.sharingMetadata.access == .readOnly || herd.sharingMetadata.access == .readWrite {
+                Section("Shared Herd — \(herd.name)") {
+                    Button("Leave Shared Herd", role: .destructive) {
+                        showsLeaveConfirmation = true
+                    }
+                    .disabled(sharing.isLeaving || isOpeningHerd || isCreating)
+                    if sharing.isLeaving { ProgressView("Leaving shared Herd") }
+                }
+            }
             if directory.selectedHerdID == nil {
                 Section("Storage") {
                     StorageActivityLink()
@@ -639,6 +669,17 @@ struct HerdDirectoryView: View {
                     }
             }
         }
+        .confirmationDialog("Leave this shared Herd?", isPresented: $showsLeaveConfirmation, titleVisibility: .visible) {
+            Button("Leave Shared Herd", role: .destructive) {
+                guard let sharing else { return }
+                Task { @MainActor in
+                    await sharing.leave { directory.refresh(reportErrors: false) }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Your access will be removed. The owner's Herd and other participants' access are not deleted. Unsynced changes may not reach the owner.")
+        }
         .alert("Sharing Unavailable", isPresented: Binding(
             get: { sharing?.errorMessage != nil },
             set: { if !$0 { sharing?.errorMessage = nil } }
@@ -649,6 +690,7 @@ struct HerdDirectoryView: View {
         }
         .onChange(of: directory.selectedHerdID) { _, _ in
             sharingTask?.cancel()
+            showsLeaveConfirmation = false
             sharing?.presentation = nil
         }
         .onChange(of: storageActivity?.snapshot.cloud?.accessState) { _, state in

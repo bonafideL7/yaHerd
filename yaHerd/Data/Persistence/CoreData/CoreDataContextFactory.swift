@@ -131,6 +131,26 @@ final class CoreDataContextFactory: Sendable {
         historyWakeups?.requestProcessing()
     }
 
+    func importedInvitationRoots(identities: Set<String>, roots: [URL]) throws -> Set<String> {
+        try persistence.withLock {
+            try $0.importedInvitationRoots(identities: identities, roots: roots)
+        }
+    }
+
+    func leaveJoinedHerd(rootIdentity: URL) async throws {
+        try validateHerdAccess()
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            do {
+                try persistence.withLock {
+                    try $0.leaveJoinedHerd(rootIdentity: rootIdentity) { result in
+                        continuation.resume(with: result)
+                    }
+                }
+            } catch { continuation.resume(throwing: error) }
+        }
+        historyWakeups?.requestProcessing()
+    }
+
     var cloudStoreActivity: [String: CloudStoreActivity] {
         persistence.withLock { $0.cloudStoreActivity }
     }
