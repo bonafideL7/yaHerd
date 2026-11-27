@@ -150,8 +150,9 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
             throw HerdRepositoryError.missingHerd
         }
         try await assembly.contextFactory.leaveJoinedHerd(rootIdentity: root)
-        // Do not deactivate a different Herd selected during the network request.
-        if selection.snapshot == snapshot {
+        // Match the actual departed root, including an A → B → A selection
+        // change during the network request. Do not deactivate another root.
+        if selection.selectedRootIdentity == root {
             selection.deferCurrentHerdUntilImportReady()
         }
     }

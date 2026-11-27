@@ -219,6 +219,9 @@ final class CoreDataContextFactory: Sendable {
     }
 
     func makeWriteContext(expectedHerdRoot: URL? = nil) throws -> NSManagedObjectContext {
+        if let expectedHerdRoot, CoreDataPersistentContainer.isDeparted(expectedHerdRoot) {
+            throw HerdRepositoryError.missingHerd
+        }
         let context = try persistence.withLock { container in
             guard container.accessMode == .readWrite else {
                 throw CoreDataPersistenceError.readOnlyStore
