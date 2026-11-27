@@ -39,6 +39,7 @@ enum CoreDataHerdSharingError: LocalizedError, Equatable, Sendable {
     case notOwned
     case selectionChanged
     case inProgress
+    case awaitingPrivateImport
     case invalidGraph
     case conflictingMembership
     case incompleteMembership
@@ -51,6 +52,7 @@ enum CoreDataHerdSharingError: LocalizedError, Equatable, Sendable {
         case .notOwned: "Only the Herd owner can prepare a share."
         case .selectionChanged: "The selected Herd changed. Open the intended Herd again."
         case .inProgress: "Herd sharing is already in progress. Try again when it finishes."
+        case .awaitingPrivateImport: "Wait for the owned Herds' iCloud import to complete before creating a share."
         case .invalidGraph: "The Herd has inconsistent relationships. Sharing cannot safely proceed."
         case .conflictingMembership: "Records already belong to another share. Sharing cannot safely proceed."
         case .incompleteMembership: "The complete share membership is not yet available. Check iCloud activity and try again."
@@ -782,7 +784,13 @@ final class CoreDataPersistentContainer {
               rootShare.currentUserParticipant?.acceptanceStatus == .accepted else {
             throw CoreDataHerdSharingError.notOwned
         }
-        let missing = ids.filter { shares[$0] == nil }.count
+        // A cache association alone is not proof of zone placement. Inspect
+        // each locally known CloudKit record ID, including recently added
+        // descendants. Missing/still-moving records remain incomplete.
+        let recordIDs = mirrored.recordIDs(for: ids)
+        let missing = ids.filter {
+            shares[$0] == nil || recordIDs[$0]?.zoneID != rootShare.recordID.zoneID
+        }.count
         return (.existing(membership: missing == 0 ? .complete : .incomplete(missingCount: missing)), rootShare)
     }
 
@@ -802,6 +810,22 @@ final class CoreDataPersistentContainer {
             // a zone move or recreate a share while mirroring catches up.
             completion(.success(()))
             return
+        }
+        // A missing cached share during initial or failed import is not
+        // enough evidence that the Herd has never been shared on another
+        // device. Do not create until the private-store import has completed.
+        guard let store = root.objectID.persistentStore else {
+            throw CoreDataHerdSharingError.notOwned
+        }
+        let identifier: String? = store.identifier
+        guard let identifier,
+              let activity = cloudStoreActivity[identifier],
+              activity.setup?.state == .complete,
+              activity.importing?.state == .complete else {
+            throw CoreDataHerdSharingError.awaitingPrivateImport
+        }
+        guard !herdImportState.blocksHerdAccess else {
+            throw HerdRepositoryError.accountUnavailable
         }
         let expectedIDs = Set(objects.map(\.objectID))
         // A nil share creates a private zone with no invited participants.
