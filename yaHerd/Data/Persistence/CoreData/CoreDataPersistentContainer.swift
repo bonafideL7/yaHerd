@@ -881,14 +881,14 @@ final class CoreDataPersistentContainer {
         }
     }
 
-    /// Resolve an already prepared share without passing transport objects
-    /// into SwiftUI. The UIKit controller is created on the main actor only.
-    @MainActor
-    func makeOwnedSharingController(
+    /// Resolve the native share under the persistence lock, then create UIKit
+    /// objects outside the lock on the main actor. The closure retains only
+    /// the framework objects required by this presentation, not this wrapper.
+    func makeOwnedSharingPresentation(
         rootIdentity: URL,
-        onChange: @escaping @MainActor () -> Void,
-        onFailure: @escaping @MainActor () -> Void
-    ) throws -> UIViewController {
+        onChange: @escaping @MainActor @Sendable () -> Void,
+        onFailure: @escaping @MainActor @Sendable () -> Void
+    ) throws -> @MainActor @Sendable () -> UIViewController {
         guard let rootID = container.persistentStoreCoordinator.managedObjectID(forURIRepresentation: rootIdentity) else {
             throw HerdRepositoryError.missingHerd
         }
@@ -905,19 +905,19 @@ final class CoreDataPersistentContainer {
         guard share.publicPermission == .none else {
             throw CoreDataHerdSharingError.publicShareUnsupported
         }
-        let controller = UICloudSharingController(
-            share: share,
-            container: CKContainer(identifier: Self.cloudKitContainerIdentifier)
-        )
-        controller.availablePermissions = [.allowPrivate, .allowReadOnly, .allowReadWrite]
-        let delegate = OwnedSharingDelegate(
-            mirrored: mirrored, store: store, importResults: importResults,
-            onChange: onChange, onFailure: onFailure
-        )
-        controller.delegate = delegate
-        // The native controller's delegate is weak; retain it for this
-        // presentation only through a parent controller.
-        return OwnedSharingHost(controller: controller, sharingDelegate: delegate)
+        return { @MainActor in
+            let controller = UICloudSharingController(
+                share: share,
+                container: CKContainer(identifier: CoreDataPersistentContainer.cloudKitContainerIdentifier)
+            )
+            controller.availablePermissions = [.allowPrivate, .allowReadOnly, .allowReadWrite]
+            let delegate = OwnedSharingDelegate(
+                mirrored: mirrored, store: store, importResults: importResults,
+                onChange: onChange, onFailure: onFailure
+            )
+            controller.delegate = delegate
+            return OwnedSharingHost(controller: controller, sharingDelegate: delegate)
+        }
     }
 
     /// Read only the shares already imported by this container. This does not
@@ -1039,15 +1039,15 @@ private final class OwnedSharingDelegate: NSObject, UICloudSharingControllerDele
     private let mirrored: NSPersistentCloudKitContainer
     private let store: NSPersistentStore
     private let importResults: HerdImportResults
-    private let onChange: @MainActor () -> Void
-    private let onFailure: @MainActor () -> Void
+    private let onChange: @MainActor @Sendable () -> Void
+    private let onFailure: @MainActor @Sendable () -> Void
 
     init(
         mirrored: NSPersistentCloudKitContainer,
         store: NSPersistentStore,
         importResults: HerdImportResults,
-        onChange: @escaping @MainActor () -> Void,
-        onFailure: @escaping @MainActor () -> Void
+        onChange: @escaping @MainActor @Sendable () -> Void,
+        onFailure: @escaping @MainActor @Sendable () -> Void
     ) {
         self.mirrored = mirrored
         self.store = store
@@ -1074,6 +1074,10 @@ private final class OwnedSharingDelegate: NSObject, UICloudSharingControllerDele
             onFailure()
             return
         }
+        // Retain the result handlers until export completes, independently
+        // of the lifetime of the sheet or its weak UIKit delegate.
+        let onChange = self.onChange
+        let onFailure = self.onFailure
         mirrored.persistUpdatedShare(share, in: store) { _, error in
             let failed = error != nil
             if let error {
@@ -1082,9 +1086,8 @@ private final class OwnedSharingDelegate: NSObject, UICloudSharingControllerDele
                     "operation=share-ui-persist domain=\(failure.domain, privacy: .public) code=\(failure.code, privacy: .public)"
                 )
             }
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                if failed { self.onFailure() } else { self.onChange() }
+            Task { @MainActor in
+                if failed { onFailure() } else { onChange() }
             }
         }
     }

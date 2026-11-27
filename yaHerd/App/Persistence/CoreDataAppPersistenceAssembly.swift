@@ -116,8 +116,8 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
     }
 
     func prepareSharingInterface(
-        onChange: @escaping @MainActor () -> Void,
-        onFailure: @escaping @MainActor () -> Void
+        onChange: @escaping @MainActor @Sendable () -> Void,
+        onFailure: @escaping @MainActor @Sendable () -> Void
     ) async throws -> UIViewController {
         let snapshot = selection.snapshot
         guard let rootIdentity = snapshot.rootIdentity else {

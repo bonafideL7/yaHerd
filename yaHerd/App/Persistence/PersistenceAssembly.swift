@@ -7,8 +7,8 @@ protocol PersistenceAssembly {
     var storageActivity: StorageActivitySnapshot { get }
 
     func prepareSharingInterface(
-        onChange: @escaping @MainActor () -> Void,
-        onFailure: @escaping @MainActor () -> Void
+        onChange: @escaping @MainActor @Sendable () -> Void,
+        onFailure: @escaping @MainActor @Sendable () -> Void
     ) async throws -> UIViewController
 
     func makeDependencies(
@@ -44,7 +44,7 @@ final class StorageActivityController {
 @Observable
 final class HerdSharingController {
     struct Presentation: Identifiable {
-        let id = UUID()
+        let id: UUID
         let controller: UIViewController
     }
 
@@ -57,21 +57,24 @@ final class HerdSharingController {
         self.assembly = assembly
     }
 
-    func open(onChange: @escaping @MainActor () -> Void) async {
+    func open(onChange: @escaping @MainActor @Sendable () -> Void) async {
         guard !isPreparing, presentation == nil else { return }
         isPreparing = true
+        let sessionID = UUID()
         defer { isPreparing = false }
         do {
             let controller = try await assembly.prepareSharingInterface(
                 onChange: onChange,
                 onFailure: { [weak self] in
                     self?.errorMessage = "Sharing changes could not be saved. Check iCloud activity and try again."
-                    self?.presentation = nil
+                    if self?.presentation?.id == sessionID {
+                        self?.presentation = nil
+                    }
                     onChange()
                 }
             )
             try Task.checkCancellation()
-            presentation = Presentation(controller: controller)
+            presentation = Presentation(id: sessionID, controller: controller)
             onChange()
         } catch is CancellationError {
             onChange()
