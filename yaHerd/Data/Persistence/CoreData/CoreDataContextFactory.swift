@@ -7,6 +7,7 @@ import Foundation
 /// Core Data's write coordinators. No managed object or context is stored here.
 final class CoreDataContextFactory: Sendable {
     private let persistence: Mutex<CoreDataPersistentContainer>
+    private let sharePreparationInProgress = Mutex(false)
     private let lastLocalSave = Mutex<Date?>(nil)
     private let localSaveObserver = Mutex<(any NSObjectProtocol)?>(nil)
     // Only this running process can claim its own published local saves.
@@ -35,6 +36,71 @@ final class CoreDataContextFactory: Sendable {
 
     func sharingMetadata(for objectIDs: [NSManagedObjectID]) -> [NSManagedObjectID: HerdSharingMetadata] {
         persistence.withLock { $0.sharingMetadata(for: objectIDs) }
+    }
+
+    func discoverOwnedShare(for selection: HerdSelectionSnapshot) async throws -> HerdShareDiscovery {
+        try validateHerdAccess()
+        guard let id = selection.id, let identity = selection.rootIdentity else {
+            throw HerdRepositoryError.missingHerd
+        }
+        let context = makeReadContext(expectedHerdRoot: identity)
+        return try await context.perform {
+            let lookup = CoreDataLookup()
+            guard let root = try lookup.herd(id: id, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+            _ = try root.toSummary()
+            let objects = try lookup.objectsForSharing(root: root, in: context)
+            return try self.persistence.withLock { try $0.inspectOwnedShare(root: root, objects: objects) }
+        }
+    }
+
+    func prepareOwnedShare(for selection: HerdSelectionSnapshot) async throws -> HerdShareDiscovery {
+        try Task.checkCancellation()
+        try validateHerdAccess()
+        guard let id = selection.id, let identity = selection.rootIdentity else {
+            throw HerdRepositoryError.missingHerd
+        }
+        // Shared by all callers of this factory, including other scenes.
+        // Do not release the reservation merely because a UI task cancels;
+        // the native sharing operation may still be committing a share.
+        let reserved = sharePreparationInProgress.withLock { active in
+            guard !active else { return false }
+            active = true
+            return true
+        }
+        guard reserved else { throw CoreDataHerdSharingError.inProgress }
+        defer { sharePreparationInProgress.withLock { $0 = false } }
+
+        let context = makeReadContext(expectedHerdRoot: identity)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            context.perform {
+                do {
+                    let lookup = CoreDataLookup()
+                    guard let root = try lookup.herd(id: id, in: context) else {
+                        throw HerdRepositoryError.missingHerd
+                    }
+                    _ = try root.toSummary()
+                    let objects = try lookup.objectsForSharing(root: root, in: context)
+                    try self.persistence.withLock {
+                        try $0.prepareOwnedShare(root: root, objects: objects) { result in
+                            continuation.resume(with: result)
+                        }
+                    }
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+        // Native completion is not proof that every current child belongs to
+        // the same zone; re-read a fresh graph and the persisted share cache.
+        try validateHerdAccess()
+        let discovered = try await discoverOwnedShare(for: selection)
+        guard case .existing = discovered else {
+            throw CoreDataHerdSharingError.incompleteMembership
+        }
+        historyWakeups?.requestProcessing()
+        return discovered
     }
 
     var cloudStoreActivity: [String: CloudStoreActivity] {
