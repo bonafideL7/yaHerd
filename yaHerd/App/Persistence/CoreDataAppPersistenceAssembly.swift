@@ -136,6 +136,10 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         )
     }
 
+    func acceptHerdInvitation(_ invitation: HerdInvitation) async throws {
+        try await assembly.contextFactory.acceptHerdInvitation(invitation)
+    }
+
     func makeRemoteHistoryCoordinator(
         mutationCenter: ApplicationMutationCenter,
         herdDirectory: HerdDirectoryController
