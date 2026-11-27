@@ -22,6 +22,43 @@ enum HerdImportState: Equatable, Sendable {
     }
 }
 
+enum HerdShareMembership: Equatable, Sendable {
+    case complete
+    case incomplete(missingCount: Int)
+}
+
+/// Local cache discovery, not confirmation of server-side delivery.
+enum HerdShareDiscovery: Equatable, Sendable {
+    case unshared
+    case existing(membership: HerdShareMembership)
+}
+
+enum CoreDataHerdSharingError: LocalizedError, Equatable, Sendable {
+    case notConfigured
+    case readOnly
+    case notOwned
+    case selectionChanged
+    case inProgress
+    case invalidGraph
+    case conflictingMembership
+    case incompleteMembership
+    case operationFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .notConfigured: "iCloud sharing is not enabled for this launch."
+        case .readOnly: "Sharing is unavailable in read-only recovery."
+        case .notOwned: "Only the Herd owner can prepare a share."
+        case .selectionChanged: "The selected Herd changed. Open the intended Herd again."
+        case .inProgress: "Herd sharing is already in progress. Try again when it finishes."
+        case .invalidGraph: "The Herd has inconsistent relationships. Sharing cannot safely proceed."
+        case .conflictingMembership: "Records already belong to another share. Sharing cannot safely proceed."
+        case .incompleteMembership: "The complete share membership is not yet available. Check iCloud activity and try again."
+        case .operationFailed: "iCloud could not prepare the Herd share. Check iCloud activity and try again."
+        }
+    }
+}
+
 /// A value-only snapshot of each operation for one loaded persistent store.
 /// An export outcome must never be substituted for an import outcome.
 struct CloudStoreActivity: Equatable, Sendable {
@@ -689,6 +726,100 @@ final class CoreDataPersistentContainer {
 
     func makeBackgroundContext() -> NSManagedObjectContext {
         container.newBackgroundContext()
+    }
+
+    /// Sharing uses the actual configured private store, not the filename or
+    /// a UUID-only lookup. A joined share must never be recreated as owned.
+    private func ownedSharingContainer(for root: CDHerd) throws -> NSPersistentCloudKitContainer {
+        guard accessMode == .readWrite else {
+            throw CoreDataHerdSharingError.readOnly
+        }
+        guard importResults != nil,
+              let mirrored = container as? NSPersistentCloudKitContainer else {
+            throw CoreDataHerdSharingError.notConfigured
+        }
+        guard !herdImportState.blocksHerdAccess else {
+            throw HerdRepositoryError.accountUnavailable
+        }
+        guard let privateURL = storeURL,
+              let store = root.objectID.persistentStore,
+              !root.objectID.isTemporaryID,
+              store.url == privateURL,
+              container.persistentStoreCoordinator.persistentStores.contains(where: { $0 === store }),
+              container.persistentStoreDescriptions.contains(where: {
+                  $0.url == privateURL && $0.cloudKitContainerOptions?.databaseScope == .private
+              }) else {
+            throw CoreDataHerdSharingError.notOwned
+        }
+        return mirrored
+    }
+
+    /// Called on the root's context queue. Check the graph before asking
+    /// CloudKit to traverse it: a malformed cross-Herd link must not disclose
+    /// another Herd's records through native deep traversal.
+    func inspectOwnedShare(root: CDHerd, objects: [NSManagedObject]) throws -> HerdShareDiscovery {
+        let mirrored = try ownedSharingContainer(for: root)
+        return try Self.inspectShare(root: root, objects: objects, in: mirrored).discovery
+    }
+
+    private static func inspectShare(
+        root: CDHerd,
+        objects: [NSManagedObject],
+        in mirrored: NSPersistentCloudKitContainer
+    ) throws -> (discovery: HerdShareDiscovery, share: CKShare?) {
+        let ids = objects.map(\.objectID)
+        let shares = try mirrored.fetchShares(matching: ids)
+        let rootShare = shares[root.objectID]
+        // Refuse to adopt a child from any other share, including a share
+        // for which the root has no locally known association.
+        guard shares.values.allSatisfy({ $0.recordID == rootShare?.recordID }) else {
+            throw CoreDataHerdSharingError.conflictingMembership
+        }
+        guard let rootShare else {
+            return (.unshared, nil)
+        }
+        guard rootShare.currentUserParticipant?.role == .owner,
+              rootShare.currentUserParticipant?.acceptanceStatus == .accepted else {
+            throw CoreDataHerdSharingError.notOwned
+        }
+        let missing = ids.filter { shares[$0] == nil }.count
+        return (.existing(membership: missing == 0 ? .complete : .incomplete(missingCount: missing)), rootShare)
+    }
+
+    /// Native sharing migrates the connected graph to one share zone. New
+    /// children maintain a direct Herd relationship and Core Data assigns
+    /// their zone through its mirroring delegate. Reinspect membership when
+    /// preparing a share again; never create a second share for that root.
+    func prepareOwnedShare(
+        root: CDHerd,
+        objects: [NSManagedObject],
+        completion: @escaping @Sendable (Result<Void, Error>) -> Void
+    ) throws {
+        let mirrored = try ownedSharingContainer(for: root)
+        let existing = try Self.inspectShare(root: root, objects: objects, in: mirrored)
+        if case .existing = existing.discovery {
+            // An incomplete cache can reflect unsent children. Do not force
+            // a zone move or recreate a share while mirroring catches up.
+            completion(.success(()))
+            return
+        }
+        let expectedIDs = Set(objects.map(\.objectID))
+        // A nil share creates a private zone with no invited participants.
+        // Invitation visibility and permission configuration are Stage 5.3.
+        mirrored.share(objects, to: nil) { ids, share, _, error in
+            if let error {
+                let failure = error as NSError
+                ReliabilityLog.persistence.error(
+                    "operation=herd-share-create domain=\(failure.domain, privacy: .public) code=\(failure.code, privacy: .public)"
+                )
+                completion(.failure(CoreDataHerdSharingError.operationFailed))
+            } else if let ids, share != nil, expectedIDs.isSubset(of: ids) {
+                completion(.success(()))
+            } else {
+                // Do not purge or create again: a share may already exist.
+                completion(.failure(CoreDataHerdSharingError.incompleteMembership))
+            }
+        }
     }
 
     /// Read only the shares already imported by this container. This does not

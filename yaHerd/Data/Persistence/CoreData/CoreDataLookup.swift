@@ -203,6 +203,53 @@ struct CoreDataLookup: Sendable {
         }
     }
 
+    /// Complete current Herd graph, including all direct Herd-owned entities.
+    /// Validate both inverse collections and other relationships before native
+    /// sharing's deep traversal. A corrupt relationship cannot expand a share.
+    func objectsForSharing(root: CDHerd, in context: NSManagedObjectContext) throws -> [NSManagedObject] {
+        let store = try owningStore(of: root, in: context)
+        var objects: [NSManagedObject] = [root]
+        for relationship in root.entity.relationshipsByName.values {
+            guard relationship.isToMany,
+                  let entityName = relationship.destinationEntity?.name,
+                  relationship.inverseRelationship?.name == "herd" else {
+                throw CoreDataHerdSharingError.invalidGraph
+            }
+            let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
+            request.affectedStores = [store]
+            request.predicate = NSPredicate(format: "herd == %@", root)
+            objects.append(contentsOf: try context.fetch(request))
+        }
+
+        let ids = Set(objects.map(\.objectID))
+        guard ids.count == objects.count else { throw CoreDataHerdSharingError.invalidGraph }
+        for object in objects {
+            guard !object.objectID.isTemporaryID, object.objectID.persistentStore === store,
+                  !object.isDeleted, !object.isInserted else {
+                throw CoreDataHerdSharingError.invalidGraph
+            }
+            if object !== root {
+                guard let owned = object as? any CoreDataHerdOwnedManagedObject,
+                      owned.herd?.objectID == root.objectID, owned.id != nil else {
+                    throw CoreDataHerdSharingError.invalidGraph
+                }
+            }
+            for relationship in object.entity.relationshipsByName.values {
+                let value = object.value(forKey: relationship.name)
+                let related: [NSManagedObject]
+                if relationship.isToMany {
+                    related = (value as? NSSet)?.allObjects.compactMap { $0 as? NSManagedObject } ?? []
+                } else {
+                    related = (value as? NSManagedObject).map { [$0] } ?? []
+                }
+                guard related.allSatisfy({ ids.contains($0.objectID) }) else {
+                    throw CoreDataHerdSharingError.invalidGraph
+                }
+            }
+        }
+        return objects
+    }
+
     private func owningStore(
         of herd: CDHerd,
         in context: NSManagedObjectContext

@@ -93,6 +93,27 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         return CoreDataAppPersistenceAssembly(assembly: assembly, selection: candidate)
     }
 
+    /// Platform sharing preparation is explicitly scoped to the selected
+    /// store-qualified root. No CKShare or Core Data object enters the feature
+    /// dependency graph; the native presentation adapter will use this later.
+    func discoverSelectedHerdShare() async throws -> HerdShareDiscovery {
+        let snapshot = selection.snapshot
+        let result = try await assembly.contextFactory.discoverOwnedShare(for: snapshot)
+        guard selection.snapshot == snapshot else {
+            throw CoreDataHerdSharingError.selectionChanged
+        }
+        return result
+    }
+
+    func prepareSelectedHerdShare() async throws -> HerdShareDiscovery {
+        let snapshot = selection.snapshot
+        let result = try await assembly.contextFactory.prepareOwnedShare(for: snapshot)
+        guard selection.snapshot == snapshot else {
+            throw CoreDataHerdSharingError.selectionChanged
+        }
+        return result
+    }
+
     func makeRemoteHistoryCoordinator(
         mutationCenter: ApplicationMutationCenter,
         herdDirectory: HerdDirectoryController
