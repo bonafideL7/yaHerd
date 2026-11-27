@@ -11,6 +11,7 @@ protocol PersistenceAssembly {
         onFailure: @escaping @MainActor @Sendable () -> Void
     ) async throws -> UIViewController
 
+    func stopSelectedHerdSharing(expectedRoot: URL) async throws
     func leaveSelectedHerd() async throws
 
     func makeDependencies(
@@ -50,6 +51,7 @@ final class HerdSharingController {
         let controller: UIViewController
     }
 
+    private(set) var isStopping = false
     private(set) var isLeaving = false
     private(set) var isPreparing = false
     var presentation: Presentation?
@@ -58,6 +60,18 @@ final class HerdSharingController {
 
     init(assembly: any PersistenceAssembly) {
         self.assembly = assembly
+    }
+
+    func stop(expectedRoot: URL, onChange: @escaping @MainActor () -> Void) async {
+        guard !isStopping, !isLeaving, !isPreparing, presentation == nil else { return }
+        isStopping = true
+        defer { isStopping = false }
+        do {
+            try await assembly.stopSelectedHerdSharing(expectedRoot: expectedRoot)
+        } catch {
+            errorMessage = "Could not remove all participant access. Refresh sharing information before retrying. \(error.localizedDescription)"
+        }
+        onChange()
     }
 
     func leave(onChange: @escaping @MainActor () -> Void) async {
@@ -73,7 +87,7 @@ final class HerdSharingController {
     }
 
     func open(onChange: @escaping @MainActor @Sendable () -> Void) async {
-        guard !isPreparing, presentation == nil else { return }
+        guard !isPreparing, !isStopping, !isLeaving, presentation == nil else { return }
         isPreparing = true
         let sessionID = UUID()
         defer { isPreparing = false }

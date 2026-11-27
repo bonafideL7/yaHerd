@@ -1024,6 +1024,55 @@ final class CoreDataPersistentContainer {
         }
     }
 
+    /// Withdraw every guest's access without deleting the owner's share zone.
+    /// Keeping the private zone and its object identities intact is intentional.
+    func stopOwnedSharing(
+        rootIdentity: URL,
+        completion: @escaping @Sendable (Result<Void, Error>) -> Void
+    ) throws {
+        guard let id = container.persistentStoreCoordinator.managedObjectID(forURIRepresentation: rootIdentity),
+              id.entity.name == CDHerd.coreDataEntityName,
+              let store = id.persistentStore else {
+            throw HerdRepositoryError.missingHerd
+        }
+        let mirrored = try ownedSharingContainer(for: id)
+        guard let share = try mirrored.fetchShares(matching: [id])[id],
+              share.currentUserParticipant?.role == .owner,
+              share.currentUserParticipant?.acceptanceStatus == .accepted,
+              share.publicPermission == .none else {
+            throw CoreDataHerdSharingError.notOwned
+        }
+        // Read the current server roster before changing it. Do not overwrite
+        // participants added by another device using an old cached share.
+        guard let importResults else { throw CoreDataHerdSharingError.notConfigured }
+        let database = CKContainer(identifier: Self.cloudKitContainerIdentifier).privateCloudDatabase
+        database.fetch(withRecordID: share.recordID) { record, error in
+            if let error {
+                completion(.failure(HerdInvitationError.classify(error)))
+                return
+            }
+            guard let current = record as? CKShare,
+                  current.currentUserParticipant?.role == .owner,
+                  current.currentUserParticipant?.acceptanceStatus == .accepted,
+                  !importResults.importState(for: mirrored.persistentStoreCoordinator.persistentStores.map(\.identifier)).blocksHerdAccess,
+                  mirrored.persistentStoreCoordinator.persistentStores.contains(where: { $0 === store }) else {
+                completion(.failure(CoreDataHerdSharingError.notOwned))
+                return
+            }
+            current.publicPermission = .none
+            for participant in current.participants where participant.role != .owner {
+                current.removeParticipant(participant)
+            }
+            mirrored.persistUpdatedShare(current, in: store) { _, error in
+                if let error {
+                    completion(.failure(HerdInvitationError.classify(error)))
+                } else {
+                    completion(.success(()))
+                }
+            }
+        }
+    }
+
     /// Resolve the native share under the persistence lock, then create UIKit
     /// objects outside the lock on the main actor. The closure retains only
     /// the framework objects required by this presentation, not this wrapper.
@@ -1244,9 +1293,12 @@ private final class OwnedSharingDelegate: NSObject, UICloudSharingControllerDele
     }
 
     func cloudSharingControllerDidStopSharing(_ csc: UICloudSharingController) {
-        // Do not purge the owner's local Herd. Explicit lifecycle operations
-        // and reconciliation are separate Stage 5 workstreams.
+        // Native stop may already have removed the server share. Never purge
+        // the owner's zone as a follow-up: that would delete the Herd graph.
+        // Refresh inventory and surface the uncertain cache state rather than
+        // claiming that a native stop safely preserved every record.
         onChange()
+        onFailure()
     }
 }
 

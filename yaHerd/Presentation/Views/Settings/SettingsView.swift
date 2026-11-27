@@ -477,6 +477,8 @@ struct HerdDirectoryView: View {
     @Environment(StorageActivityController.self) private var storageActivity: StorageActivityController?
     @ObservedObject private var invitations = HerdInvitationInbox.shared
     @State private var showsLeaveConfirmation = false
+    @State private var stopRoot: URL?
+    @State private var showsStopConfirmation = false
     @State private var sharingTask: Task<Void, Never>?
 
     @State private var isCreating = false
@@ -623,11 +625,19 @@ struct HerdDirectoryView: View {
                             )
                         }
                     }
-                    .disabled(isCreating || isOpeningHerd || sharing.isPreparing || sharingTask != nil)
+                    .disabled(isCreating || isOpeningHerd || sharing.isPreparing || sharing.isStopping || sharingTask != nil)
+                    if herd.sharingMetadata.access == .owner {
+                        Button("Stop Sharing", role: .destructive) {
+                            stopRoot = herd.rootIdentity
+                            showsStopConfirmation = true
+                        }
+                        .disabled(sharing.isPreparing || sharing.isStopping || sharing.isLeaving || isCreating || isOpeningHerd)
+                        if sharing.isStopping { ProgressView("Removing participant access") }
+                    }
                 } header: {
                     Text("Sharing — \(herd.name)")
                 } footer: {
-                    Text("Invite specific people to this entire Herd with read-only or read/write access.")
+                    Text("Manage individual participants in the sharing sheet. To remove everyone while keeping your Herd, use Stop Sharing here, not the native sheet’s stop action. Sharing actions do not delete Herd records.")
                 }
             }
             if !dataAccessMode.isRecoveryMode,
@@ -669,6 +679,18 @@ struct HerdDirectoryView: View {
                     }
             }
         }
+        .confirmationDialog("Stop sharing this Herd?", isPresented: $showsStopConfirmation, titleVisibility: .visible) {
+            Button("Remove All Participant Access", role: .destructive) {
+                guard let sharing, let root = stopRoot else { return }
+                stopRoot = nil
+                Task { @MainActor in
+                    await sharing.stop(expectedRoot: root) { directory.refresh(reportErrors: false) }
+                }
+            }
+            Button("Cancel", role: .cancel) { stopRoot = nil }
+        } message: {
+            Text("All invited and accepted participants will lose access. Your Herd, animals, pastures and history remain yours. You can invite people again later.")
+        }
         .confirmationDialog("Leave this shared Herd?", isPresented: $showsLeaveConfirmation, titleVisibility: .visible) {
             Button("Leave Shared Herd", role: .destructive) {
                 guard let sharing else { return }
@@ -691,6 +713,8 @@ struct HerdDirectoryView: View {
         .onChange(of: directory.selectedHerdID) { _, _ in
             sharingTask?.cancel()
             showsLeaveConfirmation = false
+            showsStopConfirmation = false
+            stopRoot = nil
             sharing?.presentation = nil
         }
         .onChange(of: storageActivity?.snapshot.cloud?.accessState) { _, state in

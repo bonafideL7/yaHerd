@@ -151,6 +151,27 @@ final class CoreDataContextFactory: Sendable {
         historyWakeups?.requestProcessing()
     }
 
+    func stopOwnedSharing(rootIdentity: URL) async throws {
+        try validateHerdAccess()
+        let reserved = sharePreparationInProgress.withLock { active in
+            guard !active else { return false }
+            active = true
+            return true
+        }
+        guard reserved else { throw CoreDataHerdSharingError.inProgress }
+        defer { sharePreparationInProgress.withLock { $0 = false } }
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            do {
+                try persistence.withLock {
+                    try $0.stopOwnedSharing(rootIdentity: rootIdentity) { result in
+                        continuation.resume(with: result)
+                    }
+                }
+            } catch { continuation.resume(throwing: error) }
+        }
+        historyWakeups?.requestProcessing()
+    }
+
     var cloudStoreActivity: [String: CloudStoreActivity] {
         persistence.withLock { $0.cloudStoreActivity }
     }

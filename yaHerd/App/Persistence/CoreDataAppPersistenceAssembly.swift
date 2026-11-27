@@ -144,6 +144,13 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         try assembly.contextFactory.importedInvitationRoots(identities: identities, roots: roots)
     }
 
+    func stopSelectedHerdSharing(expectedRoot: URL) async throws {
+        guard selection.selectedRootIdentity == expectedRoot else {
+            throw CoreDataHerdSharingError.selectionChanged
+        }
+        try await assembly.contextFactory.stopOwnedSharing(rootIdentity: expectedRoot)
+    }
+
     func leaveSelectedHerd() async throws {
         let snapshot = selection.snapshot
         guard let root = snapshot.rootIdentity, snapshot.id != nil else {
