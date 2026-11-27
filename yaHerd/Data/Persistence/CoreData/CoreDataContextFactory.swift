@@ -44,14 +44,17 @@ final class CoreDataContextFactory: Sendable {
             throw HerdRepositoryError.missingHerd
         }
         let context = makeReadContext(expectedHerdRoot: identity)
-        let result = try await context.perform {
+        let graph = try await context.perform {
             let lookup = CoreDataLookup()
             guard let root = try lookup.herd(id: id, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
             _ = try root.toSummary()
             let objects = try lookup.objectsForSharing(root: root, in: context)
-            return try self.persistence.withLock { try $0.inspectOwnedShare(root: root, objects: objects) }
+            return (root.objectID, objects.map(\.objectID))
+        }
+        let result = try persistence.withLock {
+            try $0.inspectOwnedShare(rootID: graph.0, objectIDs: graph.1)
         }
         try validateHerdAccess()
         return result
@@ -74,24 +77,15 @@ final class CoreDataContextFactory: Sendable {
         guard reserved else { throw CoreDataHerdSharingError.inProgress }
         defer { sharePreparationInProgress.withLock { $0 = false } }
 
-        let context = makeReadContext(expectedHerdRoot: identity)
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            context.perform {
-                do {
-                    let lookup = CoreDataLookup()
-                    guard let root = try lookup.herd(id: id, in: context) else {
-                        throw HerdRepositoryError.missingHerd
+            do {
+                try persistence.withLock {
+                    try $0.prepareOwnedShare(herdID: id, rootIdentity: identity) { result in
+                        continuation.resume(with: result)
                     }
-                    _ = try root.toSummary()
-                    let objects = try lookup.objectsForSharing(root: root, in: context)
-                    try self.persistence.withLock {
-                        try $0.prepareOwnedShare(root: root, objects: objects) { result in
-                            continuation.resume(with: result)
-                        }
-                    }
-                } catch {
-                    continuation.resume(throwing: error)
                 }
+            } catch {
+                continuation.resume(throwing: error)
             }
         }
         // Native completion is not proof that every current child belongs to
