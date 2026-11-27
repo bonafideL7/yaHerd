@@ -193,6 +193,17 @@ struct CoreDataLookup: Sendable {
                     try validateOwnership(relatedObject)
                 }
             }
+            // Validate explicitly modified collections as well as to-one links.
+            // Do not scan unchanged inverse collections on every transaction.
+            for relationship in object.entity.relationshipsByName.values
+            where relationship.isToMany && object.changedValues().keys.contains(relationship.name) {
+                let current = (object.value(forKey: relationship.name) as? NSSet)?.allObjects.compactMap { $0 as? NSManagedObject } ?? []
+                let previous = (object.committedValues(forKeys: [relationship.name])[relationship.name] as? NSSet)?.allObjects.compactMap { $0 as? NSManagedObject } ?? []
+                let previousIDs = Set(previous.map(\.objectID))
+                for target in current where !previousIDs.contains(target.objectID) {
+                    try validateOwnership(target)
+                }
+            }
             if object.isDeleted {
                 try validateDeletionEffects(object)
             }

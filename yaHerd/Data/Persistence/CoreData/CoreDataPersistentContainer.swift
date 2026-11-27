@@ -24,6 +24,15 @@ enum HerdImportState: Equatable, Sendable {
     }
 }
 
+/// Local inspection only: a complete result does not attest to server delivery.
+enum HerdGraphVerification: Equatable, Sendable {
+    case checking
+    case complete
+    case waitingForMembership(Int)
+    case inconsistent
+    case unavailable
+}
+
 enum HerdShareMembership: Equatable, Sendable {
     case complete
     case incomplete(missingCount: Int)
@@ -794,6 +803,43 @@ final class CoreDataPersistentContainer {
               }) else {
             throw CoreDataHerdSharingError.notOwned
         }
+    }
+
+    /// Verify owned and joined roots using the same store-qualified graph.
+    /// Never move, purge, or recreate objects in response to incomplete imports.
+    func verifyHerdMembership(rootID: NSManagedObjectID, objectIDs: [NSManagedObjectID]) throws -> HerdGraphVerification {
+        guard let mirrored = container as? NSPersistentCloudKitContainer,
+              importResults != nil, !herdImportState.blocksHerdAccess else {
+            return .unavailable
+        }
+        guard let store = rootID.persistentStore,
+              mirrored.persistentStoreCoordinator.persistentStores.contains(where: { $0 === store }),
+              let description = mirrored.persistentStoreDescriptions.first(where: { $0.url == store.url }),
+              let options = description.cloudKitContainerOptions,
+              options.containerIdentifier == Self.cloudKitContainerIdentifier,
+              options.databaseScope == .private || options.databaseScope == .shared,
+              objectIDs.contains(rootID),
+              objectIDs.allSatisfy({ !$0.isTemporaryID && $0.persistentStore === store }) else {
+            return .inconsistent
+        }
+        let shares = try mirrored.fetchShares(matching: objectIDs)
+        guard let share = shares[rootID] else {
+            if !shares.isEmpty { return .inconsistent }
+            return options.databaseScope == .private ? .complete : .waitingForMembership(objectIDs.count)
+        }
+        guard let participant = share.currentUserParticipant,
+              participant.acceptanceStatus == .accepted,
+              (participant.role == .owner) == (options.databaseScope == .private) else {
+            return .unavailable
+        }
+        guard shares.values.allSatisfy({ $0.recordID == share.recordID }) else {
+            return .inconsistent
+        }
+        let records = mirrored.recordIDs(for: objectIDs)
+        let missing = objectIDs.filter {
+            shares[$0] == nil || records[$0]?.zoneID != share.recordID.zoneID
+        }.count
+        return missing == 0 ? .complete : .waitingForMembership(missing)
     }
 
     /// Only permanent object IDs cross the context/mutex boundary.

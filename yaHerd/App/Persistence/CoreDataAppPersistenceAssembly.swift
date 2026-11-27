@@ -97,6 +97,13 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
     /// Platform sharing preparation is explicitly scoped to the selected
     /// store-qualified root. No CKShare or Core Data object enters the feature
     /// dependency graph; the native presentation adapter will use this later.
+    func verifySelectedHerdGraph() async throws -> HerdGraphVerification {
+        let snapshot = selection.snapshot
+        let result = try await assembly.contextFactory.verifyHerdGraph(for: snapshot)
+        guard selection.snapshot == snapshot else { throw CancellationError() }
+        return result
+    }
+
     func discoverSelectedHerdShare() async throws -> HerdShareDiscovery {
         let snapshot = selection.snapshot
         let result = try await assembly.contextFactory.discoverOwnedShare(for: snapshot)
