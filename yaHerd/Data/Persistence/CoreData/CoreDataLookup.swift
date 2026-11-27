@@ -221,6 +221,18 @@ struct CoreDataLookup: Sendable {
             objects.append(contentsOf: try context.fetch(request))
         }
 
+        // A new modeled Herd-owned entity must also participate in the
+        // root's graph. Fail closed if the model no longer has that inverse.
+        let modeledOwnedEntities = Set(
+            context.persistentStoreCoordinator?.managedObjectModel.entities.compactMap { entity in
+                entity.relationshipsByName["herd"]?.destinationEntity === root.entity ? entity.name : nil
+            } ?? []
+        )
+        let linkedEntities = Set(root.entity.relationshipsByName.values.compactMap { $0.destinationEntity?.name })
+        guard modeledOwnedEntities == linkedEntities else {
+            throw CoreDataHerdSharingError.invalidGraph
+        }
+
         let ids = Set(objects.map(\.objectID))
         guard ids.count == objects.count else { throw CoreDataHerdSharingError.invalidGraph }
         for object in objects {

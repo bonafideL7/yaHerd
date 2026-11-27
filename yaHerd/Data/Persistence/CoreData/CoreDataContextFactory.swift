@@ -44,7 +44,7 @@ final class CoreDataContextFactory: Sendable {
             throw HerdRepositoryError.missingHerd
         }
         let context = makeReadContext(expectedHerdRoot: identity)
-        return try await context.perform {
+        let result = try await context.perform {
             let lookup = CoreDataLookup()
             guard let root = try lookup.herd(id: id, in: context) else {
                 throw HerdRepositoryError.missingHerd
@@ -53,6 +53,8 @@ final class CoreDataContextFactory: Sendable {
             let objects = try lookup.objectsForSharing(root: root, in: context)
             return try self.persistence.withLock { try $0.inspectOwnedShare(root: root, objects: objects) }
         }
+        try validateHerdAccess()
+        return result
     }
 
     func prepareOwnedShare(for selection: HerdSelectionSnapshot) async throws -> HerdShareDiscovery {
