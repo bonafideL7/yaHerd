@@ -1253,6 +1253,18 @@ final class HerdInvitationAppDelegate: NSObject, UIApplicationDelegate {
 
 @MainActor
 final class HerdInvitationSceneDelegate: NSObject, UIWindowSceneDelegate {
+    func scene(
+        _ scene: UIScene,
+        willConnectTo session: UISceneSession,
+        options connectionOptions: UIScene.ConnectionOptions
+    ) {
+        // UIKit may reuse a retained scene configuration without asking the
+        // application delegate for a new configuration on cold relaunch.
+        if let metadata = connectionOptions.cloudKitShareMetadata {
+            HerdInvitationInbox.shared.receive(HerdInvitation(metadata: metadata))
+        }
+    }
+
     func windowScene(_ windowScene: UIWindowScene, userDidAcceptCloudKitShareWith metadata: CKShare.Metadata) {
         HerdInvitationInbox.shared.receive(HerdInvitation(metadata: metadata))
     }
