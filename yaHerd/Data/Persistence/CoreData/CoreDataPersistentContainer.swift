@@ -931,6 +931,65 @@ final class CoreDataPersistentContainer {
         }
     }
 
+    /// Match only actual shared Herd roots from a successful inventory read.
+    func importedInvitationRoots(
+        identities: Set<String>, roots: [URL]
+    ) throws -> Set<String> {
+        guard let mirrored = container as? NSPersistentCloudKitContainer,
+              importResults != nil, !herdImportState.blocksHerdAccess else {
+            throw HerdInvitationError.accountUnavailable
+        }
+        let coordinator = mirrored.persistentStoreCoordinator
+        let ids = roots.compactMap { coordinator.managedObjectID(forURIRepresentation: $0) }
+        let shares = try mirrored.fetchShares(matching: ids)
+        return Set(shares.compactMap { id, share in
+            guard let store = id.persistentStore,
+                  mirrored.persistentStoreDescriptions.contains(where: {
+                      $0.url == store.url && $0.cloudKitContainerOptions?.databaseScope == .shared
+                  }),
+                  share.currentUserParticipant?.acceptanceStatus == .accepted,
+                  share.currentUserParticipant?.role != .owner else { return nil }
+            let identity = HerdInvitation.identity(container: Self.cloudKitContainerIdentifier, record: share.recordID)
+            return identities.contains(identity) ? identity : nil
+        })
+    }
+
+    /// Leaving a joined share removes only the current participant's access
+    /// in the shared database. Never delete the owner's private zone.
+    func leaveJoinedHerd(
+        rootIdentity: URL,
+        completion: @escaping @Sendable (Result<Void, Error>) -> Void
+    ) throws {
+        guard accessMode == .readWrite, importResults != nil,
+              let mirrored = container as? NSPersistentCloudKitContainer,
+              !herdImportState.blocksHerdAccess,
+              let id = mirrored.persistentStoreCoordinator.managedObjectID(forURIRepresentation: rootIdentity),
+              let store = id.persistentStore,
+              mirrored.persistentStoreDescriptions.contains(where: {
+                  $0.url == store.url &&
+                  $0.cloudKitContainerOptions?.databaseScope == .shared &&
+                  $0.cloudKitContainerOptions?.containerIdentifier == Self.cloudKitContainerIdentifier
+              }),
+              let share = try mirrored.fetchShares(matching: [id])[id],
+              let participant = share.currentUserParticipant,
+              participant.role != .owner,
+              participant.acceptanceStatus == .accepted else {
+            throw HerdInvitationError.invalid
+        }
+        let database = CKContainer(identifier: Self.cloudKitContainerIdentifier).sharedCloudDatabase
+        database.delete(withRecordID: share.recordID) { _, error in
+            if let error {
+                let failure = error as NSError
+                ReliabilityLog.persistence.error(
+                    "operation=herd-leave domain=\(failure.domain, privacy: .public) code=\(failure.code, privacy: .public)"
+                )
+                completion(.failure(HerdInvitationError.classify(error)))
+            } else {
+                completion(.success(()))
+            }
+        }
+    }
+
     /// Resolve the native share under the persistence lock, then create UIKit
     /// objects outside the lock on the main actor. The closure retains only
     /// the framework objects required by this presentation, not this wrapper.
@@ -1201,8 +1260,11 @@ enum CloudKitDevelopmentEventLog {
 struct HerdInvitation: Sendable {
     fileprivate let metadata: CKShare.Metadata
     var identity: String {
-        let id = metadata.share.recordID
-        return [metadata.containerIdentifier, id.zoneID.ownerName, id.zoneID.zoneName, id.recordName]
+        Self.identity(container: metadata.containerIdentifier, record: metadata.share.recordID)
+    }
+
+    fileprivate static func identity(container: String, record: CKRecord.ID) -> String {
+        [container, record.zoneID.ownerName, record.zoneID.zoneName, record.recordName]
             .map { "\($0.utf8.count):\($0)" }.joined()
     }
 }
@@ -1274,6 +1336,8 @@ final class HerdInvitationSceneDelegate: NSObject, UIWindowSceneDelegate {
 final class HerdInvitationInbox: ObservableObject {
     static let shared = HerdInvitationInbox()
     @Published var message: String?
+    @Published private(set) var importingIdentities: Set<String> = []
+    @Published private(set) var availableCount = 0
     private var pending: [HerdInvitation] = []
     private var activeIdentity: String?
     private var handler: (@MainActor (HerdInvitation) async throws -> Void)?
@@ -1292,6 +1356,18 @@ final class HerdInvitationInbox: ObservableObject {
         drain()
     }
 
+    func reconcileImported(_ identities: Set<String>) {
+        let completed = importingIdentities.intersection(identities)
+        guard !completed.isEmpty else { return }
+        importingIdentities.subtract(completed)
+        availableCount += completed.count
+    }
+
+    func clearAvailability() {
+        importingIdentities = []
+        availableCount = 0
+    }
+
     private func drain() {
         guard activeIdentity == nil, let handler, !pending.isEmpty else { return }
         let invitation = pending.removeFirst()
@@ -1299,7 +1375,8 @@ final class HerdInvitationInbox: ObservableObject {
         Task { @MainActor in
             do {
                 try await handler(invitation)
-                message = "Invitation accepted. Shared Herd records may still be importing. Check Herds for availability."
+                importingIdentities.insert(invitation.identity)
+                message = "Invitation accepted. Check Herds for import progress."
             } catch {
                 message = (error as? HerdInvitationError)?.localizedDescription ?? HerdInvitationError.failed.localizedDescription
             }

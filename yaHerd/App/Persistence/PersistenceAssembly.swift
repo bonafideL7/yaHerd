@@ -11,6 +11,8 @@ protocol PersistenceAssembly {
         onFailure: @escaping @MainActor @Sendable () -> Void
     ) async throws -> UIViewController
 
+    func leaveSelectedHerd() async throws
+
     func makeDependencies(
         dataAccessMode: AppDataAccessMode
     ) -> AppDependencies
@@ -48,6 +50,7 @@ final class HerdSharingController {
         let controller: UIViewController
     }
 
+    private(set) var isLeaving = false
     private(set) var isPreparing = false
     var presentation: Presentation?
     var errorMessage: String?
@@ -55,6 +58,18 @@ final class HerdSharingController {
 
     init(assembly: any PersistenceAssembly) {
         self.assembly = assembly
+    }
+
+    func leave(onChange: @escaping @MainActor () -> Void) async {
+        guard !isLeaving, !isPreparing else { return }
+        isLeaving = true
+        defer { isLeaving = false }
+        do {
+            try await assembly.leaveSelectedHerd()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        onChange()
     }
 
     func open(onChange: @escaping @MainActor @Sendable () -> Void) async {

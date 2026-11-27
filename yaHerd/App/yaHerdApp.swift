@@ -298,6 +298,7 @@ private struct AppRuntime {
 
 private struct RunningAppView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject private var invitations = HerdInvitationInbox.shared
     @StateObject private var tagColorLibrary: TagColorLibraryStore
     @StateObject private var recoveryModeController: RecoveryModeController
     @State private var storageActivity: StorageActivityController
@@ -367,6 +368,15 @@ private struct RunningAppView: View {
                 \.workingSessionFeatureDependencies,
                 runtime.dependencies.workingSessionFeatureDependencies
             )
+            .onChange(of: invitations.importingIdentities, initial: true) { _, _ in
+                reconcileInvitations()
+            }
+            .onChange(of: herdDirectory.herds) { _, _ in
+                reconcileInvitations()
+            }
+            .onChange(of: storageActivity.snapshot.cloud?.accessState) { _, state in
+                if state?.blocksHerdAccess == true { invitations.clearAvailability() }
+            }
             .onChange(of: runtime.dependencies.applicationMutationCenter.currentSequence) { _, _ in
                 guard !runtime.dataAccessMode.isRecoveryMode,
                       runtime.herdSelection.currentHerdID != nil else { return }
@@ -400,6 +410,7 @@ private struct RunningAppView: View {
                 ).receive(on: DispatchQueue.main)
             ) { _ in
                 storageActivity.refresh()
+                reconcileInvitations()
             }
             .task {
                 storageActivity.refresh()
@@ -412,12 +423,25 @@ private struct RunningAppView: View {
                     if !runtime.dataAccessMode.isRecoveryMode {
                         herdDirectory.refresh(reportErrors: false)
                         runtime.remoteHistory?.requestProcessing()
+                        reconcileInvitations()
                     }
                     if runtime.herdSelection.currentHerdID != nil {
                         tagColorLibrary.refresh()
                     }
                 }
             }
+    }
+
+    private func reconcileInvitations() {
+        guard !invitations.importingIdentities.isEmpty,
+              let persistence = runtime.persistenceLifetime as? CoreDataAppPersistenceAssembly,
+              herdDirectory.refresh(reportErrors: false) else { return }
+        let roots = herdDirectory.herds.filter { $0.category == .shared }.compactMap(\.rootIdentity)
+        if let imported = try? persistence.importedInvitationRoots(
+            identities: invitations.importingIdentities, roots: roots
+        ) {
+            invitations.reconcileImported(imported)
+        }
     }
 }
 
