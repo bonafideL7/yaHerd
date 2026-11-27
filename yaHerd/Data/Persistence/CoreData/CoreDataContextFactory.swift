@@ -1,6 +1,7 @@
 @preconcurrency import CoreData
 import Synchronization
 import Foundation
+import UIKit
 
 /// Shares only the ability to create fresh private-queue contexts with read actors.
 /// The container is kept behind the same checked-Sendable Mutex pattern used by
@@ -97,6 +98,19 @@ final class CoreDataContextFactory: Sendable {
         }
         historyWakeups?.requestProcessing()
         return discovered
+    }
+
+    @MainActor
+    func makeOwnedSharingController(
+        rootIdentity: URL,
+        onChange: @escaping @MainActor () -> Void,
+        onFailure: @escaping @MainActor () -> Void
+    ) throws -> UIViewController {
+        try persistence.withLock {
+            try $0.makeOwnedSharingController(
+                rootIdentity: rootIdentity, onChange: onChange, onFailure: onFailure
+            )
+        }
     }
 
     var cloudStoreActivity: [String: CloudStoreActivity] {

@@ -5,6 +5,7 @@
 
 import Foundation
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
@@ -472,6 +473,9 @@ struct HerdDirectoryView: View {
     @Environment(AppNavigationState.self) private var navigation
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(HerdSharingController.self) private var sharing: HerdSharingController?
+    @Environment(StorageActivityController.self) private var storageActivity: StorageActivityController?
+    @State private var sharingTask: Task<Void, Never>?
 
     @State private var isCreating = false
     @State private var openingState = HerdDirectoryOpeningState()
@@ -580,6 +584,37 @@ struct HerdDirectoryView: View {
                     Text("Creating a Herd adds a separate owned Herd. It does not join an invitation or replace incomplete imported records.")
                 }
             }
+            if !dataAccessMode.isRecoveryMode,
+               let sharing,
+               let cloud = storageActivity?.snapshot.cloud,
+               !cloud.accessState.blocksHerdAccess,
+               let herd = directory.herds.first(where: { $0.id == directory.selectedHerdID }),
+               herd.category == .owned,
+               herd.sharingMetadata == .noCachedShare || herd.sharingMetadata.access == .owner {
+                Section {
+                    Button {
+                        guard sharingTask == nil else { return }
+                        sharingTask = Task { @MainActor in
+                            defer { sharingTask = nil }
+                            await sharing.open { directory.refresh(reportErrors: false) }
+                        }
+                    } label: {
+                        if sharing.isPreparing {
+                            ProgressView("Preparing Herd sharing")
+                        } else {
+                            Label(
+                                herd.sharingMetadata.access == .owner ? "Manage Sharing" : "Share Herd",
+                                systemImage: "person.crop.circle.badge.plus"
+                            )
+                        }
+                    }
+                    .disabled(isCreating || isOpeningHerd || sharing.isPreparing || sharingTask != nil)
+                } header: {
+                    Text("Sharing — \(herd.name)")
+                } footer: {
+                    Text("Invite specific people to this entire Herd with read-only or read/write access.")
+                }
+            }
             if directory.selectedHerdID == nil {
                 Section("Storage") {
                     StorageActivityLink()
@@ -587,6 +622,41 @@ struct HerdDirectoryView: View {
             }
         }
         .navigationTitle("Herds")
+        .sheet(item: Binding(
+            get: { sharing?.presentation },
+            set: { sharing?.presentation = $0 }
+        ), onDismiss: {
+            directory.refresh(reportErrors: false)
+        }) { presentation in
+            NavigationStack {
+                HerdSharingInterface(controller: presentation.controller)
+                    .navigationTitle("Herd Sharing")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { sharing?.presentation = nil }
+                        }
+                    }
+            }
+        }
+        .alert("Sharing Unavailable", isPresented: Binding(
+            get: { sharing?.errorMessage != nil },
+            set: { if !$0 { sharing?.errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { sharing?.errorMessage = nil }
+        } message: {
+            Text(sharing?.errorMessage ?? "Sharing is unavailable.")
+        }
+        .onChange(of: directory.selectedHerdID) { _, _ in
+            sharingTask?.cancel()
+            sharing?.presentation = nil
+        }
+        .onChange(of: storageActivity?.snapshot.cloud?.accessState) { _, state in
+            if state?.blocksHerdAccess == true {
+                sharingTask?.cancel()
+                sharing?.presentation = nil
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Refresh", systemImage: "arrow.clockwise") {
@@ -625,6 +695,7 @@ struct HerdDirectoryView: View {
             validationTask = nil
             openingState.cancel()
             creationTask?.cancel()
+            sharingTask?.cancel()
         }
         .alert("Create Herd", isPresented: $showsCreatePrompt) {
             TextField("Herd name", text: $newHerdName)
@@ -772,4 +843,11 @@ struct HerdDirectoryOpeningState {
     mutating func cancel() {
         activeAttemptID = nil
     }
+}
+
+private struct HerdSharingInterface: UIViewControllerRepresentable {
+    let controller: UIViewController
+
+    func makeUIViewController(context: Context) -> UIViewController { controller }
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
 }

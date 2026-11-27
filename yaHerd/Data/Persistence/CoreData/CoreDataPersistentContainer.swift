@@ -2,6 +2,7 @@ import CloudKit
 @preconcurrency import CoreData
 import Foundation
 import Synchronization
+import UIKit
 
 enum CoreDataStoreAccessMode: Equatable, Sendable {
     case readWrite
@@ -44,6 +45,7 @@ enum CoreDataHerdSharingError: LocalizedError, Equatable, Sendable {
     case conflictingMembership
     case incompleteMembership
     case operationFailed
+    case publicShareUnsupported
 
     var errorDescription: String? {
         switch self {
@@ -57,6 +59,7 @@ enum CoreDataHerdSharingError: LocalizedError, Equatable, Sendable {
         case .conflictingMembership: "Records already belong to another share. Sharing cannot safely proceed."
         case .incompleteMembership: "The complete share membership is not yet available. Check iCloud activity and try again."
         case .operationFailed: "iCloud could not prepare the Herd share. Check iCloud activity and try again."
+        case .publicShareUnsupported: "This Herd has public sharing enabled. Invitation-only sharing cannot safely open it."
         }
     }
 }
@@ -859,8 +862,8 @@ final class CoreDataPersistentContainer {
                 throw HerdRepositoryError.accountUnavailable
             }
             let expectedIDs = Set(objects.map(\.objectID))
-            // A nil share creates a private zone with no invited participants.
-            // Invitation visibility and permission configuration are Stage 5.3.
+            // A nil share creates a zone without invited participants.
+            // The presentation adapter requires invitation-only permission before opening it.
             mirrored.share(objects, to: nil) { ids, share, _, error in
                 if let error {
                     let failure = error as NSError
@@ -876,6 +879,45 @@ final class CoreDataPersistentContainer {
                 }
             }
         }
+    }
+
+    /// Resolve an already prepared share without passing transport objects
+    /// into SwiftUI. The UIKit controller is created on the main actor only.
+    @MainActor
+    func makeOwnedSharingController(
+        rootIdentity: URL,
+        onChange: @escaping @MainActor () -> Void,
+        onFailure: @escaping @MainActor () -> Void
+    ) throws -> UIViewController {
+        guard let rootID = container.persistentStoreCoordinator.managedObjectID(forURIRepresentation: rootIdentity) else {
+            throw HerdRepositoryError.missingHerd
+        }
+        let mirrored = try ownedSharingContainer(for: rootID)
+        guard let share = try mirrored.fetchShares(matching: [rootID])[rootID],
+              share.currentUserParticipant?.role == .owner,
+              share.currentUserParticipant?.acceptanceStatus == .accepted,
+              let store = rootID.persistentStore,
+              let importResults else {
+            throw CoreDataHerdSharingError.notOwned
+        }
+        // Never expose a public share through the invitation-only workflow.
+        // Changing an existing public share would revoke access without consent.
+        guard share.publicPermission == .none else {
+            throw CoreDataHerdSharingError.publicShareUnsupported
+        }
+        let controller = UICloudSharingController(
+            share: share,
+            container: CKContainer(identifier: Self.cloudKitContainerIdentifier)
+        )
+        controller.availablePermissions = [.allowPrivate, .allowReadOnly, .allowReadWrite]
+        let delegate = OwnedSharingDelegate(
+            mirrored: mirrored, store: store, importResults: importResults,
+            onChange: onChange, onFailure: onFailure
+        )
+        controller.delegate = delegate
+        // The native controller's delegate is weak; retain it for this
+        // presentation only through a parent controller.
+        return OwnedSharingHost(controller: controller, sharingDelegate: delegate)
     }
 
     /// Read only the shares already imported by this container. This does not
@@ -958,6 +1000,99 @@ final class CoreDataPersistentContainer {
             throw CoreDataPersistenceError.modelNotFound(name: modelName)
         }
         return model
+    }
+}
+
+/// Native sharing is the only UI that receives a transport object. The
+/// surrounding SwiftUI feature owns presentation and dismissal, not shares.
+@MainActor
+private final class OwnedSharingHost: UIViewController {
+    private let controller: UICloudSharingController
+    private let sharingDelegate: OwnedSharingDelegate
+
+    init(controller: UICloudSharingController, sharingDelegate: OwnedSharingDelegate) {
+        self.controller = controller
+        self.sharingDelegate = sharingDelegate
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        addChild(controller)
+        controller.view.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(controller.view)
+        NSLayoutConstraint.activate([
+            controller.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            controller.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            controller.view.topAnchor.constraint(equalTo: view.topAnchor),
+            controller.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        controller.didMove(toParent: self)
+    }
+}
+
+@MainActor
+private final class OwnedSharingDelegate: NSObject, UICloudSharingControllerDelegate {
+    private let mirrored: NSPersistentCloudKitContainer
+    private let store: NSPersistentStore
+    private let importResults: HerdImportResults
+    private let onChange: @MainActor () -> Void
+    private let onFailure: @MainActor () -> Void
+
+    init(
+        mirrored: NSPersistentCloudKitContainer,
+        store: NSPersistentStore,
+        importResults: HerdImportResults,
+        onChange: @escaping @MainActor () -> Void,
+        onFailure: @escaping @MainActor () -> Void
+    ) {
+        self.mirrored = mirrored
+        self.store = store
+        self.importResults = importResults
+        self.onChange = onChange
+        self.onFailure = onFailure
+    }
+
+    func itemTitle(for csc: UICloudSharingController) -> String? { "Herd" }
+
+    func cloudSharingController(_ csc: UICloudSharingController, failedToSaveShareWithError error: Error) {
+        let failure = error as NSError
+        ReliabilityLog.persistence.error(
+            "operation=share-ui-save domain=\(failure.domain, privacy: .public) code=\(failure.code, privacy: .public)"
+        )
+        onFailure()
+    }
+
+    func cloudSharingControllerDidSaveShare(_ csc: UICloudSharingController) {
+        guard let share = csc.share, share.publicPermission == .none,
+              share.currentUserParticipant?.role == .owner,
+              !importResults.importState(for: mirrored.persistentStoreCoordinator.persistentStores.map(\.identifier)).blocksHerdAccess,
+              mirrored.persistentStoreCoordinator.persistentStores.contains(where: { $0 === store }) else {
+            onFailure()
+            return
+        }
+        mirrored.persistUpdatedShare(share, in: store) { _, error in
+            let failed = error != nil
+            if let error {
+                let failure = error as NSError
+                ReliabilityLog.persistence.error(
+                    "operation=share-ui-persist domain=\(failure.domain, privacy: .public) code=\(failure.code, privacy: .public)"
+                )
+            }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if failed { self.onFailure() } else { self.onChange() }
+            }
+        }
+    }
+
+    func cloudSharingControllerDidStopSharing(_ csc: UICloudSharingController) {
+        // Do not purge the owner's local Herd. Explicit lifecycle operations
+        // and reconciliation are separate Stage 5 workstreams.
+        onChange()
     }
 }
 
