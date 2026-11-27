@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// Production Core Data-only application graph. The startup loader supplies one
 /// durable or in-memory assembly and resolves its Herd before creating feature ports.
@@ -112,6 +113,27 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
             throw CoreDataHerdSharingError.selectionChanged
         }
         return result
+    }
+
+    func prepareSharingInterface(
+        onChange: @escaping @MainActor () -> Void,
+        onFailure: @escaping @MainActor () -> Void
+    ) async throws -> UIViewController {
+        let snapshot = selection.snapshot
+        guard let rootIdentity = snapshot.rootIdentity else {
+            throw HerdRepositoryError.missingHerd
+        }
+        let result = try await prepareSelectedHerdShare()
+        guard selection.snapshot == snapshot else {
+            throw CoreDataHerdSharingError.selectionChanged
+        }
+        guard case .existing(membership: .complete) = result else {
+            throw CoreDataHerdSharingError.incompleteMembership
+        }
+        try Task.checkCancellation()
+        return try assembly.contextFactory.makeOwnedSharingController(
+            rootIdentity: rootIdentity, onChange: onChange, onFailure: onFailure
+        )
     }
 
     func makeRemoteHistoryCoordinator(

@@ -278,6 +278,7 @@ private struct RunningAppView: View {
     @StateObject private var tagColorLibrary: TagColorLibraryStore
     @StateObject private var recoveryModeController: RecoveryModeController
     @State private var storageActivity: StorageActivityController
+    @State private var herdSharing: HerdSharingController
     private var herdDirectory: HerdDirectoryController { runtime.herdDirectory }
 
     private let runtime: AppRuntime
@@ -290,6 +291,7 @@ private struct RunningAppView: View {
         self.runtime = runtime
         self.applicationSettings = applicationSettings
         self._storageActivity = State(initialValue: StorageActivityController(assembly: runtime.persistenceLifetime))
+        self._herdSharing = State(initialValue: HerdSharingController(assembly: runtime.persistenceLifetime))
         self._tagColorLibrary = StateObject(
             wrappedValue: TagColorLibraryStore(
                 repository: runtime.dependencies.tagColorRepository
@@ -327,6 +329,7 @@ private struct RunningAppView: View {
             .environment(runtime.herdSelection)
             .environment(herdDirectory)
             .environment(storageActivity)
+            .environment(herdSharing)
             .environmentObject(tagColorLibrary)
             .environment(\.appDataAccessMode, runtime.dataAccessMode)
             .environment(
