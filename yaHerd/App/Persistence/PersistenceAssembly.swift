@@ -11,6 +11,7 @@ protocol PersistenceAssembly {
         onFailure: @escaping @MainActor @Sendable () -> Void
     ) async throws -> UIViewController
 
+    func verifySelectedHerdGraph() async throws -> HerdGraphVerification
     func stopSelectedHerdSharing(expectedRoot: URL) async throws
     func leaveSelectedHerd() async throws
 
@@ -51,6 +52,8 @@ final class HerdSharingController {
         let controller: UIViewController
     }
 
+    private(set) var graphVerification: HerdGraphVerification?
+    private var verificationGeneration = UUID()
     private(set) var isStopping = false
     private(set) var isLeaving = false
     private(set) var isPreparing = false
@@ -60,6 +63,29 @@ final class HerdSharingController {
 
     init(assembly: any PersistenceAssembly) {
         self.assembly = assembly
+    }
+
+    func verifyGraph(enabled: Bool) async {
+        let generation = UUID()
+        verificationGeneration = generation
+        graphVerification = enabled ? .checking : nil
+        guard enabled else { return }
+        do {
+            // Coalesce local-save, remote-history and storage-event bursts.
+            try await Task.sleep(for: .milliseconds(300))
+            let result = try await assembly.verifySelectedHerdGraph()
+            try Task.checkCancellation()
+            guard verificationGeneration == generation else { return }
+            graphVerification = result
+        } catch is CancellationError {
+            return
+        } catch {
+            guard verificationGeneration == generation, !Task.isCancelled else { return }
+            switch error as? CoreDataHerdSharingError {
+            case .invalidGraph, .conflictingMembership: graphVerification = .inconsistent
+            default: graphVerification = .unavailable
+            }
+        }
     }
 
     func stop(expectedRoot: URL, onChange: @escaping @MainActor () -> Void) async {

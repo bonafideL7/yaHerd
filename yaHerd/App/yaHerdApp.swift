@@ -296,6 +296,13 @@ private struct AppRuntime {
     let remoteHistory: AppRemoteHistoryCoordinator?
 }
 
+private struct GraphVerificationTrigger: Equatable {
+    let selection: HerdSelectionSnapshot
+    let mutation: UInt64
+    let activity: StorageActivitySnapshot
+    let active: Bool
+}
+
 private struct RunningAppView: View {
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var invitations = HerdInvitationInbox.shared
@@ -368,6 +375,20 @@ private struct RunningAppView: View {
                 \.workingSessionFeatureDependencies,
                 runtime.dependencies.workingSessionFeatureDependencies
             )
+            .task(id: GraphVerificationTrigger(
+                selection: runtime.herdSelection.snapshot,
+                mutation: runtime.dependencies.applicationMutationCenter.currentSequence,
+                activity: storageActivity.snapshot,
+                active: scenePhase == .active
+            )) {
+                await herdSharing.verifyGraph(
+                    enabled: !runtime.dataAccessMode.isRecoveryMode &&
+                        runtime.herdSelection.currentHerdID != nil &&
+                        storageActivity.snapshot.cloud != nil &&
+                        storageActivity.snapshot.cloud?.accessState.blocksHerdAccess == false &&
+                        scenePhase == .active
+                )
+            }
             .onChange(of: invitations.importingIdentities, initial: true) { _, _ in
                 reconcileInvitations()
             }

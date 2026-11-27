@@ -39,6 +39,28 @@ final class CoreDataContextFactory: Sendable {
         persistence.withLock { $0.sharingMetadata(for: objectIDs) }
     }
 
+    func verifyHerdGraph(for selection: HerdSelectionSnapshot) async throws -> HerdGraphVerification {
+        try validateHerdAccess()
+        guard let id = selection.id, let identity = selection.rootIdentity,
+              !CoreDataPersistentContainer.isDeparted(identity) else { return .unavailable }
+        let context = makeReadContext(expectedHerdRoot: identity)
+        let graph = try await context.perform {
+            let lookup = CoreDataLookup()
+            guard let root = try lookup.herd(id: id, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+            _ = try root.toSummary()
+            let objects = try lookup.objectsForSharing(root: root, in: context)
+            return (root.objectID, objects.map(\.objectID))
+        }
+        try Task.checkCancellation()
+        let result = try persistence.withLock {
+            try $0.verifyHerdMembership(rootID: graph.0, objectIDs: graph.1)
+        }
+        try validateHerdAccess()
+        return result
+    }
+
     func discoverOwnedShare(for selection: HerdSelectionSnapshot) async throws -> HerdShareDiscovery {
         try validateHerdAccess()
         guard let id = selection.id, let identity = selection.rootIdentity else {

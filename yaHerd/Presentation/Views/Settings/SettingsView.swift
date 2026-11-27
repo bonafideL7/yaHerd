@@ -655,6 +655,25 @@ struct HerdDirectoryView: View {
                     if sharing.isLeaving { ProgressView("Leaving shared Herd") }
                 }
             }
+            if let verification = sharing?.graphVerification,
+               directory.selectedHerdID != nil {
+                Section("Herd Record Membership") {
+                    switch verification {
+                    case .checking:
+                        ProgressView("Checking local Herd records")
+                    case .complete:
+                        Label("Local record membership checked", systemImage: "checkmark.circle")
+                    case .waitingForMembership(let count):
+                        Label("\(count) local records are awaiting share membership or zone information.", systemImage: "icloud.and.arrow.down")
+                    case .inconsistent:
+                        Label("Herd relationships or share membership are inconsistent. No automatic record moves or deletions were attempted.", systemImage: "exclamationmark.triangle")
+                    case .unavailable:
+                        Label("Record membership could not be verified.", systemImage: "exclamationmark.icloud")
+                    }
+                } footer: {
+                    Text("This checks the selected Herd's local graph and cached record zones, not delivery to another device.")
+                }
+            }
             if directory.selectedHerdID == nil {
                 Section("Storage") {
                     StorageActivityLink()
