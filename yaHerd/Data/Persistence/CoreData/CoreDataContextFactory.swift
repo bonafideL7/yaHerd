@@ -103,14 +103,15 @@ final class CoreDataContextFactory: Sendable {
     @MainActor
     func makeOwnedSharingController(
         rootIdentity: URL,
-        onChange: @escaping @MainActor () -> Void,
-        onFailure: @escaping @MainActor () -> Void
+        onChange: @escaping @MainActor @Sendable () -> Void,
+        onFailure: @escaping @MainActor @Sendable () -> Void
     ) throws -> UIViewController {
-        try persistence.withLock {
-            try $0.makeOwnedSharingController(
+        let presentation = try persistence.withLock {
+            try $0.makeOwnedSharingPresentation(
                 rootIdentity: rootIdentity, onChange: onChange, onFailure: onFailure
             )
         }
+        return presentation()
     }
 
     var cloudStoreActivity: [String: CloudStoreActivity] {
