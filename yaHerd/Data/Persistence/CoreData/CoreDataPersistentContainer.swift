@@ -3,6 +3,7 @@ import CloudKit
 import Foundation
 import Synchronization
 import UIKit
+import Combine
 
 enum CoreDataStoreAccessMode: Equatable, Sendable {
     case readWrite
@@ -881,6 +882,55 @@ final class CoreDataPersistentContainer {
         }
     }
 
+    /// Accept only into the loaded, configured shared database. The native
+    /// operation, not a locally constructed Herd, establishes membership.
+    func acceptHerdInvitation(
+        _ invitation: HerdInvitation,
+        completion: @escaping @Sendable (Result<Void, HerdInvitationError>) -> Void
+    ) throws {
+        guard accessMode == .readWrite, importResults != nil,
+              let mirrored = container as? NSPersistentCloudKitContainer,
+              let privateURL = storeURL else { throw HerdInvitationError.unavailable }
+        guard !herdImportState.blocksHerdAccess else { throw HerdInvitationError.accountUnavailable }
+        let sharedURL = privateURL.deletingLastPathComponent().appendingPathComponent(Self.sharedStoreFileName)
+        guard let description = mirrored.persistentStoreDescriptions.first(where: {
+            $0.url == sharedURL && $0.cloudKitContainerOptions?.databaseScope == .shared &&
+            $0.cloudKitContainerOptions?.containerIdentifier == Self.cloudKitContainerIdentifier
+        }), let url = description.url,
+        let store = mirrored.persistentStoreCoordinator.persistentStores.first(where: { $0.url == url }) else {
+            throw HerdInvitationError.unavailable
+        }
+        let metadata = invitation.metadata
+        guard metadata.containerIdentifier == Self.cloudKitContainerIdentifier,
+              metadata.participantRole != .owner else { throw HerdInvitationError.invalid }
+        // Repeated deliveries use the same native share identity. A previously
+        // accepted, locally registered share need not be accepted again.
+        let cached = try mirrored.fetchShares(in: store)
+        if metadata.participantStatus == .accepted,
+           cached.contains(where: {
+               $0.recordID == metadata.share.recordID &&
+               $0.currentUserParticipant?.acceptanceStatus == .accepted &&
+               $0.currentUserParticipant?.role != .owner
+           }) {
+            completion(.success(()))
+            return
+        }
+        guard metadata.participantStatus != .removed else { throw HerdInvitationError.invalid }
+        mirrored.acceptShareInvitations(from: [metadata], into: store) { accepted, error in
+            if let error {
+                let failure = error as NSError
+                ReliabilityLog.persistence.error(
+                    "operation=herd-invitation-accept domain=\(failure.domain, privacy: .public) code=\(failure.code, privacy: .public)"
+                )
+                completion(.failure(HerdInvitationError.classify(error)))
+            } else if accepted?.contains(where: { $0.share.recordID == metadata.share.recordID }) == true {
+                completion(.success(()))
+            } else {
+                completion(.failure(.failed))
+            }
+        }
+    }
+
     /// Resolve the native share under the persistence lock, then create UIKit
     /// objects outside the lock on the main actor. The closure retains only
     /// the framework objects required by this presentation, not this wrapper.
@@ -1144,3 +1194,105 @@ enum CloudKitDevelopmentEventLog {
     }
 }
 #endif
+
+
+/// An immutable native delivery envelope. Metadata is supplied by UIKit and
+/// is never modified, archived, or logged by the app.
+struct HerdInvitation: Sendable {
+    fileprivate let metadata: CKShare.Metadata
+    var identity: String {
+        let id = metadata.share.recordID
+        return [metadata.containerIdentifier, id.zoneID.ownerName, id.zoneID.zoneName, id.recordName]
+            .map { "\($0.utf8.count):\($0)" }.joined()
+    }
+}
+
+enum HerdInvitationError: LocalizedError, Sendable {
+    case unavailable, accountUnavailable, invalid, network, failed
+
+    var errorDescription: String? {
+        switch self {
+        case .unavailable: "Invitation acceptance requires the iCloud-enabled Herd stores. Reopen the invitation in an iCloud-enabled build."
+        case .accountUnavailable: "iCloud account access is unavailable. Check your account and reopen the invitation."
+        case .invalid: "This invitation is invalid, expired, or access has been removed. Ask the owner for a new invitation."
+        case .network: "The invitation could not be accepted over the network. Reopen the invitation to retry."
+        case .failed: "The invitation could not be accepted. Check iCloud activity and reopen the invitation."
+        }
+    }
+
+    fileprivate static func classify(_ error: Error) -> Self {
+        let failure = error as NSError
+        guard failure.domain == CKError.errorDomain,
+              let code = CKError.Code(rawValue: failure.code) else { return .failed }
+        switch code {
+        case .notAuthenticated: return .accountUnavailable
+        case .unknownItem, .permissionFailure, .zoneNotFound, .invalidArguments: return .invalid
+        case .networkUnavailable, .networkFailure, .serviceUnavailable, .requestRateLimited, .zoneBusy: return .network
+        default: return .failed
+        }
+    }
+}
+
+/// UIKit forwards both cold connection options and subsequent deliveries.
+/// The inbox survives scene creation and waits for the actual app assembly.
+@MainActor
+final class HerdInvitationAppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        configurationForConnecting connectingSceneSession: UISceneSession,
+        options: UIScene.ConnectionOptions
+    ) -> UISceneConfiguration {
+        let configuration = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
+        configuration.delegateClass = HerdInvitationSceneDelegate.self
+        if let metadata = options.cloudKitShareMetadata {
+            HerdInvitationInbox.shared.receive(HerdInvitation(metadata: metadata))
+        }
+        return configuration
+    }
+}
+
+@MainActor
+final class HerdInvitationSceneDelegate: NSObject, UIWindowSceneDelegate {
+    func windowScene(_ windowScene: UIWindowScene, userDidAcceptCloudKitShareWith metadata: CKShare.Metadata) {
+        HerdInvitationInbox.shared.receive(HerdInvitation(metadata: metadata))
+    }
+}
+
+@MainActor
+final class HerdInvitationInbox: ObservableObject {
+    static let shared = HerdInvitationInbox()
+    @Published var message: String?
+    private var pending: [HerdInvitation] = []
+    private var activeIdentity: String?
+    private var handler: (@MainActor (HerdInvitation) async throws -> Void)?
+
+    private init() {}
+
+    func receive(_ invitation: HerdInvitation) {
+        guard activeIdentity != invitation.identity,
+              !pending.contains(where: { $0.identity == invitation.identity }) else { return }
+        pending.append(invitation)
+        drain()
+    }
+
+    func install(_ handler: @escaping @MainActor (HerdInvitation) async throws -> Void) {
+        self.handler = handler
+        drain()
+    }
+
+    private func drain() {
+        guard activeIdentity == nil, let handler, !pending.isEmpty else { return }
+        let invitation = pending.removeFirst()
+        activeIdentity = invitation.identity
+        Task { @MainActor in
+            do {
+                try await handler(invitation)
+                message = "Invitation accepted. Shared Herd records may still be importing. Check Herds for availability."
+            } catch {
+                message = (error as? HerdInvitationError)?.localizedDescription ?? HerdInvitationError.failed.localizedDescription
+            }
+            activeIdentity = nil
+            drain()
+        }
+    }
+}

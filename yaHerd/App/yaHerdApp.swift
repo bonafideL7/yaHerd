@@ -9,6 +9,8 @@ import SwiftUI
 
 @main
 struct yaHerdApp: App {
+    @UIApplicationDelegateAdaptor(HerdInvitationAppDelegate.self) private var invitationDelegate
+    @StateObject private var invitations = HerdInvitationInbox.shared
     @State private var bootstrapState: AppBootstrapState = .loading
     @State private var bootstrapStarted = false
     private let applicationSettings: ApplicationSettings
@@ -55,6 +57,27 @@ struct yaHerdApp: App {
                 guard !bootstrapStarted else { return }
                 bootstrapStarted = true
                 bootstrapState = await Self.bootstrap()
+                // Do not install an acceptance target until both stores have
+                // finished loading; recovery and local-only launches fail closed.
+                if case .ready(let runtime) = bootstrapState,
+                   !runtime.dataAccessMode.isRecoveryMode,
+                   runtime.persistenceLifetime.storageActivity.cloud != nil,
+                   let persistence = runtime.persistenceLifetime as? CoreDataAppPersistenceAssembly {
+                    invitations.install { invitation in
+                        try await persistence.acceptHerdInvitation(invitation)
+                        runtime.herdDirectory.refresh(reportErrors: false)
+                    }
+                } else {
+                    invitations.install { _ in throw HerdInvitationError.unavailable }
+                }
+            }
+            .alert("Herd Invitation", isPresented: Binding(
+                get: { invitations.message != nil },
+                set: { if !$0 { invitations.message = nil } }
+            )) {
+                Button("OK", role: .cancel) { invitations.message = nil }
+            } message: {
+                Text(invitations.message ?? "")
             }
         }
     }

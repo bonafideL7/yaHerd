@@ -114,6 +114,23 @@ final class CoreDataContextFactory: Sendable {
         return presentation()
     }
 
+    func acceptHerdInvitation(_ invitation: HerdInvitation) async throws {
+        try validateHerdAccess()
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            do {
+                try persistence.withLock {
+                    try $0.acceptHerdInvitation(invitation) { result in
+                        continuation.resume(with: result.mapError { $0 as Error })
+                    }
+                }
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
+        try validateHerdAccess()
+        historyWakeups?.requestProcessing()
+    }
+
     var cloudStoreActivity: [String: CloudStoreActivity] {
         persistence.withLock { $0.cloudStoreActivity }
     }
