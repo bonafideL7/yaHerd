@@ -493,192 +493,13 @@ struct HerdDirectoryView: View {
 
     var body: some View {
         List {
-            if !invitations.importingIdentities.isEmpty {
-                Section("Accepted Invitations") {
-                    ProgressView("Waiting for \(invitations.importingIdentities.count) shared Herd invitation(s) to import")
-                    Text("An accepted invitation is not yet an available Herd. Records must arrive from iCloud.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            if invitations.availableCount > 0 {
-                Section {
-                    Label("Shared Herd invitation import completed", systemImage: "checkmark.circle")
-                }
-            }
-            Section("Available Herds") {
-                ForEach(directory.herds) { herd in
-                    Button {
-                        beginOpeningHerd(herd: herd)
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(herd.name)
-                                    .foregroundStyle(.primary)
-                                Text(herd.category == .owned ? "Owned" : "Shared")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                if let sharing = sharingDescription(for: herd.sharingMetadata) {
-                                    Text(sharing)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            Spacer()
-                            if directory.selectedHerdID == herd.id {
-                                Image(systemName: "checkmark")
-                                    .accessibilityLabel("Selected Herd")
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .disabled(dataAccessMode.isRecoveryMode || isCreating || isOpeningHerd)
-                }
-
-                if directory.inventoryState == .loading {
-                    ProgressView("Loading available Herds")
-                } else if directory.inventoryState == .unavailable {
-                    Label(
-                        "The Herd list could not be read. Existing Herds may still be present. Refresh before creating a Herd.",
-                        systemImage: "exclamationmark.triangle"
-                    )
-                    .foregroundStyle(.secondary)
-                } else if directory.inventoryState == .ambiguous {
-                    Label("Some Herds have duplicate identities and cannot be opened. Other available Herds can still be selected.", systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.secondary)
-                } else if directory.inventoryState == .waitingForImport {
-                    Label("Waiting for iCloud Herd imports.", systemImage: "icloud.and.arrow.down")
-                        .foregroundStyle(.secondary)
-                } else if directory.inventoryState == .accountChanged {
-                    Label("The iCloud account changed. Reopen yaHerd to safely check Herd access.", systemImage: "exclamationmark.icloud")
-                        .foregroundStyle(.secondary)
-                } else if directory.inventoryState == .accountUnavailable {
-                    Label("iCloud account authorization is unavailable.", systemImage: "exclamationmark.icloud")
-                        .foregroundStyle(.secondary)
-                } else if directory.inventoryState == .importUnavailable {
-                    Label("iCloud import is unavailable. Previously downloaded Herds may still be accessible.", systemImage: "exclamationmark.icloud")
-                        .foregroundStyle(.secondary)
-                } else if directory.inventoryState == .incomplete {
-                    Label(
-                        "Some Herd records are incomplete and may still be importing. Refresh to check for newly available Herds.",
-                        systemImage: "icloud.and.arrow.down"
-                    )
-                    .foregroundStyle(.secondary)
-                } else if directory.herds.isEmpty {
-                    Text("No Herds are currently available in the local inventory.")
-                        .foregroundStyle(.secondary)
-                }
-
-                if pendingHerd != nil {
-                    HStack {
-                        ProgressView()
-                        Text("Waiting for the selected Herd's records to finish importing.")
-                            .font(.callout)
-                        Spacer()
-                        Button("Cancel") {
-                            validationTask?.cancel()
-                            validationTask = nil
-                            openingState.cancel()
-                            pendingHerd = nil
-                        }
-                    }
-                }
-            }
-
-            if !dataAccessMode.isRecoveryMode {
-                Section {
-                    Button {
-                        newHerdName = ""
-                        showsCreatePrompt = true
-                    } label: {
-                        Label(
-                            directory.inventoryState == .available ? "Create Herd" : "Create Separate Herd",
-                            systemImage: "plus"
-                        )
-                    }
-                    .disabled(isCreating || isOpeningHerd || !directory.canCreateHerd)
-                } footer: {
-                    Text("Creating a Herd adds a separate owned Herd. It does not join an invitation or replace incomplete imported records.")
-                }
-            }
-            if !dataAccessMode.isRecoveryMode,
-               let sharing,
-               let cloud = storageActivity?.snapshot.cloud,
-               !cloud.accessState.blocksHerdAccess,
-               let herd = directory.herds.first(where: { $0.id == directory.selectedHerdID }),
-               herd.category == .owned,
-               herd.sharingMetadata == .noCachedShare || herd.sharingMetadata.access == .owner {
-                Section {
-                    Button {
-                        guard sharingTask == nil else { return }
-                        sharingTask = Task { @MainActor in
-                            defer { sharingTask = nil }
-                            await sharing.open { directory.refresh(reportErrors: false) }
-                        }
-                    } label: {
-                        if sharing.isPreparing {
-                            ProgressView("Preparing Herd sharing")
-                        } else {
-                            Label(
-                                herd.sharingMetadata.access == .owner ? "Manage Sharing" : "Share Herd",
-                                systemImage: "person.crop.circle.badge.plus"
-                            )
-                        }
-                    }
-                    .disabled(isCreating || isOpeningHerd || sharing.isPreparing || sharing.isStopping || sharingTask != nil)
-                    if herd.sharingMetadata.access == .owner {
-                        Button("Stop Sharing", role: .destructive) {
-                            stopRoot = herd.rootIdentity
-                            showsStopConfirmation = true
-                        }
-                        .disabled(sharing.isPreparing || sharing.isStopping || sharing.isLeaving || isCreating || isOpeningHerd)
-                        if sharing.isStopping { ProgressView("Removing participant access") }
-                    }
-                } header: {
-                    Text("Sharing — \(herd.name)")
-                } footer: {
-                    Text("Manage individual participants in the sharing sheet. To remove everyone while keeping your Herd, use Stop Sharing here, not the native sheet’s stop action. Sharing actions do not delete Herd records.")
-                }
-            }
-            if !dataAccessMode.isRecoveryMode,
-               let sharing,
-               let cloud = storageActivity?.snapshot.cloud,
-               !cloud.accessState.blocksHerdAccess,
-               let herd = directory.herds.first(where: { $0.id == directory.selectedHerdID }),
-               herd.category == .shared,
-               herd.sharingMetadata.access == .readOnly || herd.sharingMetadata.access == .readWrite {
-                Section("Shared Herd — \(herd.name)") {
-                    Button("Leave Shared Herd", role: .destructive) {
-                        showsLeaveConfirmation = true
-                    }
-                    .disabled(sharing.isLeaving || isOpeningHerd || isCreating)
-                    if sharing.isLeaving { ProgressView("Leaving shared Herd") }
-                }
-            }
-            if let verification = sharing?.graphVerification,
-               directory.selectedHerdID != nil {
-                Section("Herd Record Membership") {
-                    switch verification {
-                    case .checking:
-                        ProgressView("Checking local Herd records")
-                    case .complete:
-                        Label("Local record membership checked", systemImage: "checkmark.circle")
-                    case .waitingForMembership(let count):
-                        Label("\(count) local records are awaiting share membership or zone information.", systemImage: "icloud.and.arrow.down")
-                    case .inconsistent:
-                        Label("Herd relationships or share membership are inconsistent. No automatic record moves or deletions were attempted.", systemImage: "exclamationmark.triangle")
-                    case .unavailable:
-                        Label("Record membership could not be verified.", systemImage: "exclamationmark.icloud")
-                    }
-                } footer: {
-                    Text("This checks the selected Herd's local graph and cached record zones, not delivery to another device.")
-                }
-            }
-            if directory.selectedHerdID == nil {
-                Section("Storage") {
-                    StorageActivityLink()
-                }
-            }
+            invitationSections
+            availableHerdSection
+            createHerdSection
+            ownerSharingSection
+            participantSharingSection
+            membershipSection
+            storageSection
         }
         .navigationTitle("Herds")
         .sheet(item: Binding(
@@ -823,6 +644,219 @@ struct HerdDirectoryView: View {
             Button("OK", role: .cancel) { directory.dismissError() }
         } message: {
             Text(directory.errorMessage ?? "The Herd cannot be opened.")
+        }
+    }
+
+    @ViewBuilder
+    private var invitationSections: some View {
+        if !invitations.importingIdentities.isEmpty {
+            Section("Accepted Invitations") {
+                ProgressView("Waiting for \(invitations.importingIdentities.count) shared Herd invitation(s) to import")
+                Text("An accepted invitation is not yet an available Herd. Records must arrive from iCloud.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        if invitations.availableCount > 0 {
+            Section {
+                Label("Shared Herd invitation import completed", systemImage: "checkmark.circle")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var availableHerdSection: some View {
+        Section("Available Herds") {
+            ForEach(directory.herds) { herd in
+                Button {
+                    beginOpeningHerd(herd: herd)
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(herd.name)
+                                .foregroundStyle(.primary)
+                            Text(herd.category == .owned ? "Owned" : "Shared")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            if let sharing = sharingDescription(for: herd.sharingMetadata) {
+                                Text(sharing)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer()
+                        if directory.selectedHerdID == herd.id {
+                            Image(systemName: "checkmark")
+                                .accessibilityLabel("Selected Herd")
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .disabled(dataAccessMode.isRecoveryMode || isCreating || isOpeningHerd)
+            }
+
+            if directory.inventoryState == .loading {
+                ProgressView("Loading available Herds")
+            } else if directory.inventoryState == .unavailable {
+                Label(
+                    "The Herd list could not be read. Existing Herds may still be present. Refresh before creating a Herd.",
+                    systemImage: "exclamationmark.triangle"
+                )
+                .foregroundStyle(.secondary)
+            } else if directory.inventoryState == .ambiguous {
+                Label("Some Herds have duplicate identities and cannot be opened. Other available Herds can still be selected.", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.secondary)
+            } else if directory.inventoryState == .waitingForImport {
+                Label("Waiting for iCloud Herd imports.", systemImage: "icloud.and.arrow.down")
+                    .foregroundStyle(.secondary)
+            } else if directory.inventoryState == .accountChanged {
+                Label("The iCloud account changed. Reopen yaHerd to safely check Herd access.", systemImage: "exclamationmark.icloud")
+                    .foregroundStyle(.secondary)
+            } else if directory.inventoryState == .accountUnavailable {
+                Label("iCloud account authorization is unavailable.", systemImage: "exclamationmark.icloud")
+                    .foregroundStyle(.secondary)
+            } else if directory.inventoryState == .importUnavailable {
+                Label("iCloud import is unavailable. Previously downloaded Herds may still be accessible.", systemImage: "exclamationmark.icloud")
+                    .foregroundStyle(.secondary)
+            } else if directory.inventoryState == .incomplete {
+                Label(
+                    "Some Herd records are incomplete and may still be importing. Refresh to check for newly available Herds.",
+                    systemImage: "icloud.and.arrow.down"
+                )
+                .foregroundStyle(.secondary)
+            } else if directory.herds.isEmpty {
+                Text("No Herds are currently available in the local inventory.")
+                    .foregroundStyle(.secondary)
+            }
+
+            if pendingHerd != nil {
+                HStack {
+                    ProgressView()
+                    Text("Waiting for the selected Herd's records to finish importing.")
+                        .font(.callout)
+                    Spacer()
+                    Button("Cancel") {
+                        validationTask?.cancel()
+                        validationTask = nil
+                        openingState.cancel()
+                        pendingHerd = nil
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var createHerdSection: some View {
+        if !dataAccessMode.isRecoveryMode {
+            Section {
+                Button {
+                    newHerdName = ""
+                    showsCreatePrompt = true
+                } label: {
+                    Label(
+                        directory.inventoryState == .available ? "Create Herd" : "Create Separate Herd",
+                        systemImage: "plus"
+                    )
+                }
+                .disabled(isCreating || isOpeningHerd || !directory.canCreateHerd)
+            } footer: {
+                Text("Creating a Herd adds a separate owned Herd. It does not join an invitation or replace incomplete imported records.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var ownerSharingSection: some View {
+        if !dataAccessMode.isRecoveryMode,
+           let sharing,
+           let cloud = storageActivity?.snapshot.cloud,
+           !cloud.accessState.blocksHerdAccess,
+           let herd = directory.herds.first(where: { $0.id == directory.selectedHerdID }),
+           herd.category == .owned,
+           herd.sharingMetadata == .noCachedShare || herd.sharingMetadata.access == .owner {
+            Section {
+                Button {
+                    guard sharingTask == nil else { return }
+                    sharingTask = Task { @MainActor in
+                        defer { sharingTask = nil }
+                        await sharing.open { directory.refresh(reportErrors: false) }
+                    }
+                } label: {
+                    if sharing.isPreparing {
+                        ProgressView("Preparing Herd sharing")
+                    } else {
+                        Label(
+                            herd.sharingMetadata.access == .owner ? "Manage Sharing" : "Share Herd",
+                            systemImage: "person.crop.circle.badge.plus"
+                        )
+                    }
+                }
+                .disabled(isCreating || isOpeningHerd || sharing.isPreparing || sharing.isStopping || sharingTask != nil)
+                if herd.sharingMetadata.access == .owner {
+                    Button("Stop Sharing", role: .destructive) {
+                        stopRoot = herd.rootIdentity
+                        showsStopConfirmation = true
+                    }
+                    .disabled(sharing.isPreparing || sharing.isStopping || sharing.isLeaving || isCreating || isOpeningHerd)
+                    if sharing.isStopping { ProgressView("Removing participant access") }
+                }
+            } header: {
+                Text("Sharing — \(herd.name)")
+            } footer: {
+                Text("Manage individual participants in the sharing sheet. To remove everyone while keeping your Herd, use Stop Sharing here, not the native sheet’s stop action. Sharing actions do not delete Herd records.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var participantSharingSection: some View {
+        if !dataAccessMode.isRecoveryMode,
+           let sharing,
+           let cloud = storageActivity?.snapshot.cloud,
+           !cloud.accessState.blocksHerdAccess,
+           let herd = directory.herds.first(where: { $0.id == directory.selectedHerdID }),
+           herd.category == .shared,
+           herd.sharingMetadata.access == .readOnly || herd.sharingMetadata.access == .readWrite {
+            Section("Shared Herd — \(herd.name)") {
+                Button("Leave Shared Herd", role: .destructive) {
+                    showsLeaveConfirmation = true
+                }
+                .disabled(sharing.isLeaving || isOpeningHerd || isCreating)
+                if sharing.isLeaving { ProgressView("Leaving shared Herd") }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var membershipSection: some View {
+        if let verification = sharing?.graphVerification,
+           directory.selectedHerdID != nil {
+            Section("Herd Record Membership") {
+                switch verification {
+                case .checking:
+                    ProgressView("Checking local Herd records")
+                case .complete:
+                    Label("Local record membership checked", systemImage: "checkmark.circle")
+                case .waitingForMembership(let count):
+                    Label("\(count) local records are awaiting share membership or zone information.", systemImage: "icloud.and.arrow.down")
+                case .inconsistent:
+                    Label("Herd relationships or share membership are inconsistent. No automatic record moves or deletions were attempted.", systemImage: "exclamationmark.triangle")
+                case .unavailable:
+                    Label("Record membership could not be verified.", systemImage: "exclamationmark.icloud")
+                }
+            } footer: {
+                Text("This checks the selected Herd's local graph and cached record zones, not delivery to another device.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var storageSection: some View {
+        if directory.selectedHerdID == nil {
+            Section("Storage") {
+                StorageActivityLink()
+            }
         }
     }
 
