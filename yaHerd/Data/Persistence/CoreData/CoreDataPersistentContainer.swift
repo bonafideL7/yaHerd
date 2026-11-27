@@ -743,17 +743,27 @@ final class CoreDataPersistentContainer {
         guard !herdImportState.blocksHerdAccess else {
             throw HerdRepositoryError.accountUnavailable
         }
-        guard let privateURL = storeURL,
-              let store = rootID.persistentStore,
+        guard let privateURL = storeURL else {
+            throw CoreDataHerdSharingError.notOwned
+        }
+        try Self.validateOwnedShareRoot(rootID, privateURL: privateURL, in: mirrored)
+        return mirrored
+    }
+
+    private static func validateOwnedShareRoot(
+        _ rootID: NSManagedObjectID,
+        privateURL: URL,
+        in mirrored: NSPersistentCloudKitContainer
+    ) throws {
+        guard let store = rootID.persistentStore,
               !rootID.isTemporaryID,
               store.url == privateURL,
-              container.persistentStoreCoordinator.persistentStores.contains(where: { $0 === store }),
-              container.persistentStoreDescriptions.contains(where: {
+              mirrored.persistentStoreCoordinator.persistentStores.contains(where: { $0 === store }),
+              mirrored.persistentStoreDescriptions.contains(where: {
                   $0.url == privateURL && $0.cloudKitContainerOptions?.databaseScope == .private
               }) else {
             throw CoreDataHerdSharingError.notOwned
         }
-        return mirrored
     }
 
     /// Only permanent object IDs cross the context/mutex boundary.
@@ -802,7 +812,17 @@ final class CoreDataPersistentContainer {
     ) throws {
         // Create and use the context inside the persistence boundary. No
         // queue-confined managed objects are imported into the mutex region.
-        let context = makeBackgroundContext()
+        guard let importResults,
+              let mirrored = container as? NSPersistentCloudKitContainer else {
+            throw CoreDataHerdSharingError.notConfigured
+        }
+        guard accessMode == .readWrite else {
+            throw CoreDataHerdSharingError.readOnly
+        }
+        guard let privateURL = storeURL else {
+            throw CoreDataHerdSharingError.notOwned
+        }
+        let context = mirrored.newBackgroundContext()
         try context.performAndWait {
             context.userInfo[CoreDataLookup.expectedHerdRootKey] = rootIdentity
             let lookup = CoreDataLookup()
@@ -810,7 +830,10 @@ final class CoreDataPersistentContainer {
                 throw HerdRepositoryError.missingHerd
             }
             _ = try root.toSummary()
-            let mirrored = try ownedSharingContainer(for: root.objectID)
+            try Self.validateOwnedShareRoot(root.objectID, privateURL: privateURL, in: mirrored)
+            guard !importResults.importState(for: mirrored.persistentStoreCoordinator.persistentStores.map(\.identifier)).blocksHerdAccess else {
+                throw HerdRepositoryError.accountUnavailable
+            }
             let objects = try lookup.objectsForSharing(root: root, in: context)
             let existing = try Self.inspectShare(rootID: root.objectID, ids: objects.map(\.objectID), in: mirrored)
             if case .existing = existing.discovery {
@@ -827,12 +850,12 @@ final class CoreDataPersistentContainer {
             }
             let identifier: String? = store.identifier
             guard let identifier,
-                  let activity = cloudStoreActivity[identifier],
+                  let activity = importResults.activity(for: [identifier])[identifier],
                   activity.setup?.state == .complete,
                   activity.importing?.state == .complete else {
                 throw CoreDataHerdSharingError.awaitingPrivateImport
             }
-            guard !herdImportState.blocksHerdAccess else {
+            guard !importResults.importState(for: mirrored.persistentStoreCoordinator.persistentStores.map(\.identifier)).blocksHerdAccess else {
                 throw HerdRepositoryError.accountUnavailable
             }
             let expectedIDs = Set(objects.map(\.objectID))
