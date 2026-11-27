@@ -238,6 +238,32 @@ final class CoreDataPersistentContainer {
     }
 
     private let container: NSPersistentContainer
+    private static let departedRootsPreference = "yaHerd.departedSharedRoots.v1"
+
+    private static func departedRoots() -> [String: String] {
+        UserDefaults.standard.dictionary(forKey: departedRootsPreference) as? [String: String] ?? [:]
+    }
+
+    private static let departureLock = Mutex<Void>(())
+
+    private static func rememberDeparture(root: URL, shareIdentity: String) {
+        departureLock.withLock { _ in
+            var roots = departedRoots()
+            roots[root.absoluteString] = shareIdentity
+            UserDefaults.standard.set(roots, forKey: departedRootsPreference)
+        }
+    }
+
+    private static func clearDeparture(for identity: String) {
+        departureLock.withLock { _ in
+            let roots = departedRoots().filter { $0.value != identity }
+            UserDefaults.standard.set(roots, forKey: departedRootsPreference)
+        }
+    }
+
+    static func isDeparted(_ root: URL) -> Bool {
+        departureLock.withLock { _ in departedRoots()[root.absoluteString] != nil }
+    }
     let accessMode: CoreDataStoreAccessMode
     let storeURL: URL?
     private let cloudKitEventObserver: (any NSObjectProtocol)?
@@ -906,7 +932,10 @@ final class CoreDataPersistentContainer {
         // Repeated deliveries use the same native share identity. A previously
         // accepted, locally registered share need not be accepted again.
         let cached = try mirrored.fetchShares(in: store)
-        if metadata.participantStatus == .accepted,
+        let wasDeparted = Self.departureLock.withLock { _ in
+            Self.departedRoots().values.contains(invitation.identity)
+        }
+        if !wasDeparted, metadata.participantStatus == .accepted,
            cached.contains(where: {
                $0.recordID == metadata.share.recordID &&
                $0.currentUserParticipant?.acceptanceStatus == .accepted &&
@@ -924,6 +953,7 @@ final class CoreDataPersistentContainer {
                 )
                 completion(.failure(HerdInvitationError.classify(error)))
             } else if accepted?.contains(where: { $0.share.recordID == metadata.share.recordID }) == true {
+                Self.clearDeparture(for: invitation.identity)
                 completion(.success(()))
             } else {
                 completion(.failure(.failed))
@@ -976,6 +1006,7 @@ final class CoreDataPersistentContainer {
               participant.acceptanceStatus == .accepted else {
             throw HerdInvitationError.invalid
         }
+        let shareIdentity = HerdInvitation.identity(container: Self.cloudKitContainerIdentifier, record: share.recordID)
         let database = CKContainer(identifier: Self.cloudKitContainerIdentifier).sharedCloudDatabase
         database.delete(withRecordID: share.recordID) { _, error in
             if let error {
@@ -985,6 +1016,9 @@ final class CoreDataPersistentContainer {
                 )
                 completion(.failure(HerdInvitationError.classify(error)))
             } else {
+                // Record the successful departure before any inventory refresh
+                // can expose the cached root, including after a process restart.
+                Self.rememberDeparture(root: rootIdentity, shareIdentity: shareIdentity)
                 completion(.success(()))
             }
         }
@@ -1053,14 +1087,22 @@ final class CoreDataPersistentContainer {
             do {
                 let shares = try mirrored.fetchShares(matching: ids)
                 for id in ids {
-                    metadata[id] = shares[id].map(Self.sharingMetadata(for:)) ?? .noCachedShare
+                    if Self.isDeparted(id.uriRepresentation()) {
+                        metadata[id] = .shared(access: .removed, acceptedParticipants: nil, pendingInvitations: nil)
+                    } else {
+                        metadata[id] = shares[id].map(Self.sharingMetadata(for:)) ?? .noCachedShare
+                    }
                 }
             } catch {
                 let failure = error as NSError
                 ReliabilityLog.persistence.error(
                     "operation=share-metadata-read domain=\(failure.domain, privacy: .public) code=\(failure.code, privacy: .public)"
                 )
-                for id in ids { metadata[id] = .unavailable }
+                for id in ids {
+                    metadata[id] = Self.isDeparted(id.uriRepresentation())
+                        ? .shared(access: .removed, acceptedParticipants: nil, pendingInvitations: nil)
+                        : .unavailable
+                }
             }
         }
         return metadata
