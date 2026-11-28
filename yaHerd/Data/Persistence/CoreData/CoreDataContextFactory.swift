@@ -35,6 +35,30 @@ final class CoreDataContextFactory: Sendable {
         }
     }
 
+    func authorization(for selection: HerdSelectionSnapshot, recordIdentity: URL? = nil) -> HerdAuthorization {
+        guard let herdID = selection.id, let rootIdentity = selection.rootIdentity else { return .denied() }
+        let context = makeReadContext(expectedHerdRoot: rootIdentity)
+        do {
+            let ids = try context.performAndWait {
+                guard let root = try CoreDataLookup().herd(id: herdID, in: context) else {
+                    throw HerdRepositoryError.missingHerd
+                }
+                guard let recordIdentity else { return (root.objectID, root.objectID) }
+                guard let recordID = context.persistentStoreCoordinator?.managedObjectID(forURIRepresentation: recordIdentity),
+                      let record = try? context.existingObject(with: recordID),
+                      !record.isDeleted,
+                      recordID == root.objectID ||
+                          (record as? any CoreDataHerdOwnedManagedObject)?.herd?.objectID == root.objectID else {
+                    throw HerdRepositoryError.missingHerd
+                }
+                return (root.objectID, recordID)
+            }
+            return persistence.withLock { $0.authorization(rootID: ids.0, recordID: ids.1) }
+        } catch {
+            return .denied()
+        }
+    }
+
     func sharingMetadata(for objectIDs: [NSManagedObjectID]) -> [NSManagedObjectID: HerdSharingMetadata] {
         persistence.withLock { $0.sharingMetadata(for: objectIDs) }
     }

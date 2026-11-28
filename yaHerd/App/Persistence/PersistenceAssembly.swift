@@ -5,6 +5,7 @@ import UIKit
 @MainActor
 protocol PersistenceAssembly {
     var storageActivity: StorageActivitySnapshot { get }
+    func selectedHerdAuthorization(recordIdentity: URL?) -> HerdAuthorization
 
     func prepareSharingInterface(
         onChange: @escaping @MainActor @Sendable () -> Void,
