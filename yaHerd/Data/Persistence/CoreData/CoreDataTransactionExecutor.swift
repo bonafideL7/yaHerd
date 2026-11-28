@@ -55,11 +55,7 @@ final class CoreDataTransactionExecutor {
                     }
 
                     try beforeSave?(context)
-                    if let herdID {
-                        try CoreDataLookup().prepareForSave(herdID: herdID, in: context)
-                    }
-
-                    try contextFactory.validateHerdAccess()
+                    try contextFactory.authorizeSave(in: context, herdID: herdID)
                     // A Herd switch may cancel the caller while changes are
                     // staged. Roll them back unless the save has already begun.
                     try cancellation.withLock {

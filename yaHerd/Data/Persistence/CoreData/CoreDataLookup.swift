@@ -92,7 +92,8 @@ struct CoreDataLookup: Sendable {
     /// before assigning inserted objects to that Herd's persistent store.
     func prepareForSave(
         herdID: UUID,
-        in context: NSManagedObjectContext
+        in context: NSManagedObjectContext,
+        authorize: (NSManagedObjectID, NSManagedObjectID, HerdMutationKind) throws -> Void = { _, _, _ in }
     ) throws {
         guard let herd = try herd(id: herdID, in: context) else {
             throw HerdRepositoryError.missingHerd
@@ -155,9 +156,34 @@ struct CoreDataLookup: Sendable {
         // save. Check the committed graph, including to-one inverse links.
         // Follow cascade edges recursively, but do not traverse nullify targets.
         var visitedDeletions = Set<NSManagedObject>()
+        var authorizedUpdates = Set<NSManagedObjectID>()
+        var authorizedDeletes = Set<NSManagedObjectID>()
+
+        func authorizeChange(_ object: NSManagedObject, kind: HerdMutationKind) throws {
+            if object === herd, case .delete = kind {
+                // Root deletion is not an ordinary record mutation or leave action.
+                throw CoreDataPersistenceError.herdWriteNotAuthorized(.unavailable)
+            }
+            if object.isInserted {
+                // Newly inserted records have no exported record identity yet.
+                try authorize(herd.objectID, herd.objectID, .insert)
+                return
+            }
+            switch kind {
+            case .insert:
+                try authorize(herd.objectID, herd.objectID, .insert)
+            case .update:
+                guard authorizedUpdates.insert(object.objectID).inserted else { return }
+                try authorize(herd.objectID, object.objectID, .update)
+            case .delete:
+                guard authorizedDeletes.insert(object.objectID).inserted else { return }
+                try authorize(herd.objectID, object.objectID, .delete)
+            }
+        }
         func validateDeletionEffects(_ object: NSManagedObject) throws {
             guard visitedDeletions.insert(object).inserted else { return }
             try validateOwnership(object)
+            try authorizeChange(object, kind: .delete)
 
             for relationship in object.entity.relationshipsByName.values
             where relationship.deleteRule == .cascadeDeleteRule
@@ -178,6 +204,8 @@ struct CoreDataLookup: Sendable {
                     try validateOwnership(target)
                     if relationship.deleteRule == .cascadeDeleteRule {
                         try validateDeletionEffects(target)
+                    } else if !target.isDeleted {
+                        try authorizeChange(target, kind: .update)
                     }
                 }
             }
@@ -185,6 +213,9 @@ struct CoreDataLookup: Sendable {
 
         for object in changedObjects {
             try validateOwnership(object)
+            if !object.isDeleted {
+                try authorizeChange(object, kind: object.isInserted ? .insert : .update)
+            }
             // Ordinary writes inspect to-one links without faulting every
             // to-many inverse in the Herd.
             for relationship in object.entity.relationshipsByName.values

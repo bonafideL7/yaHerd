@@ -216,7 +216,7 @@ final class CoreDataHerdRepository: HerdRepository {
                     try cancellation.withLock {
                         if $0 { throw CancellationError() }
                     }
-                    try contextFactory.validateHerdAccess()
+                    try contextFactory.authorizeSave(in: context, herdID: nil)
                     do {
                         try context.save()
                     } catch {

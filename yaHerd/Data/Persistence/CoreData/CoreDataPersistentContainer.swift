@@ -1160,6 +1160,30 @@ final class CoreDataPersistentContainer {
 
     /// Resolve permissions for an exact persisted object, never from a UI
     /// selection's cached participant label alone.
+    func authorizedNewHerdStore() throws -> NSPersistentStore {
+        guard accessMode == .readWrite, !herdImportState.blocksHerdAccess else {
+            throw CoreDataPersistenceError.herdWriteNotAuthorized(.unavailable)
+        }
+        let stores = container.persistentStoreCoordinator.persistentStores
+        if importResults == nil {
+            guard stores.count == 1, let store = stores.first else {
+                throw CoreDataPersistenceError.unscopedMultiStoreWrite
+            }
+            return store
+        }
+        guard let mirrored = container as? NSPersistentCloudKitContainer,
+              let storeURL,
+              let store = stores.first(where: { $0.url == storeURL }),
+              mirrored.persistentStoreDescriptions.contains(where: {
+                  $0.url == storeURL &&
+                  $0.cloudKitContainerOptions?.databaseScope == .private &&
+                  $0.cloudKitContainerOptions?.containerIdentifier == Self.cloudKitContainerIdentifier
+              }), mirrored.canModifyManagedObjects(in: store) else {
+            throw CoreDataPersistenceError.herdWriteNotAuthorized(.unavailable)
+        }
+        return store
+    }
+
     func authorization(rootID: NSManagedObjectID, recordID: NSManagedObjectID) -> HerdAuthorization {
         guard accessMode == .readWrite, !herdImportState.blocksHerdAccess,
               !rootID.isTemporaryID, !recordID.isTemporaryID,
