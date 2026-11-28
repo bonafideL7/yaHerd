@@ -554,8 +554,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 try operation(context, herd)
                 if context.hasChanges {
                     try beforeSave?(context)
-                    try lookup.prepareForSave(herdID: herdID, in: context)
-                try contextFactory.validateHerdAccess()
+                    try contextFactory.authorizeSave(in: context, herdID: herdID)
                     do {
                         try context.save()
                     } catch {

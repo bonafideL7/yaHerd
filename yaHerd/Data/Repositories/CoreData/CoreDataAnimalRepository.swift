@@ -1487,8 +1487,7 @@ final class CoreDataAnimalRepository:
                 guard context.hasChanges else {
                     return result
                 }
-                try lookup.prepareForSave(herdID: herdID, in: context)
-                try contextFactory.validateHerdAccess()
+                try contextFactory.authorizeSave(in: context, herdID: herdID)
                 do {
                     try context.save()
                     return result

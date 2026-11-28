@@ -3,6 +3,10 @@ import Synchronization
 import Foundation
 import UIKit
 
+enum HerdMutationKind: Sendable {
+    case insert, update, delete
+}
+
 /// Shares only the ability to create fresh private-queue contexts with read actors.
 /// The container is kept behind the same checked-Sendable Mutex pattern used by
 /// Core Data's write coordinators. No managed object or context is stored here.
@@ -283,6 +287,44 @@ final class CoreDataContextFactory: Sendable {
         guard !herdImportState.blocksHerdAccess else {
             throw HerdRepositoryError.accountUnavailable
         }
+    }
+
+    /// Single application save boundary, called on the context's queue.
+    /// Native mirroring imports do not use this application write path.
+    func authorizeSave(in context: NSManagedObjectContext, herdID: UUID?) throws {
+        try validateHerdAccess()
+        context.processPendingChanges()
+        guard context.hasChanges else { return }
+        if let herdID {
+            try CoreDataLookup().prepareForSave(herdID: herdID, in: context) { rootID, recordID, kind in
+                let authorization = self.persistence.withLock {
+                    $0.authorization(rootID: rootID, recordID: recordID)
+                }
+                let permitted: Bool
+                switch kind {
+                case .insert: permitted = authorization.canInsert
+                case .update: permitted = authorization.canUpdate
+                case .delete: permitted = authorization.canDelete
+                }
+                guard permitted else {
+                    throw CoreDataPersistenceError.herdWriteNotAuthorized(authorization.role)
+                }
+            }
+        } else {
+            // Only creation of an owned Herd is permitted without a selected
+            // root. An unscoped operation cannot mutate any existing record.
+            guard context.updatedObjects.isEmpty, context.deletedObjects.isEmpty,
+                  context.insertedObjects.count == 1,
+                  let root = context.insertedObjects.first as? CDHerd else {
+                throw CoreDataPersistenceError.unscopedMultiStoreWrite
+            }
+            let destination = try persistence.withLock { try $0.authorizedNewHerdStore() }
+            if let assigned = root.objectID.persistentStore, assigned !== destination {
+                throw CoreDataPersistenceError.herdWriteNotAuthorized(.unavailable)
+            }
+            context.assign(root, to: destination)
+        }
+        try validateHerdAccess()
     }
 
     func makeWriteContext(expectedHerdRoot: URL? = nil) throws -> NSManagedObjectContext {

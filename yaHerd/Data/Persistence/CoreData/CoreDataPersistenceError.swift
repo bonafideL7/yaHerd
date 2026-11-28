@@ -13,6 +13,7 @@ enum CoreDataPersistenceError: LocalizedError, Equatable {
     case tagColorMaterializationInProgress(id: UUID, herdID: UUID)
     case tagColorDefaultMaterializationInProgress(herdID: UUID)
     case readOnlyStore
+    case herdWriteNotAuthorized(HerdAuthorization.Role)
 
     var errorDescription: String? {
         switch self {
@@ -44,6 +45,15 @@ enum CoreDataPersistenceError: LocalizedError, Equatable {
             return "A tag color default is already being materialized in Herd \(herdID.uuidString). Retry the change after the in-flight transaction completes."
         case .readOnlyStore:
             return "Changes are disabled while the Core Data store is read-only."
+        case .herdWriteNotAuthorized(let role):
+            switch role {
+            case .viewer:
+                return "You have read-only access to this Herd. No changes were saved."
+            case .revoked:
+                return "Your access to this Herd was removed. No changes were saved."
+            default:
+                return "Permission to save these Herd changes could not be established. No changes were saved. Check your sharing access and try again."
+            }
         }
     }
 }
