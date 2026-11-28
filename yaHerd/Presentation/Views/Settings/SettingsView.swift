@@ -832,7 +832,7 @@ struct HerdDirectoryView: View {
     private var membershipSection: some View {
         if let verification = sharing?.graphVerification,
            directory.selectedHerdID != nil {
-            Section("Herd Record Membership") {
+            Section {
                 switch verification {
                 case .checking:
                     ProgressView("Checking local Herd records")
@@ -845,6 +845,8 @@ struct HerdDirectoryView: View {
                 case .unavailable:
                     Label("Record membership could not be verified.", systemImage: "exclamationmark.icloud")
                 }
+            } header: {
+                Text("Herd Record Membership")
             } footer: {
                 Text("This checks the selected Herd's local graph and cached record zones, not delivery to another device.")
             }
