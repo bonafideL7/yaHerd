@@ -1158,6 +1158,51 @@ final class CoreDataPersistentContainer {
         }
     }
 
+    /// Resolve permissions for an exact persisted object, never from a UI
+    /// selection's cached participant label alone.
+    func authorization(rootID: NSManagedObjectID, recordID: NSManagedObjectID) -> HerdAuthorization {
+        guard accessMode == .readWrite, !herdImportState.blocksHerdAccess,
+              !rootID.isTemporaryID, !recordID.isTemporaryID,
+              rootID.entity.name == CDHerd.coreDataEntityName,
+              let store = rootID.persistentStore,
+              recordID.persistentStore === store,
+              container.persistentStoreCoordinator.persistentStores.contains(where: { $0 === store }) else {
+            return .denied()
+        }
+        if Self.isDeparted(rootID.uriRepresentation()) { return .denied(.revoked) }
+        guard let mirrored = container as? NSPersistentCloudKitContainer, importResults != nil else {
+            guard container.persistentStoreCoordinator.persistentStores.count == 1 else { return .denied() }
+            return HerdAuthorization(role: .owner, canInsert: true, canUpdate: true, canDelete: true)
+        }
+        guard let description = mirrored.persistentStoreDescriptions.first(where: { $0.url == store.url }),
+              let options = description.cloudKitContainerOptions,
+              options.containerIdentifier == Self.cloudKitContainerIdentifier else { return .denied() }
+        let role: HerdAuthorization.Role
+        switch options.databaseScope {
+        case .private:
+            role = .owner
+        case .shared:
+            guard let share = try? mirrored.fetchShares(matching: [rootID])[rootID],
+                  let participant = share.currentUserParticipant else { return .denied() }
+            if participant.acceptanceStatus == .removed { return .denied(.revoked) }
+            guard participant.acceptanceStatus == .accepted, participant.role != .owner else { return .denied() }
+            switch participant.permission {
+            case .readOnly: return .denied(.viewer)
+            case .readWrite: role = .editor
+            default: return .denied()
+            }
+            guard let recordShare = try? mirrored.fetchShares(matching: [recordID])[recordID],
+                  recordShare.recordID == share.recordID else { return .denied() }
+        default: return .denied()
+        }
+        return HerdAuthorization(
+            role: role,
+            canInsert: mirrored.canModifyManagedObjects(in: store) && mirrored.canUpdateRecord(forManagedObjectWith: rootID),
+            canUpdate: mirrored.canUpdateRecord(forManagedObjectWith: recordID),
+            canDelete: mirrored.canDeleteRecord(forManagedObjectWith: recordID)
+        )
+    }
+
     /// Read only the shares already imported by this container. This does not
     /// contact the server or establish current authorization while offline.
     func sharingMetadata(for objectIDs: [NSManagedObjectID]) -> [NSManagedObjectID: HerdSharingMetadata] {

@@ -10,6 +10,10 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
     private let selection: AppCurrentHerdSelection
 
     var currentHerdSelection: AppCurrentHerdSelection { selection }
+
+    func selectedHerdAuthorization(recordIdentity: URL? = nil) -> HerdAuthorization {
+        assembly.contextFactory.authorization(for: selection.snapshot, recordIdentity: recordIdentity)
+    }
     var herdImportState: HerdImportState { assembly.contextFactory.herdImportState }
     var storageActivity: StorageActivitySnapshot { assembly.contextFactory.storageActivity }
 

@@ -76,3 +76,22 @@ struct HerdInventory: Sendable {
     let hasIncompleteOwnedRoots: Bool
     let ambiguousHerdIDs: Set<UUID>
 }
+
+
+/// Locally resolved authorization; the server remains authoritative.
+struct HerdAuthorization: Equatable, Sendable {
+    enum Role: Equatable, Sendable {
+        case owner, editor, viewer, revoked, unavailable
+    }
+
+    let role: Role
+    let canInsert: Bool
+    let canUpdate: Bool
+    let canDelete: Bool
+
+    static func denied(_ role: Role = .unavailable) -> Self {
+        Self(role: role, canInsert: false, canUpdate: false, canDelete: false)
+    }
+
+    var canManageSharing: Bool { role == .owner && canUpdate }
+}
